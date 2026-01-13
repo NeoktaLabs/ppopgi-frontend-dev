@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-image: url('/bg.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100vh;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* --- COMPACT VERTICAL TICKET CUTTER --- */
+/* Smaller holes (12px) to match the smaller card size */
+.ticket-mask {
+  -webkit-mask-image: 
+    radial-gradient(circle at 0 36%, transparent 11px, black 12px), 
+    radial-gradient(circle at 100% 36%, transparent 11px, black 12px);
+  mask-image: 
+    radial-gradient(circle at 0 36%, transparent 11px, black 12px), 
+    radial-gradient(circle at 100% 36%, transparent 11px, black 12px);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+/* Toast Animations */
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+.toast-enter { animation: slideIn 0.5s ease-out forwards; }
+.toast-exit { animation: fadeOut 0.5s ease-in forwards; }
