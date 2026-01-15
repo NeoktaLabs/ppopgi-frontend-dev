@@ -5,6 +5,8 @@ import { RaffleCard } from "./features/raffles/RaffleCard";
 import { useQuery } from "@tanstack/react-query";
 import { getSubgraphClient } from "./lib/subgraph";
 import { QUERY_RAFFLE_DETAIL } from "./lib/queries";
+import { DisclaimerGate } from "./features/disclaimer/DisclaimerGate";
+import { friendlyStatus } from "./lib/format";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
@@ -12,11 +14,14 @@ export default function App() {
 
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
 
+  // Used to force a re-render after disclaimer acceptance (simple + reliable)
+  const [disclaimerTick, setDisclaimerTick] = useState(0);
+
   // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
     return m ? decodeURIComponent(m[1]).toLowerCase() : null;
-  }, []);
+  }, [disclaimerTick]);
 
   useEffect(() => {
     if (raffleFromHash) setOpenRaffleId(raffleFromHash);
@@ -39,6 +44,8 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: 16 }}>
+      <DisclaimerGate onAccept={() => setDisclaimerTick((x) => x + 1)} />
+
       {/* Top bar */}
       <div
         style={{
@@ -162,7 +169,7 @@ export default function App() {
                 width: "fit-content",
               }}
             >
-              {raffle.status}
+              {friendlyStatus(raffle.status)}
               {raffle.paused ? " (paused)" : ""}
             </div>
 
