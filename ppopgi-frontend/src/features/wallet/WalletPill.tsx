@@ -1,3 +1,4 @@
+// src/features/wallet/WalletPill.tsx
 import { useAccount, useBalance, useReadContract } from "wagmi";
 import { ADDR, ERC20_ABI } from "../../lib/contracts";
 import { formatUnits } from "viem";
@@ -11,7 +12,7 @@ function fmt(n?: string) {
 }
 
 export function WalletPill() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, status } = useAccount();
 
   const xtzBal = useBalance({
     address,
@@ -33,7 +34,7 @@ export function WalletPill() {
     query: { enabled: !!address },
   });
 
-  if (!isConnected) return null;
+  if (!isConnected || status === "connecting") return null;
 
   const xtz = xtzBal.data ? fmt(xtzBal.data.formatted) : "…";
 
