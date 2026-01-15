@@ -1,4 +1,4 @@
-import { RaffleLite } from "./useRafflesHome";
+import type { RaffleLite } from "./useRafflesHome";
 
 function shorten(s: string, start = 6, end = 4) {
   if (!s) return "";
