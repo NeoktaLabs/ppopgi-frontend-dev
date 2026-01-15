@@ -1,7 +1,8 @@
+// src/features/disclaimer/DisclaimerGate.tsx
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
-export function DisclaimerModal() {
+export function DisclaimerGate({ onAccept }: { onAccept?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function DisclaimerModal() {
           onClick={() => {
             sessionStorage.setItem("ppopgi_disclaimer_accepted", "true");
             setIsOpen(false);
+            onAccept?.();
           }}
           className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl transition-colors shadow-lg shadow-amber-200"
         >
