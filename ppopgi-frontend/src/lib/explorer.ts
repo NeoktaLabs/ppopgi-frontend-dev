@@ -1,15 +1,9 @@
-export function friendlyStatus(status?: string) {
-  switch ((status ?? "").toUpperCase()) {
-    case "OPEN":
-      return "Open";
-    case "DRAWING":
-      return "Drawing";
-    case "COMPLETED":
-      return "Settled";
-    case "CANCELED":
-    case "CANCELLED":
-      return "Cancelled";
-    default:
-      return status ? status : "Unknown";
-  }
+export function txUrl(txHash: string) {
+  const base = import.meta.env.VITE_EXPLORER_TX_BASE as string;
+  return base ? `${base}${txHash}` : txHash;
+}
+
+export function addrUrl(addr: string) {
+  const base = import.meta.env.VITE_EXPLORER_ADDR_BASE as string;
+  return base ? `${base}${addr}` : addr;
 }
