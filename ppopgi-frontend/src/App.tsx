@@ -5,6 +5,7 @@ import { Ticket, Store, Compass, LogOut, Wallet, LayoutDashboard } from "lucide-
 import { useAccount, useDisconnect } from "wagmi";
 
 import { Modal } from "./ui/Modal";
+import { PageModal } from "./ui/PageModal";
 import { useBigPrizes, useEndingSoon } from "./features/raffles/useRafflesHome";
 import { RaffleCard } from "./features/raffles/RaffleCard";
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { SafetyProofModal } from "./features/safety/SafetyProofModal";
 import { WalletPill } from "./features/wallet/WalletPill";
 import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
 import { NetworkBanner } from "./features/wallet/NetworkBanner";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
@@ -25,10 +27,11 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
-  const [disclaimerTick, setDisclaimerTick] = useState(0);
 
+  const [disclaimerTick, setDisclaimerTick] = useState(0);
   const acc = useAccount();
 
+  // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
     return m ? decodeURIComponent(m[1]).toLowerCase() : null;
@@ -63,6 +66,7 @@ export default function App() {
 
   const raffle = (raffleDetailQ.data as any)?.raffle;
   const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
+
   const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen || dashboardOpen;
 
   return (
@@ -75,8 +79,7 @@ export default function App() {
         onOpenDashboard={() => setDashboardOpen(true)}
       />
 
-      {/* keep banner, but NOT in navbar */}
-      <div className="pt-28">
+      <div className="pt-20">
         <NetworkBanner />
       </div>
 
@@ -101,7 +104,9 @@ export default function App() {
             </p>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
-              {big.isLoading && <div className="text-white font-bold opacity-80 py-10">Loading…</div>}
+              {big.isLoading && (
+                <div className="text-white font-bold opacity-80 py-10">Loading…</div>
+              )}
               {big.error && (
                 <div className="text-white font-bold opacity-90 py-10">
                   Loading directly from the network… This may take a moment.
@@ -137,7 +142,9 @@ export default function App() {
             </p>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
-              {soon.isLoading && <div className="text-white font-bold opacity-80 py-10">Loading…</div>}
+              {soon.isLoading && (
+                <div className="text-white font-bold opacity-80 py-10">Loading…</div>
+              )}
               {soon.error && (
                 <div className="text-white font-bold opacity-90 py-10">
                   Loading directly from the network… This may take a moment.
@@ -160,6 +167,28 @@ export default function App() {
         </main>
       </div>
 
+      {/* Dashboard overlay */}
+      {dashboardOpen && (
+        <PageModal
+          onClose={() => {
+            setDashboardOpen(false);
+          }}
+        >
+          <DashboardPage
+            onClose={() => setDashboardOpen(false)}
+            onOpenCreate={() => {
+              setDashboardOpen(false);
+              setCreateOpen(true);
+            }}
+            onOpenRaffle={(id) => {
+              setDashboardOpen(false);
+              window.location.hash = `raffle=${encodeURIComponent(id.toLowerCase())}`;
+              setOpenRaffleId(id.toLowerCase());
+            }}
+          />
+        </PageModal>
+      )}
+
       {/* Raffle modal */}
       <Modal
         open={!!openRaffleId}
@@ -173,7 +202,9 @@ export default function App() {
         {raffleDetailQ.isLoading ? (
           <div>Loading…</div>
         ) : raffleDetailQ.error ? (
-          <div style={{ fontWeight: 800 }}>Loading directly from the network… This may take a moment.</div>
+          <div style={{ fontWeight: 800 }}>
+            Loading directly from the network… This may take a moment.
+          </div>
         ) : !raffle ? (
           <div style={{ fontWeight: 800 }}>
             We couldn’t find this raffle right now.
@@ -232,7 +263,9 @@ export default function App() {
               >
                 <div style={{ fontWeight: 900 }}>Winner</div>
                 <div style={{ marginTop: 4 }}>{raffle.winner}</div>
-                <div style={{ marginTop: 4, opacity: 0.9 }}>Winning ticket: {raffle.winningTicketIndex}</div>
+                <div style={{ marginTop: 4, opacity: 0.9 }}>
+                  Winning ticket: {raffle.winningTicketIndex}
+                </div>
               </div>
             )}
 
@@ -241,7 +274,9 @@ export default function App() {
               {raffleEventsQ.isLoading ? (
                 <div>Loading…</div>
               ) : raffleEventsQ.error ? (
-                <div style={{ fontWeight: 800, opacity: 0.9 }}>This timeline may be slightly behind.</div>
+                <div style={{ fontWeight: 800, opacity: 0.9 }}>
+                  This timeline may be slightly behind.
+                </div>
               ) : (
                 <RaffleTimeline events={events} />
               )}
@@ -271,18 +306,11 @@ export default function App() {
         </div>
       </Modal>
 
-      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
-
-      {/* Dashboard (placeholder shell) */}
-      <Modal open={dashboardOpen} onClose={() => setDashboardOpen(false)} title="Dashboard">
-        <div style={{ lineHeight: 1.6 }}>
-          <div style={{ fontWeight: 1000 }}>Player activity</div>
-          <div style={{ marginTop: 8, opacity: 0.85 }}>
-            Next step: we’ll list raffles you created, tickets you bought, and show claim/refund buttons
-            based on live on-chain reads + the subgraph.
-          </div>
-        </div>
-      </Modal>
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {}}
+      />
     </div>
   );
 }
@@ -299,92 +327,113 @@ function Navbar({
   const { disconnect } = useDisconnect();
 
   return (
-    <nav className="fixed top-4 left-0 right-0 z-50 px-4">
-      <div className="mx-auto max-w-[1100px] h-20 bg-white/85 backdrop-blur-md border border-white/50 rounded-3xl shadow-sm flex items-center justify-between px-4 md:px-8">
-        <ConnectButton.Custom>
-          {({ account, chain, openConnectModal, mounted }) => {
-            const connected = mounted && account && chain;
+    <nav className="w-full h-20 bg-white/85 backdrop-blur-md border-b border-white/50 fixed top-0 z-50 flex items-center justify-between px-4 md:px-8 shadow-sm">
+      <ConnectButton.Custom>
+        {({ account, chain, openConnectModal, openChainModal, mounted }) => {
+          const connected = mounted && account && chain;
 
-            return (
-              <>
-                <div className="flex items-center gap-6">
-                  <div
-                    className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
-                    onClick={() => {
-                      window.location.hash = "";
-                    }}
+          return (
+            <>
+              {/* Left */}
+              <div className="flex items-center gap-6">
+                <div
+                  className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => {
+                    window.location.hash = "";
+                  }}
+                >
+                  <div className="w-9 h-9 bg-[#FFD700] rounded-full flex items-center justify-center text-white font-bold shadow-inner border-2 border-white">
+                    <Ticket size={18} className="text-amber-700" />
+                  </div>
+                  <span className="font-bold text-xl text-amber-800 tracking-tight hidden md:block">
+                    Ppopgi
+                  </span>
+                </div>
+
+                <div className="hidden md:flex items-center gap-2">
+                  <button
+                    onClick={() => {}}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                   >
-                    <div className="w-9 h-9 bg-[#FFD700] rounded-full flex items-center justify-center text-white font-bold shadow-inner border-2 border-white">
-                      <Ticket size={18} className="text-amber-700" />
-                    </div>
-                    <span className="font-bold text-xl text-amber-800 tracking-tight hidden md:block">
-                      Ppopgi
-                    </span>
-                  </div>
+                    <Compass size={16} /> Explore
+                  </button>
 
-                  <div className="hidden md:flex items-center gap-2">
-                    <button className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                      <Compass size={16} /> Explore
-                    </button>
-
-                    <button
-                      onClick={() => (connected ? onOpenCreate() : openConnectModal())}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-amber-700 hover:bg-amber-100 transition-colors"
-                    >
-                      <Ticket size={16} /> Create
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => (connected ? onOpenCreate() : openConnectModal())}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    <Ticket size={16} /> Create
+                  </button>
                 </div>
+              </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 pr-2 rounded-2xl border border-gray-200/60 shadow-inner">
+              {/* Right */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 pr-2 rounded-2xl border border-gray-200/60 shadow-inner">
+                  <div className="hidden lg:block pl-1">
                     <WalletPill />
-
-                    <button
-                      onClick={onOpenCashier}
-                      className="bg-amber-500 hover:bg-amber-600 text-white p-2 md:px-4 md:py-2.5 rounded-xl font-bold shadow-sm active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-xs md:text-sm h-full"
-                    >
-                      <Store size={18} />
-                      <span className="hidden md:inline">Cashier</span>
-                    </button>
                   </div>
 
-                  {connected ? (
-                    <div className="flex items-center gap-2">
-                      {/* Player button opens dashboard */}
-                      <button
-                        onClick={onOpenDashboard}
-                        className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
-                        title="Open Dashboard"
-                      >
-                        <LayoutDashboard size={16} />
-                        {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
-                      </button>
-
-                      <button
-                        onClick={() => disconnect()}
-                        className="bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 p-2.5 rounded-xl transition-colors border border-transparent hover:border-red-100"
-                        title="Disconnect Wallet"
-                      >
-                        <LogOut size={18} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={openConnectModal}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
-                    >
-                      <Wallet size={18} />
-                      <span className="hidden md:inline">Join the Park</span>
-                      <span className="md:hidden">Join</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={onOpenCashier}
+                    className="bg-amber-500 hover:bg-amber-600 text-white p-2 md:px-4 md:py-2.5 rounded-xl font-bold shadow-sm active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-xs md:text-sm h-full"
+                  >
+                    <Store size={18} />
+                    <span className="hidden md:inline">Cashier</span>
+                  </button>
                 </div>
-              </>
-            );
-          }}
-        </ConnectButton.Custom>
-      </div>
+
+                {connected ? (
+                  <div className="flex items-center gap-2">
+                    {chain?.unsupported ? (
+                      <button
+                        onClick={openChainModal}
+                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold shadow-sm text-sm"
+                      >
+                        Wrong network
+                      </button>
+                    ) : (
+                      <button
+                        onClick={openChainModal}
+                        className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm text-sm transition-colors"
+                        title="Switch network"
+                      >
+                        Network
+                      </button>
+                    )}
+
+                    <button
+                      onClick={onOpenDashboard}
+                      className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
+                      title="Open Dashboard"
+                    >
+                      <LayoutDashboard size={16} />
+                      {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
+                    </button>
+
+                    <button
+                      onClick={() => disconnect()}
+                      className="bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 p-2.5 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                      title="Disconnect Wallet"
+                    >
+                      <LogOut size={18} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openConnectModal}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
+                  >
+                    <Wallet size={18} />
+                    <span className="hidden md:inline">Join the Park</span>
+                    <span className="md:hidden">Join</span>
+                  </button>
+                )}
+              </div>
+            </>
+          );
+        }}
+      </ConnectButton.Custom>
     </nav>
   );
 }
