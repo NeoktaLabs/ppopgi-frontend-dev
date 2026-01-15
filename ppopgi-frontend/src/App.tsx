@@ -1,5 +1,9 @@
 // src/App.tsx
 import { useEffect, useMemo, useState } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { Ticket, Store, Compass, LogOut, Wallet } from "lucide-react";
+import { useAccount, useDisconnect } from "wagmi";
+
 import { Modal } from "./ui/Modal";
 import { useBigPrizes, useEndingSoon } from "./features/raffles/useRafflesHome";
 import { RaffleCard } from "./features/raffles/RaffleCard";
@@ -10,17 +14,14 @@ import { DisclaimerGate } from "./features/disclaimer/DisclaimerGate";
 import { friendlyStatus } from "./lib/format";
 import { RaffleTimeline } from "./features/raffles/RaffleTimeline";
 import { SafetyProofModal } from "./features/safety/SafetyProofModal";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { WalletPill } from "./features/wallet/WalletPill";
 import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
 import { NetworkBanner } from "./features/wallet/NetworkBanner";
-import { useAccount } from "wagmi";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
-
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
 
   // Used to force a re-render after disclaimer acceptance (simple + reliable)
@@ -65,101 +66,113 @@ export default function App() {
   const raffle = (raffleDetailQ.data as any)?.raffle;
   const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
 
+  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen;
+
   return (
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: 16 }}>
+    <div className="min-h-screen pb-12 relative">
       <DisclaimerGate onAccept={() => setDisclaimerTick((x) => x + 1)} />
 
-      {/* Top bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          padding: "12px 14px",
-          borderRadius: 18,
-          border: "1px solid rgba(255,255,255,0.35)",
-          background: "rgba(255,255,255,0.18)",
-          backdropFilter: "blur(14px)",
-          boxShadow: "0 10px 34px rgba(0,0,0,0.10)",
-        }}
-      >
-        <div style={{ fontWeight: 1000, letterSpacing: 0.2 }}>Ppopgi</div>
-
-        <div style={{ display: "flex", gap: 12, marginLeft: 10 }}>
-          <button style={linkBtn()}>Explore</button>
-          <button style={linkBtn()} onClick={() => setCreateOpen(true)}>
-            Create
-          </button>
-        </div>
-
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
-          <WalletPill />
-          <button style={pillBtn()} onClick={() => setCashierOpen(true)}>
-            Cashier
-          </button>
-          <ConnectButton />
-        </div>
-      </div>
+      {/* NAVBAR (old style) */}
+      <Navbar
+        onOpenCashier={() => setCashierOpen(true)}
+        onOpenCreate={() => setCreateOpen(true)}
+      />
 
       {/* Calm network mismatch banner */}
-      <NetworkBanner />
-
-      {/* Home sections */}
-      <div style={{ display: "grid", gap: 18, marginTop: 16 }}>
-        <section style={panel()}>
-          <div style={{ fontWeight: 1000, fontSize: 18 }}>Big prizes right now</div>
-          <div style={{ opacity: 0.85, marginTop: 4 }}>
-            The biggest rewards you can win today.
-          </div>
-
-          <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-            {big.isLoading && <div>Loading…</div>}
-            {big.error && (
-              <div style={{ fontWeight: 800 }}>
-                Loading directly from the network… This may take a moment.
-              </div>
-            )}
-            {(big.data?.raffles ?? []).map((r) => (
-              <RaffleCard
-                key={r.id}
-                raffle={r}
-                onOpen={(id) => {
-                  const lower = id.toLowerCase();
-                  window.location.hash = `raffle=${encodeURIComponent(lower)}`;
-                  setOpenRaffleId(lower);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section style={panel()}>
-          <div style={{ fontWeight: 1000, fontSize: 18 }}>Ending soon</div>
-          <div style={{ opacity: 0.85, marginTop: 4 }}>Last chance to join.</div>
-
-          <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-            {soon.isLoading && <div>Loading…</div>}
-            {soon.error && (
-              <div style={{ fontWeight: 800 }}>
-                Loading directly from the network… This may take a moment.
-              </div>
-            )}
-            {(soon.data?.raffles ?? []).map((r) => (
-              <RaffleCard
-                key={r.id}
-                raffle={r}
-                onOpen={(id) => {
-                  const lower = id.toLowerCase();
-                  window.location.hash = `raffle=${encodeURIComponent(lower)}`;
-                  setOpenRaffleId(lower);
-                }}
-              />
-            ))}
-          </div>
-        </section>
+      <div className="pt-20">
+        <NetworkBanner />
       </div>
 
-      {/* Raffle modal (subgraph-first detail) */}
+      {/* MAIN (blur/scale when modals open like old app) */}
+      <div
+        className={`transition-all duration-300 ${
+          anyOverlayOpen ? "scale-[0.98] blur-[2px] opacity-50 pointer-events-none" : ""
+        }`}
+      >
+        <main className="container mx-auto px-4 pt-6 max-w-[100rem] animate-fade-in">
+          {/* SECTION: Big prizes */}
+          <div className="w-fit mx-auto bg-white/10 backdrop-blur-sm rounded-3xl p-6 mb-6 border border-white/30 shadow-lg relative overflow-visible mt-6">
+            <div className="flex items-center gap-3 mb-2 pl-1">
+              <div className="p-2 rounded-xl bg-yellow-400 text-white shadow-md rotate-[-6deg]">
+                <Ticket size={20} strokeWidth={3} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-800/90 tracking-tight uppercase drop-shadow-sm">
+                Big prizes right now
+              </h2>
+            </div>
+            <p className="text-gray-600 font-bold text-xs md:text-sm leading-relaxed max-w-2xl pl-1">
+              The biggest rewards you can win today.
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
+              {big.isLoading && (
+                <div className="text-white font-bold opacity-80 py-10">Loading…</div>
+              )}
+
+              {big.error && (
+                <div className="text-white font-bold opacity-90 py-10">
+                  Loading directly from the network… This may take a moment.
+                </div>
+              )}
+
+              {(big.data?.raffles ?? []).map((r) => (
+                <div key={r.id} className="w-full flex justify-center">
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={(id) => {
+                      const lower = id.toLowerCase();
+                      window.location.hash = `raffle=${encodeURIComponent(lower)}`;
+                      setOpenRaffleId(lower);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* SECTION: Ending soon */}
+          <div className="w-fit mx-auto bg-white/10 backdrop-blur-sm rounded-3xl p-6 mb-10 border border-white/30 shadow-lg relative overflow-visible">
+            <div className="flex items-center gap-3 mb-2 pl-1">
+              <div className="p-2 rounded-xl bg-red-400 text-white shadow-md rotate-[-6deg]">
+                <Compass size={20} strokeWidth={3} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-800/90 tracking-tight uppercase drop-shadow-sm">
+                Ending soon
+              </h2>
+            </div>
+            <p className="text-gray-600 font-bold text-xs md:text-sm leading-relaxed max-w-2xl pl-1">
+              Last chance to join.
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
+              {soon.isLoading && (
+                <div className="text-white font-bold opacity-80 py-10">Loading…</div>
+              )}
+
+              {soon.error && (
+                <div className="text-white font-bold opacity-90 py-10">
+                  Loading directly from the network… This may take a moment.
+                </div>
+              )}
+
+              {(soon.data?.raffles ?? []).map((r) => (
+                <div key={r.id} className="w-full flex justify-center">
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={(id) => {
+                      const lower = id.toLowerCase();
+                      window.location.hash = `raffle=${encodeURIComponent(lower)}`;
+                      setOpenRaffleId(lower);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+
+      {/* RAFFLE MODAL (keeps your existing Modal component) */}
       <Modal
         open={!!openRaffleId}
         onClose={() => {
@@ -267,7 +280,7 @@ export default function App() {
         creator={raffle?.creator}
       />
 
-      {/* Cashier modal */}
+      {/* Cashier modal (keeps your existing Modal; we’ll swap to the old CashierModal later if you want) */}
       <Modal open={cashierOpen} onClose={() => setCashierOpen(false)} title="Cashier">
         <div style={{ lineHeight: 1.6 }}>
           <div style={{ fontWeight: 900, marginBottom: 8 }}>What you need</div>
@@ -290,35 +303,130 @@ export default function App() {
   );
 }
 
-function linkBtn(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(255,255,255,0.0)",
-    background: "transparent",
-    cursor: "pointer",
-    fontWeight: 900,
-    padding: "8px 10px",
-    borderRadius: 12,
-  };
-}
+/** Old-style navbar shell, but reuses your current WalletPill + RainbowKit */
+function Navbar({
+  onOpenCashier,
+  onOpenCreate,
+}: {
+  onOpenCashier: () => void;
+  onOpenCreate: () => void;
+}) {
+  const { disconnect } = useDisconnect();
+  const { address } = useAccount();
 
-function pillBtn(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(255,255,255,0.45)",
-    background: "rgba(255,255,255,0.20)",
-    cursor: "pointer",
-    fontWeight: 900,
-    padding: "8px 12px",
-    borderRadius: 999,
-  };
-}
+  return (
+    <nav className="w-full h-20 bg-white/85 backdrop-blur-md border-b border-white/50 fixed top-0 z-50 flex items-center justify-between px-4 md:px-8 shadow-sm">
+      <ConnectButton.Custom>
+        {({ account, chain, openConnectModal, openChainModal, mounted }) => {
+          const connected = mounted && account && chain;
 
-function panel(): React.CSSProperties {
-  return {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.35)",
-    background: "rgba(255,255,255,0.18)",
-    backdropFilter: "blur(14px)",
-    boxShadow: "0 10px 34px rgba(0,0,0,0.08)",
-    padding: 14,
-  };
+          return (
+            <>
+              {/* Left */}
+              <div className="flex items-center gap-6">
+                <div
+                  className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => {
+                    // Home
+                    window.location.hash = "";
+                  }}
+                >
+                  <div className="w-9 h-9 bg-[#FFD700] rounded-full flex items-center justify-center text-white font-bold shadow-inner border-2 border-white">
+                    <Ticket size={18} className="text-amber-700" />
+                  </div>
+                  <span className="font-bold text-xl text-amber-800 tracking-tight hidden md:block">
+                    Ppopgi
+                  </span>
+                </div>
+
+                <div className="hidden md:flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      // keep as placeholder for now
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                  >
+                    <Compass size={16} /> Explore
+                  </button>
+
+                  <button
+                    onClick={() => (connected ? onOpenCreate() : openConnectModal())}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    <Ticket size={16} /> Create
+                  </button>
+                </div>
+              </div>
+
+              {/* Right */}
+              <div className="flex items-center gap-4">
+                {/* Balances pill (your component) */}
+                <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 pr-2 rounded-2xl border border-gray-200/60 shadow-inner">
+                  <div className="hidden lg:block pl-1">
+                    <WalletPill />
+                  </div>
+
+                  <button
+                    onClick={onOpenCashier}
+                    className="bg-amber-500 hover:bg-amber-600 text-white p-2 md:px-4 md:py-2.5 rounded-xl font-bold shadow-sm active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-xs md:text-sm h-full"
+                  >
+                    <Store size={18} />
+                    <span className="hidden md:inline">Cashier</span>
+                  </button>
+                </div>
+
+                {connected ? (
+                  <div className="flex items-center gap-2">
+                    {/* Wrong network button (old behavior) */}
+                    {chain?.unsupported ? (
+                      <button
+                        onClick={openChainModal}
+                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold shadow-sm text-sm"
+                      >
+                        Wrong network
+                      </button>
+                    ) : (
+                      <button
+                        onClick={openChainModal}
+                        className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
+                        title="Network"
+                      >
+                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                        {chain?.name ?? "Network"}
+                      </button>
+                    )}
+
+                    <button
+                      className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
+                      title="Account"
+                    >
+                      <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                      {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
+                    </button>
+
+                    <button
+                      onClick={() => disconnect()}
+                      className="bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 p-2.5 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                      title="Disconnect Wallet"
+                    >
+                      <LogOut size={18} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openConnectModal}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
+                  >
+                    <Wallet size={18} />
+                    <span className="hidden md:inline">Join the Park</span>
+                    <span className="md:hidden">Join</span>
+                  </button>
+                )}
+              </div>
+            </>
+          );
+        }}
+      </ConnectButton.Custom>
+    </nav>
+  );
 }
