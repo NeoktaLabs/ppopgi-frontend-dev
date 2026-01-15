@@ -17,6 +17,7 @@ import { SafetyProofModal } from "./features/safety/SafetyProofModal";
 import { WalletPill } from "./features/wallet/WalletPill";
 import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
 import { NetworkBanner } from "./features/wallet/NetworkBanner";
+import { CashierModal } from "./features/cashier/CashierModal";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
@@ -66,7 +67,7 @@ export default function App() {
   const raffle = (raffleDetailQ.data as any)?.raffle;
   const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
 
-  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen;
+  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen || cashierOpen;
 
   return (
     <div className="min-h-screen pb-12 relative">
@@ -172,7 +173,7 @@ export default function App() {
         </main>
       </div>
 
-      {/* RAFFLE MODAL (keeps your existing Modal component) */}
+      {/* RAFFLE MODAL */}
       <Modal
         open={!!openRaffleId}
         onClose={() => {
@@ -280,16 +281,8 @@ export default function App() {
         creator={raffle?.creator}
       />
 
-      {/* Cashier modal (keeps your existing Modal; we’ll swap to the old CashierModal later if you want) */}
-      <Modal open={cashierOpen} onClose={() => setCashierOpen(false)} title="Cashier">
-        <div style={{ lineHeight: 1.6 }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>What you need</div>
-          <ul>
-            <li>Energy coins (XTZ) for energy costs and the draw step.</li>
-            <li>Coins (USDC) to buy tickets.</li>
-          </ul>
-        </div>
-      </Modal>
+      {/* Cashier modal (old style) */}
+      <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
       {/* Create raffle modal */}
       <CreateRaffleModal
