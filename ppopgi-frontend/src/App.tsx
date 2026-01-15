@@ -1,7 +1,7 @@
 // src/App.tsx
 import { useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Ticket, Store, Compass, LogOut, Wallet } from "lucide-react";
+import { Ticket, Store, Compass, LogOut, Wallet, LayoutDashboard } from "lucide-react";
 import { useAccount, useDisconnect } from "wagmi";
 
 import { Modal } from "./ui/Modal";
@@ -22,6 +22,8 @@ export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
@@ -61,15 +63,19 @@ export default function App() {
 
   const raffle = (raffleDetailQ.data as any)?.raffle;
   const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
-  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen;
+  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen || dashboardOpen;
 
   return (
     <div className="min-h-screen pb-12 relative">
       <DisclaimerGate onAccept={() => setDisclaimerTick((x) => x + 1)} />
 
-      <Navbar onOpenCashier={() => setCashierOpen(true)} onOpenCreate={() => setCreateOpen(true)} />
+      <Navbar
+        onOpenCashier={() => setCashierOpen(true)}
+        onOpenCreate={() => setCreateOpen(true)}
+        onOpenDashboard={() => setDashboardOpen(true)}
+      />
 
-      {/* space for floating navbar */}
+      {/* keep banner, but NOT in navbar */}
       <div className="pt-28">
         <NetworkBanner />
       </div>
@@ -80,6 +86,7 @@ export default function App() {
         }`}
       >
         <main className="container mx-auto px-4 pt-6 max-w-[100rem] animate-fade-in">
+          {/* Big prizes */}
           <div className="w-fit mx-auto bg-white/10 backdrop-blur-sm rounded-3xl p-6 mb-6 border border-white/30 shadow-lg relative overflow-visible mt-6">
             <div className="flex items-center gap-3 mb-2 pl-1">
               <div className="p-2 rounded-xl bg-yellow-400 text-white shadow-md rotate-[-6deg]">
@@ -115,6 +122,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Ending soon */}
           <div className="w-fit mx-auto bg-white/10 backdrop-blur-sm rounded-3xl p-6 mb-10 border border-white/30 shadow-lg relative overflow-visible">
             <div className="flex items-center gap-3 mb-2 pl-1">
               <div className="p-2 rounded-xl bg-red-400 text-white shadow-md rotate-[-6deg]">
@@ -152,6 +160,7 @@ export default function App() {
         </main>
       </div>
 
+      {/* Raffle modal */}
       <Modal
         open={!!openRaffleId}
         onClose={() => {
@@ -262,11 +271,18 @@ export default function App() {
         </div>
       </Modal>
 
-      <CreateRaffleModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => {}}
-      />
+      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
+
+      {/* Dashboard (placeholder shell) */}
+      <Modal open={dashboardOpen} onClose={() => setDashboardOpen(false)} title="Dashboard">
+        <div style={{ lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 1000 }}>Player activity</div>
+          <div style={{ marginTop: 8, opacity: 0.85 }}>
+            Next step: we’ll list raffles you created, tickets you bought, and show claim/refund buttons
+            based on live on-chain reads + the subgraph.
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -274,9 +290,11 @@ export default function App() {
 function Navbar({
   onOpenCashier,
   onOpenCreate,
+  onOpenDashboard,
 }: {
   onOpenCashier: () => void;
   onOpenCreate: () => void;
+  onOpenDashboard: () => void;
 }) {
   const { disconnect } = useDisconnect();
 
@@ -284,7 +302,7 @@ function Navbar({
     <nav className="fixed top-4 left-0 right-0 z-50 px-4">
       <div className="mx-auto max-w-[1100px] h-20 bg-white/85 backdrop-blur-md border border-white/50 rounded-3xl shadow-sm flex items-center justify-between px-4 md:px-8">
         <ConnectButton.Custom>
-          {({ account, chain, openConnectModal, openChainModal, mounted }) => {
+          {({ account, chain, openConnectModal, mounted }) => {
             const connected = mounted && account && chain;
 
             return (
@@ -333,29 +351,13 @@ function Navbar({
 
                   {connected ? (
                     <div className="flex items-center gap-2">
-                      {chain?.unsupported ? (
-                        <button
-                          onClick={openChainModal}
-                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold shadow-sm text-sm"
-                        >
-                          Wrong network
-                        </button>
-                      ) : (
-                        <button
-                          onClick={openChainModal}
-                          className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
-                          title="Network"
-                        >
-                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                          {chain?.name ?? "Network"}
-                        </button>
-                      )}
-
+                      {/* Player button opens dashboard */}
                       <button
+                        onClick={onOpenDashboard}
                         className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
-                        title="Account"
+                        title="Open Dashboard"
                       >
-                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                        <LayoutDashboard size={16} />
                         {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
                       </button>
 
