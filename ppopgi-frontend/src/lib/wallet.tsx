@@ -1,18 +1,28 @@
 // src/lib/wallet.tsx
 import "@rainbow-me/rainbowkit/styles.css";
-import { RainbowKitProvider, getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { WagmiProvider } from "wagmi";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { etherlink } from "viem/chains";
 import React from "react";
+import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
+import { WagmiProvider, createConfig, http } from "wagmi";
+import { etherlink } from "viem/chains";
+import { injected, walletConnect } from "wagmi/connectors";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string;
+const RPC = (import.meta.env.VITE_RPC_URL as string) || "https://node.mainnet.etherlink.com";
+const wcProjectId = (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string) || "";
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "Ppopgi",
-  projectId,
+const connectors = [
+  // MetaMask / Injected — most reliable for your case
+  injected({ shimDisconnect: true }),
+  // WalletConnect (optional)
+  ...(wcProjectId ? [walletConnect({ projectId: wcProjectId, showQrModal: true })] : []),
+];
+
+export const wagmiConfig = createConfig({
   chains: [etherlink],
-  // Important for Vite SPA
+  connectors,
+  transports: {
+    [etherlink.id]: http(RPC),
+  },
   ssr: false,
 });
 
