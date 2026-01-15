@@ -5,10 +5,9 @@ import { formatUnits } from "viem";
 
 function fmt(n?: string) {
   if (!n) return "0";
-  // keep it calm: max 4 decimals
   const [a, b] = n.split(".");
   if (!b) return a;
-  return `${a}.${b.slice(0, 4)}`;
+  return `${a}.${b.slice(0, 2)}`; // nicer in navbar
 }
 
 export function WalletPill() {
@@ -36,30 +35,30 @@ export function WalletPill() {
 
   if (!isConnected || status === "connecting") return null;
 
-  const xtz = xtzBal.data ? fmt(xtzBal.data.formatted) : "…";
+  const xtz = xtzBal.data ? fmt(xtzBal.data.formatted) : "0";
 
   const d = Number(usdcDecimals.data ?? 6);
-  const usdc = usdcBal.data ? fmt(formatUnits(usdcBal.data as bigint, d)) : "…";
+  const usdc = usdcBal.data ? fmt(formatUnits(usdcBal.data as bigint, d)) : "0";
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-      <div style={chip()}>
-        Energy: <span style={{ fontWeight: 1000 }}>{xtz}</span> XTZ
-      </div>
-      <div style={chip()}>
-        Coins: <span style={{ fontWeight: 1000 }}>{usdc}</span> USDC
+    <div className="hidden lg:block">
+      <div className="flex flex-col gap-1 pl-1">
+        <div className="w-40 bg-[#E8F5E9] text-green-700 px-2.5 py-1 rounded-md font-bold text-[10px] flex items-center justify-between border border-green-200 shadow-sm tracking-tight">
+          <div className="flex items-center gap-1.5">
+            <span className="text-green-600">⚡</span>
+            <span>Energy</span>
+          </div>
+          <span>{xtz} XTZ</span>
+        </div>
+
+        <div className="w-40 bg-[#FFF8E1] text-amber-700 px-2.5 py-1 rounded-md font-bold text-[10px] flex items-center justify-between border border-amber-200 shadow-sm tracking-tight">
+          <div className="flex items-center gap-1.5">
+            <span className="text-amber-600">🪙</span>
+            <span>Entry</span>
+          </div>
+          <span>{usdc} USDC</span>
+        </div>
       </div>
     </div>
   );
-}
-
-function chip(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(255,255,255,0.45)",
-    background: "rgba(255,255,255,0.20)",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontWeight: 900,
-    fontSize: 13,
-  };
 }
