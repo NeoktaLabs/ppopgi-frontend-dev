@@ -4,13 +4,16 @@ import { useBigPrizes, useEndingSoon } from "./features/raffles/useRafflesHome";
 import { RaffleCard } from "./features/raffles/RaffleCard";
 import { useQuery } from "@tanstack/react-query";
 import { getSubgraphClient } from "./lib/subgraph";
-import { QUERY_RAFFLE_DETAIL } from "./lib/queries";
+import { QUERY_RAFFLE_DETAIL, QUERY_RAFFLE_EVENTS } from "./lib/queries";
 import { DisclaimerGate } from "./features/disclaimer/DisclaimerGate";
 import { friendlyStatus } from "./lib/format";
+import { RaffleTimeline } from "./features/raffles/RaffleTimeline";
+import { SafetyProofModal } from "./features/safety/SafetyProofModal";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
 
@@ -40,7 +43,18 @@ export default function App() {
     retry: 1,
   });
 
+  const raffleEventsQ = useQuery({
+    queryKey: ["raffleEvents", openRaffleId],
+    enabled: !!openRaffleId,
+    queryFn: async () => {
+      const client = getSubgraphClient();
+      return client.request(QUERY_RAFFLE_EVENTS, { raffle: openRaffleId, first: 50 });
+    },
+    retry: 1,
+  });
+
   const raffle = (raffleDetailQ.data as any)?.raffle;
+  const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
 
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: 16 }}>
@@ -137,6 +151,7 @@ export default function App() {
         open={!!openRaffleId}
         onClose={() => {
           setOpenRaffleId(null);
+          setSafetyOpen(false);
           window.location.hash = "";
         }}
         title={raffle?.name || "Raffle"}
@@ -173,6 +188,22 @@ export default function App() {
               {raffle.paused ? " (paused)" : ""}
             </div>
 
+            <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={() => setSafetyOpen(true)}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,0.50)",
+                  background: "rgba(255,255,255,0.20)",
+                  cursor: "pointer",
+                  fontWeight: 1000,
+                }}
+              >
+                Safety &amp; Proof
+              </button>
+            </div>
+
             <div style={{ marginTop: 8 }}>Ticket: {raffle.ticketPrice} USDC</div>
             <div>Win: {raffle.winningPot} USDC</div>
             <div>Joined: {raffle.sold}</div>
@@ -195,12 +226,33 @@ export default function App() {
               </div>
             )}
 
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontWeight: 1000, marginBottom: 8 }}>Timeline</div>
+              {raffleEventsQ.isLoading ? (
+                <div>Loading…</div>
+              ) : raffleEventsQ.error ? (
+                <div style={{ fontWeight: 800, opacity: 0.9 }}>
+                  This timeline may be slightly behind.
+                </div>
+              ) : (
+                <RaffleTimeline events={events} />
+              )}
+            </div>
+
             <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
               This view is fast. Before any action, we’ll confirm live data.
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Safety & Proof modal */}
+      <SafetyProofModal
+        open={safetyOpen}
+        onClose={() => setSafetyOpen(false)}
+        raffleId={openRaffleId ?? ""}
+        creator={raffle?.creator}
+      />
 
       {/* Cashier modal */}
       <Modal open={cashierOpen} onClose={() => setCashierOpen(false)} title="Cashier">
