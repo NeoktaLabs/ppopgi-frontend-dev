@@ -1,43 +1,94 @@
-// src/features/disclaimer/DisclaimerGate.tsx
-import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
+import { getSubgraphClient } from "../../lib/subgraph";
+import { QUERY_MY_ACTIVITY_EVENTS, QUERY_MY_CREATED_RAFFLES } from "../../lib/queries";
 
-export function DisclaimerGate({ onAccept }: { onAccept?: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
+type RaffleLite = {
+  id: string;
+  name: string;
+  status: string;
+  paused: boolean;
+  ticketPrice: string;
+  winningPot: string;
+  deadline: string;
+  sold: string;
+  minTickets?: string;
+  maxTickets?: string | null;
+  createdAtTimestamp?: string;
+  creationTx?: string;
+  winner?: string | null;
+  winningTicketIndex?: string | null;
+  canceledAt?: string | null;
+  canceledReason?: string | null;
+};
 
-  useEffect(() => {
-    if (!sessionStorage.getItem("ppopgi_disclaimer_accepted")) {
-      setIsOpen(true);
+type ActivityEvent = {
+  type: string;
+  blockTimestamp: string;
+  txHash?: string | null;
+  amount?: string | null;
+  amount2?: string | null;
+  raffle: RaffleLite;
+};
+
+function toBytesAddress(addr?: string) {
+  return addr ? addr.toLowerCase() : "";
+}
+
+export function useDashboard() {
+  const { address, isConnected } = useAccount();
+  const me = useMemo(() => toBytesAddress(address), [address]);
+
+  const createdQ = useQuery({
+    queryKey: ["dashboard", "created", me],
+    enabled: isConnected && !!me,
+    queryFn: async () => {
+      const client = getSubgraphClient();
+      return client.request<{ raffles: RaffleLite[] }>(QUERY_MY_CREATED_RAFFLES, { me, first: 50 });
+    },
+    retry: 1,
+    refetchInterval: 20_000,
+  });
+
+  const activityQ = useQuery({
+    queryKey: ["dashboard", "activity", me],
+    enabled: isConnected && !!me,
+    queryFn: async () => {
+      const client = getSubgraphClient();
+      return client.request<{ raffleEvents: ActivityEvent[] }>(QUERY_MY_ACTIVITY_EVENTS, {
+        me,
+        first: 200,
+      });
+    },
+    retry: 1,
+    refetchInterval: 20_000,
+  });
+
+  const activityByRaffle = useMemo(() => {
+    const map = new Map<string, { raffle: RaffleLite; latestTs: number; types: Set<string> }>();
+    const evs = activityQ.data?.raffleEvents ?? [];
+    for (const e of evs) {
+      const id = (e.raffle?.id ?? "").toLowerCase();
+      if (!id) continue;
+      const ts = Number(e.blockTimestamp || 0);
+      const cur = map.get(id);
+      if (!cur) {
+        map.set(id, { raffle: e.raffle, latestTs: ts, types: new Set([e.type]) });
+      } else {
+        cur.latestTs = Math.max(cur.latestTs, ts);
+        cur.types.add(e.type);
+        // keep freshest raffle snapshot
+        cur.raffle = e.raffle ?? cur.raffle;
+      }
     }
-  }, []);
+    return Array.from(map.values()).sort((a, b) => b.latestTs - a.latestTs);
+  }, [activityQ.data]);
 
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-fade-in">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in-up border border-gray-200">
-        <div className="flex justify-center mb-4 bg-amber-100 w-20 h-20 rounded-full items-center mx-auto">
-          <AlertTriangle size={40} className="text-amber-500" />
-        </div>
-        <h2 className="text-2xl font-black text-center mb-2 text-gray-800 uppercase">
-          Welcome to Ppopgi
-        </h2>
-        <p className="text-center text-gray-500 text-sm mb-6 leading-relaxed">
-          By entering, you confirm you are 18+ years of age and accept the risks
-          associated with blockchain gaming.
-        </p>
-        <button
-          onClick={() => {
-            sessionStorage.setItem("ppopgi_disclaimer_accepted", "true");
-            setIsOpen(false);
-            onAccept?.();
-          }}
-          className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl transition-colors shadow-lg shadow-amber-200"
-        >
-          Enter Park
-        </button>
-      </div>
-    </div>
-  );
+  return {
+    me,
+    createdQ,
+    activityQ,
+    activityByRaffle,
+  };
 }
