@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
 import { Modal } from "../../ui/Modal";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import {
+  useAccount,
+  useReadContract,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 import { ADDR, ERC20_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits } from "viem";
 
 export function CreateRaffleModal({
   open,
@@ -13,7 +18,7 @@ export function CreateRaffleModal({
   onClose: () => void;
   onCreated: (raffleAddress: string) => void;
 }) {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
 
   // Read deployer config for transparency
   const cfg = useMemo(
@@ -73,7 +78,7 @@ export function CreateRaffleModal({
   const [durationHours, setDurationHours] = useState("24");
   const [minTickets, setMinTickets] = useState("1");
   const [maxTickets, setMaxTickets] = useState(""); // optional
-  const [minPurchaseAmount, setMinPurchaseAmount] = useState("1"); // USDC (anti-spam rule)
+  const [minPurchaseAmount, setMinPurchaseAmount] = useState("1"); // uint32 (raw)
 
   const { writeContractAsync, data: txHash, isPending } = useWriteContract();
   const tx = useWaitForTransactionReceipt({ hash: txHash });
@@ -89,36 +94,26 @@ export function CreateRaffleModal({
 
     const tp = parseUnits(ticketPrice || "0", d);
     const wp = parseUnits(winningPot || "0", d);
-    const minBuy = parseUnits(minPurchaseAmount || "1", d); // in USDC smallest units
 
-    // NOTE: createSingleWinnerLottery returns the new address, but wagmi can't directly read return value from tx.
-    // We'll read it from the transaction receipt logs later via the indexer or use the event in a later improvement.
+    // IMPORTANT: contract expects uint32 (raw), not USDC units.
+    // Keep it a simple integer with sane bounds.
+    const minBuyRaw = Math.max(1, Math.floor(Number(minPurchaseAmount) || 1));
+    const minBuyU32 = Math.min(minBuyRaw, 0xffffffff);
+
     const hash = await writeContractAsync({
       address: ADDR.deployer,
       abi: SINGLE_WINNER_DEPLOYER_ABI,
       functionName: "createSingleWinnerLottery",
-      args: [
-        name,
-        tp,
-        wp,
-        minT,
-        maxT,
-        durationSeconds,
-        Number(formatUnits(minBuy, d)) >= 1 ? Number(minBuy) : Number(minBuy), // keep as uint32 in smallest units
-      ] as any,
+      args: [name, tp, wp, minT, maxT, durationSeconds, minBuyU32] as any,
     });
 
-    // Once mined, we’ll use the indexer on the home screen to find it.
-    // For now, after confirm, just close and let you refresh.
     return hash;
   }
 
   return (
     <Modal open={open} onClose={onClose} title="Create">
       {!isConnected ? (
-        <div style={{ fontWeight: 900, lineHeight: 1.6 }}>
-          Sign in to create a raffle.
-        </div>
+        <div style={{ fontWeight: 900, lineHeight: 1.6 }}>Sign in to create a raffle.</div>
       ) : (
         <div style={{ display: "grid", gap: 14 }}>
           <div style={panel()}>
@@ -128,10 +123,7 @@ export function CreateRaffleModal({
               <div>Randomness system: {String(qEntropy.data ?? "…")}</div>
               <div>Randomness provider: {String(qProvider.data ?? "…")}</div>
               <div>Fee receiver: {String(qFee.data ?? "…")}</div>
-              <div>
-                Ppopgi fee:{" "}
-                {percent === null ? "…" : `${percent}%`}
-              </div>
+              <div>Ppopgi fee: {percent === null ? "…" : `${percent}%`}</div>
             </div>
           </div>
 
@@ -188,35 +180,22 @@ export function CreateRaffleModal({
                 </Field>
               </div>
 
-              <Field label="Minimum buy when not extending the latest range (USDC)">
+              <Field label="Minimum buy amount (raw)">
                 <input
                   value={minPurchaseAmount}
                   onChange={(e) => setMinPurchaseAmount(e.target.value)}
                   style={input()}
-                  inputMode="decimal"
+                  inputMode="numeric"
                 />
-                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                  This prevents tiny fragmented buys.
-                </div>
               </Field>
 
-              <button
-                onClick={onCreate}
-                disabled={!canSubmit}
-                style={primaryBtn(!canSubmit)}
-              >
+              <button onClick={onCreate} disabled={!canSubmit} style={primaryBtn(!canSubmit)}>
                 {isPending ? "Confirming…" : "Create raffle"}
               </button>
 
-              {txHash && (
-                <div style={{ fontSize: 12, opacity: 0.85 }}>
-                  We’re confirming your raffle…
-                </div>
-              )}
+              {txHash && <div style={{ fontSize: 12, opacity: 0.85 }}>We’re confirming your raffle…</div>}
               {tx.isSuccess && (
-                <div style={{ fontWeight: 900 }}>
-                  Created. It should appear on the home list soon.
-                </div>
+                <div style={{ fontWeight: 900 }}>Created. It should appear on the home list soon.</div>
               )}
             </div>
           </div>
@@ -254,7 +233,7 @@ function input(): React.CSSProperties {
     width: "100%",
     padding: "10px 12px",
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.40)",
+    border: "1px solid rgba(255,255,255,0.4)",
     background: "rgba(255,255,255,0.22)",
     outline: "none",
     fontWeight: 900,
@@ -266,7 +245,7 @@ function primaryBtn(disabled: boolean): React.CSSProperties {
     width: "100%",
     padding: "12px 14px",
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.50)",
+    border: "1px solid rgba(255,255,255,0.5)",
     background: disabled ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.28)",
     cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 1000,
