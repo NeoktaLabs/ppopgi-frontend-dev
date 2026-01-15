@@ -1,48 +1,45 @@
 import { Modal } from "../../ui/Modal";
-import { storage } from "../../lib/storage";
+import { addrUrl } from "../../lib/explorer";
 
-const KEY = "ppopgi_disclaimer_ok_v1";
-
-export function DisclaimerGate({ onAccept }: { onAccept: () => void }) {
-  const accepted = storage.getBool(KEY);
-
+export function SafetyProofModal({
+  open,
+  onClose,
+  raffleId,
+  creator,
+}: {
+  open: boolean;
+  onClose: () => void;
+  raffleId: string;
+  creator?: string | null;
+}) {
   return (
-    <Modal
-      open={!accepted}
-      onClose={() => {
-        // no “close to skip”
-      }}
-      title="Before you play"
-      fullscreen
-    >
-      <div style={{ maxWidth: 720, margin: "0 auto", paddingTop: 32 }}>
-        <ul style={{ fontSize: 18, lineHeight: 1.6 }}>
-          <li style={{ marginBottom: 10 }}>This is an experimental app.</li>
-          <li style={{ marginBottom: 10 }}>You’re responsible for your choices.</li>
-          <li style={{ marginBottom: 10 }}>
-            Only play with money you can afford to lose.
-          </li>
-        </ul>
+    <Modal open={open} onClose={onClose} title="Safety & Proof">
+      <div style={{ display: "grid", gap: 12, lineHeight: 1.6 }}>
+        <div>
+          <div style={{ fontWeight: 1000 }}>What the app cannot do</div>
+          <ul style={{ marginTop: 8 }}>
+            <li>It cannot choose the winner.</li>
+            <li>It cannot change the rules after creation.</li>
+            <li>It cannot take prizes or refunds once they’re owed.</li>
+          </ul>
+        </div>
 
-        <div style={{ marginTop: 24 }}>
-          <button
-            onClick={() => {
-              storage.setBool(KEY, true);
-              onAccept();
-            }}
-            style={{
-              width: "100%",
-              padding: "14px 16px",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.45)",
-              background: "rgba(255,255,255,0.30)",
-              cursor: "pointer",
-              fontWeight: 1000,
-              fontSize: 16,
-            }}
-          >
-            I understand — let’s go
-          </button>
+        <div>
+          <div style={{ fontWeight: 1000 }}>Proof links</div>
+          <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+            <a href={addrUrl(raffleId)} target="_blank" rel="noreferrer">
+              View raffle proof
+            </a>
+            {creator && (
+              <a href={addrUrl(creator)} target="_blank" rel="noreferrer">
+                View creator proof
+              </a>
+            )}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, opacity: 0.8 }}>
+          Next: we’ll add the “Who gets what” fee breakdown from live on-chain reads.
         </div>
       </div>
     </Modal>
