@@ -17,21 +17,16 @@ import { SafetyProofModal } from "./features/safety/SafetyProofModal";
 import { WalletPill } from "./features/wallet/WalletPill";
 import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
 import { NetworkBanner } from "./features/wallet/NetworkBanner";
-import { CashierModal } from "./features/cashier/CashierModal";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
-
-  // Used to force a re-render after disclaimer acceptance (simple + reliable)
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
-  // Subscribe to wallet state so the UI reacts immediately after connect
   const acc = useAccount();
 
-  // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
     return m ? decodeURIComponent(m[1]).toLowerCase() : null;
@@ -66,32 +61,25 @@ export default function App() {
 
   const raffle = (raffleDetailQ.data as any)?.raffle;
   const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
-
-  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen || cashierOpen;
+  const anyOverlayOpen = !!openRaffleId || createOpen || safetyOpen;
 
   return (
     <div className="min-h-screen pb-12 relative">
       <DisclaimerGate onAccept={() => setDisclaimerTick((x) => x + 1)} />
 
-      {/* NAVBAR (old style) */}
-      <Navbar
-        onOpenCashier={() => setCashierOpen(true)}
-        onOpenCreate={() => setCreateOpen(true)}
-      />
+      <Navbar onOpenCashier={() => setCashierOpen(true)} onOpenCreate={() => setCreateOpen(true)} />
 
-      {/* Calm network mismatch banner */}
-      <div className="pt-20">
+      {/* space for floating navbar */}
+      <div className="pt-28">
         <NetworkBanner />
       </div>
 
-      {/* MAIN (blur/scale when modals open like old app) */}
       <div
         className={`transition-all duration-300 ${
           anyOverlayOpen ? "scale-[0.98] blur-[2px] opacity-50 pointer-events-none" : ""
         }`}
       >
         <main className="container mx-auto px-4 pt-6 max-w-[100rem] animate-fade-in">
-          {/* SECTION: Big prizes */}
           <div className="w-fit mx-auto bg-white/10 backdrop-blur-sm rounded-3xl p-6 mb-6 border border-white/30 shadow-lg relative overflow-visible mt-6">
             <div className="flex items-center gap-3 mb-2 pl-1">
               <div className="p-2 rounded-xl bg-yellow-400 text-white shadow-md rotate-[-6deg]">
@@ -106,16 +94,12 @@ export default function App() {
             </p>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
-              {big.isLoading && (
-                <div className="text-white font-bold opacity-80 py-10">Loading…</div>
-              )}
-
+              {big.isLoading && <div className="text-white font-bold opacity-80 py-10">Loading…</div>}
               {big.error && (
                 <div className="text-white font-bold opacity-90 py-10">
                   Loading directly from the network… This may take a moment.
                 </div>
               )}
-
               {(big.data?.raffles ?? []).map((r) => (
                 <div key={r.id} className="w-full flex justify-center">
                   <RaffleCard
@@ -131,7 +115,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* SECTION: Ending soon */}
           <div className="w-fit mx-auto bg-white/10 backdrop-blur-sm rounded-3xl p-6 mb-10 border border-white/30 shadow-lg relative overflow-visible">
             <div className="flex items-center gap-3 mb-2 pl-1">
               <div className="p-2 rounded-xl bg-red-400 text-white shadow-md rotate-[-6deg]">
@@ -146,16 +129,12 @@ export default function App() {
             </p>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
-              {soon.isLoading && (
-                <div className="text-white font-bold opacity-80 py-10">Loading…</div>
-              )}
-
+              {soon.isLoading && <div className="text-white font-bold opacity-80 py-10">Loading…</div>}
               {soon.error && (
                 <div className="text-white font-bold opacity-90 py-10">
                   Loading directly from the network… This may take a moment.
                 </div>
               )}
-
               {(soon.data?.raffles ?? []).map((r) => (
                 <div key={r.id} className="w-full flex justify-center">
                   <RaffleCard
@@ -173,7 +152,6 @@ export default function App() {
         </main>
       </div>
 
-      {/* RAFFLE MODAL */}
       <Modal
         open={!!openRaffleId}
         onClose={() => {
@@ -186,9 +164,7 @@ export default function App() {
         {raffleDetailQ.isLoading ? (
           <div>Loading…</div>
         ) : raffleDetailQ.error ? (
-          <div style={{ fontWeight: 800 }}>
-            Loading directly from the network… This may take a moment.
-          </div>
+          <div style={{ fontWeight: 800 }}>Loading directly from the network… This may take a moment.</div>
         ) : !raffle ? (
           <div style={{ fontWeight: 800 }}>
             We couldn’t find this raffle right now.
@@ -247,9 +223,7 @@ export default function App() {
               >
                 <div style={{ fontWeight: 900 }}>Winner</div>
                 <div style={{ marginTop: 4 }}>{raffle.winner}</div>
-                <div style={{ marginTop: 4, opacity: 0.9 }}>
-                  Winning ticket: {raffle.winningTicketIndex}
-                </div>
+                <div style={{ marginTop: 4, opacity: 0.9 }}>Winning ticket: {raffle.winningTicketIndex}</div>
               </div>
             )}
 
@@ -258,9 +232,7 @@ export default function App() {
               {raffleEventsQ.isLoading ? (
                 <div>Loading…</div>
               ) : raffleEventsQ.error ? (
-                <div style={{ fontWeight: 800, opacity: 0.9 }}>
-                  This timeline may be slightly behind.
-                </div>
+                <div style={{ fontWeight: 800, opacity: 0.9 }}>This timeline may be slightly behind.</div>
               ) : (
                 <RaffleTimeline events={events} />
               )}
@@ -273,7 +245,6 @@ export default function App() {
         )}
       </Modal>
 
-      {/* Safety & Proof modal */}
       <SafetyProofModal
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
@@ -281,22 +252,25 @@ export default function App() {
         creator={raffle?.creator}
       />
 
-      {/* Cashier modal (old style) */}
-      <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
+      <Modal open={cashierOpen} onClose={() => setCashierOpen(false)} title="Cashier">
+        <div style={{ lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>What you need</div>
+          <ul>
+            <li>Energy coins (XTZ) for energy costs and the draw step.</li>
+            <li>Coins (USDC) to buy tickets.</li>
+          </ul>
+        </div>
+      </Modal>
 
-      {/* Create raffle modal */}
       <CreateRaffleModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => {
-          // Next step: auto-open created raffle
-        }}
+        onCreated={() => {}}
       />
     </div>
   );
 }
 
-/** Old-style navbar shell, but reuses your current WalletPill + RainbowKit */
 function Navbar({
   onOpenCashier,
   onOpenCreate,
@@ -305,121 +279,110 @@ function Navbar({
   onOpenCreate: () => void;
 }) {
   const { disconnect } = useDisconnect();
-  const { address } = useAccount();
 
   return (
-    <nav className="w-full h-20 bg-white/85 backdrop-blur-md border-b border-white/50 fixed top-0 z-50 flex items-center justify-between px-4 md:px-8 shadow-sm">
-      <ConnectButton.Custom>
-        {({ account, chain, openConnectModal, openChainModal, mounted }) => {
-          const connected = mounted && account && chain;
+    <nav className="fixed top-4 left-0 right-0 z-50 px-4">
+      <div className="mx-auto max-w-[1100px] h-20 bg-white/85 backdrop-blur-md border border-white/50 rounded-3xl shadow-sm flex items-center justify-between px-4 md:px-8">
+        <ConnectButton.Custom>
+          {({ account, chain, openConnectModal, openChainModal, mounted }) => {
+            const connected = mounted && account && chain;
 
-          return (
-            <>
-              {/* Left */}
-              <div className="flex items-center gap-6">
-                <div
-                  className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
-                  onClick={() => {
-                    // Home
-                    window.location.hash = "";
-                  }}
-                >
-                  <div className="w-9 h-9 bg-[#FFD700] rounded-full flex items-center justify-center text-white font-bold shadow-inner border-2 border-white">
-                    <Ticket size={18} className="text-amber-700" />
-                  </div>
-                  <span className="font-bold text-xl text-amber-800 tracking-tight hidden md:block">
-                    Ppopgi
-                  </span>
-                </div>
-
-                <div className="hidden md:flex items-center gap-2">
-                  <button
+            return (
+              <>
+                <div className="flex items-center gap-6">
+                  <div
+                    className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
                     onClick={() => {
-                      // keep as placeholder for now
+                      window.location.hash = "";
                     }}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                   >
-                    <Compass size={16} /> Explore
-                  </button>
-
-                  <button
-                    onClick={() => (connected ? onOpenCreate() : openConnectModal())}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-amber-700 hover:bg-amber-100 transition-colors"
-                  >
-                    <Ticket size={16} /> Create
-                  </button>
-                </div>
-              </div>
-
-              {/* Right */}
-              <div className="flex items-center gap-4">
-                {/* Balances pill (your component) */}
-                <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 pr-2 rounded-2xl border border-gray-200/60 shadow-inner">
-                  <div className="hidden lg:block pl-1">
-                    <WalletPill />
+                    <div className="w-9 h-9 bg-[#FFD700] rounded-full flex items-center justify-center text-white font-bold shadow-inner border-2 border-white">
+                      <Ticket size={18} className="text-amber-700" />
+                    </div>
+                    <span className="font-bold text-xl text-amber-800 tracking-tight hidden md:block">
+                      Ppopgi
+                    </span>
                   </div>
 
-                  <button
-                    onClick={onOpenCashier}
-                    className="bg-amber-500 hover:bg-amber-600 text-white p-2 md:px-4 md:py-2.5 rounded-xl font-bold shadow-sm active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-xs md:text-sm h-full"
-                  >
-                    <Store size={18} />
-                    <span className="hidden md:inline">Cashier</span>
-                  </button>
+                  <div className="hidden md:flex items-center gap-2">
+                    <button className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                      <Compass size={16} /> Explore
+                    </button>
+
+                    <button
+                      onClick={() => (connected ? onOpenCreate() : openConnectModal())}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm text-gray-600 hover:text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      <Ticket size={16} /> Create
+                    </button>
+                  </div>
                 </div>
 
-                {connected ? (
-                  <div className="flex items-center gap-2">
-                    {/* Wrong network button (old behavior) */}
-                    {chain?.unsupported ? (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 pr-2 rounded-2xl border border-gray-200/60 shadow-inner">
+                    <WalletPill />
+
+                    <button
+                      onClick={onOpenCashier}
+                      className="bg-amber-500 hover:bg-amber-600 text-white p-2 md:px-4 md:py-2.5 rounded-xl font-bold shadow-sm active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-xs md:text-sm h-full"
+                    >
+                      <Store size={18} />
+                      <span className="hidden md:inline">Cashier</span>
+                    </button>
+                  </div>
+
+                  {connected ? (
+                    <div className="flex items-center gap-2">
+                      {chain?.unsupported ? (
+                        <button
+                          onClick={openChainModal}
+                          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold shadow-sm text-sm"
+                        >
+                          Wrong network
+                        </button>
+                      ) : (
+                        <button
+                          onClick={openChainModal}
+                          className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
+                          title="Network"
+                        >
+                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                          {chain?.name ?? "Network"}
+                        </button>
+                      )}
+
                       <button
-                        onClick={openChainModal}
-                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl font-bold shadow-sm text-sm"
-                      >
-                        Wrong network
-                      </button>
-                    ) : (
-                      <button
-                        onClick={openChainModal}
                         className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
-                        title="Network"
+                        title="Account"
                       >
                         <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                        {chain?.name ?? "Network"}
+                        {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
                       </button>
-                    )}
 
+                      <button
+                        onClick={() => disconnect()}
+                        className="bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 p-2.5 rounded-xl transition-colors border border-transparent hover:border-red-100"
+                        title="Disconnect Wallet"
+                      >
+                        <LogOut size={18} />
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-4 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
-                      title="Account"
+                      onClick={openConnectModal}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
                     >
-                      <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                      {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
+                      <Wallet size={18} />
+                      <span className="hidden md:inline">Join the Park</span>
+                      <span className="md:hidden">Join</span>
                     </button>
-
-                    <button
-                      onClick={() => disconnect()}
-                      className="bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 p-2.5 rounded-xl transition-colors border border-transparent hover:border-red-100"
-                      title="Disconnect Wallet"
-                    >
-                      <LogOut size={18} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={openConnectModal}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
-                  >
-                    <Wallet size={18} />
-                    <span className="hidden md:inline">Join the Park</span>
-                    <span className="md:hidden">Join</span>
-                  </button>
-                )}
-              </div>
-            </>
-          );
-        }}
-      </ConnectButton.Custom>
+                  )}
+                </div>
+              </>
+            );
+          }}
+        </ConnectButton.Custom>
+      </div>
     </nav>
   );
 }
