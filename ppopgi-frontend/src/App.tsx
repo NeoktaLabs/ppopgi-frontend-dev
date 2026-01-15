@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./ui/Modal";
 import { useBigPrizes, useEndingSoon } from "./features/raffles/useRafflesHome";
@@ -12,6 +13,8 @@ import { SafetyProofModal } from "./features/safety/SafetyProofModal";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { WalletPill } from "./features/wallet/WalletPill";
 import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
+import { NetworkBanner } from "./features/wallet/NetworkBanner";
+import { useAccount } from "wagmi";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
@@ -23,11 +26,14 @@ export default function App() {
   // Used to force a re-render after disclaimer acceptance (simple + reliable)
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
+  // Subscribe to wallet state so the UI reacts immediately after connect
+  const acc = useAccount();
+
   // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
     return m ? decodeURIComponent(m[1]).toLowerCase() : null;
-  }, [disclaimerTick]);
+  }, [disclaimerTick, acc.address]);
 
   useEffect(() => {
     if (raffleFromHash) setOpenRaffleId(raffleFromHash);
@@ -94,6 +100,9 @@ export default function App() {
           <ConnectButton />
         </div>
       </div>
+
+      {/* Calm network mismatch banner */}
+      <NetworkBanner />
 
       {/* Home sections */}
       <div style={{ display: "grid", gap: 18, marginTop: 16 }}>
