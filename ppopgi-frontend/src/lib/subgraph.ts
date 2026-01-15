@@ -1,10 +1,11 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import { GraphQLClient } from "graphql-request";
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+export function getSubgraphClient() {
+  const url = import.meta.env.VITE_SUBGRAPH_URL as string;
+
+  if (!url) {
+    throw new Error("Missing VITE_SUBGRAPH_URL");
+  }
+
+  return new GraphQLClient(url);
+}
