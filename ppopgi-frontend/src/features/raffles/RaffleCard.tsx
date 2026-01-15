@@ -1,4 +1,5 @@
 import type { RaffleLite } from "./useRafflesHome";
+import { friendlyStatus } from "../../lib/format";
 
 function shorten(s: string, start = 6, end = 4) {
   if (!s) return "";
@@ -86,7 +87,7 @@ export function RaffleCard({
             fontSize: 12,
           }}
         >
-          {raffle.status}
+          {friendlyStatus(raffle.status)}
           {raffle.paused ? " (paused)" : ""}
         </div>
       </div>
