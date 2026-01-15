@@ -40,7 +40,19 @@ export default function App() {
   return (
     <div style={{ maxWidth: 1040, margin: "0 auto", padding: 16 }}>
       {/* Top bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          padding: "12px 14px",
+          borderRadius: 18,
+          border: "1px solid rgba(255,255,255,0.35)",
+          background: "rgba(255,255,255,0.18)",
+          backdropFilter: "blur(14px)",
+          boxShadow: "0 10px 34px rgba(0,0,0,0.10)",
+        }}
+      >
         <div style={{ fontWeight: 1000, letterSpacing: 0.2 }}>Ppopgi</div>
 
         <div style={{ display: "flex", gap: 12, marginLeft: 10 }}>
@@ -59,7 +71,7 @@ export default function App() {
       </div>
 
       {/* Home sections */}
-      <div style={{ display: "grid", gap: 18, marginTop: 12 }}>
+      <div style={{ display: "grid", gap: 18, marginTop: 16 }}>
         <section style={panel()}>
           <div style={{ fontWeight: 1000, fontSize: 18 }}>Big prizes right now</div>
           <div style={{ opacity: 0.85, marginTop: 4 }}>
@@ -137,21 +149,48 @@ export default function App() {
           </div>
         ) : (
           <div style={{ display: "grid", gap: 6 }}>
-            <div>
-              Status: {raffle.status}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 10px",
+                borderRadius: 999,
+                border: "1px dashed rgba(255,255,255,0.55)",
+                background: "rgba(169,212,255,0.18)",
+                fontWeight: 900,
+                width: "fit-content",
+              }}
+            >
+              {raffle.status}
               {raffle.paused ? " (paused)" : ""}
             </div>
-            <div>Ticket: {raffle.ticketPrice} USDC</div>
+
+            <div style={{ marginTop: 8 }}>Ticket: {raffle.ticketPrice} USDC</div>
             <div>Win: {raffle.winningPot} USDC</div>
             <div>Joined: {raffle.sold}</div>
 
             {raffle.winner && (
-              <div style={{ marginTop: 10 }}>
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,0.35)",
+                  background: "rgba(255,255,255,0.18)",
+                }}
+              >
                 <div style={{ fontWeight: 900 }}>Winner</div>
-                <div>{raffle.winner}</div>
-                <div>Winning ticket: {raffle.winningTicketIndex}</div>
+                <div style={{ marginTop: 4 }}>{raffle.winner}</div>
+                <div style={{ marginTop: 4, opacity: 0.9 }}>
+                  Winning ticket: {raffle.winningTicketIndex}
+                </div>
               </div>
             )}
+
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+              This view is fast. Before any action, we’ll confirm live data.
+            </div>
           </div>
         )}
       </Modal>
@@ -179,10 +218,10 @@ export default function App() {
 
 function linkBtn(): React.CSSProperties {
   return {
-    border: "none",
+    border: "1px solid rgba(255,255,255,0.0)",
     background: "transparent",
     cursor: "pointer",
-    fontWeight: 800,
+    fontWeight: 900,
     padding: "8px 10px",
     borderRadius: 12,
   };
@@ -190,7 +229,7 @@ function linkBtn(): React.CSSProperties {
 
 function pillBtn(): React.CSSProperties {
   return {
-    border: "1px solid rgba(255,255,255,0.4)",
+    border: "1px solid rgba(255,255,255,0.45)",
     background: "rgba(255,255,255,0.20)",
     cursor: "pointer",
     fontWeight: 900,
@@ -205,6 +244,7 @@ function panel(): React.CSSProperties {
     border: "1px solid rgba(255,255,255,0.35)",
     background: "rgba(255,255,255,0.18)",
     backdropFilter: "blur(14px)",
+    boxShadow: "0 10px 34px rgba(0,0,0,0.08)",
     padding: 14,
   };
 }
