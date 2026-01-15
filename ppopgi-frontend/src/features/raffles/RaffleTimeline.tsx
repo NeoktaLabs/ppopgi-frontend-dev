@@ -1,157 +1,94 @@
-import type { RaffleLite } from "./useRafflesHome";
-import { friendlyStatus } from "../../lib/format";
+import { addrUrl, txUrl } from "../../lib/explorer";
+import { timeAgoFromSeconds } from "../../lib/time";
 
-function shorten(s: string, start = 6, end = 4) {
-  if (!s) return "";
-  if (s.length <= start + end + 3) return s;
-  return `${s.slice(0, start)}…${s.slice(-end)}`;
+type RaffleEvent = {
+  type: string;
+  blockTimestamp: string;
+  actor?: string | null;
+  target?: string | null;
+  amount?: string | null;
+  amount2?: string | null;
+  text?: string | null;
+  txHash?: string | null;
+};
+
+function labelForType(t: string) {
+  // Keep it calm + simple
+  switch ((t || "").toUpperCase()) {
+    case "TICKETS_PURCHASED":
+      return "Tickets bought";
+    case "LOTTERY_FINALIZED":
+      return "Draw requested";
+    case "WINNER_PICKED":
+      return "Winner selected";
+    case "LOTTERY_CANCELED":
+      return "Cancelled";
+    case "FUNDS_CLAIMED":
+      return "Funds claimed";
+    case "NATIVE_CLAIMED":
+      return "Energy coins claimed";
+    case "PAUSED":
+      return "Paused";
+    case "UNPAUSED":
+      return "Unpaused";
+    default:
+      return t;
+  }
 }
 
-function secondsLeft(deadline: string) {
-  const dl = Number(deadline);
-  const now = Math.floor(Date.now() / 1000);
-  return Math.max(0, dl - now);
+function shortAddr(a?: string | null) {
+  if (!a) return "";
+  const s = a.toString();
+  if (s.length < 12) return s;
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
 }
 
-function formatTimeLeft(sec: number) {
-  if (sec <= 0) return "Ended";
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h <= 0) return `${m}m`;
-  return `${h}h ${m}m`;
-}
-
-export function RaffleCard({
-  raffle,
-  onOpen,
-}: {
-  raffle: RaffleLite;
-  onOpen: (id: string) => void;
-}) {
-  const left = formatTimeLeft(secondsLeft(raffle.deadline));
+export function RaffleTimeline({ events }: { events: RaffleEvent[] }) {
+  if (!events.length) {
+    return <div style={{ opacity: 0.85 }}>No timeline yet.</div>;
+  }
 
   return (
-    <div
-      style={{
-        borderRadius: 20,
-        border: "1px solid rgba(255,255,255,0.40)",
-        background:
-          "linear-gradient(135deg, rgba(246,182,200,0.22), rgba(255,255,255,0.14))",
-        backdropFilter: "blur(14px)",
-        boxShadow: "0 10px 34px rgba(0,0,0,0.10)",
-        padding: 14,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* Ticket notches */}
-      <div
-        style={{
-          position: "absolute",
-          left: -10,
-          top: "50%",
-          width: 20,
-          height: 20,
-          borderRadius: 999,
-          background: "rgba(255,246,239,0.90)",
-          transform: "translateY(-50%)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          right: -10,
-          top: "50%",
-          width: 20,
-          height: 20,
-          borderRadius: 999,
-          background: "rgba(255,246,239,0.90)",
-          transform: "translateY(-50%)",
-        }}
-      />
-
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div style={{ fontWeight: 1000, fontSize: 16 }}>{raffle.name || "Raffle"}</div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Proof: {shorten(raffle.id)}</div>
-        </div>
-
+    <div style={{ display: "grid", gap: 10 }}>
+      {events.map((e, idx) => (
         <div
+          key={idx}
           style={{
-            alignSelf: "start",
-            padding: "5px 10px",
-            borderRadius: 999,
-            border: "1px dashed rgba(255,255,255,0.55)",
-            background: "rgba(203,183,246,0.18)",
-            fontWeight: 900,
-            fontSize: 12,
+            border: "1px solid rgba(255,255,255,0.25)",
+            borderRadius: 16,
+            padding: 12,
+            background: "rgba(255,255,255,0.16)",
           }}
         >
-          {friendlyStatus(raffle.status)}
-          {raffle.paused ? " (paused)" : ""}
-        </div>
-      </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontWeight: 1000 }}>{labelForType(e.type)}</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              {timeAgoFromSeconds(e.blockTimestamp)}
+            </div>
+          </div>
 
-      <div
-        style={{
-          marginTop: 10,
-          borderTop: "1px dashed rgba(255,255,255,0.55)",
-          paddingTop: 10,
-          display: "grid",
-          gap: 6,
-          fontSize: 14,
-        }}
-      >
-        <div>
-          <span style={{ fontWeight: 900 }}>Win:</span> {raffle.winningPot} USDC
-        </div>
-        <div>
-          <span style={{ fontWeight: 900 }}>Ticket:</span> {raffle.ticketPrice} USDC
-        </div>
-        <div>
-          <span style={{ fontWeight: 900 }}>Ends in:</span> {left}
-        </div>
-        <div>
-          <span style={{ fontWeight: 900 }}>Joined:</span> {raffle.sold}
-          {raffle.maxTickets ? ` (Max: ${raffle.maxTickets})` : ""}
-        </div>
-      </div>
+          {e.text && <div style={{ marginTop: 6 }}>{e.text}</div>}
 
-      <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-        <button
-          onClick={() => onOpen(raffle.id)}
-          style={{
-            flex: 1,
-            padding: "10px 12px",
-            borderRadius: 14,
-            border: "1px solid rgba(255,255,255,0.50)",
-            background: "rgba(255,255,255,0.28)",
-            cursor: "pointer",
-            fontWeight: 1000,
-          }}
-        >
-          Open
-        </button>
-
-        <button
-          onClick={() => {
-            const url = `${window.location.origin}/#raffle=${encodeURIComponent(
-              raffle.id.toLowerCase()
-            )}`;
-            navigator.clipboard?.writeText(url);
-          }}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 14,
-            border: "1px solid rgba(255,255,255,0.50)",
-            background: "rgba(255,255,255,0.20)",
-            cursor: "pointer",
-            fontWeight: 1000,
-          }}
-        >
-          Share
-        </button>
-      </div>
+          <div style={{ marginTop: 8, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+            {e.actor && (
+              <a href={addrUrl(e.actor)} target="_blank" rel="noreferrer">
+                {shortAddr(e.actor)}
+              </a>
+            )}
+            {e.target && (
+              <a href={addrUrl(e.target)} target="_blank" rel="noreferrer">
+                {shortAddr(e.target)}
+              </a>
+            )}
+            {e.amount && <span style={{ opacity: 0.85 }}>{e.amount}</span>}
+            {e.txHash && (
+              <a href={txUrl(e.txHash)} target="_blank" rel="noreferrer" style={{ fontWeight: 900 }}>
+                Proof
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
