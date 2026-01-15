@@ -1,64 +1,51 @@
-import { useAccount, useBalance, useReadContract } from "wagmi";
-import { ADDR, ERC20_ABI } from "../../lib/contracts";
-import { formatUnits } from "viem";
+import { useAccount, useChainId, useSwitchChain } from "wagmi";
+import { etherlink } from "viem/chains";
 
-function fmt(n?: string) {
-  if (!n) return "0";
-  // keep it calm: max 4 decimals
-  const [a, b] = n.split(".");
-  if (!b) return a;
-  return `${a}.${b.slice(0, 4)}`;
-}
-
-export function WalletPill() {
-  const { address, isConnected } = useAccount();
-
-  const xtzBal = useBalance({
-    address,
-    query: { enabled: !!address },
-  });
-
-  const usdcDecimals = useReadContract({
-    address: ADDR.usdc,
-    abi: ERC20_ABI,
-    functionName: "decimals",
-    query: { enabled: true },
-  });
-
-  const usdcBal = useReadContract({
-    address: ADDR.usdc,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
+export function NetworkBanner() {
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain, isPending } = useSwitchChain();
 
   if (!isConnected) return null;
-
-  const xtz = xtzBal.data ? fmt(xtzBal.data.formatted) : "…";
-
-  const d = Number(usdcDecimals.data ?? 6);
-  const usdc = usdcBal.data ? fmt(formatUnits(usdcBal.data as bigint, d)) : "…";
+  if (chainId === etherlink.id) return null;
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-      <div style={chip()}>
-        Energy: <span style={{ fontWeight: 1000 }}>{xtz}</span> XTZ
+    <div
+      style={{
+        marginTop: 12,
+        borderRadius: 18,
+        border: "1px solid rgba(255,255,255,0.40)",
+        background: "rgba(255,255,255,0.20)",
+        backdropFilter: "blur(14px)",
+        padding: 12,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        justifyContent: "space-between",
+      }}
+    >
+      <div style={{ fontWeight: 900 }}>
+        You’re not playing on Etherlink yet.
+        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+          Switch to Etherlink to create or join raffles.
+        </div>
       </div>
-      <div style={chip()}>
-        Coins: <span style={{ fontWeight: 1000 }}>{usdc}</span> USDC
-      </div>
+
+      <button
+        onClick={() => switchChain?.({ chainId: etherlink.id })}
+        disabled={isPending}
+        style={{
+          padding: "10px 12px",
+          borderRadius: 14,
+          border: "1px solid rgba(255,255,255,0.50)",
+          background: "rgba(255,255,255,0.28)",
+          cursor: isPending ? "not-allowed" : "pointer",
+          fontWeight: 1000,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {isPending ? "Switching…" : "Switch to Etherlink"}
+      </button>
     </div>
   );
-}
-
-function chip(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(255,255,255,0.45)",
-    background: "rgba(255,255,255,0.20)",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontWeight: 900,
-    fontSize: 13,
-  };
 }
