@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@tanstack/react-query": "^5.90.17",
-    "graphql-request": "^7.4.0"
-  }
-}
