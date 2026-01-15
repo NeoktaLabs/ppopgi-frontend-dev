@@ -1,11 +1,15 @@
-import { GraphQLClient } from "graphql-request";
-
-export function getSubgraphClient() {
-  const url = import.meta.env.VITE_SUBGRAPH_URL as string;
-
-  if (!url) {
-    throw new Error("Missing VITE_SUBGRAPH_URL");
+export function friendlyStatus(status?: string) {
+  switch ((status ?? "").toUpperCase()) {
+    case "OPEN":
+      return "Open";
+    case "DRAWING":
+      return "Drawing";
+    case "COMPLETED":
+      return "Settled";
+    case "CANCELED":
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return status ? status : "Unknown";
   }
-
-  return new GraphQLClient(url);
 }
