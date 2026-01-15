@@ -9,6 +9,9 @@ import { DisclaimerGate } from "./features/disclaimer/DisclaimerGate";
 import { friendlyStatus } from "./lib/format";
 import { RaffleTimeline } from "./features/raffles/RaffleTimeline";
 import { SafetyProofModal } from "./features/safety/SafetyProofModal";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { WalletPill } from "./features/wallet/WalletPill";
+import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
 
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
@@ -83,11 +86,12 @@ export default function App() {
           </button>
         </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+          <WalletPill />
           <button style={pillBtn()} onClick={() => setCashierOpen(true)}>
             Cashier
           </button>
-          <button style={pillBtn()}>Sign in</button>
+          <ConnectButton />
         </div>
       </div>
 
@@ -265,12 +269,14 @@ export default function App() {
         </div>
       </Modal>
 
-      {/* Create modal */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create">
-        <div style={{ lineHeight: 1.6 }}>
-          Create will be wired after we add the factory contract.
-        </div>
-      </Modal>
+      {/* Create raffle modal */}
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          // Next step: auto-open created raffle
+        }}
+      />
     </div>
   );
 }
