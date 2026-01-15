@@ -15,7 +15,7 @@ export default function App() {
   // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
-    return m ? decodeURIComponent(m[1]) : null;
+    return m ? decodeURIComponent(m[1]).toLowerCase() : null;
   }, []);
 
   useEffect(() => {
@@ -78,8 +78,9 @@ export default function App() {
                 key={r.id}
                 raffle={r}
                 onOpen={(id) => {
-                  window.location.hash = `raffle=${encodeURIComponent(id)}`;
-                  setOpenRaffleId(id);
+                  const lower = id.toLowerCase();
+                  window.location.hash = `raffle=${encodeURIComponent(lower)}`;
+                  setOpenRaffleId(lower);
                 }}
               />
             ))}
@@ -102,8 +103,9 @@ export default function App() {
                 key={r.id}
                 raffle={r}
                 onOpen={(id) => {
-                  window.location.hash = `raffle=${encodeURIComponent(id)}`;
-                  setOpenRaffleId(id);
+                  const lower = id.toLowerCase();
+                  window.location.hash = `raffle=${encodeURIComponent(lower)}`;
+                  setOpenRaffleId(lower);
                 }}
               />
             ))}
@@ -126,9 +128,19 @@ export default function App() {
           <div style={{ fontWeight: 800 }}>
             Loading directly from the network… This may take a moment.
           </div>
+        ) : !raffle ? (
+          <div style={{ fontWeight: 800 }}>
+            We couldn’t find this raffle right now.
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
+              This can happen if the fast view is behind. You can try again in a moment.
+            </div>
+          </div>
         ) : (
           <div style={{ display: "grid", gap: 6 }}>
-            <div>Status: {raffle.status}{raffle.paused ? " (paused)" : ""}</div>
+            <div>
+              Status: {raffle.status}
+              {raffle.paused ? " (paused)" : ""}
+            </div>
             <div>Ticket: {raffle.ticketPrice} USDC</div>
             <div>Win: {raffle.winningPot} USDC</div>
             <div>Joined: {raffle.sold}</div>
