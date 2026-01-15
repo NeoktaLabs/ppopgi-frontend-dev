@@ -1,4 +1,3 @@
-// Home — Big prizes
 export const QUERY_BIG_PRIZES = `
   query BigPrizes($first: Int!) {
     raffles(
@@ -20,7 +19,6 @@ export const QUERY_BIG_PRIZES = `
   }
 `;
 
-// Home — Ending soon
 export const QUERY_ENDING_SOON = `
   query EndingSoon($first: Int!, $now: BigInt!) {
     raffles(
@@ -42,7 +40,6 @@ export const QUERY_ENDING_SOON = `
   }
 `;
 
-// Raffle detail
 export const QUERY_RAFFLE_DETAIL = `
   query RaffleDetail($id: Bytes!) {
     raffle(id: $id) {
