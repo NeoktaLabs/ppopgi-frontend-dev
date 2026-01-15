@@ -60,3 +60,23 @@ export const QUERY_RAFFLE_DETAIL = `
     }
   }
 `;
+
+export const QUERY_RAFFLE_EVENTS = `
+  query RaffleEvents($raffle: Bytes!, $first: Int!) {
+    raffleEvents(
+      where: { raffle: $raffle }
+      orderBy: blockTimestamp
+      orderDirection: desc
+      first: $first
+    ) {
+      type
+      blockTimestamp
+      actor
+      target
+      amount
+      amount2
+      text
+      txHash
+    }
+  }
+`;
