@@ -11,16 +11,13 @@ import {
   ExternalLink,
   ArrowRight,
   Copy,
-  Coins,
-  Zap,
-  RotateCcw,
+  Settings2,
 } from "lucide-react";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
+
 import { useDashboard } from "./useDashboard";
 import { friendlyStatus } from "../../lib/format";
-import { addrUrl, txUrl } from "../../lib/explorer";
-import { ADDR, LOTTERY_SINGLE_WINNER_ABI } from "../../lib/contracts";
-import { formatUnits } from "viem";
+import { addrUrl } from "../../lib/explorer";
+import { RaffleActionsModal } from "./RaffleActionsModal";
 
 function shortAddr(a?: string) {
   if (!a) return "";
@@ -64,16 +61,6 @@ function glassCard() {
   return "bg-white/80 backdrop-blur-md border border-white/60 shadow-[0_20px_70px_rgba(0,0,0,0.18)]";
 }
 
-function fmtUSDC(raw?: bigint | null) {
-  if (!raw) return "0";
-  return Number(formatUnits(raw, 6)).toFixed(2);
-}
-
-function fmtXTZ(raw?: bigint | null) {
-  if (!raw) return "0";
-  return Number(formatUnits(raw, 18)).toFixed(4);
-}
-
 export function DashboardPage({
   onClose,
   onOpenRaffle,
@@ -86,13 +73,23 @@ export function DashboardPage({
   const { me, createdQ, activityByRaffle } = useDashboard();
   const created = createdQ.data?.raffles ?? [];
 
+  const hasAnything = created.length > 0 || activityByRaffle.length > 0;
+
   const headerName = useMemo(() => "Player Dashboard", []);
   const sub = useMemo(() => {
     if (!me) return "Your On-Chain History";
     return `Your On-Chain History • ${shortAddr(me)}`;
   }, [me]);
 
-  const hasAnything = created.length > 0 || activityByRaffle.length > 0;
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageRaffleId, setManageRaffleId] = useState<string | null>(null);
+  const [manageRaffleName, setManageRaffleName] = useState<string | null>(null);
+
+  function openManage(id: string, name?: string) {
+    setManageRaffleId(id.toLowerCase());
+    setManageRaffleName(name ?? null);
+    setManageOpen(true);
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-24 px-4 animate-fade-in">
@@ -116,14 +113,12 @@ export function DashboardPage({
               <button
                 onClick={onOpenCreate}
                 className="bg-amber-500 hover:bg-amber-600 text-white font-black px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-2"
-                type="button"
               >
                 <PlusCircle size={18} /> Create
               </button>
               <button
                 onClick={onClose}
                 className="bg-white/85 hover:bg-white text-gray-800 font-black px-4 py-2.5 rounded-xl shadow-lg transition-all border border-white/60"
-                type="button"
               >
                 Close
               </button>
@@ -182,29 +177,31 @@ export function DashboardPage({
               ) : (
                 <div className="space-y-3">
                   {activityByRaffle.slice(0, 8).map(({ raffle }) => (
-                    <RaffleRowWithActions
+                    <RowCard
                       key={raffle.id}
-                      me={me ?? ""}
-                      raffle={raffle}
+                      title={raffle.name}
+                      subtitle={`Ticket: ${raffle.ticketPrice} USDC • Pot: ${raffle.winningPot} USDC`}
+                      rightTop={friendlyStatus(raffle.status) + (raffle.paused ? " (paused)" : "")}
+                      rightBottom={`Ends: ${endsIn(raffle.deadline)} • Sold: ${raffle.sold}`}
                       pillClass={statusPill(raffle.status, raffle.paused)}
                       pillText={raffle.paused ? "Paused" : friendlyStatus(raffle.status)}
-                      subtitle={`Ticket: ${raffle.ticketPrice} USDC • Pot: ${raffle.winningPot} USDC`}
-                      rightBottom={`Ends: ${endsIn(raffle.deadline)} • Sold: ${raffle.sold}`}
                       onOpen={() => onOpenRaffle(raffle.id.toLowerCase())}
+                      onManage={() => openManage(raffle.id, raffle.name)}
                     />
                   ))}
 
                   {activityByRaffle.length === 0 &&
-                    created.slice(0, 8).map((raffle) => (
-                      <RaffleRowWithActions
-                        key={raffle.id}
-                        me={me ?? ""}
-                        raffle={raffle}
-                        pillClass={statusPill(raffle.status, raffle.paused)}
-                        pillText={raffle.paused ? "Paused" : friendlyStatus(raffle.status)}
-                        subtitle={`Ticket: ${raffle.ticketPrice} USDC • Pot: ${raffle.winningPot} USDC`}
-                        rightBottom={`Ends: ${endsIn(raffle.deadline)} • Sold: ${raffle.sold}`}
-                        onOpen={() => onOpenRaffle(raffle.id.toLowerCase())}
+                    created.slice(0, 8).map((r) => (
+                      <RowCard
+                        key={r.id}
+                        title={r.name}
+                        subtitle={`Ticket: ${r.ticketPrice} USDC • Pot: ${r.winningPot} USDC`}
+                        rightTop={friendlyStatus(r.status) + (r.paused ? " (paused)" : "")}
+                        rightBottom={`Ends: ${endsIn(r.deadline)} • Sold: ${r.sold}`}
+                        pillClass={statusPill(r.status, r.paused)}
+                        pillText={r.paused ? "Paused" : friendlyStatus(r.status)}
+                        onOpen={() => onOpenRaffle(r.id.toLowerCase())}
+                        onManage={() => openManage(r.id, r.name)}
                       />
                     ))}
                 </div>
@@ -234,7 +231,6 @@ export function DashboardPage({
                   <button
                     onClick={onOpenCreate}
                     className="mt-4 w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-3 rounded-xl shadow-lg flex items-center justify-center gap-2"
-                    type="button"
                   >
                     <Sparkles size={18} /> Create a raffle
                   </button>
@@ -248,7 +244,8 @@ export function DashboardPage({
                       meta={`Ends: ${endsIn(r.deadline)} • Sold: ${r.sold}`}
                       pillClass={statusPill(r.status, r.paused)}
                       pillText={r.paused ? "Paused" : friendlyStatus(r.status)}
-                      onClick={() => onOpenRaffle(r.id.toLowerCase())}
+                      onOpen={() => onOpenRaffle(r.id.toLowerCase())}
+                      onManage={() => openManage(r.id, r.name)}
                     />
                   ))}
 
@@ -263,236 +260,19 @@ export function DashboardPage({
           </div>
         </div>
 
+        {/* FOOT NOTE */}
         <div className="mt-6 text-white/70 text-xs font-bold text-center">
-          Claims & refunds are live from the raffle contracts (USDC + Energy).
+          Dashboard actions are live on-chain per raffle.
         </div>
       </div>
+
+      <RaffleActionsModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        raffleId={manageRaffleId}
+        raffleName={manageRaffleName}
+      />
     </div>
-  );
-}
-
-function RaffleRowWithActions({
-  me,
-  raffle,
-  subtitle,
-  rightBottom,
-  pillClass,
-  pillText,
-  onOpen,
-}: {
-  me: string;
-  raffle: {
-    id: string;
-    name: string;
-    status: string;
-    paused: boolean;
-    ticketPrice: string;
-    winningPot: string;
-    deadline: string;
-    sold: string;
-  };
-  subtitle: string;
-  rightBottom: string;
-  pillClass: string;
-  pillText: string;
-  onOpen: () => void;
-}) {
-  const addr = raffle.id as `0x${string}`;
-  const enabled = !!me && me.startsWith("0x") && me.length === 42;
-
-  const ticketsOwnedQ = useReadContract({
-    address: addr,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "ticketsOwned",
-    args: enabled ? ([me as `0x${string}`] as const) : undefined,
-    query: { enabled: enabled && !!addr },
-  });
-
-  const claimableFundsQ = useReadContract({
-    address: addr,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "claimableFunds",
-    args: enabled ? ([me as `0x${string}`] as const) : undefined,
-    query: { enabled: enabled && !!addr },
-  });
-
-  const claimableNativeQ = useReadContract({
-    address: addr,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "claimableNative",
-    args: enabled ? ([me as `0x${string}`] as const) : undefined,
-    query: { enabled: enabled && !!addr },
-  });
-
-  const ticketsOwned = (ticketsOwnedQ.data as bigint | undefined) ?? 0n;
-  const claimableUSDC = (claimableFundsQ.data as bigint | undefined) ?? 0n;
-  const claimableXTZ = (claimableNativeQ.data as bigint | undefined) ?? 0n;
-
-  const canRefund = ticketsOwned > 0n;
-  const canClaimUSDC = claimableUSDC > 0n;
-  const canClaimXTZ = claimableXTZ > 0n;
-
-  const { writeContractAsync } = useWriteContract();
-  const [busy, setBusy] = useState<null | "refund" | "usdc" | "xtz">(null);
-  const [lastTx, setLastTx] = useState<string | null>(null);
-
-  async function act(kind: "refund" | "usdc" | "xtz") {
-    if (!enabled || !addr) return;
-    setBusy(kind);
-    setLastTx(null);
-    try {
-      if (kind === "refund") {
-        const tx = await writeContractAsync({
-          address: addr,
-          abi: LOTTERY_SINGLE_WINNER_ABI,
-          functionName: "claimTicketRefund",
-        });
-        setLastTx(tx);
-      }
-      if (kind === "usdc") {
-        const tx = await writeContractAsync({
-          address: addr,
-          abi: LOTTERY_SINGLE_WINNER_ABI,
-          functionName: "withdrawFunds",
-        });
-        setLastTx(tx);
-      }
-      if (kind === "xtz") {
-        const tx = await writeContractAsync({
-          address: addr,
-          abi: LOTTERY_SINGLE_WINNER_ABI,
-          functionName: "withdrawNative",
-        });
-        setLastTx(tx);
-      }
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <div className="w-full rounded-2xl bg-white/70 border border-white/70 shadow-sm transition-all px-4 py-4">
-      <button onClick={onOpen} className="w-full text-left" type="button">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="font-black text-gray-900 truncate">{raffle.name}</div>
-            <div className="text-xs font-bold text-gray-600 mt-1 truncate">{subtitle}</div>
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              <span className={pillClass}>{pillText}</span>
-              <span className="text-xs font-black text-gray-500 inline-flex items-center gap-1">
-                <Clock size={14} /> {rightBottom}
-              </span>
-            </div>
-          </div>
-
-          <div className="shrink-0 text-right flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center shadow-md">
-              <ArrowRight size={18} />
-            </div>
-          </div>
-        </div>
-      </button>
-
-      {/* Actions */}
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <ActionCard
-          icon={<Coins size={16} />}
-          title="Claim USDC"
-          value={`${fmtUSDC(claimableUSDC)} USDC`}
-          disabled={!canClaimUSDC || busy !== null}
-          loading={busy === "usdc"}
-          onClick={() => act("usdc")}
-        />
-
-        <ActionCard
-          icon={<Zap size={16} />}
-          title="Collect Energy"
-          value={`${fmtXTZ(claimableXTZ)} XTZ`}
-          disabled={!canClaimXTZ || busy !== null}
-          loading={busy === "xtz"}
-          onClick={() => act("xtz")}
-        />
-
-        <ActionCard
-          icon={<RotateCcw size={16} />}
-          title="Refund Tickets"
-          value={`${ticketsOwned.toString()} tickets`}
-          disabled={!canRefund || busy !== null}
-          loading={busy === "refund"}
-          onClick={() => act("refund")}
-        />
-      </div>
-
-      {lastTx ? (
-        <div className="mt-3 text-xs font-bold text-gray-700">
-          Tx:{" "}
-          <a
-            href={txUrl(lastTx)}
-            target="_blank"
-            rel="noreferrer"
-            className="text-blue-600 hover:text-blue-700 hover:underline"
-          >
-            {lastTx.slice(0, 10)}…{lastTx.slice(-6)}
-          </a>
-        </div>
-      ) : null}
-
-      {/* tiny guard (wrong network etc.) */}
-      {!enabled ? (
-        <div className="mt-3 text-xs font-bold text-gray-600">
-          Connect to enable claims.
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ActionCard({
-  icon,
-  title,
-  value,
-  disabled,
-  loading,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-  disabled: boolean;
-  loading: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-2xl border px-4 py-3 text-left transition-all shadow-sm ${
-        disabled
-          ? "bg-gray-100/80 border-gray-200 text-gray-500 cursor-not-allowed"
-          : "bg-white/80 hover:bg-white border-white/70 text-gray-900"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
-              disabled ? "bg-white border-gray-200" : "bg-gray-900 text-white border-gray-900"
-            }`}
-          >
-            {icon}
-          </div>
-          <div>
-            <div className="text-xs font-black uppercase tracking-wide opacity-70">{title}</div>
-            <div className="text-sm font-black">{value}</div>
-          </div>
-        </div>
-
-        <div className="text-xs font-black">
-          {loading ? "…" : disabled ? "—" : "Go"}
-        </div>
-      </div>
-    </button>
   );
 }
 
@@ -515,10 +295,74 @@ function EmptyState({ onOpenCreate }: { onOpenCreate: () => void }) {
       <button
         onClick={onOpenCreate}
         className="mt-6 inline-flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-black px-5 py-3 rounded-xl shadow-lg"
-        type="button"
       >
         <Sparkles size={18} /> Create your first raffle
       </button>
+    </div>
+  );
+}
+
+function RowCard({
+  title,
+  subtitle,
+  rightTop,
+  rightBottom,
+  pillClass,
+  pillText,
+  onOpen,
+  onManage,
+}: {
+  title: string;
+  subtitle: string;
+  rightTop: string;
+  rightBottom: string;
+  pillClass: string;
+  pillText: string;
+  onOpen: () => void;
+  onManage: () => void;
+}) {
+  return (
+    <div className="w-full rounded-2xl bg-white/70 border border-white/70 shadow-sm px-4 py-4 flex items-center justify-between gap-4">
+      <button
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-left hover:opacity-95 transition"
+        type="button"
+      >
+        <div className="font-black text-gray-900 truncate">{title}</div>
+        <div className="text-xs font-bold text-gray-600 mt-1 truncate">{subtitle}</div>
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <span className={pillClass}>{pillText}</span>
+          <span className="text-xs font-black text-gray-500 inline-flex items-center gap-1">
+            <Clock size={14} /> {rightBottom}
+          </span>
+        </div>
+      </button>
+
+      <div className="shrink-0 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onManage}
+          className="p-2.5 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700"
+          title="Manage (claim/refund)"
+          aria-label="Manage (claim/refund)"
+        >
+          <Settings2 size={16} />
+        </button>
+
+        <div className="hidden md:block text-right">
+          <div className="text-sm font-black text-gray-900">{rightTop}</div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpen}
+          className="w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center shadow-md hover:opacity-95 transition"
+          title="Open"
+          aria-label="Open"
+        >
+          <ArrowRight size={18} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -528,27 +372,37 @@ function MiniCard({
   meta,
   pillClass,
   pillText,
-  onClick,
+  onOpen,
+  onManage,
 }: {
   title: string;
   meta: string;
   pillClass: string;
   pillText: string;
-  onClick: () => void;
+  onOpen: () => void;
+  onManage: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left rounded-2xl bg-white/70 hover:bg-white/85 border border-white/70 shadow-sm transition-all p-4"
-      type="button"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-black text-gray-900 truncate">{title}</div>
-          <div className="text-xs font-bold text-gray-600 mt-1">{meta}</div>
+    <div className="w-full rounded-2xl bg-white/70 border border-white/70 shadow-sm p-4 flex items-start justify-between gap-3">
+      <button onClick={onOpen} className="min-w-0 flex-1 text-left" type="button">
+        <div className="font-black text-gray-900 truncate">{title}</div>
+        <div className="text-xs font-bold text-gray-600 mt-1">{meta}</div>
+        <div className="mt-3">
+          <span className={pillClass}>{pillText}</span>
         </div>
-        <span className={pillClass}>{pillText}</span>
+      </button>
+
+      <div className="shrink-0 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onManage}
+          className="p-2.5 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700"
+          title="Manage (claim/refund)"
+          aria-label="Manage (claim/refund)"
+        >
+          <Settings2 size={16} />
+        </button>
       </div>
-    </button>
+    </div>
   );
 }
