@@ -1,5 +1,5 @@
 // src/features/dashboard/DashboardPage.tsx
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Ticket,
   Trophy,
@@ -21,6 +21,7 @@ import { friendlyStatus } from "../../lib/format";
 import { addrUrl } from "../../lib/explorer";
 import { RaffleActionsModal } from "./RaffleActionsModal";
 import { ADDR } from "../../lib/contracts";
+import { formatToken } from "../../lib/formatMoney"; // ✅ NEW (USDC formatting)
 
 function shortAddr(a?: string) {
   if (!a) return "";
@@ -68,20 +69,14 @@ function verifyPillClass(tone: "ok" | "warn") {
     : `${base} bg-amber-100 text-amber-900 border-amber-200`;
 }
 
-function isOfficialRaffle(raffle: {
-  deployer?: string | null;
-  isRegistered?: boolean;
-}) {
+function isOfficialRaffle(raffle: { deployer?: string | null; isRegistered?: boolean }) {
   const dep = (raffle.deployer ?? "").toLowerCase();
   const isRegistered = raffle.isRegistered === true;
   const matches = dep && dep === ADDR.deployer.toLowerCase();
   return isRegistered && matches;
 }
 
-function isUnverifiedRaffle(raffle: {
-  deployer?: string | null;
-  isRegistered?: boolean;
-}) {
+function isUnverifiedRaffle(raffle: { deployer?: string | null; isRegistered?: boolean }) {
   // Treat "missing data" as unverified (don't silently hide)
   const hasAny = !!(raffle.deployer ?? "") || raffle.isRegistered !== undefined;
   if (!hasAny) return true;
@@ -211,7 +206,10 @@ export function DashboardPage({
                     <RowCard
                       key={raffle.id}
                       title={raffle.name}
-                      subtitle={`Ticket: ${raffle.ticketPrice} USDC • Pot: ${raffle.winningPot} USDC`}
+                      subtitle={`Ticket: ${formatToken(raffle.ticketPrice, 6)} USDC • Pot: ${formatToken(
+                        raffle.winningPot,
+                        6
+                      )} USDC`}
                       rightTop={friendlyStatus(raffle.status) + (raffle.paused ? " (paused)" : "")}
                       rightBottom={`Ends: ${endsIn(raffle.deadline)} • Sold: ${raffle.sold}`}
                       pillClass={statusPill(raffle.status, raffle.paused)}
@@ -243,7 +241,10 @@ export function DashboardPage({
                       <RowCard
                         key={r.id}
                         title={r.name}
-                        subtitle={`Ticket: ${r.ticketPrice} USDC • Pot: ${r.winningPot} USDC`}
+                        subtitle={`Ticket: ${formatToken(r.ticketPrice, 6)} USDC • Pot: ${formatToken(
+                          r.winningPot,
+                          6
+                        )} USDC`}
                         rightTop={friendlyStatus(r.status) + (r.paused ? " (paused)" : "")}
                         rightBottom={`Ends: ${endsIn(r.deadline)} • Sold: ${r.sold}`}
                         pillClass={statusPill(r.status, r.paused)}
