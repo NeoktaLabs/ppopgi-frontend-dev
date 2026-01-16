@@ -1,15 +1,16 @@
 // src/features/raffles/RaffleDetailsModal.tsx
 import { useEffect, useMemo, useState } from "react";
-import { Modal } from "../../ui/Modal";
 import { useQuery } from "@tanstack/react-query";
+import { useReadContract } from "wagmi";
+
+import { Modal } from "../../ui/Modal";
 import { getSubgraphClient } from "../../lib/subgraph";
 import { QUERY_RAFFLE_DETAIL, QUERY_RAFFLE_EVENTS } from "../../lib/queries";
 import { friendlyStatus } from "../../lib/format";
-import { RaffleTimeline } from "./RaffleTimeline";
-import { RaffleActionsModal } from "./RaffleActionsModal";
-
-import { useReadContract } from "wagmi";
 import { ADDR, LOTTERY_SINGLE_WINNER_ABI } from "../../lib/contracts";
+
+import { RaffleTimeline } from "./RaffleTimeline";
+import { RaffleActionsModal } from "../dashboard/RaffleActionsModal";
 
 export function RaffleDetailsModal({
   raffleId,
@@ -51,12 +52,13 @@ export function RaffleDetailsModal({
     onLoadedRaffle?.(raffle);
   }, [raffle, onLoadedRaffle]);
 
-  // Unverified / caution
+  // Unverified / caution (only when we actually have a raffleId)
   const rDeployer = useReadContract({
     address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
     functionName: "deployer",
-    query: { enabled: !!raffleId },
+    // recommended: don’t poke RPC until raffle exists (and modal is actually open)
+    query: { enabled: !!raffleId && !!raffle },
   });
 
   const isOfficial = useMemo(() => {
@@ -95,7 +97,8 @@ export function RaffleDetailsModal({
               >
                 <div style={{ fontWeight: 1000 }}>Unverified / use caution</div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>
-                  This raffle was not created from the official Ppopgi site (it does not match the official deployer).
+                  This raffle was not created from the official Ppopgi site (it does
+                  not match the official deployer).
                 </div>
               </div>
             )}
@@ -119,6 +122,7 @@ export function RaffleDetailsModal({
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button
+                type="button"
                 onClick={() => setActionsOpen(true)}
                 style={{
                   padding: "10px 12px",
@@ -133,6 +137,7 @@ export function RaffleDetailsModal({
               </button>
 
               <button
+                type="button"
                 onClick={onOpenSafety}
                 style={{
                   padding: "10px 12px",
@@ -192,7 +197,8 @@ export function RaffleDetailsModal({
       <RaffleActionsModal
         open={actionsOpen}
         onClose={() => setActionsOpen(false)}
-        raffleId={raffleId}
+        raffleId={raffleId ?? ""}
+        raffleName={raffle?.name}
       />
     </>
   );
