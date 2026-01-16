@@ -1,7 +1,7 @@
 // src/features/navbar/Navbar.tsx
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Compass, LayoutDashboard, LogOut, Shield, Store, Ticket, Wallet } from "lucide-react";
-import { useDisconnect } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import { WalletPill } from "../wallet/WalletPill";
 
 export function Navbar({
@@ -21,13 +21,16 @@ export function Navbar({
 }) {
   const { disconnect } = useDisconnect();
 
+  // ✅ FIX: wagmi state updates instantly without refresh
+  const { address, isConnected } = useAccount();
+
   return (
     <div className="fixed top-0 left-0 right-0 z-50 pt-4 px-4">
-      {/* Rounded, centered, not full-width */}
       <nav className="mx-auto max-w-6xl bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl shadow-sm h-16 flex items-center justify-between px-4 md:px-6">
         <ConnectButton.Custom>
-          {({ account, chain, openConnectModal, mounted }) => {
-            const connected = mounted && !!account && !!chain;
+          {({ openConnectModal, mounted }) => {
+            // ✅ FIX: rely on wagmi connection state, not rainbowkit render state
+            const connected = mounted && isConnected && !!address;
 
             return (
               <>
@@ -68,7 +71,6 @@ export function Navbar({
 
                 {/* Right */}
                 <div className="flex items-center gap-3">
-                  {/* Stacked balances */}
                   <div className="hidden lg:block">
                     <WalletPill />
                   </div>
@@ -96,7 +98,6 @@ export function Navbar({
 
                   {connected ? (
                     <>
-                      {/* Player button */}
                       <button
                         onClick={onOpenDashboard}
                         className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
@@ -104,7 +105,7 @@ export function Navbar({
                         type="button"
                       >
                         <LayoutDashboard size={16} />
-                        {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
+                        {address ? `Player ...${address.slice(-4)}` : "Player"}
                       </button>
 
                       <button
