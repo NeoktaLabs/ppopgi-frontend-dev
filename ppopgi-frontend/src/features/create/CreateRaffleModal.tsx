@@ -103,12 +103,12 @@ export function CreateRaffleModal({
     const tp = parseUnits(ticketPrice || "0", d);
     const wp = parseUnits(winningPot || "0", d);
 
-    // duration
-    const v = clampInt(Math.floor(safeNum(durationValue) || 1), 1, 60 * 60 * 24 * 365 * 10);
+    // duration (cap to 10 years)
+    const maxSeconds = 60 * 60 * 24 * 365 * 10;
+    const v = clampInt(Math.floor(safeNum(durationValue) || 1), 1, maxSeconds);
     const secMul = unitToSeconds(durationUnit);
 
-    // Cap duration to 10 years in seconds
-    const durationSecondsNum = clampInt(v * secMul, 1, 60 * 60 * 24 * 365 * 10);
+    const durationSecondsNum = clampInt(v * secMul, 1, maxSeconds);
     const durationSeconds = BigInt(durationSecondsNum);
 
     const minT = BigInt(clampInt(Math.floor(safeNum(minTickets) || 1), 1, 10_000_000));
@@ -202,7 +202,15 @@ export function CreateRaffleModal({
   const shareLink = createdAddr ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}` : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="Create raffle" width="wide" height="auto">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Create raffle"
+      subtitle="Set the rules, then deploy on-chain."
+      width="wide"
+      height="auto"
+      icon={<Ticket size={22} />}
+    >
       {!isConnected ? (
         <div className="rounded-3xl bg-white/10 border border-white/20 p-5 text-white">
           <div className="font-black text-lg">Connect your wallet</div>
@@ -212,26 +220,20 @@ export function CreateRaffleModal({
         </div>
       ) : (
         <div className="grid gap-4">
-          {/* Cashier-like header card */}
-          <div className="rounded-3xl overflow-hidden border border-white/20">
-            <div className="bg-[#FFD700] p-5">
+          {/* Fee / Prize breakdown */}
+          <div className="rounded-3xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur-md">
+            {/* Yellow stripe header (Cashier-ish) */}
+            <div className="bg-[#FFD700] px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-black text-amber-900/70 uppercase tracking-wider">
-                    Create
+                    Setup
                   </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-md">
-                      <Ticket className="text-amber-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-xl font-black text-amber-900 leading-tight">
-                        New raffle
-                      </div>
-                      <div className="text-[12px] font-bold text-amber-900/80">
-                        Set the rules, then deploy on-chain.
-                      </div>
-                    </div>
+                  <div className="mt-1 text-xl font-black text-amber-900 leading-tight">
+                    Prize breakdown
+                  </div>
+                  <div className="text-[12px] font-bold text-amber-900/80">
+                    Winner receives net prize. Fee is taken at payout.
                   </div>
                 </div>
 
@@ -246,11 +248,11 @@ export function CreateRaffleModal({
               </div>
             </div>
 
-            {/* Fee area (clean + readable) */}
-            <div className="bg-white/10 backdrop-blur-md p-5">
+            {/* Fee cards */}
+            <div className="p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
-                  Prize breakdown
+                  Live preview
                 </div>
                 <div className="text-[11px] font-black text-white/60">
                   {feePreview ? `${feePreview.percent}% platform fee` : "Fee loading…"}
@@ -290,7 +292,9 @@ export function CreateRaffleModal({
             <div className="grid gap-5">
               {/* Section: Basics */}
               <section>
-                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Basics</div>
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
+                  Basics
+                </div>
                 <div className="mt-3 grid gap-3">
                   <Field label="Raffle name">
                     <input
@@ -325,7 +329,9 @@ export function CreateRaffleModal({
 
               {/* Section: Timing */}
               <section className="pt-4 border-t border-white/15">
-                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Timing</div>
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
+                  Timing
+                </div>
 
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
                   <Field label="Duration">
@@ -349,7 +355,9 @@ export function CreateRaffleModal({
                     </div>
                     <div className="mt-1 text-[11px] font-bold text-white/60">
                       Sent to contract as seconds:{" "}
-                      <span className="font-black text-white">{String(parsed.durationSeconds)}</span>
+                      <span className="font-black text-white">
+                        {String(parsed.durationSeconds)}
+                      </span>
                     </div>
                   </Field>
 
@@ -376,7 +384,9 @@ export function CreateRaffleModal({
 
               {/* Section: Purchase rules */}
               <section className="pt-4 border-t border-white/15">
-                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Purchase rules</div>
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
+                  Purchase rules
+                </div>
 
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Field label="Minimum buy amount (raw)">
@@ -435,7 +445,11 @@ export function CreateRaffleModal({
                 {txHash ? (
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white/10 border border-white/15 p-3">
                     <div className="text-xs font-bold text-white/75">
-                      {tx.isLoading ? "Transaction pending…" : tx.isSuccess ? "Transaction confirmed" : "Transaction sent"}
+                      {tx.isLoading
+                        ? "Transaction pending…"
+                        : tx.isSuccess
+                        ? "Transaction confirmed"
+                        : "Transaction sent"}
                     </div>
                     <a
                       href={txUrl(String(txHash))}
@@ -456,7 +470,9 @@ export function CreateRaffleModal({
 
                 {shareLink ? (
                   <div className="mt-3 rounded-2xl bg-white/10 border border-white/15 p-3">
-                    <div className="text-xs font-black text-white/70 uppercase tracking-wider">Share link</div>
+                    <div className="text-xs font-black text-white/70 uppercase tracking-wider">
+                      Share link
+                    </div>
                     <div className="mt-2 flex items-center gap-2">
                       <input className={inputDark()} value={shareLink} readOnly />
                       <button
@@ -475,7 +491,9 @@ export function CreateRaffleModal({
                     </div>
                     <div className="mt-2 text-xs font-bold text-white/70">
                       Raffle:{" "}
-                      <span className="font-black text-white">{shortAddr(createdAddr || "")}</span>
+                      <span className="font-black text-white">
+                        {shortAddr(createdAddr || "")}
+                      </span>
                     </div>
                   </div>
                 ) : null}
