@@ -115,6 +115,11 @@ export const QUERY_MY_CREATED_RAFFLES = `
       winningTicketIndex
       canceledAt
       canceledReason
+
+      # verification (from subgraph)
+      deployer
+      isRegistered
+      registry
     }
   }
 `;
@@ -155,6 +160,11 @@ export const QUERY_MY_ACTIVITY_EVENTS = `
         winningTicketIndex
         canceledAt
         canceledReason
+
+        # verification (from subgraph)
+        deployer
+        isRegistered
+        registry
       }
     }
   }
