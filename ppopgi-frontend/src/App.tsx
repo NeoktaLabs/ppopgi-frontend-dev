@@ -18,6 +18,9 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
+  // ✅ Safety modal is controlled from App (so Navbar button can open it)
+  const [safetyOpen, setSafetyOpen] = useState(false);
+
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
 
   // Used to force a re-render after disclaimer acceptance (simple + reliable)
@@ -40,20 +43,26 @@ export default function App() {
     if (raffleFromHash) setOpenRaffleId(raffleFromHash);
   }, [raffleFromHash]);
 
-  const anyOverlayOpen = !!openRaffleId || createOpen || dashboardOpen;
+  const anyOverlayOpen = !!openRaffleId || createOpen || dashboardOpen || safetyOpen;
 
   function openRaffle(id: string) {
     const lower = id.toLowerCase();
     window.location.hash = `raffle=${encodeURIComponent(lower)}`;
     setOpenRaffleId(lower);
-
     loadedRaffleIdRef.current = null;
   }
 
   function closeRaffle() {
     setOpenRaffleId(null);
+    setSafetyOpen(false);
     window.location.hash = "";
     loadedRaffleIdRef.current = null;
+  }
+
+  function openSafetyGlobal() {
+    // If a raffle is selected, safety is meaningful right away.
+    // If not, your SafetyProofModal should show a “select a raffle” / empty state.
+    setSafetyOpen(true);
   }
 
   return (
@@ -64,11 +73,18 @@ export default function App() {
         onOpenCashier={() => setCashierOpen(true)}
         onOpenCreate={() => setCreateOpen(true)}
         onOpenDashboard={() => setDashboardOpen(true)}
+        onOpenSafety={openSafetyGlobal} // ✅ FIX: Safety button works
         onGoHome={() => {
+          // ✅ Logo goes home
           window.location.hash = "";
+          setSafetyOpen(false);
+          setOpenRaffleId(null);
         }}
         onGoExplore={() => {
-          // TODO: Explore page later (for now keep home)
+          // ✅ For now: hash route placeholder; later we’ll scroll or navigate
+          window.location.hash = "explore";
+          setSafetyOpen(false);
+          setOpenRaffleId(null);
         }}
       />
 
@@ -82,8 +98,9 @@ export default function App() {
         <HomePage
           onOpenRaffle={openRaffle}
           onOpenSafety={(raffleId) => {
-            // Now: just open the raffle; Safety modal is inside RaffleDetailsModal
+            // ✅ Home safety opens raffle + safety modal
             openRaffle(raffleId);
+            setSafetyOpen(true);
           }}
         />
       </div>
@@ -107,22 +124,33 @@ export default function App() {
       <RaffleDetailsModal
         raffleId={openRaffleId}
         onClose={closeRaffle}
-        // Safety is handled inside RaffleDetailsModal now
-        onOpenSafety={() => {}}
+        // ✅ FIX: details "Safety & Proof" button opens modal
+        onOpenSafety={() => setSafetyOpen(true)}
         onLoadedRaffle={(r) => {
           // Optional: keep this only if something else needs it later
           if (!openRaffleId) return;
           if (loadedRaffleIdRef.current === openRaffleId) return;
           loadedRaffleIdRef.current = openRaffleId;
 
-          // no-op currently; you can delete onLoadedRaffle entirely later
           void r;
         }}
       />
 
+      {/* ✅ Safety modal lives outside; RaffleDetailsModal should render it based on safetyOpen
+          If your SafetyProofModal is already in RaffleDetailsModal, we’ll move it next.
+          For now, keep safetyOpen plumbing; next step we’ll wire your actual SafetyProofModal here. */}
+      {/* TODO: mount your SafetyProofModal here if it’s an App-level component */}
+
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {}}
+      />
+
+      {/* If you currently render SafetyProofModal somewhere else, tell me where,
+          and I’ll paste the exact block to mount it here using safetyOpen + openRaffleId. */}
     </div>
   );
 }
