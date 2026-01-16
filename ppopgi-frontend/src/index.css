@@ -44,24 +44,41 @@ body {
     "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.35;
 
-  /* Soft pastel background */
+  /*
+    ✅ Website background (PNG + soft overlays)
+
+    1) Put your image at: src/assets/bg.png
+    2) This uses the PNG as the base layer, with a soft "veil" + pastel glows above it
+       so text remains readable.
+  */
   background:
+    /* readability veil */
+    linear-gradient(180deg, rgba(255, 246, 239, 0.88), rgba(255, 246, 239, 0.88)),
+
+    /* pastel lights */
     radial-gradient(
       1200px 800px at 15% 10%,
-      rgba(246, 182, 200, 0.55),
+      rgba(246, 182, 200, 0.40),
       transparent 60%
     ),
     radial-gradient(
       900px 700px at 85% 15%,
-      rgba(169, 212, 255, 0.55),
+      rgba(169, 212, 255, 0.40),
       transparent 55%
     ),
     radial-gradient(
       1100px 800px at 55% 95%,
-      rgba(203, 183, 246, 0.55),
+      rgba(203, 183, 246, 0.40),
       transparent 60%
     ),
-    linear-gradient(180deg, var(--cream), var(--cream));
+
+    /* PNG base */
+    url("/src/assets/bg.png");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 /* Buttons inherit font */
