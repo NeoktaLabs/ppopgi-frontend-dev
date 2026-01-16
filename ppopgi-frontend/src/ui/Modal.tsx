@@ -1,23 +1,59 @@
+// src/ui/Modal.tsx
 import React, { useEffect } from "react";
+import { X } from "lucide-react";
+
+type ModalWidth = "sm" | "md" | "lg" | "xl" | "2xl" | "wide";
+type ModalHeight = "auto" | "tall";
+
+function widthClass(w: ModalWidth) {
+  switch (w) {
+    case "sm":
+      return "max-w-sm";
+    case "md":
+      return "max-w-md";
+    case "lg":
+      return "max-w-lg";
+    case "xl":
+      return "max-w-xl";
+    case "2xl":
+      return "max-w-2xl";
+    case "wide":
+      return "max-w-4xl";
+    default:
+      return "max-w-xl";
+  }
+}
+
+function heightClass(h: ModalHeight) {
+  switch (h) {
+    case "tall":
+      return "max-h-[88vh]";
+    case "auto":
+    default:
+      return "max-h-[80vh]";
+  }
+}
 
 export function Modal({
   open,
   onClose,
   title,
   children,
-  fullscreen,
+  width = "xl",
+  height = "auto",
 }: {
   open: boolean;
   onClose: () => void;
-  title?: string;
+  title: string;
   children: React.ReactNode;
-  fullscreen?: boolean;
+  width?: ModalWidth;
+  height?: ModalHeight;
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
+    function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
-    };
+    }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -25,62 +61,51 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: fullscreen ? "stretch" : "center",
-        padding: fullscreen ? 0 : 16,
-        background: "rgba(0,0,0,0.35)",
-        backdropFilter: "blur(6px)",
-      }}
-    >
-      <div
-        style={{
-          width: fullscreen ? "100%" : "min(920px, 100%)",
-          height: fullscreen ? "100%" : "auto",
-          maxHeight: fullscreen ? "100%" : "min(86vh, 860px)",
-          overflow: "auto",
-          borderRadius: fullscreen ? 0 : 18,
-          border: "1px solid rgba(255,255,255,0.35)",
-          background: "rgba(255,255,255,0.22)",
-          backdropFilter: "blur(14px)",
-          boxShadow: "0 10px 40px rgba(0,0,0,0.18)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "14px 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.25)",
-          }}
-        >
-          <div style={{ fontWeight: 900 }}>{title ?? ""}</div>
-          <button
-            onClick={onClose}
-            style={{
-              border: "1px solid rgba(255,255,255,0.4)",
-              background: "rgba(255,255,255,0.25)",
-              borderRadius: 999,
-              padding: "6px 10px",
-              cursor: "pointer",
-              fontWeight: 900,
-            }}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        aria-label="Close modal"
+      />
 
-        <div style={{ padding: 16 }}>{children}</div>
+      {/* Centered container */}
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          className={[
+            "w-full",
+            widthClass(width),
+            heightClass(height),
+            "overflow-hidden",
+            "rounded-[28px]",
+            "border border-white/40",
+            "bg-white/10",
+            "backdrop-blur-xl",
+            "shadow-[0_20px_80px_rgba(0,0,0,0.35)]",
+          ].join(" ")}
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/20 bg-white/10">
+            <div className="font-black text-white text-lg tracking-tight">{title}</div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-10 h-10 rounded-2xl bg-white/20 hover:bg-white/30 border border-white/20 flex items-center justify-center text-white"
+              aria-label="Close"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="p-5 overflow-y-auto max-h-[calc(80vh-72px)]">
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   );
