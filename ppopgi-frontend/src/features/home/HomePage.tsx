@@ -2,7 +2,13 @@
 import { useBigPrizes, useEndingSoon } from "../raffles/useRafflesHome";
 import { RaffleCard } from "../raffles/RaffleCard";
 
-export function HomePage({ onOpenRaffle }: { onOpenRaffle: (id: string) => void }) {
+export function HomePage({
+  onOpenRaffle,
+  onOpenSafety,
+}: {
+  onOpenRaffle: (id: string) => void;
+  onOpenSafety: (raffleId: string) => void;
+}) {
   const big = useBigPrizes();
   const soon = useEndingSoon();
 
@@ -24,9 +30,7 @@ export function HomePage({ onOpenRaffle }: { onOpenRaffle: (id: string) => void 
         </p>
 
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
-          {big.isLoading && (
-            <div className="text-white font-bold opacity-80 py-10">Loading…</div>
-          )}
+          {big.isLoading && <div className="text-white font-bold opacity-80 py-10">Loading…</div>}
 
           {big.error && (
             <div className="text-white font-bold opacity-90 py-10">
@@ -36,7 +40,7 @@ export function HomePage({ onOpenRaffle }: { onOpenRaffle: (id: string) => void 
 
           {(big.data?.raffles ?? []).map((r) => (
             <div key={r.id} className="w-full flex justify-center">
-              <RaffleCard raffle={r} onOpen={onOpenRaffle} />
+              <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} />
             </div>
           ))}
         </div>
@@ -58,9 +62,7 @@ export function HomePage({ onOpenRaffle }: { onOpenRaffle: (id: string) => void 
         </p>
 
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 justify-items-center">
-          {soon.isLoading && (
-            <div className="text-white font-bold opacity-80 py-10">Loading…</div>
-          )}
+          {soon.isLoading && <div className="text-white font-bold opacity-80 py-10">Loading…</div>}
 
           {soon.error && (
             <div className="text-white font-bold opacity-90 py-10">
@@ -70,7 +72,7 @@ export function HomePage({ onOpenRaffle }: { onOpenRaffle: (id: string) => void 
 
           {(soon.data?.raffles ?? []).map((r) => (
             <div key={r.id} className="w-full flex justify-center">
-              <RaffleCard raffle={r} onOpen={onOpenRaffle} />
+              <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} />
             </div>
           ))}
         </div>
