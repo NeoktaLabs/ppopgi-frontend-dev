@@ -1,4 +1,5 @@
 // src/features/raffles/RaffleDetailsModal.tsx
+import { useEffect } from "react";
 import { Modal } from "../../ui/Modal";
 import { useQuery } from "@tanstack/react-query";
 import { getSubgraphClient } from "../../lib/subgraph";
@@ -10,10 +11,12 @@ export function RaffleDetailsModal({
   raffleId,
   onClose,
   onOpenSafety,
+  onLoadedRaffle,
 }: {
   raffleId: string | null;
   onClose: () => void;
   onOpenSafety: () => void;
+  onLoadedRaffle?: (raffle: any | null) => void;
 }) {
   const raffleDetailQ = useQuery({
     queryKey: ["raffleDetail", raffleId],
@@ -35,8 +38,13 @@ export function RaffleDetailsModal({
     retry: 1,
   });
 
-  const raffle = (raffleDetailQ.data as any)?.raffle;
+  const raffle = (raffleDetailQ.data as any)?.raffle ?? null;
   const events = (raffleEventsQ.data as any)?.raffleEvents ?? [];
+
+  // Notify parent when raffle loads / changes
+  useEffect(() => {
+    onLoadedRaffle?.(raffle);
+  }, [raffle, onLoadedRaffle]);
 
   return (
     <Modal open={!!raffleId} onClose={onClose} title={raffle?.name || "Raffle"}>
