@@ -1,6 +1,7 @@
 // src/App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId, useSwitchChain } from "wagmi";
+import { etherlink } from "viem/chains";
 
 import { PageModal } from "./ui/PageModal";
 
@@ -19,24 +20,22 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
-  // ✅ Global safety modal
+  // Global safety modal state
   const [safetyOpen, setSafetyOpen] = useState(false);
-  const [safetyRaffleId, setSafetyRaffleId] = useState<string | null>(null);
-  const [safetyCreator, setSafetyCreator] = useState<string | null>(null);
 
   // Selected raffle (details modal)
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
 
-  // Creator cache (when details loads)
+  // Creator cache for safety modal (optional)
   const [openRaffleCreator, setOpenRaffleCreator] = useState<string | null>(null);
 
   // Used to force a re-render after disclaimer acceptance (simple + reliable)
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
-  // Wallet state subscription
+  // Subscribe to wallet state so the UI reacts immediately after connect
   const acc = useAccount();
 
-  // Prevent loops for onLoadedRaffle
+  // Track which raffle we already applied creator for (prevents needless setState loops)
   const loadedRaffleIdRef = useRef<string | null>(null);
 
   // shared link support: /#raffle=0x...
@@ -64,41 +63,37 @@ export default function App() {
   function closeRaffle() {
     setOpenRaffleId(null);
     setOpenRaffleCreator(null);
-
-    // also close safety and clear selection
     setSafetyOpen(false);
-    setSafetyRaffleId(null);
-    setSafetyCreator(null);
-
     window.location.hash = "";
     loadedRaffleIdRef.current = null;
   }
 
   function openSafetyGlobal() {
-    // Opens even if no raffle is selected (modal will show empty/limited state)
-    setSafetyRaffleId(openRaffleId ?? null);
-    setSafetyCreator(openRaffleCreator ?? null);
     setSafetyOpen(true);
   }
 
   function openSafetyForRaffle(id: string) {
-    const lower = id.toLowerCase();
-
-    // Ensure the app selects this raffle (hash + details modal)
-    openRaffle(lower);
-
-    // Safety modal should point to that raffle immediately
-    setSafetyRaffleId(lower);
-    setSafetyCreator(null); // will be filled when details loads (if available)
+    openRaffle(id);
     setSafetyOpen(true);
   }
 
-  // Keep safety modal synced if user opens raffle via hash while safety is already open
+  // ✅ AUTO-SWITCH TO ETHERLINK AFTER CONNECT
+  const chainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
+
   useEffect(() => {
-    if (!safetyOpen) return;
-    if (!openRaffleId) return;
-    setSafetyRaffleId(openRaffleId);
-  }, [safetyOpen, openRaffleId]);
+    // Only attempt when connected
+    if (!acc.isConnected) return;
+
+    // If already on Etherlink, do nothing
+    if (chainId === etherlink.id) return;
+
+    // Prompt a switch once connected (WalletConnect often lands on Ethereum by default)
+    // This will open MetaMask and ask user to switch network.
+    switchChainAsync({ chainId: etherlink.id }).catch(() => {
+      // user rejected or wallet can't switch automatically
+    });
+  }, [acc.isConnected, chainId, switchChainAsync]);
 
   return (
     <div className="min-h-screen pb-12 relative">
@@ -112,22 +107,13 @@ export default function App() {
         onGoHome={() => {
           window.location.hash = "";
           setOpenRaffleId(null);
-          setOpenRaffleCreator(null);
-
           setSafetyOpen(false);
-          setSafetyRaffleId(null);
-          setSafetyCreator(null);
         }}
         onGoExplore={() => {
-          // Placeholder route (we can implement later)
+          // placeholder route; later we’ll implement explore page/scroll
           window.location.hash = "explore";
-
           setOpenRaffleId(null);
-          setOpenRaffleCreator(null);
-
           setSafetyOpen(false);
-          setSafetyRaffleId(null);
-          setSafetyCreator(null);
         }}
       />
 
@@ -140,7 +126,9 @@ export default function App() {
       >
         <HomePage
           onOpenRaffle={openRaffle}
-          onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)}
+          onOpenSafety={(raffleId) => {
+            openSafetyForRaffle(raffleId);
+          }}
         />
       </div>
 
@@ -163,40 +151,26 @@ export default function App() {
       <RaffleDetailsModal
         raffleId={openRaffleId}
         onClose={closeRaffle}
-        onOpenSafety={() => {
-          if (openRaffleId) openSafetyForRaffle(openRaffleId);
-          else setSafetyOpen(true);
-        }}
+        onOpenSafety={() => setSafetyOpen(true)}
         onLoadedRaffle={(r) => {
           if (!openRaffleId) return;
           if (loadedRaffleIdRef.current === openRaffleId) return;
 
           loadedRaffleIdRef.current = openRaffleId;
-
-          const creator = r?.creator ? String(r.creator) : null;
-          setOpenRaffleCreator(creator);
-
-          // If safety is open for this raffle, also update creator there
-          if (safetyOpen && safetyRaffleId?.toLowerCase() === openRaffleId.toLowerCase()) {
-            setSafetyCreator(creator);
-          }
+          setOpenRaffleCreator(r?.creator ? String(r.creator) : null);
         }}
       />
 
       <SafetyProofModal
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
-        raffleId={(safetyRaffleId ?? openRaffleId ?? "") as string}
-        creator={(safetyCreator ?? openRaffleCreator) ?? undefined}
+        raffleId={openRaffleId ?? ""}
+        creator={openRaffleCreator ?? undefined}
       />
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      <CreateRaffleModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => {}}
-      />
+      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
     </div>
   );
 }
