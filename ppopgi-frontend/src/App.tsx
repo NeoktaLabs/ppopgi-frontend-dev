@@ -21,7 +21,13 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
+
+  // Creator cache for the currently loaded raffle detail
   const [openRaffleCreator, setOpenRaffleCreator] = useState<string | null>(null);
+
+  // Safety may be opened from places that don't load raffle details yet (Home cards, shared links)
+  const [safetyRaffleId, setSafetyRaffleId] = useState<string | null>(null);
+  const [safetyCreator, setSafetyCreator] = useState<string | null>(null);
 
   // Used to force a re-render after disclaimer acceptance (simple + reliable)
   const [disclaimerTick, setDisclaimerTick] = useState(0);
@@ -57,10 +63,34 @@ export default function App() {
   function closeRaffle() {
     setOpenRaffleId(null);
     setOpenRaffleCreator(null);
+
+    // close safety too (and clear its selected raffle)
     setSafetyOpen(false);
+    setSafetyRaffleId(null);
+    setSafetyCreator(null);
+
     window.location.hash = "";
     loadedRaffleIdRef.current = null;
   }
+
+  function openSafetyForRaffle(id: string) {
+    const lower = id.toLowerCase();
+
+    // ensure the raffle modal opens (and hash is set) so the app has a single “selected raffle”
+    openRaffle(lower);
+
+    // safety modal should point to that raffle immediately
+    setSafetyRaffleId(lower);
+    setSafetyCreator(null); // will be filled when details loads (if/when it does)
+    setSafetyOpen(true);
+  }
+
+  // Keep safety modal synced with the currently open raffle (e.g., if user opens details via hash)
+  useEffect(() => {
+    if (!safetyOpen) return;
+    if (!openRaffleId) return;
+    setSafetyRaffleId(openRaffleId);
+  }, [safetyOpen, openRaffleId]);
 
   return (
     <div className="min-h-screen pb-12 relative">
@@ -88,8 +118,7 @@ export default function App() {
         <HomePage
           onOpenRaffle={openRaffle}
           onOpenSafety={(raffleId) => {
-            openRaffle(raffleId);
-            setSafetyOpen(true);
+            openSafetyForRaffle(raffleId);
           }}
         />
       </div>
@@ -113,26 +142,40 @@ export default function App() {
       <RaffleDetailsModal
         raffleId={openRaffleId}
         onClose={closeRaffle}
-        onOpenSafety={() => setSafetyOpen(true)}
+        onOpenSafety={() => {
+          if (openRaffleId) openSafetyForRaffle(openRaffleId);
+          else setSafetyOpen(true);
+        }}
         onLoadedRaffle={(r) => {
           if (!openRaffleId) return;
           if (loadedRaffleIdRef.current === openRaffleId) return;
 
           loadedRaffleIdRef.current = openRaffleId;
-          setOpenRaffleCreator(r?.creator ? String(r.creator) : null);
+
+          const creator = r?.creator ? String(r.creator) : null;
+          setOpenRaffleCreator(creator);
+
+          // if safety is open for this raffle, also update safety creator
+          if (safetyOpen && safetyRaffleId?.toLowerCase() === openRaffleId.toLowerCase()) {
+            setSafetyCreator(creator);
+          }
         }}
       />
 
       <SafetyProofModal
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
-        raffleId={openRaffleId ?? ""}
-        creator={openRaffleCreator ?? undefined}
+        raffleId={(safetyRaffleId ?? openRaffleId ?? "") as string}
+        creator={(safetyCreator ?? openRaffleCreator) ?? undefined}
       />
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {}}
+      />
     </div>
   );
 }
