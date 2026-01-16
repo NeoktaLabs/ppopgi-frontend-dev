@@ -21,16 +21,17 @@ export function Navbar({
 }) {
   const { disconnect } = useDisconnect();
 
-  // ✅ FIX: wagmi state updates instantly without refresh
+  // Wagmi state updates instantly (no refresh needed)
   const { address, isConnected } = useAccount();
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 pt-4 px-4">
       <nav className="mx-auto max-w-6xl bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl shadow-sm h-16 flex items-center justify-between px-4 md:px-6">
         <ConnectButton.Custom>
-          {({ openConnectModal, mounted }) => {
-            // ✅ FIX: rely on wagmi connection state, not rainbowkit render state
-            const connected = mounted && isConnected && !!address;
+          {({ chain, openConnectModal, openChainModal, mounted }) => {
+            const ready = mounted;
+            const connected = ready && isConnected && !!address; // ✅ no chain dependency
+            const wrongNetwork = !!chain?.unsupported;
 
             return (
               <>
@@ -71,6 +72,7 @@ export function Navbar({
 
                 {/* Right */}
                 <div className="flex items-center gap-3">
+                  {/* Stacked balances */}
                   <div className="hidden lg:block">
                     <WalletPill />
                   </div>
@@ -98,6 +100,19 @@ export function Navbar({
 
                   {connected ? (
                     <>
+                      {/* Wrong network helper */}
+                      {wrongNetwork ? (
+                        <button
+                          onClick={openChainModal}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 px-3 py-2 rounded-xl font-black shadow-sm text-sm"
+                          title="Switch network"
+                          type="button"
+                        >
+                          Wrong network
+                        </button>
+                      ) : null}
+
+                      {/* Player button */}
                       <button
                         onClick={onOpenDashboard}
                         className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
