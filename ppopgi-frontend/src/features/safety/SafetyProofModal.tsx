@@ -6,7 +6,11 @@ import { Shield, ExternalLink, Copy, CheckCircle2, AlertTriangle } from "lucide-
 
 import { Modal } from "../../ui/Modal";
 import { addrUrl } from "../../lib/explorer";
-import { ADDR, LOTTERY_SINGLE_WINNER_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
+import {
+  ADDR,
+  LOTTERY_SINGLE_WINNER_ABI,
+  SINGLE_WINNER_DEPLOYER_ABI,
+} from "../../lib/contracts";
 
 function shortAddr(a?: string | null) {
   if (!a) return "—";
@@ -30,7 +34,9 @@ function Row({
   return (
     <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
       <div className="min-w-0">
-        <div className="text-[11px] font-black text-gray-600 uppercase tracking-wider">{label}</div>
+        <div className="text-[11px] font-black text-gray-600 uppercase tracking-wider">
+          {label}
+        </div>
         {href ? (
           <a
             href={href}
@@ -80,39 +86,40 @@ export function SafetyProofModal({
 }) {
   const enabled = open && !!raffleId;
 
-  // --- Deployer defaults (canonical)
+  // --- Deployer defaults (canonical) ---
+  // ✅ FIX: gate these reads with `enabled`, not just `open`
   const dUsdc = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "usdc",
-    query: { enabled: open },
+    query: { enabled },
   });
   const dEntropy = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "entropy",
-    query: { enabled: open },
+    query: { enabled },
   });
   const dProvider = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "entropyProvider",
-    query: { enabled: open },
+    query: { enabled },
   });
   const dFeeRecipient = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "feeRecipient",
-    query: { enabled: open },
+    query: { enabled },
   });
   const dFeePercent = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "protocolFeePercent",
-    query: { enabled: open },
+    query: { enabled },
   });
 
-  // --- Raffle live reads (prove this raffle matches defaults)
+  // --- Raffle live reads (prove this raffle matches defaults) ---
   const rDeployer = useReadContract({
     address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
@@ -154,7 +161,6 @@ export function SafetyProofModal({
   const isOfficial = deployerAddr && deployerAddr === ADDR.deployer.toLowerCase();
 
   const match = useMemo(() => {
-    // if raffle reads missing, don’t claim mismatch
     const ru = rUsdc.data ? String(rUsdc.data).toLowerCase() : "";
     const re = rEntropy.data ? String(rEntropy.data).toLowerCase() : "";
     const rp = rProvider.data ? String(rProvider.data).toLowerCase() : "";
@@ -224,7 +230,9 @@ export function SafetyProofModal({
         <div className="rounded-3xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">On-chain proofs</div>
+              <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
+                On-chain proofs
+              </div>
               <div className="mt-1 text-lg font-black text-gray-900 flex items-center gap-2">
                 Shield Check <Shield size={16} />
               </div>
@@ -256,12 +264,29 @@ export function SafetyProofModal({
             }
           />
 
-          {creator && <Row label="Creator" value={shortAddr(creator)} href={addrUrl(creator)} copyValue={creator} />}
+          {creator ? (
+            <Row
+              label="Creator"
+              value={shortAddr(creator)}
+              href={addrUrl(creator)}
+              copyValue={creator}
+            />
+          ) : null}
 
           <Row
             label="Deployer"
-            value={rDeployer.isLoading ? "Loading…" : rDeployer.data ? shortAddr(String(rDeployer.data)) : "—"}
-            href={rDeployer.data && isAddress(String(rDeployer.data)) ? addrUrl(String(rDeployer.data)) : undefined}
+            value={
+              rDeployer.isLoading
+                ? "Loading…"
+                : rDeployer.data
+                  ? shortAddr(String(rDeployer.data))
+                  : "—"
+            }
+            href={
+              rDeployer.data && isAddress(String(rDeployer.data))
+                ? addrUrl(String(rDeployer.data))
+                : undefined
+            }
             copyValue={rDeployer.data ? String(rDeployer.data) : undefined}
           />
         </div>
@@ -270,8 +295,12 @@ export function SafetyProofModal({
         <div className="rounded-3xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">Verified configuration</div>
-              <div className="mt-1 text-base font-black text-gray-900">Randomness + Fees</div>
+              <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
+                Verified configuration
+              </div>
+              <div className="mt-1 text-base font-black text-gray-900">
+                Randomness + Fees
+              </div>
             </div>
 
             {match.known ? (
@@ -292,20 +321,42 @@ export function SafetyProofModal({
           </div>
 
           <div className="mt-3 grid gap-2">
-            <ProofLine label="USDC token" deployerValue={dUsdc.data ? String(dUsdc.data) : undefined} raffleValue={rUsdc.data ? String(rUsdc.data) : undefined} />
-            <ProofLine label="Entropy contract" deployerValue={dEntropy.data ? String(dEntropy.data) : undefined} raffleValue={rEntropy.data ? String(rEntropy.data) : undefined} />
-            <ProofLine label="Entropy provider" deployerValue={dProvider.data ? String(dProvider.data) : undefined} raffleValue={rProvider.data ? String(rProvider.data) : undefined} />
-            <ProofLine label="Fee recipient" deployerValue={dFeeRecipient.data ? String(dFeeRecipient.data) : undefined} raffleValue={rFeeRecipient.data ? String(rFeeRecipient.data) : undefined} />
+            <ProofLine
+              label="USDC token"
+              deployerValue={dUsdc.data ? String(dUsdc.data) : undefined}
+              raffleValue={rUsdc.data ? String(rUsdc.data) : undefined}
+            />
+            <ProofLine
+              label="Entropy contract"
+              deployerValue={dEntropy.data ? String(dEntropy.data) : undefined}
+              raffleValue={rEntropy.data ? String(rEntropy.data) : undefined}
+            />
+            <ProofLine
+              label="Entropy provider"
+              deployerValue={dProvider.data ? String(dProvider.data) : undefined}
+              raffleValue={rProvider.data ? String(rProvider.data) : undefined}
+            />
+            <ProofLine
+              label="Fee recipient"
+              deployerValue={dFeeRecipient.data ? String(dFeeRecipient.data) : undefined}
+              raffleValue={rFeeRecipient.data ? String(rFeeRecipient.data) : undefined}
+            />
             <ProofLine
               label="Platform fee percent"
-              deployerValue={dFeePercent.data !== undefined ? `${String(dFeePercent.data)}%` : undefined}
-              raffleValue={rFeePercent.data !== undefined ? `${String(rFeePercent.data)}%` : undefined}
+              deployerValue={
+                dFeePercent.data !== undefined ? `${String(dFeePercent.data)}%` : undefined
+              }
+              raffleValue={
+                rFeePercent.data !== undefined ? `${String(rFeePercent.data)}%` : undefined
+              }
               isAddr={false}
             />
           </div>
 
           <div className="mt-3 text-xs font-bold text-gray-700/80">
-            Tip: “Official” means this raffle’s <span className="font-black">deployer()</span> equals your known deployer address. “Matches defaults” means the live raffle config equals the deployer config.
+            Tip: “Official” means this raffle’s <span className="font-black">deployer()</span>{" "}
+            equals your known deployer address. “Matches defaults” means the live raffle
+            config equals the deployer config.
           </div>
         </div>
 
@@ -361,14 +412,18 @@ function ProofLine({
     <div className="rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-black text-gray-600 uppercase tracking-wider">{label}</div>
-
-          <div className="mt-1 text-xs font-bold text-gray-700">
-            <span className="text-gray-500">Deployer:</span> {d ? (isAddr ? shortAddr(d) : d) : "…"}
+          <div className="text-[11px] font-black text-gray-600 uppercase tracking-wider">
+            {label}
           </div>
 
           <div className="mt-1 text-xs font-bold text-gray-700">
-            <span className="text-gray-500">Raffle:</span> {r ? (isAddr ? shortAddr(r) : r) : "…"}
+            <span className="text-gray-500">Deployer:</span>{" "}
+            {d ? (isAddr ? shortAddr(d) : d) : "…"}
+          </div>
+
+          <div className="mt-1 text-xs font-bold text-gray-700">
+            <span className="text-gray-500">Raffle:</span>{" "}
+            {r ? (isAddr ? shortAddr(r) : r) : "…"}
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2">
