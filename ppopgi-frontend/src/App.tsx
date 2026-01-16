@@ -66,7 +66,6 @@ export default function App() {
     <div className="min-h-screen pb-12 relative">
       <DisclaimerGate onAccept={() => setDisclaimerTick((x) => x + 1)} />
 
-      {/* Rounded centered navbar (extracted) */}
       <Navbar
         onOpenCashier={() => setCashierOpen(true)}
         onOpenCreate={() => setCreateOpen(true)}
@@ -79,19 +78,22 @@ export default function App() {
         }}
       />
 
-      {/* Give space under fixed navbar */}
       <div className="pt-24" />
 
-      {/* MAIN (blur/scale when overlays open) */}
       <div
         className={`transition-all duration-300 ${
           anyOverlayOpen ? "scale-[0.98] blur-[2px] opacity-50 pointer-events-none" : ""
         }`}
       >
-        <HomePage onOpenRaffle={openRaffle} />
+        <HomePage
+          onOpenRaffle={openRaffle}
+          onOpenSafety={(raffleId) => {
+            openRaffle(raffleId);
+            setSafetyOpen(true);
+          }}
+        />
       </div>
 
-      {/* Dashboard overlay */}
       {dashboardOpen && (
         <PageModal onClose={() => setDashboardOpen(false)}>
           <DashboardPage
@@ -108,13 +110,11 @@ export default function App() {
         </PageModal>
       )}
 
-      {/* Raffle details modal */}
       <RaffleDetailsModal
         raffleId={openRaffleId}
         onClose={closeRaffle}
         onOpenSafety={() => setSafetyOpen(true)}
         onLoadedRaffle={(r) => {
-          // only apply when the modal is for this raffle + once per raffle
           if (!openRaffleId) return;
           if (loadedRaffleIdRef.current === openRaffleId) return;
 
@@ -123,7 +123,6 @@ export default function App() {
         }}
       />
 
-      {/* Safety & Proof modal */}
       <SafetyProofModal
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
@@ -131,15 +130,9 @@ export default function App() {
         creator={openRaffleCreator ?? undefined}
       />
 
-      {/* Cashier modal (polished) */}
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      {/* Create raffle modal */}
-      <CreateRaffleModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => {}}
-      />
+      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
     </div>
   );
 }
