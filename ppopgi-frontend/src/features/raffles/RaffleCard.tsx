@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import type { RaffleLite } from "./useRafflesHome";
 import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
 import { ADDR } from "../../lib/contracts";
+import { formatToken } from "../../lib/formatMoney"; // ✅ NEW (USDC formatting)
 
 export function RaffleCard({
   raffle,
@@ -106,11 +107,11 @@ export function RaffleCard({
           <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={pill()}>
               <span style={{ opacity: 0.75 }}>Win</span>{" "}
-              <span style={{ fontWeight: 1000 }}>{raffle.winningPot} USDC</span>
+              <span style={{ fontWeight: 1000 }}>{formatToken(raffle.winningPot, 6)} USDC</span>
             </div>
             <div style={pill()}>
               <span style={{ opacity: 0.75 }}>Ticket</span>{" "}
-              <span style={{ fontWeight: 1000 }}>{raffle.ticketPrice} USDC</span>
+              <span style={{ fontWeight: 1000 }}>{formatToken(raffle.ticketPrice, 6)} USDC</span>
             </div>
           </div>
         </div>
@@ -137,7 +138,14 @@ export function RaffleCard({
               </div>
             </>
           ) : (
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                opacity: 0.8,
+              }}
+            >
               <span style={{ fontWeight: 900 }}>Joined</span>
               <span style={{ fontWeight: 900 }}>{soldNum}</span>
             </div>
@@ -145,7 +153,14 @@ export function RaffleCard({
         </div>
 
         {/* Bottom */}
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <div style={{ fontSize: 12, opacity: 0.8 }}>Tap to view details</div>
           <div style={ctaPill()}>Open</div>
         </div>
