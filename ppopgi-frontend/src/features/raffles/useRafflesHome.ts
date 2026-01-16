@@ -16,7 +16,7 @@ export type RaffleLite = {
 
   // verification (subgraph)
   deployer?: string | null;
-  isRegistered?: boolean;
+  isRegistered?: boolean | null;
   registry?: string | null;
 };
 
@@ -29,12 +29,7 @@ export function useBigPrizes() {
     queryKey: ["home", "bigPrizes"],
     queryFn: async () => {
       const client = getSubgraphClient();
-      const res = await client.request<{ raffles: RaffleLite[] }>(QUERY_BIG_PRIZES, { first: 3 });
-
-      return {
-        ...res,
-        raffles: (res.raffles ?? []).map((r) => ({ ...r, verified: true })), // you said you register all raffles
-      };
+      return client.request<{ raffles: RaffleLite[] }>(QUERY_BIG_PRIZES, { first: 3 });
     },
     refetchInterval: 20_000,
     retry: 1,
@@ -46,15 +41,10 @@ export function useEndingSoon() {
     queryKey: ["home", "endingSoon"],
     queryFn: async () => {
       const client = getSubgraphClient();
-      const res = await client.request<{ raffles: RaffleLite[] }>(QUERY_ENDING_SOON, {
+      return client.request<{ raffles: RaffleLite[] }>(QUERY_ENDING_SOON, {
         first: 5,
         now: nowBigInt(),
       });
-
-      return {
-        ...res,
-        raffles: (res.raffles ?? []).map((r) => ({ ...r, verified: true })), // you said you register all raffles
-      };
     },
     refetchInterval: 20_000,
     retry: 1,
