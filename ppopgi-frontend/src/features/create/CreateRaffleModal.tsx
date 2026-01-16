@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+// src/features/create/CreateRaffleModal.tsx
+import React, { useMemo, useState } from "react";
 import { Modal } from "../../ui/Modal";
 import {
   useAccount,
@@ -6,32 +7,41 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { parseUnits, formatUnits, isAddress } from "viem";
+import { Shield, ExternalLink, Loader2, Sparkles } from "lucide-react";
+
 import { ADDR, ERC20_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
-import { parseUnits } from "viem";
+import { addrUrl, txUrl } from "../../lib/explorer";
+
+function shortAddr(a?: string) {
+  if (!a) return "—";
+  const s = String(a);
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
+}
+
+function clampInt(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function safeNum(v: string) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
 export function CreateRaffleModal({
   open,
   onClose,
   onCreated,
+  onOpenSafety,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (raffleAddress: string) => void;
+  onOpenSafety?: () => void;
 }) {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
 
-  // Read deployer config for transparency
-  const cfg = useMemo(
-    () => ({
-      usdc: { fn: "usdc" as const, label: "Coins used" },
-      entropy: { fn: "entropy" as const, label: "Randomness system" },
-      entropyProvider: { fn: "entropyProvider" as const, label: "Randomness provider" },
-      feeRecipient: { fn: "feeRecipient" as const, label: "Fee receiver" },
-      protocolFeePercent: { fn: "protocolFeePercent" as const, label: "Ppopgi fee" },
-    }),
-    []
-  );
-
+  // --- USDC decimals ---
   const usdcDecimals = useReadContract({
     address: ADDR.usdc,
     abi: ERC20_ABI,
@@ -40,140 +50,258 @@ export function CreateRaffleModal({
   });
   const d = Number(usdcDecimals.data ?? 6);
 
+  // --- Deployer config reads ---
   const qUsdc = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: cfg.usdc.fn,
+    functionName: "usdc",
     query: { enabled: open },
   });
   const qEntropy = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: cfg.entropy.fn,
+    functionName: "entropy",
     query: { enabled: open },
   });
   const qProvider = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: cfg.entropyProvider.fn,
+    functionName: "entropyProvider",
     query: { enabled: open },
   });
   const qFee = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: cfg.feeRecipient.fn,
+    functionName: "feeRecipient",
     query: { enabled: open },
   });
   const qPercent = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: cfg.protocolFeePercent.fn,
+    functionName: "protocolFeePercent",
     query: { enabled: open },
   });
 
-  // Form
+  const percent = qPercent.data ? Number(qPercent.data as bigint) : null;
+
+  // --- form ---
   const [name, setName] = useState("My raffle");
   const [ticketPrice, setTicketPrice] = useState("1"); // USDC
   const [winningPot, setWinningPot] = useState("10"); // USDC
   const [durationHours, setDurationHours] = useState("24");
   const [minTickets, setMinTickets] = useState("1");
   const [maxTickets, setMaxTickets] = useState(""); // optional
-  const [minPurchaseAmount, setMinPurchaseAmount] = useState("1"); // uint32 (raw)
+  const [minPurchaseAmount, setMinPurchaseAmount] = useState("1"); // uint32 raw
 
-  const { writeContractAsync, data: txHash, isPending } = useWriteContract();
-  const tx = useWaitForTransactionReceipt({ hash: txHash });
-
-  const canSubmit = isConnected && !isPending && !tx.isLoading;
-
-  const percent = qPercent.data ? Number(qPercent.data as bigint) : null;
-
-  async function onCreate() {
-    const durationSeconds = BigInt(Math.max(1, Number(durationHours) || 1) * 3600);
-    const minT = BigInt(Math.max(1, Number(minTickets) || 1));
-    const maxT = maxTickets ? BigInt(Math.max(0, Number(maxTickets) || 0)) : BigInt(0);
-
+  // derived
+  const parsed = useMemo(() => {
     const tp = parseUnits(ticketPrice || "0", d);
     const wp = parseUnits(winningPot || "0", d);
 
-    // IMPORTANT: contract expects uint32 (raw), not USDC units.
-    // Keep it a simple integer with sane bounds.
-    const minBuyRaw = Math.max(1, Math.floor(Number(minPurchaseAmount) || 1));
-    const minBuyU32 = Math.min(minBuyRaw, 0xffffffff);
+    const durationSeconds = BigInt(clampInt(Math.floor(safeNum(durationHours) || 1), 1, 24 * 365 * 10) * 3600);
+    const minT = BigInt(clampInt(Math.floor(safeNum(minTickets) || 1), 1, 10_000_000));
+    const maxTNum = Math.floor(safeNum(maxTickets));
+    const maxT = BigInt(maxTickets ? clampInt(maxTNum, 0, 10_000_000) : 0);
 
+    const minBuyRaw = clampInt(Math.floor(safeNum(minPurchaseAmount) || 1), 1, 0xffffffff);
+    const minBuyU32 = minBuyRaw;
+
+    return { tp, wp, durationSeconds, minT, maxT, minBuyU32 };
+  }, [ticketPrice, winningPot, durationHours, minTickets, maxTickets, minPurchaseAmount, d]);
+
+  const feePreview = useMemo(() => {
+    if (percent === null) return null;
+    const wp = parsed.wp; // USDC base units
+    // percent looks like integer percent (e.g., 3)
+    const fee = (wp * BigInt(percent)) / BigInt(100);
+    const net = wp - fee;
+    return {
+      fee: formatUnits(fee, d),
+      net: formatUnits(net, d),
+    };
+  }, [percent, parsed.wp, d]);
+
+  // --- tx ---
+  const { writeContractAsync, data: txHash, isPending } = useWriteContract();
+  const tx = useWaitForTransactionReceipt({ hash: txHash });
+
+  const canSubmit =
+    isConnected &&
+    !isPending &&
+    !tx.isLoading &&
+    name.trim().length > 0 &&
+    parsed.tp > 0n &&
+    parsed.wp > 0n &&
+    parsed.minT > 0n;
+
+  async function onCreate() {
     const hash = await writeContractAsync({
       address: ADDR.deployer,
       abi: SINGLE_WINNER_DEPLOYER_ABI,
       functionName: "createSingleWinnerLottery",
-      args: [name, tp, wp, minT, maxT, durationSeconds, minBuyU32] as any,
+      args: [
+        name.trim(),
+        parsed.tp,
+        parsed.wp,
+        parsed.minT,
+        parsed.maxT,
+        parsed.durationSeconds,
+        parsed.minBuyU32,
+      ] as any,
     });
 
     return hash;
   }
 
+  const configRows = [
+    { label: "Coins used", v: qUsdc.data ? String(qUsdc.data) : "…" },
+    { label: "Randomness system", v: qEntropy.data ? String(qEntropy.data) : "…" },
+    { label: "Randomness provider", v: qProvider.data ? String(qProvider.data) : "…" },
+    { label: "Fee receiver", v: qFee.data ? String(qFee.data) : "…" },
+    { label: "Ppopgi fee", v: percent === null ? "…" : `${percent}%` },
+  ];
+
   return (
-    <Modal open={open} onClose={onClose} title="Create">
+    <Modal open={open} onClose={onClose} title="Create Raffle">
       {!isConnected ? (
-        <div style={{ fontWeight: 900, lineHeight: 1.6 }}>Sign in to create a raffle.</div>
+        <div className="font-black text-gray-800">
+          Connect your wallet to create a raffle.
+        </div>
       ) : (
-        <div style={{ display: "grid", gap: 14 }}>
-          <div style={panel()}>
-            <div style={{ fontWeight: 1000, marginBottom: 8 }}>Defaults (set once)</div>
-            <div style={{ display: "grid", gap: 6, fontSize: 13, opacity: 0.9 }}>
-              <div>Coins used: {String(qUsdc.data ?? "…")}</div>
-              <div>Randomness system: {String(qEntropy.data ?? "…")}</div>
-              <div>Randomness provider: {String(qProvider.data ?? "…")}</div>
-              <div>Fee receiver: {String(qFee.data ?? "…")}</div>
-              <div>Ppopgi fee: {percent === null ? "…" : `${percent}%`}</div>
+        <div className="grid gap-4">
+          {/* Safety/Proof header */}
+          <div className="rounded-2xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
+                  On-chain defaults
+                </div>
+                <div className="text-lg font-black text-gray-900 flex items-center gap-2">
+                  Transparency <Shield size={16} />
+                </div>
+                <div className="text-xs font-bold text-gray-600 mt-1">
+                  These come from your deployer contract.
+                </div>
+              </div>
+
+              {onOpenSafety ? (
+                <button
+                  type="button"
+                  onClick={onOpenSafety}
+                  className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-white/80 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-gray-800 shadow-sm"
+                >
+                  <Shield size={14} /> Safety &amp; Proof
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-3 grid gap-2 text-xs font-bold text-gray-700">
+              {configRows.map((r) => (
+                <div key={r.label} className="flex items-center justify-between gap-3">
+                  <span className="text-gray-600">{r.label}</span>
+                  <span className="font-black text-gray-900">
+                    {isAddress(String(r.v)) ? shortAddr(String(r.v)) : r.v}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {qFee.data ? (
+                <a
+                  className="inline-flex items-center gap-1 rounded-xl bg-white/70 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-blue-700"
+                  href={addrUrl(String(qFee.data))}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Fee receiver <ExternalLink size={12} />
+                </a>
+              ) : null}
+              {qProvider.data ? (
+                <a
+                  className="inline-flex items-center gap-1 rounded-xl bg-white/70 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-blue-700"
+                  href={addrUrl(String(qProvider.data))}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Provider <ExternalLink size={12} />
+                </a>
+              ) : null}
             </div>
           </div>
 
-          <div style={panel()}>
-            <div style={{ display: "grid", gap: 10 }}>
+          {/* Form */}
+          <div className="rounded-2xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
+            <div className="grid gap-3">
               <Field label="Name">
-                <input value={name} onChange={(e) => setName(e.target.value)} style={input()} />
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={input()}
+                  placeholder="My raffle"
+                />
               </Field>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Ticket price (USDC)">
                   <input
                     value={ticketPrice}
                     onChange={(e) => setTicketPrice(e.target.value)}
-                    style={input()}
+                    className={input()}
                     inputMode="decimal"
                   />
                 </Field>
-                <Field label="Win amount (USDC)">
+
+                <Field label="Winning pot (USDC)">
                   <input
                     value={winningPot}
                     onChange={(e) => setWinningPot(e.target.value)}
-                    style={input()}
+                    className={input()}
                     inputMode="decimal"
                   />
                 </Field>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {feePreview ? (
+                <div className="rounded-2xl bg-white/70 border border-white/60 p-3">
+                  <div className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                    Fee preview
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-sm font-black text-gray-900">
+                    <span>Platform fee</span>
+                    <span>{feePreview.fee} USDC</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-xs font-bold text-gray-700">
+                    <span>Net pot after fee</span>
+                    <span className="font-black">{feePreview.net} USDC</span>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Field label="Duration (hours)">
                   <input
                     value={durationHours}
                     onChange={(e) => setDurationHours(e.target.value)}
-                    style={input()}
+                    className={input()}
                     inputMode="numeric"
                   />
                 </Field>
+
                 <Field label="Min tickets">
                   <input
                     value={minTickets}
                     onChange={(e) => setMinTickets(e.target.value)}
-                    style={input()}
+                    className={input()}
                     inputMode="numeric"
                   />
                 </Field>
+
                 <Field label="Max tickets (optional)">
                   <input
                     value={maxTickets}
                     onChange={(e) => setMaxTickets(e.target.value)}
-                    style={input()}
+                    className={input()}
                     inputMode="numeric"
                     placeholder="No limit"
                   />
@@ -184,24 +312,61 @@ export function CreateRaffleModal({
                 <input
                   value={minPurchaseAmount}
                   onChange={(e) => setMinPurchaseAmount(e.target.value)}
-                  style={input()}
+                  className={input()}
                   inputMode="numeric"
                 />
               </Field>
 
-              <button onClick={onCreate} disabled={!canSubmit} style={primaryBtn(!canSubmit)}>
-                {isPending ? "Confirming…" : "Create raffle"}
+              <div className="rounded-2xl bg-white/60 border border-white/60 p-3 text-xs font-bold text-gray-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Creator</span>
+                  <span className="font-black">{address ? shortAddr(address) : "—"}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={onCreate}
+                disabled={!canSubmit}
+                type="button"
+                className={primaryBtn(!canSubmit)}
+              >
+                {isPending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="animate-spin" size={16} /> Confirm in wallet…
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    <Sparkles size={16} /> Create raffle
+                  </span>
+                )}
               </button>
 
-              {txHash && <div style={{ fontSize: 12, opacity: 0.85 }}>We’re confirming your raffle…</div>}
-              {tx.isSuccess && (
-                <div style={{ fontWeight: 900 }}>Created. It should appear on the home list soon.</div>
-              )}
+              {txHash ? (
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 border border-white/60 p-3">
+                  <div className="text-xs font-bold text-gray-700">
+                    {tx.isLoading ? "Transaction pending…" : tx.isSuccess ? "Transaction confirmed" : "Transaction sent"}
+                  </div>
+                  <a
+                    href={txUrl(String(txHash))}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-black text-blue-700 hover:underline inline-flex items-center gap-1"
+                  >
+                    View <ExternalLink size={12} />
+                  </a>
+                </div>
+              ) : null}
+
+              {tx.isSuccess ? (
+                <div className="rounded-2xl bg-green-50 border border-green-200 p-3 text-sm font-black text-green-900">
+                  Created. It should appear on the home list soon.
+                </div>
+              ) : null}
             </div>
           </div>
 
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            Creating does not pick a winner. The draw happens later.
+          <div className="text-xs font-bold text-gray-700/80">
+            Creating doesn’t pick a winner. The draw happens later.
           </div>
         </div>
       )}
@@ -209,45 +374,25 @@ export function CreateRaffleModal({
   );
 }
 
-function Field({ label, children }: { label: string; children: any }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontWeight: 900, marginBottom: 6 }}>{label}</div>
+      <div className="font-black text-sm text-gray-900 mb-2">{label}</div>
       {children}
     </div>
   );
 }
 
-function panel(): React.CSSProperties {
-  return {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.35)",
-    background: "rgba(255,255,255,0.18)",
-    backdropFilter: "blur(14px)",
-    padding: 14,
-  };
+function input() {
+  return "w-full px-4 py-3 rounded-2xl border border-white/60 bg-white/25 backdrop-blur-md font-black text-gray-900 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-amber-400/60";
 }
 
-function input(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.4)",
-    background: "rgba(255,255,255,0.22)",
-    outline: "none",
-    fontWeight: 900,
-  };
-}
-
-function primaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: "12px 14px",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.5)",
-    background: disabled ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.28)",
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontWeight: 1000,
-  };
+function primaryBtn(disabled: boolean) {
+  return [
+    "w-full rounded-2xl px-4 py-3 font-black shadow-lg transition-all",
+    "border border-white/60",
+    disabled
+      ? "bg-white/30 text-gray-500 cursor-not-allowed"
+      : "bg-amber-500 hover:bg-amber-600 text-white active:translate-y-0.5",
+  ].join(" ");
 }
