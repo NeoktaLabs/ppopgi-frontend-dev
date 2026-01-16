@@ -1,14 +1,15 @@
 // src/features/create/CreateRaffleModal.tsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Modal } from "../../ui/Modal";
 import {
   useAccount,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  usePublicClient,
 } from "wagmi";
 import { parseUnits, formatUnits, isAddress } from "viem";
-import { Shield, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import { Shield, ExternalLink, Loader2, Sparkles, Copy, Check } from "lucide-react";
 
 import { ADDR, ERC20_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
 import { addrUrl, txUrl } from "../../lib/explorer";
@@ -40,6 +41,7 @@ export function CreateRaffleModal({
   onOpenSafety?: () => void;
 }) {
   const { isConnected, address } = useAccount();
+  const publicClient = usePublicClient();
 
   // --- USDC decimals ---
   const usdcDecimals = useReadContract({
@@ -93,12 +95,24 @@ export function CreateRaffleModal({
   const [maxTickets, setMaxTickets] = useState(""); // optional
   const [minPurchaseAmount, setMinPurchaseAmount] = useState("1"); // uint32 raw
 
+  const [createdAddr, setCreatedAddr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Reset local "created" state when modal re-opens
+  useEffect(() => {
+    if (!open) return;
+    setCreatedAddr(null);
+    setCopied(false);
+  }, [open]);
+
   // derived
   const parsed = useMemo(() => {
     const tp = parseUnits(ticketPrice || "0", d);
     const wp = parseUnits(winningPot || "0", d);
 
-    const durationSeconds = BigInt(clampInt(Math.floor(safeNum(durationHours) || 1), 1, 24 * 365 * 10) * 3600);
+    const durationSeconds = BigInt(
+      clampInt(Math.floor(safeNum(durationHours) || 1), 1, 24 * 365 * 10) * 3600
+    );
     const minT = BigInt(clampInt(Math.floor(safeNum(minTickets) || 1), 1, 10_000_000));
     const maxTNum = Math.floor(safeNum(maxTickets));
     const maxT = BigInt(maxTickets ? clampInt(maxTNum, 0, 10_000_000) : 0);
@@ -111,8 +125,7 @@ export function CreateRaffleModal({
 
   const feePreview = useMemo(() => {
     if (percent === null) return null;
-    const wp = parsed.wp; // USDC base units
-    // percent looks like integer percent (e.g., 3)
+    const wp = parsed.wp;
     const fee = (wp * BigInt(percent)) / BigInt(100);
     const net = wp - fee;
     return {
@@ -135,6 +148,9 @@ export function CreateRaffleModal({
     parsed.minT > 0n;
 
   async function onCreate() {
+    setCreatedAddr(null);
+    setCopied(false);
+
     const hash = await writeContractAsync({
       address: ADDR.deployer,
       abi: SINGLE_WINNER_DEPLOYER_ABI,
@@ -153,6 +169,36 @@ export function CreateRaffleModal({
     return hash;
   }
 
+  // When confirmed, extract created raffle address from the receipt logs
+  useEffect(() => {
+    if (!tx.isSuccess || !txHash || !publicClient || createdAddr) return;
+
+    (async () => {
+      try {
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+        const event = publicClient.parseEventLogs({
+          abi: SINGLE_WINNER_DEPLOYER_ABI as any,
+          logs: receipt.logs,
+          eventName: "LotteryCreated",
+        })?.[0];
+
+        const addr =
+          (event as any)?.args?.lottery ||
+          (event as any)?.args?.lotteryAddress ||
+          (event as any)?.args?.addr ||
+          null;
+
+        if (addr && typeof addr === "string") {
+          const lower = addr.toLowerCase();
+          setCreatedAddr(lower);
+          onCreated(lower);
+        }
+      } catch {
+        // If the deployer doesn't emit LotteryCreated, we still show confirmed state.
+      }
+    })();
+  }, [tx.isSuccess, txHash, publicClient, createdAddr, onCreated]);
+
   const configRows = [
     { label: "Coins used", v: qUsdc.data ? String(qUsdc.data) : "…" },
     { label: "Randomness system", v: qEntropy.data ? String(qEntropy.data) : "…" },
@@ -161,12 +207,12 @@ export function CreateRaffleModal({
     { label: "Ppopgi fee", v: percent === null ? "…" : `${percent}%` },
   ];
 
+  const shareLink = createdAddr ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}` : null;
+
   return (
     <Modal open={open} onClose={onClose} title="Create Raffle">
       {!isConnected ? (
-        <div className="font-black text-gray-800">
-          Connect your wallet to create a raffle.
-        </div>
+        <div className="font-black text-gray-800">Connect your wallet to create a raffle.</div>
       ) : (
         <div className="grid gap-4">
           {/* Safety/Proof header */}
@@ -344,7 +390,11 @@ export function CreateRaffleModal({
               {txHash ? (
                 <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 border border-white/60 p-3">
                   <div className="text-xs font-bold text-gray-700">
-                    {tx.isLoading ? "Transaction pending…" : tx.isSuccess ? "Transaction confirmed" : "Transaction sent"}
+                    {tx.isLoading
+                      ? "Transaction pending…"
+                      : tx.isSuccess
+                      ? "Transaction confirmed"
+                      : "Transaction sent"}
                   </div>
                   <a
                     href={txUrl(String(txHash))}
@@ -360,6 +410,33 @@ export function CreateRaffleModal({
               {tx.isSuccess ? (
                 <div className="rounded-2xl bg-green-50 border border-green-200 p-3 text-sm font-black text-green-900">
                   Created. It should appear on the home list soon.
+                </div>
+              ) : null}
+
+              {shareLink ? (
+                <div className="rounded-2xl bg-white/80 border border-white/60 p-3">
+                  <div className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                    Share link
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input className={input()} value={shareLink} readOnly />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(shareLink);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 900);
+                      }}
+                      className="shrink-0 rounded-2xl bg-white hover:bg-gray-50 border border-gray-200 px-3 py-3 text-gray-800 shadow-sm"
+                      title="Copy link"
+                      aria-label="Copy link"
+                    >
+                      {copied ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                  </div>
+                  <div className="mt-2 text-xs font-bold text-gray-600">
+                    Raffle: <span className="font-black">{shortAddr(createdAddr || "")}</span>
+                  </div>
                 </div>
               ) : null}
             </div>
