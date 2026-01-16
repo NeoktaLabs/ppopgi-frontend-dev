@@ -10,6 +10,7 @@ import {
   Sparkles,
   ExternalLink,
   ArrowRight,
+  Copy,
 } from "lucide-react";
 import { useDashboard } from "./useDashboard";
 import { friendlyStatus } from "../../lib/format";
@@ -35,7 +36,6 @@ function endsIn(deadline?: string) {
 }
 
 function statusPill(status?: string, paused?: boolean) {
-  const s = friendlyStatus(status);
   const base =
     "inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black border shadow-sm";
   if (paused) return `${base} bg-gray-100 text-gray-700 border-gray-200`;
@@ -72,11 +72,7 @@ export function DashboardPage({
 
   const hasAnything = created.length > 0 || activityByRaffle.length > 0;
 
-  const headerName = useMemo(() => {
-    if (!me) return "Player Dashboard";
-    return "Player Dashboard";
-  }, [me]);
-
+  const headerName = useMemo(() => "Player Dashboard", []);
   const sub = useMemo(() => {
     if (!me) return "Your On-Chain History";
     return `Your On-Chain History • ${shortAddr(me)}`;
@@ -86,35 +82,62 @@ export function DashboardPage({
     <div className="min-h-screen pt-24 pb-24 px-4 animate-fade-in">
       <div className="max-w-6xl mx-auto">
         {/* HERO */}
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg border-2 border-white">
-              <Wallet className="text-white" size={22} />
+        <div className="mb-6">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg border-2 border-white">
+                <Wallet className="text-white" size={22} />
+              </div>
+              <div>
+                <div className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_6px_18px_rgba(0,0,0,0.35)] uppercase tracking-tight">
+                  {headerName}
+                </div>
+                <div className="text-white/80 font-bold text-sm md:text-base">{sub}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_6px_18px_rgba(0,0,0,0.35)] uppercase tracking-tight">
-                {headerName}
-              </div>
-              <div className="text-white/80 font-bold text-sm md:text-base">
-                {sub}
-              </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onOpenCreate}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-black px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-2"
+              >
+                <PlusCircle size={18} /> Create
+              </button>
+              <button
+                onClick={onClose}
+                className="bg-white/85 hover:bg-white text-gray-800 font-black px-4 py-2.5 rounded-xl shadow-lg transition-all border border-white/60"
+              >
+                Close
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenCreate}
-              className="bg-amber-500 hover:bg-amber-600 text-white font-black px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-2"
-            >
-              <PlusCircle size={18} /> Create
-            </button>
-            <button
-              onClick={onClose}
-              className="bg-white/85 hover:bg-white text-gray-800 font-black px-4 py-2.5 rounded-xl shadow-lg transition-all border border-white/60"
-            >
-              Close
-            </button>
-          </div>
+          {/* Address chip */}
+          {me ? (
+            <div className="mt-4">
+              <div className="inline-flex items-center gap-2 bg-white/85 border border-white/60 rounded-2xl px-3 py-2 shadow-lg">
+                <span className="text-xs font-black text-gray-700">Connected:</span>
+                <a
+                  href={addrUrl(me)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-black text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
+                  title="View on explorer"
+                >
+                  {shortAddr(me)} <ExternalLink size={12} />
+                </a>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(me)}
+                  className="ml-1 p-2 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700"
+                  title="Copy address"
+                  aria-label="Copy address"
+                  type="button"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* GRID */}
@@ -130,28 +153,14 @@ export function DashboardPage({
                   <div className="text-xs font-black text-gray-500 uppercase tracking-wider">
                     Recent Interactions
                   </div>
-                  <div className="text-lg font-black text-gray-900">
-                    Your activity across raffles
-                  </div>
+                  <div className="text-lg font-black text-gray-900">Your activity across raffles</div>
                 </div>
               </div>
-
-              {me ? (
-                <a
-                  href={addrUrl(me)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-black text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
-                  title="View address on explorer"
-                >
-                  {shortAddr(me)} <ExternalLink size={12} />
-                </a>
-              ) : null}
             </div>
 
             <div className="p-6">
               {!hasAnything ? (
-                <EmptyState />
+                <EmptyState onOpenCreate={onOpenCreate} />
               ) : (
                 <div className="space-y-3">
                   {/* show activity first */}
@@ -194,12 +203,8 @@ export function DashboardPage({
                 <Trophy size={18} />
               </div>
               <div>
-                <div className="text-xs font-black text-gray-500 uppercase tracking-wider">
-                  Your Raffles
-                </div>
-                <div className="text-lg font-black text-gray-900">
-                  Created by you
-                </div>
+                <div className="text-xs font-black text-gray-500 uppercase tracking-wider">Your Raffles</div>
+                <div className="text-lg font-black text-gray-900">Created by you</div>
               </div>
             </div>
 
@@ -209,9 +214,7 @@ export function DashboardPage({
               ) : created.length === 0 ? (
                 <div className="p-4 rounded-2xl bg-white/60 border border-white/60 text-gray-700">
                   <div className="font-black">No raffles yet</div>
-                  <div className="text-sm font-bold text-gray-600 mt-1">
-                    Create one to see it here.
-                  </div>
+                  <div className="text-sm font-bold text-gray-600 mt-1">Create one to see it here.</div>
                   <button
                     onClick={onOpenCreate}
                     className="mt-4 w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-3 rounded-xl shadow-lg flex items-center justify-center gap-2"
@@ -252,7 +255,7 @@ export function DashboardPage({
   );
 }
 
-function EmptyState() {
+function EmptyState({ onOpenCreate }: { onOpenCreate: () => void }) {
   return (
     <div className="rounded-3xl bg-white/60 border border-white/60 p-10 text-center">
       <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center mx-auto shadow-md border border-gray-100">
@@ -264,9 +267,16 @@ function EmptyState() {
         Raffles you Create or Play will appear here.
       </div>
 
-      <div className="mt-6 inline-flex items-center gap-2 text-xs font-black text-gray-500">
+      <div className="mt-6 flex items-center justify-center gap-2 text-xs font-black text-gray-500">
         <Clock size={14} /> Recent interactions appear automatically
       </div>
+
+      <button
+        onClick={onOpenCreate}
+        className="mt-6 inline-flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-black px-5 py-3 rounded-xl shadow-lg"
+      >
+        <Sparkles size={18} /> Create your first raffle
+      </button>
     </div>
   );
 }
@@ -292,13 +302,12 @@ function RowCard({
     <button
       onClick={onClick}
       className="w-full text-left rounded-2xl bg-white/70 hover:bg-white/85 border border-white/70 shadow-sm transition-all px-4 py-4 flex items-center justify-between gap-4"
+      type="button"
     >
       <div className="min-w-0">
         <div className="font-black text-gray-900 truncate">{title}</div>
-        <div className="text-xs font-bold text-gray-600 mt-1 truncate">
-          {subtitle}
-        </div>
-        <div className="mt-3 flex items-center gap-2">
+        <div className="text-xs font-bold text-gray-600 mt-1 truncate">{subtitle}</div>
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span className={pillClass}>{pillText}</span>
           <span className="text-xs font-black text-gray-500 inline-flex items-center gap-1">
             <Clock size={14} /> {rightBottom}
@@ -335,6 +344,7 @@ function MiniCard({
     <button
       onClick={onClick}
       className="w-full text-left rounded-2xl bg-white/70 hover:bg-white/85 border border-white/70 shadow-sm transition-all p-4"
+      type="button"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
