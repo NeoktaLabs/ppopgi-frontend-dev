@@ -1,5 +1,5 @@
 // src/ui/Modal.tsx
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import { X } from "lucide-react";
 
 type ModalWidth = "sm" | "md" | "lg" | "xl" | "2xl" | "wide";
@@ -24,16 +24,20 @@ function widthClass(w: ModalWidth) {
   }
 }
 
-function maxHValue(h: ModalHeight) {
-  return h === "tall" ? "88vh" : "80vh";
+function heightClass(h: ModalHeight) {
+  switch (h) {
+    case "tall":
+      return "max-h-[88vh]";
+    case "auto":
+    default:
+      return "max-h-[80vh]";
+  }
 }
 
 export function Modal({
   open,
   onClose,
   title,
-  subtitle,
-  icon,
   children,
   width = "xl",
   height = "auto",
@@ -41,29 +45,23 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   title: string;
-  subtitle?: string;
-  icon?: React.ReactNode;
   children: React.ReactNode;
   width?: ModalWidth;
   height?: ModalHeight;
 }) {
   useEffect(() => {
     if (!open) return;
-
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
-
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const maxH = useMemo(() => maxHValue(height), [height]);
-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100]">
+    <div className="fixed inset-0 z-[200]">
       {/* Backdrop */}
       <button
         type="button"
@@ -78,66 +76,33 @@ export function Modal({
           className={[
             "w-full",
             widthClass(width),
-
-            // The modal should never take full screen height.
-            `max-h-[${maxH}]`,
-
+            heightClass(height),
             "overflow-hidden",
-            "rounded-[32px]",
-
-            // Soft glass shell like your screenshots
+            "rounded-[28px]",
             "border border-white/25",
             "bg-white/10",
             "backdrop-blur-xl",
-            "shadow-[0_24px_90px_rgba(0,0,0,0.45)]",
+            "shadow-[0_20px_80px_rgba(0,0,0,0.45)]",
           ].join(" ")}
           role="dialog"
           aria-modal="true"
         >
           {/* Header */}
-          <div className="px-6 py-5 border-b border-white/15 bg-white/10">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                {icon ? (
-                  <div className="shrink-0 w-11 h-11 rounded-2xl bg-white/15 border border-white/15 flex items-center justify-center text-white">
-                    {icon}
-                  </div>
-                ) : null}
-
-                <div className="min-w-0">
-                  <div className="font-black text-white text-xl tracking-tight truncate">
-                    {title}
-                  </div>
-                  {subtitle ? (
-                    <div className="mt-1 text-[12px] font-bold text-white/70 leading-snug">
-                      {subtitle}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="shrink-0 w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 border border-white/15 flex items-center justify-center text-white transition"
-                aria-label="Close"
-                title="Close"
-              >
-                <X size={20} />
-              </button>
-            </div>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/15 bg-white/10">
+            <div className="font-black text-white text-lg tracking-tight">{title}</div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white"
+              aria-label="Close"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          {/* Body (scrolls inside) */}
-          <div
-            className="p-6 overflow-y-auto"
-            style={{
-              // header is ~84px-96px depending on subtitle; this keeps it safe.
-              maxHeight: `calc(${maxH} - 96px)`,
-            }}
-          >
-            {children}
-          </div>
+          {/* Body */}
+          <div className="p-5 overflow-y-auto max-h-[calc(80vh-72px)]">{children}</div>
         </div>
       </div>
     </div>
