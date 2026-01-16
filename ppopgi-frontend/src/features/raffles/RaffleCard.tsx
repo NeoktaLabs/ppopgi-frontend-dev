@@ -1,7 +1,8 @@
 // src/features/raffles/RaffleCard.tsx
 import type { CSSProperties } from "react";
 import type { RaffleLite } from "./useRafflesHome";
-import { Shield, CheckCircle2 } from "lucide-react";
+import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
+import { ADDR } from "../../lib/contracts";
 
 export function RaffleCard({
   raffle,
@@ -21,7 +22,8 @@ export function RaffleCard({
   const endsIn = formatEndsIn(raffle.deadline);
   const status = friendlyStatus(raffle.status, raffle.paused);
 
-  const isVerified = !!(raffle as any)?.verified;
+  const dep = (raffle.deployer ?? "").toLowerCase();
+  const isOfficial = dep && dep === ADDR.deployer.toLowerCase();
 
   return (
     <button
@@ -31,6 +33,7 @@ export function RaffleCard({
       aria-label={`Open raffle ${raffle.name}`}
     >
       <div style={cardInner()}>
+        {/* Top row */}
         <div
           style={{
             display: "flex",
@@ -40,15 +43,29 @@ export function RaffleCard({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {/* Status */}
             <div style={badge(status.kind)}>{status.label}</div>
 
-            {isVerified && (
-              <div style={verifiedPill()} title="This raffle was created by the official Ppopgi deployer">
-                <CheckCircle2 size={14} />
-                Verified
-              </div>
-            )}
+            {/* Verification */}
+            {dep ? (
+              isOfficial ? (
+                <div
+                  style={verifyPill("ok")}
+                  title="Created from the official Ppopgi deployer"
+                >
+                  <BadgeCheck size={14} /> Official
+                </div>
+              ) : (
+                <div
+                  style={verifyPill("warn")}
+                  title="This raffle was not created from the official Ppopgi deployer. Use caution."
+                >
+                  <AlertTriangle size={14} /> Unverified
+                </div>
+              )
+            ) : null}
 
+            {/* Safety shield */}
             {onOpenSafety && (
               <button
                 type="button"
@@ -69,8 +86,10 @@ export function RaffleCard({
           <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.75 }}>{endsIn}</div>
         </div>
 
+        {/* Main */}
         <div style={{ marginTop: 10 }}>
           <div style={{ fontWeight: 1000, fontSize: 18, lineHeight: 1.1 }}>{raffle.name}</div>
+
           <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={pill()}>
               <span style={{ opacity: 0.75 }}>Win</span>{" "}
@@ -83,17 +102,11 @@ export function RaffleCard({
           </div>
         </div>
 
+        {/* Progress / joined */}
         <div style={{ marginTop: 12 }}>
           {hasHardCap ? (
             <>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 12,
-                  opacity: 0.8,
-                }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8 }}>
                 <span style={{ fontWeight: 900 }}>Sold</span>
                 <span style={{ fontWeight: 900 }}>
                   {soldNum}/{maxNum}
@@ -111,6 +124,7 @@ export function RaffleCard({
           )}
         </div>
 
+        {/* Bottom */}
         <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: 12, opacity: 0.8 }}>Tap to view details</div>
           <div style={ctaPill()}>Open</div>
@@ -148,10 +162,8 @@ function friendlyStatus(status: string, paused: boolean) {
   const s = (status || "").toLowerCase();
   if (s.includes("open")) return { label: "Open", kind: "ok" as const };
   if (s.includes("drawing")) return { label: "Drawing", kind: "info" as const };
-  if (s.includes("ended") || s.includes("closed") || s.includes("finished"))
-    return { label: "Ended", kind: "muted" as const };
-  if (s.includes("canceled") || s.includes("cancelled"))
-    return { label: "Canceled", kind: "muted" as const };
+  if (s.includes("ended") || s.includes("closed") || s.includes("finished")) return { label: "Ended", kind: "muted" as const };
+  if (s.includes("canceled") || s.includes("cancelled")) return { label: "Canceled", kind: "muted" as const };
 
   return { label: status || "Unknown", kind: "muted" as const };
 }
@@ -197,8 +209,8 @@ function badge(kind: "ok" | "warn" | "info" | "muted"): CSSProperties {
   return { ...base, background: "rgba(255,255,255,0.14)" };
 }
 
-function verifiedPill(): CSSProperties {
-  return {
+function verifyPill(tone: "ok" | "warn"): CSSProperties {
+  const base: CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
@@ -206,9 +218,12 @@ function verifiedPill(): CSSProperties {
     borderRadius: 999,
     fontWeight: 1000,
     fontSize: 12,
-    border: "1px solid rgba(34,197,94,0.25)",
-    background: "rgba(34,197,94,0.12)",
+    border: "1px solid rgba(255,255,255,0.45)",
+    background: "rgba(255,255,255,0.18)",
   };
+
+  if (tone === "ok") return { ...base, background: "rgba(120, 255, 190, 0.16)" };
+  return { ...base, background: "rgba(255, 210, 120, 0.18)" };
 }
 
 function shieldBtn(): CSSProperties {
