@@ -1,7 +1,7 @@
 // src/features/navbar/Navbar.tsx
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Compass, LayoutDashboard, LogOut, Shield, Store, Ticket, Wallet } from "lucide-react";
-import { useAccount, useDisconnect } from "wagmi";
+import { Compass, LayoutDashboard, LogOut, Shield, Store, Ticket } from "lucide-react";
+import { useDisconnect } from "wagmi";
 import { WalletPill } from "../wallet/WalletPill";
 
 export function Navbar({
@@ -21,16 +21,22 @@ export function Navbar({
 }) {
   const { disconnect } = useDisconnect();
 
-  // Wagmi state updates instantly (no refresh needed)
-  const { address, isConnected } = useAccount();
-
   return (
     <div className="fixed top-0 left-0 right-0 z-50 pt-4 px-4">
       <nav className="mx-auto max-w-6xl bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl shadow-sm h-16 flex items-center justify-between px-4 md:px-6">
+        {/* ✅ IMPORTANT:
+            Use RainbowKit's own account/chain state inside ConnectButton.Custom.
+            Do NOT use wagmi useAccount() here, otherwise the connect modal can get "stuck" (QR stays open). */}
         <ConnectButton.Custom>
-          {({ chain, openConnectModal, openChainModal, mounted }) => {
+          {({
+            account,
+            chain,
+            mounted,
+            openConnectModal,
+            openChainModal,
+          }) => {
             const ready = mounted;
-            const connected = ready && isConnected && !!address; // ✅ no chain dependency
+            const connected = ready && !!account && !!chain;
             const wrongNetwork = !!chain?.unsupported;
 
             return (
@@ -120,7 +126,7 @@ export function Navbar({
                         type="button"
                       >
                         <LayoutDashboard size={16} />
-                        {address ? `Player ...${address.slice(-4)}` : "Player"}
+                        {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
                       </button>
 
                       <button
@@ -138,7 +144,10 @@ export function Navbar({
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
                       type="button"
                     >
-                      <Wallet size={18} />
+                      {/* keep icon set minimal; Ticket is already imported */}
+                      <span className="inline-flex items-center justify-center w-5">
+                        <Ticket size={18} />
+                      </span>
                       <span className="hidden sm:inline">Join the Park</span>
                       <span className="sm:hidden">Join</span>
                     </button>
