@@ -15,6 +15,9 @@ import { CashierModal } from "./features/cashier/CashierModal";
 import { HomePage } from "./features/home/HomePage";
 import { RaffleDetailsModal } from "./features/raffles/RaffleDetailsModal";
 
+// ✅ NEW: Explore page
+import { ExplorePage } from "./features/explore/ExplorePage";
+
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -38,6 +41,14 @@ export default function App() {
   // prevent needless loops
   const loadedRaffleIdRef = useRef<string | null>(null);
 
+  // --- routing via hash ---
+  const route = useMemo(() => {
+    const h = window.location.hash || "";
+    if (h.includes("raffle=")) return "raffle";
+    if (h === "#explore" || h.startsWith("#explore")) return "explore";
+    return "home";
+  }, [disclaimerTick, acc.address]);
+
   // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
@@ -46,6 +57,7 @@ export default function App() {
 
   useEffect(() => {
     if (raffleFromHash) setOpenRaffleId(raffleFromHash);
+    else setOpenRaffleId(null);
   }, [raffleFromHash]);
 
   const anyOverlayOpen = !!openRaffleId || createOpen || dashboardOpen || safetyOpen;
@@ -63,7 +75,9 @@ export default function App() {
     setOpenRaffleId(null);
     setOpenRaffleCreator(null);
     setSafetyOpen(false);
-    window.location.hash = "";
+
+    // return to explore if user came from explore, otherwise home
+    window.location.hash = route === "explore" ? "explore" : "";
     loadedRaffleIdRef.current = null;
   }
 
@@ -104,15 +118,17 @@ export default function App() {
 
       <div className="pt-24" />
 
+      {/* ✅ Main page switches by hash */}
       <div
         className={`transition-all duration-300 ${
           anyOverlayOpen ? "scale-[0.98] blur-[2px] opacity-50 pointer-events-none" : ""
         }`}
       >
-        <HomePage
-          onOpenRaffle={openRaffle}
-          onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)}
-        />
+        {route === "explore" ? (
+          <ExplorePage />
+        ) : (
+          <HomePage onOpenRaffle={openRaffle} onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)} />
+        )}
       </div>
 
       {dashboardOpen && (
@@ -156,11 +172,7 @@ export default function App() {
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      <CreateRaffleModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => {}}
-      />
+      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
     </div>
   );
 }
