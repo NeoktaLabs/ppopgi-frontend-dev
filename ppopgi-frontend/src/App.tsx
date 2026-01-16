@@ -2,15 +2,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 
-import { Modal } from "./ui/Modal";
 import { PageModal } from "./ui/PageModal";
 
 import { Navbar } from "./features/navbar/Navbar";
 import { DisclaimerGate } from "./features/disclaimer/DisclaimerGate";
 import { SafetyProofModal } from "./features/safety/SafetyProofModal";
 import { CreateRaffleModal } from "./features/create/CreateRaffleModal";
-import { NetworkBanner } from "./features/wallet/NetworkBanner";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { CashierModal } from "./features/cashier/CashierModal";
 
 import { HomePage } from "./features/home/HomePage";
 import { RaffleDetailsModal } from "./features/raffles/RaffleDetailsModal";
@@ -22,6 +21,7 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
+  const [openRaffleCreator, setOpenRaffleCreator] = useState<string | null>(null);
 
   // Used to force a re-render after disclaimer acceptance (simple + reliable)
   const [disclaimerTick, setDisclaimerTick] = useState(0);
@@ -49,6 +49,7 @@ export default function App() {
 
   function closeRaffle() {
     setOpenRaffleId(null);
+    setOpenRaffleCreator(null);
     setSafetyOpen(false);
     window.location.hash = "";
   }
@@ -70,12 +71,8 @@ export default function App() {
         }}
       />
 
-      {/* Give space under fixed navbar */}
-      <div className="pt-24 px-4">
-        <div className="mx-auto max-w-6xl">
-          <NetworkBanner />
-        </div>
-      </div>
+      {/* Give space under fixed navbar (no banner anymore) */}
+      <div className="pt-24" />
 
       {/* MAIN (blur/scale when overlays open) */}
       <div
@@ -108,6 +105,10 @@ export default function App() {
         raffleId={openRaffleId}
         onClose={closeRaffle}
         onOpenSafety={() => setSafetyOpen(true)}
+        onLoadedRaffle={(r) => {
+          // Let App own creator so SafetyProofModal can link to it
+          setOpenRaffleCreator(r?.creator ? String(r.creator) : null);
+        }}
       />
 
       {/* Safety & Proof modal */}
@@ -115,19 +116,11 @@ export default function App() {
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
         raffleId={openRaffleId ?? ""}
-        creator={undefined}
+        creator={openRaffleCreator ?? undefined}
       />
 
-      {/* Cashier modal (placeholder content for now) */}
-      <Modal open={cashierOpen} onClose={() => setCashierOpen(false)} title="Cashier">
-        <div style={{ lineHeight: 1.6 }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>What you need</div>
-          <ul>
-            <li>Energy coins (XTZ) for energy costs and the draw step.</li>
-            <li>Coins (USDC) to buy tickets.</li>
-          </ul>
-        </div>
-      </Modal>
+      {/* Cashier modal (polished) */}
+      <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
       {/* Create raffle modal */}
       <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
