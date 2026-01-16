@@ -50,16 +50,141 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-// --- ABIs you pasted (as-is) ---
-
-export const LOTTERY_REGISTRY_ABI = [
-  // (paste 1st ABI here) - you already pasted it; keep it as-is in your file
-] as const;
-
+// --- LotterySingleWinner (claims + proof reads + actions) ---
 export const LOTTERY_SINGLE_WINNER_ABI = [
-  // (paste 2nd ABI here) - you already pasted it; keep it as-is in your file
+  // ===== reads (for proof UI + dashboard actions) =====
+  {
+    type: "function",
+    name: "creator",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "deployer",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "usdcToken",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "entropy",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "entropyProvider",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "feeRecipient",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "protocolFeePercent",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "winner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "ticketsOwned",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "claimableFunds",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "claimableNative",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+
+  // ===== writes (dashboard buttons) =====
+  {
+    type: "function",
+    name: "withdrawFunds",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdrawNative",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "claimTicketRefund",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+
+  // (optional later)
+  {
+    type: "function",
+    name: "buyTickets",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "count" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "finalize",
+    stateMutability: "payable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancel",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
 ] as const;
 
-export const SINGLE_WINNER_DEPLOYER_ABI = [
-  // (paste 3rd ABI here) - you already pasted it; keep it as-is in your file
-] as const;
+// Keep placeholders until you paste them (not needed for dashboard actions)
+export const LOTTERY_REGISTRY_ABI = [] as const;
+export const SINGLE_WINNER_DEPLOYER_ABI = [] as const;
