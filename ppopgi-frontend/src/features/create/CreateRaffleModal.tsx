@@ -1,6 +1,5 @@
 // src/features/create/CreateRaffleModal.tsx
 import React, { useMemo, useState, useEffect } from "react";
-import { Modal } from "../../ui/Modal";
 import {
   useAccount,
   useReadContract,
@@ -9,8 +8,9 @@ import {
   usePublicClient,
 } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
-import { ExternalLink, Loader2, Sparkles, Copy, Check } from "lucide-react";
+import { ExternalLink, Loader2, Sparkles, Copy, Check, Ticket } from "lucide-react";
 
+import { Modal } from "../../ui/Modal";
 import { ADDR, ERC20_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
 import { txUrl } from "../../lib/explorer";
 
@@ -65,7 +65,7 @@ export function CreateRaffleModal({
   });
   const d = Number(usdcDecimals.data ?? 6);
 
-  // --- Deployer config reads (fee preview) ---
+  // --- Fee percent (from deployer) ---
   const qPercent = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
@@ -103,6 +103,7 @@ export function CreateRaffleModal({
     const tp = parseUnits(ticketPrice || "0", d);
     const wp = parseUnits(winningPot || "0", d);
 
+    // duration
     const v = clampInt(Math.floor(safeNum(durationValue) || 1), 1, 60 * 60 * 24 * 365 * 10);
     const secMul = unitToSeconds(durationUnit);
 
@@ -118,16 +119,7 @@ export function CreateRaffleModal({
     const minBuyU32 = minBuyRaw;
 
     return { tp, wp, durationSeconds, minT, maxT, minBuyU32 };
-  }, [
-    ticketPrice,
-    winningPot,
-    durationValue,
-    durationUnit,
-    minTickets,
-    maxTickets,
-    minPurchaseAmount,
-    d,
-  ]);
+  }, [ticketPrice, winningPot, durationValue, durationUnit, minTickets, maxTickets, minPurchaseAmount, d]);
 
   const feePreview = useMemo(() => {
     if (percent === null) return null;
@@ -207,12 +199,10 @@ export function CreateRaffleModal({
     })();
   }, [tx.isSuccess, txHash, publicClient, createdAddr, onCreated]);
 
-  const shareLink = createdAddr
-    ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}`
-    : null;
+  const shareLink = createdAddr ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}` : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="Create Raffle" width="wide" height="auto">
+    <Modal open={open} onClose={onClose} title="Create raffle" width="wide" height="auto">
       {!isConnected ? (
         <div className="rounded-3xl bg-white/10 border border-white/20 p-5 text-white">
           <div className="font-black text-lg">Connect your wallet</div>
@@ -222,71 +212,85 @@ export function CreateRaffleModal({
         </div>
       ) : (
         <div className="grid gap-4">
-          {/* Top summary card (Cashier-ish) */}
-          <div className="rounded-3xl bg-white/10 border border-white/20 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-black text-white/70 uppercase tracking-wider">
-                  Summary
+          {/* Cashier-like header card */}
+          <div className="rounded-3xl overflow-hidden border border-white/20">
+            <div className="bg-[#FFD700] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-black text-amber-900/70 uppercase tracking-wider">
+                    Create
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-md">
+                      <Ticket className="text-amber-600" size={20} />
+                    </div>
+                    <div>
+                      <div className="text-xl font-black text-amber-900 leading-tight">
+                        New raffle
+                      </div>
+                      <div className="text-[12px] font-bold text-amber-900/80">
+                        Set the rules, then deploy on-chain.
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-xl font-black text-white">Set up your raffle</div>
-                <div className="mt-1 text-sm font-bold text-white/75">
-                  The draw happens later — creating doesn’t pick a winner.
-                </div>
-              </div>
 
-              <div className="text-right">
-                <div className="text-[11px] font-black text-white/60 uppercase tracking-wider">
-                  Creator
-                </div>
-                <div className="mt-1 font-black text-white">
-                  {address ? shortAddr(address) : "—"}
+                <div className="text-right">
+                  <div className="text-[11px] font-black text-amber-900/70 uppercase tracking-wider">
+                    Creator
+                  </div>
+                  <div className="mt-1 font-black text-amber-900">
+                    {address ? shortAddr(address) : "—"}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Fee preview card */}
-            <div className="mt-4 rounded-3xl bg-white/10 border border-white/15 p-4">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-black text-white/70 uppercase tracking-wider">
+            {/* Fee area (clean + readable) */}
+            <div className="bg-white/10 backdrop-blur-md p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
                   Prize breakdown
                 </div>
-                <div className="text-xs font-black text-white/60">
-                  {feePreview ? `${feePreview.percent}% fee` : "fee …"}
+                <div className="text-[11px] font-black text-white/60">
+                  {feePreview ? `${feePreview.percent}% platform fee` : "Fee loading…"}
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-white/10 border border-white/15 p-4">
-                  <div className="text-xs font-black text-white/70">Net prize</div>
-                  <div className="mt-1 text-2xl font-black text-white">
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Net prize (big) */}
+                <div className="md:col-span-2 rounded-3xl bg-white/10 border border-white/15 p-4">
+                  <div className="text-xs font-black text-white/70">Net prize (winner receives)</div>
+                  <div className="mt-2 text-3xl font-black text-white leading-none">
                     {feePreview ? feePreview.net : "…"}{" "}
                     <span className="text-sm font-black text-white/70">USDC</span>
                   </div>
+                  <div className="mt-2 text-[12px] font-bold text-white/60">
+                    Calculated from winning pot minus platform fee.
+                  </div>
                 </div>
 
-                <div className="rounded-2xl bg-white/10 border border-white/15 p-4">
+                {/* Platform fee (smaller) */}
+                <div className="rounded-3xl bg-white/10 border border-white/15 p-4">
                   <div className="text-xs font-black text-white/70">Platform fee</div>
-                  <div className="mt-2 text-lg font-black text-white/85">
+                  <div className="mt-2 text-lg font-black text-white/90">
                     {feePreview ? feePreview.fee : "…"}{" "}
                     <span className="text-xs font-black text-white/60">USDC</span>
                   </div>
-                  <div className="mt-1 text-xs font-bold text-white/60">
-                    Taken from winning pot at payout.
+                  <div className="mt-2 text-[11px] font-bold text-white/55">
+                    Taken from pot at payout.
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Form card */}
+          {/* Form */}
           <div className="rounded-3xl bg-white/10 border border-white/20 p-5">
-            <div className="grid gap-4">
-              {/* Basics */}
-              <div>
-                <div className="text-xs font-black text-white/70 uppercase tracking-wider">
-                  Basics
-                </div>
+            <div className="grid gap-5">
+              {/* Section: Basics */}
+              <section>
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Basics</div>
                 <div className="mt-3 grid gap-3">
                   <Field label="Raffle name">
                     <input
@@ -297,7 +301,7 @@ export function CreateRaffleModal({
                     />
                   </Field>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Field label="Ticket price (USDC)">
                       <input
                         value={ticketPrice}
@@ -317,15 +321,13 @@ export function CreateRaffleModal({
                     </Field>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Rules */}
-              <div className="pt-2 border-t border-white/15">
-                <div className="text-xs font-black text-white/70 uppercase tracking-wider">
-                  Rules
-                </div>
+              {/* Section: Timing */}
+              <section className="pt-4 border-t border-white/15">
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Timing</div>
 
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
                   <Field label="Duration">
                     <div className="flex gap-2">
                       <input
@@ -346,7 +348,8 @@ export function CreateRaffleModal({
                       </select>
                     </div>
                     <div className="mt-1 text-[11px] font-bold text-white/60">
-                      Contract receives seconds.
+                      Sent to contract as seconds:{" "}
+                      <span className="font-black text-white">{String(parsed.durationSeconds)}</span>
                     </div>
                   </Field>
 
@@ -369,8 +372,13 @@ export function CreateRaffleModal({
                     />
                   </Field>
                 </div>
+              </section>
 
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Section: Purchase rules */}
+              <section className="pt-4 border-t border-white/15">
+                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Purchase rules</div>
+
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Field label="Minimum buy amount (raw)">
                     <input
                       value={minPurchaseAmount}
@@ -384,21 +392,29 @@ export function CreateRaffleModal({
                   </Field>
 
                   <div className="rounded-3xl bg-white/10 border border-white/15 p-4">
-                    <div className="text-xs font-black text-white/70 uppercase tracking-wider">
-                      Quick check
+                    <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
+                      Quick preview
                     </div>
-                    <div className="mt-2 text-sm font-bold text-white/80">
-                      Duration seconds:
-                      <span className="ml-2 font-black text-white">
-                        {String(parsed.durationSeconds)}
+                    <div className="mt-2 text-sm font-bold text-white/75">
+                      Ticket price:{" "}
+                      <span className="font-black text-white">{ticketPrice || "0"} USDC</span>
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-white/75">
+                      Winning pot:{" "}
+                      <span className="font-black text-white">{winningPot || "0"} USDC</span>
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-white/75">
+                      Duration:{" "}
+                      <span className="font-black text-white">
+                        {durationValue || "0"} {durationUnit}
                       </span>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
               {/* CTA */}
-              <div className="pt-2">
+              <section className="pt-1">
                 <button
                   onClick={onCreate}
                   disabled={!canSubmit}
@@ -419,11 +435,7 @@ export function CreateRaffleModal({
                 {txHash ? (
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white/10 border border-white/15 p-3">
                     <div className="text-xs font-bold text-white/75">
-                      {tx.isLoading
-                        ? "Transaction pending…"
-                        : tx.isSuccess
-                          ? "Transaction confirmed"
-                          : "Transaction sent"}
+                      {tx.isLoading ? "Transaction pending…" : tx.isSuccess ? "Transaction confirmed" : "Transaction sent"}
                     </div>
                     <a
                       href={txUrl(String(txHash))}
@@ -444,9 +456,7 @@ export function CreateRaffleModal({
 
                 {shareLink ? (
                   <div className="mt-3 rounded-2xl bg-white/10 border border-white/15 p-3">
-                    <div className="text-xs font-black text-white/70 uppercase tracking-wider">
-                      Share link
-                    </div>
+                    <div className="text-xs font-black text-white/70 uppercase tracking-wider">Share link</div>
                     <div className="mt-2 flex items-center gap-2">
                       <input className={inputDark()} value={shareLink} readOnly />
                       <button
@@ -464,11 +474,16 @@ export function CreateRaffleModal({
                       </button>
                     </div>
                     <div className="mt-2 text-xs font-bold text-white/70">
-                      Raffle: <span className="font-black text-white">{shortAddr(createdAddr || "")}</span>
+                      Raffle:{" "}
+                      <span className="font-black text-white">{shortAddr(createdAddr || "")}</span>
                     </div>
                   </div>
                 ) : null}
-              </div>
+
+                <div className="mt-3 text-[12px] font-bold text-white/70">
+                  Creating doesn’t pick a winner. The draw happens later.
+                </div>
+              </section>
             </div>
           </div>
         </div>
