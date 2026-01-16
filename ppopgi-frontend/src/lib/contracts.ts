@@ -50,95 +50,32 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-// --- LotterySingleWinner (claims + proof reads + actions) ---
+// --- Minimal LotterySingleWinner ABI (reads + dashboard actions) ---
 export const LOTTERY_SINGLE_WINNER_ABI = [
-  // ===== reads (for proof UI + dashboard actions) =====
-  {
-    type: "function",
-    name: "creator",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "deployer",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "usdcToken",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "entropy",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "entropyProvider",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "feeRecipient",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "protocolFeePercent",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "winner",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address" }],
-  },
-  {
-    type: "function",
-    name: "paused",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "bool" }],
-  },
+  // reads (dashboard gating)
   {
     type: "function",
     name: "ticketsOwned",
     stateMutability: "view",
-    inputs: [{ type: "address" }],
+    inputs: [{ name: "user", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
   {
     type: "function",
     name: "claimableFunds",
     stateMutability: "view",
-    inputs: [{ type: "address" }],
+    inputs: [{ name: "user", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
   {
     type: "function",
     name: "claimableNative",
     stateMutability: "view",
-    inputs: [{ type: "address" }],
+    inputs: [{ name: "user", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
 
-  // ===== writes (dashboard buttons) =====
+  // writes (dashboard actions)
   {
     type: "function",
     name: "withdrawFunds",
@@ -160,31 +97,8 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     inputs: [],
     outputs: [],
   },
-
-  // (optional later)
-  {
-    type: "function",
-    name: "buyTickets",
-    stateMutability: "nonpayable",
-    inputs: [{ type: "uint256", name: "count" }],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "finalize",
-    stateMutability: "payable",
-    inputs: [],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "cancel",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
 ] as const;
 
-// Keep placeholders until you paste them (not needed for dashboard actions)
+// Optional (keep if you use them elsewhere)
 export const LOTTERY_REGISTRY_ABI = [] as const;
 export const SINGLE_WINNER_DEPLOYER_ABI = [] as const;
