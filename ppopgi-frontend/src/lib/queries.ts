@@ -1,3 +1,6 @@
+// src/lib/queries.ts
+import { gql } from "graphql-request";
+
 export const QUERY_BIG_PRIZES = `
   query BigPrizes($first: Int!) {
     raffles(
@@ -166,6 +169,38 @@ export const QUERY_MY_ACTIVITY_EVENTS = `
         isRegistered
         registry
       }
+    }
+  }
+`;
+
+export const QUERY_EXPLORE_RAFFLES = gql`
+  query ExploreRaffles(
+    $first: Int!
+    $skip: Int!
+    $where: Raffle_filter
+    $orderBy: Raffle_orderBy!
+    $orderDirection: OrderDirection!
+  ) {
+    raffles(
+      first: $first
+      skip: $skip
+      where: $where
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+    ) {
+      id
+      name
+      status
+      paused
+      ticketPrice
+      winningPot
+      sold
+      deadline
+      maxTickets
+
+      deployer
+      isRegistered
+      registry
     }
   }
 `;
