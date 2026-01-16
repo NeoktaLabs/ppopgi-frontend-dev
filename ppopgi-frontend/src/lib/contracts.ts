@@ -72,7 +72,7 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     name: "entropy",
     stateMutability: "view",
     inputs: [],
-    outputs: [{ type: "address" }], // contract IEntropy but returned as address
+    outputs: [{ type: "address" }],
   },
   {
     type: "function",
@@ -94,6 +94,31 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }],
+  },
+
+  // --- reads for actions (buy calc + contract constraints) ---
+  {
+    type: "function",
+    name: "ticketPrice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "minPurchaseAmount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint32" }],
+  },
+
+  // --- write for actions (buy) ---
+  {
+    type: "function",
+    name: "buyTickets",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "count", type: "uint256" }],
+    outputs: [],
   },
 
   // --- reads (dashboard gating) ---
@@ -145,7 +170,6 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
 
 // --- Minimal Deployer ABI (reads used by Create + Safety) ---
 export const SINGLE_WINNER_DEPLOYER_ABI = [
-  // reads used in CreateRaffleModal + SafetyProofModal
   {
     type: "function",
     name: "usdc",
@@ -181,8 +205,6 @@ export const SINGLE_WINNER_DEPLOYER_ABI = [
     inputs: [],
     outputs: [{ type: "uint256" }],
   },
-
-  // write used in CreateRaffleModal
   {
     type: "function",
     name: "createSingleWinnerLottery",
@@ -196,9 +218,9 @@ export const SINGLE_WINNER_DEPLOYER_ABI = [
       { name: "durationSeconds", type: "uint64" },
       { name: "minPurchaseAmount", type: "uint32" },
     ],
-    outputs: [{ type: "address" }], // if yours returns address; if it returns nothing, it's still fine to keep outputs optional
+    outputs: [{ type: "address" }],
   },
 ] as const;
 
-// Optional (keep if you use them elsewhere)
+// Optional
 export const LOTTERY_REGISTRY_ABI = [] as const;
