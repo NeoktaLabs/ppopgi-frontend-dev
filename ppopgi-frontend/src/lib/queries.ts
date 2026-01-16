@@ -15,6 +15,11 @@ export const QUERY_BIG_PRIZES = `
       sold
       winningPot
       maxTickets
+
+      # verification (from subgraph)
+      deployer
+      isRegistered
+      registry
     }
   }
 `;
@@ -36,6 +41,11 @@ export const QUERY_ENDING_SOON = `
       sold
       winningPot
       maxTickets
+
+      # verification (from subgraph)
+      deployer
+      isRegistered
+      registry
     }
   }
 `;
