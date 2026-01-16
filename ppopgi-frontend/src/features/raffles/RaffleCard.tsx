@@ -1,13 +1,16 @@
 // src/features/raffles/RaffleCard.tsx
 import type { CSSProperties } from "react";
 import type { RaffleLite } from "./useRafflesHome";
+import { Shield } from "lucide-react";
 
 export function RaffleCard({
   raffle,
   onOpen,
+  onOpenSafety,
 }: {
   raffle: RaffleLite;
   onOpen: (id: string) => void;
+  onOpenSafety?: (raffleId: string) => void;
 }) {
   const soldNum = safeNum(raffle.sold);
   const maxNum = raffle.maxTickets ? safeNum(raffle.maxTickets) : null;
@@ -26,8 +29,27 @@ export function RaffleCard({
       aria-label={`Open raffle ${raffle.name}`}
     >
       <div style={cardInner()}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-          <div style={badge(status.kind)}>{status.label}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={badge(status.kind)}>{status.label}</div>
+
+            {onOpenSafety && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenSafety(raffle.id);
+                }}
+                style={shieldBtn()}
+                aria-label="Safety & Proof"
+                title="Safety & Proof"
+              >
+                <Shield size={16} />
+              </button>
+            )}
+          </div>
+
           <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.75 }}>{endsIn}</div>
         </div>
 
@@ -148,6 +170,20 @@ function badge(kind: "ok" | "warn" | "info" | "muted"): CSSProperties {
   if (kind === "warn") return { ...base, background: "rgba(255, 210, 120, 0.20)" };
   if (kind === "info") return { ...base, background: "rgba(169, 212, 255, 0.18)" };
   return { ...base, background: "rgba(255,255,255,0.14)" };
+}
+
+function shieldBtn(): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 30,
+    width: 30,
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.45)",
+    background: "rgba(255,255,255,0.22)",
+    cursor: "pointer",
+  };
 }
 
 function pill(): CSSProperties {
