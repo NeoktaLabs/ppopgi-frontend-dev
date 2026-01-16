@@ -15,16 +15,13 @@ import { CashierModal } from "./features/cashier/CashierModal";
 import { HomePage } from "./features/home/HomePage";
 import { RaffleDetailsModal } from "./features/raffles/RaffleDetailsModal";
 
-type SafetyMode = "create" | "raffle";
-
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
-  // Safety modal
+  // ✅ Safety modal: raffle-only
   const [safetyOpen, setSafetyOpen] = useState(false);
-  const [safetyMode, setSafetyMode] = useState<SafetyMode>("raffle");
 
   // Selected raffle (details modal)
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
@@ -32,13 +29,13 @@ export default function App() {
   // Creator cache for safety modal (optional)
   const [openRaffleCreator, setOpenRaffleCreator] = useState<string | null>(null);
 
-  // Used to force a re-render after disclaimer acceptance (simple + reliable)
+  // Used to force a re-render after disclaimer acceptance
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
-  // Subscribe to wallet state so the UI reacts immediately after connect
+  // wallet state
   const acc = useAccount();
 
-  // Track which raffle we already applied creator for (prevents needless setState loops)
+  // prevent needless loops
   const loadedRaffleIdRef = useRef<string | null>(null);
 
   // shared link support: /#raffle=0x...
@@ -58,7 +55,6 @@ export default function App() {
     window.location.hash = `raffle=${encodeURIComponent(lower)}`;
     setOpenRaffleId(lower);
 
-    // reset creator while loading
     setOpenRaffleCreator(null);
     loadedRaffleIdRef.current = null;
   }
@@ -72,29 +68,19 @@ export default function App() {
   }
 
   function openSafetyForRaffle(id: string) {
-    setSafetyMode("raffle");
     openRaffle(id);
     setSafetyOpen(true);
   }
 
-  function openSafetyForCreate() {
-    setSafetyMode("create");
-    setSafetyOpen(true);
-  }
-
-  // ✅ AUTO-SWITCH TO ETHERLINK AFTER CONNECT (kept)
+  // ✅ auto-switch to Etherlink after connect (kept)
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
 
   useEffect(() => {
     if (!acc.isConnected) return;
     if (chainId === etherlink.id) return;
-
     switchChainAsync({ chainId: etherlink.id }).catch(() => {});
   }, [acc.isConnected, chainId, switchChainAsync]);
-
-  const safetyRaffleId = safetyMode === "raffle" ? (openRaffleId ?? "") : "";
-  const safetyCreator = safetyMode === "raffle" ? (openRaffleCreator ?? undefined) : undefined;
 
   return (
     <div className="min-h-screen pb-12 relative">
@@ -125,9 +111,7 @@ export default function App() {
       >
         <HomePage
           onOpenRaffle={openRaffle}
-          onOpenSafety={(raffleId) => {
-            openSafetyForRaffle(raffleId);
-          }}
+          onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)}
         />
       </div>
 
@@ -151,9 +135,7 @@ export default function App() {
         raffleId={openRaffleId}
         onClose={closeRaffle}
         onOpenSafety={() => {
-          if (!openRaffleId) return;
-          setSafetyMode("raffle");
-          setSafetyOpen(true);
+          if (openRaffleId) setSafetyOpen(true);
         }}
         onLoadedRaffle={(r) => {
           if (!openRaffleId) return;
@@ -164,12 +146,12 @@ export default function App() {
         }}
       />
 
+      {/* Safety modal only opens when a raffle is selected */}
       <SafetyProofModal
-        open={safetyOpen}
+        open={safetyOpen && !!openRaffleId}
         onClose={() => setSafetyOpen(false)}
-        raffleId={safetyRaffleId}
-        creator={safetyCreator}
-        mode={safetyMode} // ✅ add this prop (see below)
+        raffleId={openRaffleId ?? ""}
+        creator={openRaffleCreator ?? undefined}
       />
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
@@ -178,7 +160,6 @@ export default function App() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => {}}
-        onOpenSafety={openSafetyForCreate} // ✅ shield opens safety modal
       />
     </div>
   );
