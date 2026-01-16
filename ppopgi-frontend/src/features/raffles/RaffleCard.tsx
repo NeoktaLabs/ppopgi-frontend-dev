@@ -22,8 +22,17 @@ export function RaffleCard({
   const endsIn = formatEndsIn(raffle.deadline);
   const status = friendlyStatus(raffle.status, raffle.paused);
 
+  // --- verification (subgraph) ---
   const dep = (raffle.deployer ?? "").toLowerCase();
-  const isOfficial = dep && dep === ADDR.deployer.toLowerCase();
+  const isRegistered = raffle.isRegistered === true;
+
+  const matchesDeployer = dep && dep === ADDR.deployer.toLowerCase();
+
+  // "Official" requires BOTH: registered + matches known deployer
+  const isOfficial = isRegistered && matchesDeployer;
+
+  // If we don't have deployer info, we treat as unverified (don't silently hide)
+  const hasVerificationData = !!dep || raffle.isRegistered !== undefined;
 
   return (
     <button
@@ -47,23 +56,27 @@ export function RaffleCard({
             <div style={badge(status.kind)}>{status.label}</div>
 
             {/* Verification */}
-            {dep ? (
+            {hasVerificationData ? (
               isOfficial ? (
                 <div
                   style={verifyPill("ok")}
-                  title="Created from the official Ppopgi deployer"
+                  title="Registered + created from the official Ppopgi deployer"
                 >
                   <BadgeCheck size={14} /> Official
                 </div>
               ) : (
                 <div
                   style={verifyPill("warn")}
-                  title="This raffle was not created from the official Ppopgi deployer. Use caution."
+                  title="Unverified: not registered and/or not created from the official Ppopgi deployer"
                 >
                   <AlertTriangle size={14} /> Unverified
                 </div>
               )
-            ) : null}
+            ) : (
+              <div style={verifyPill("warn")} title="Verification data unavailable">
+                <AlertTriangle size={14} /> Unverified
+              </div>
+            )}
 
             {/* Safety shield */}
             {onOpenSafety && (
@@ -106,7 +119,14 @@ export function RaffleCard({
         <div style={{ marginTop: 12 }}>
           {hasHardCap ? (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 12,
+                  opacity: 0.8,
+                }}
+              >
                 <span style={{ fontWeight: 900 }}>Sold</span>
                 <span style={{ fontWeight: 900 }}>
                   {soldNum}/{maxNum}
@@ -162,8 +182,10 @@ function friendlyStatus(status: string, paused: boolean) {
   const s = (status || "").toLowerCase();
   if (s.includes("open")) return { label: "Open", kind: "ok" as const };
   if (s.includes("drawing")) return { label: "Drawing", kind: "info" as const };
-  if (s.includes("ended") || s.includes("closed") || s.includes("finished")) return { label: "Ended", kind: "muted" as const };
-  if (s.includes("canceled") || s.includes("cancelled")) return { label: "Canceled", kind: "muted" as const };
+  if (s.includes("ended") || s.includes("closed") || s.includes("finished"))
+    return { label: "Ended", kind: "muted" as const };
+  if (s.includes("canceled") || s.includes("cancelled"))
+    return { label: "Canceled", kind: "muted" as const };
 
   return { label: status || "Unknown", kind: "muted" as const };
 }
