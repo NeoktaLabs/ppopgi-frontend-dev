@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 import { etherlink } from "viem/chains";
@@ -20,7 +19,7 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
-  // Global safety modal state
+  // ✅ Safety modal exists, but can ONLY be opened from a raffle context
   const [safetyOpen, setSafetyOpen] = useState(false);
 
   // Selected raffle (details modal)
@@ -68,28 +67,19 @@ export default function App() {
     loadedRaffleIdRef.current = null;
   }
 
-  function openSafetyGlobal() {
-    setSafetyOpen(true);
-  }
-
   function openSafetyForRaffle(id: string) {
     openRaffle(id);
     setSafetyOpen(true);
   }
 
-  // ✅ AUTO-SWITCH TO ETHERLINK AFTER CONNECT
+  // ✅ AUTO-SWITCH TO ETHERLINK AFTER CONNECT (kept)
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
 
   useEffect(() => {
-    // Only attempt when connected
     if (!acc.isConnected) return;
-
-    // If already on Etherlink, do nothing
     if (chainId === etherlink.id) return;
 
-    // Prompt a switch once connected (WalletConnect often lands on Ethereum by default)
-    // This will open MetaMask and ask user to switch network.
     switchChainAsync({ chainId: etherlink.id }).catch(() => {
       // user rejected or wallet can't switch automatically
     });
@@ -103,14 +93,12 @@ export default function App() {
         onOpenCashier={() => setCashierOpen(true)}
         onOpenCreate={() => setCreateOpen(true)}
         onOpenDashboard={() => setDashboardOpen(true)}
-        onOpenSafety={openSafetyGlobal}
         onGoHome={() => {
           window.location.hash = "";
           setOpenRaffleId(null);
           setSafetyOpen(false);
         }}
         onGoExplore={() => {
-          // placeholder route; later we’ll implement explore page/scroll
           window.location.hash = "explore";
           setOpenRaffleId(null);
           setSafetyOpen(false);
@@ -151,7 +139,9 @@ export default function App() {
       <RaffleDetailsModal
         raffleId={openRaffleId}
         onClose={closeRaffle}
-        onOpenSafety={() => setSafetyOpen(true)}
+        onOpenSafety={() => {
+          if (openRaffleId) setSafetyOpen(true);
+        }}
         onLoadedRaffle={(r) => {
           if (!openRaffleId) return;
           if (loadedRaffleIdRef.current === openRaffleId) return;
@@ -161,6 +151,7 @@ export default function App() {
         }}
       />
 
+      {/* ✅ Safety modal only opens when a raffle is selected */}
       <SafetyProofModal
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
@@ -170,7 +161,11 @@ export default function App() {
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {}}
+      />
     </div>
   );
 }
