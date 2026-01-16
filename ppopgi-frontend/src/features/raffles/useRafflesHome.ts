@@ -1,3 +1,4 @@
+// src/features/raffles/useRafflesHome.ts
 import { useQuery } from "@tanstack/react-query";
 import { getSubgraphClient } from "../../lib/subgraph";
 import { QUERY_BIG_PRIZES, QUERY_ENDING_SOON } from "../../lib/queries";
@@ -12,6 +13,7 @@ export type RaffleLite = {
   sold: string;
   winningPot: string;
   maxTickets?: string | null;
+  verified?: boolean; // NEW
 };
 
 function nowBigInt(): string {
@@ -23,7 +25,12 @@ export function useBigPrizes() {
     queryKey: ["home", "bigPrizes"],
     queryFn: async () => {
       const client = getSubgraphClient();
-      return client.request<{ raffles: RaffleLite[] }>(QUERY_BIG_PRIZES, { first: 3 });
+      const res = await client.request<{ raffles: RaffleLite[] }>(QUERY_BIG_PRIZES, { first: 3 });
+
+      return {
+        ...res,
+        raffles: (res.raffles ?? []).map((r) => ({ ...r, verified: true })), // you said you register all raffles
+      };
     },
     refetchInterval: 20_000,
     retry: 1,
@@ -35,10 +42,15 @@ export function useEndingSoon() {
     queryKey: ["home", "endingSoon"],
     queryFn: async () => {
       const client = getSubgraphClient();
-      return client.request<{ raffles: RaffleLite[] }>(QUERY_ENDING_SOON, {
+      const res = await client.request<{ raffles: RaffleLite[] }>(QUERY_ENDING_SOON, {
         first: 5,
         now: nowBigInt(),
       });
+
+      return {
+        ...res,
+        raffles: (res.raffles ?? []).map((r) => ({ ...r, verified: true })), // you said you register all raffles
+      };
     },
     refetchInterval: 20_000,
     retry: 1,
