@@ -1,7 +1,7 @@
 // src/features/raffles/RaffleCard.tsx
 import type { CSSProperties } from "react";
 import type { RaffleLite } from "./useRafflesHome";
-import { Shield } from "lucide-react";
+import { Shield, CheckCircle2 } from "lucide-react";
 
 export function RaffleCard({
   raffle,
@@ -21,6 +21,8 @@ export function RaffleCard({
   const endsIn = formatEndsIn(raffle.deadline);
   const status = friendlyStatus(raffle.status, raffle.paused);
 
+  const isVerified = !!(raffle as any)?.verified;
+
   return (
     <button
       type="button"
@@ -29,9 +31,23 @@ export function RaffleCard({
       aria-label={`Open raffle ${raffle.name}`}
     >
       <div style={cardInner()}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div style={badge(status.kind)}>{status.label}</div>
+
+            {isVerified && (
+              <div style={verifiedPill()} title="This raffle was created by the official Ppopgi deployer">
+                <CheckCircle2 size={14} />
+                Verified
+              </div>
+            )}
 
             {onOpenSafety && (
               <button
@@ -70,7 +86,14 @@ export function RaffleCard({
         <div style={{ marginTop: 12 }}>
           {hasHardCap ? (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 12,
+                  opacity: 0.8,
+                }}
+              >
                 <span style={{ fontWeight: 900 }}>Sold</span>
                 <span style={{ fontWeight: 900 }}>
                   {soldNum}/{maxNum}
@@ -125,8 +148,10 @@ function friendlyStatus(status: string, paused: boolean) {
   const s = (status || "").toLowerCase();
   if (s.includes("open")) return { label: "Open", kind: "ok" as const };
   if (s.includes("drawing")) return { label: "Drawing", kind: "info" as const };
-  if (s.includes("ended") || s.includes("closed") || s.includes("finished")) return { label: "Ended", kind: "muted" as const };
-  if (s.includes("canceled") || s.includes("cancelled")) return { label: "Canceled", kind: "muted" as const };
+  if (s.includes("ended") || s.includes("closed") || s.includes("finished"))
+    return { label: "Ended", kind: "muted" as const };
+  if (s.includes("canceled") || s.includes("cancelled"))
+    return { label: "Canceled", kind: "muted" as const };
 
   return { label: status || "Unknown", kind: "muted" as const };
 }
@@ -170,6 +195,20 @@ function badge(kind: "ok" | "warn" | "info" | "muted"): CSSProperties {
   if (kind === "warn") return { ...base, background: "rgba(255, 210, 120, 0.20)" };
   if (kind === "info") return { ...base, background: "rgba(169, 212, 255, 0.18)" };
   return { ...base, background: "rgba(255,255,255,0.14)" };
+}
+
+function verifiedPill(): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontWeight: 1000,
+    fontSize: 12,
+    border: "1px solid rgba(34,197,94,0.25)",
+    background: "rgba(34,197,94,0.12)",
+  };
 }
 
 function shieldBtn(): CSSProperties {
