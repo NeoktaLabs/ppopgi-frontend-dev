@@ -1,9 +1,18 @@
 // src/lib/contracts.ts
+
+/* =========================================================
+ * Addresses
+ * ======================================================= */
+
 export const ADDR = {
   registry: "0xE26d8B29d116540C7B181389D8e5a4990E41BcB5",
   deployer: "0x6ce44c2c89779F8f20deB1435B99a96d29Cd21C3",
   usdc: "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9",
 } as const;
+
+/* =========================================================
+ * Minimal ERC20 ABI (USDC)
+ * ======================================================= */
 
 export const ERC20_ABI = [
   {
@@ -49,8 +58,66 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-// Minimal deployer ABI needed for CreateRaffleModal
+/* =========================================================
+ * LotterySingleWinner (raffle instance)
+ * Used by: dashboard, cashier, raffle page
+ * ======================================================= */
+
+export const LOTTERY_SINGLE_WINNER_ABI = [
+  // ---- reads (user state)
+  {
+    type: "function",
+    name: "ticketsOwned",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "claimableFunds",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "claimableNative",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+
+  // ---- writes (user actions)
+  {
+    type: "function",
+    name: "withdrawFunds",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdrawNative",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "claimTicketRefund",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+] as const;
+
+/* =========================================================
+ * SingleWinnerDeployer
+ * Used by: CreateRaffleModal + Safety/Proof
+ * ======================================================= */
+
 export const SINGLE_WINNER_DEPLOYER_ABI = [
+  // ---- config reads (transparency / safety modal)
   {
     type: "function",
     name: "usdc",
@@ -87,7 +154,7 @@ export const SINGLE_WINNER_DEPLOYER_ABI = [
     outputs: [{ type: "uint256" }],
   },
 
-  // create
+  // ---- create raffle
   {
     type: "function",
     name: "createSingleWinnerLottery",
@@ -103,52 +170,21 @@ export const SINGLE_WINNER_DEPLOYER_ABI = [
     ],
     outputs: [{ type: "address" }],
   },
+
+  // ---- event (IMPORTANT: used to detect created raffle)
+  {
+    type: "event",
+    name: "LotteryCreated",
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "lottery", type: "address" },
+      { indexed: true, name: "creator", type: "address" },
+    ],
+  },
 ] as const;
 
-// --- Minimal LotterySingleWinner ABI (reads + dashboard actions) ---
-export const LOTTERY_SINGLE_WINNER_ABI = [
-  {
-    type: "function",
-    name: "ticketsOwned",
-    stateMutability: "view",
-    inputs: [{ name: "user", type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "claimableFunds",
-    stateMutability: "view",
-    inputs: [{ name: "user", type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "claimableNative",
-    stateMutability: "view",
-    inputs: [{ name: "user", type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "withdrawFunds",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "withdrawNative",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "claimTicketRefund",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
-] as const;
+/* =========================================================
+ * Registry ABI (not needed right now, kept empty on purpose)
+ * ======================================================= */
 
 export const LOTTERY_REGISTRY_ABI = [] as const;
