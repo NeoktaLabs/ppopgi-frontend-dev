@@ -9,7 +9,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
-import { Shield, ExternalLink, Loader2, Sparkles, Copy, Check } from "lucide-react";
+import { ExternalLink, Loader2, Sparkles, Copy, Check } from "lucide-react";
 
 import { ADDR, ERC20_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
 import { txUrl } from "../../lib/explorer";
@@ -33,12 +33,10 @@ export function CreateRaffleModal({
   open,
   onClose,
   onCreated,
-  onOpenSafety,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (raffleAddress: string) => void;
-  onOpenSafety?: () => void;
 }) {
   const { isConnected, address } = useAccount();
   const publicClient = usePublicClient();
@@ -52,38 +50,11 @@ export function CreateRaffleModal({
   });
   const d = Number(usdcDecimals.data ?? 6);
 
-  // --- Deployer config reads (kept for Safety/Proof modal + fee preview) ---
+  // --- Deployer config reads (fee preview only) ---
   const qPercent = useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "protocolFeePercent",
-    query: { enabled: open },
-  });
-
-  // (Optional) keep these reads for your Safety/Proof modal, even if UI doesn't show them here.
-  // If you want, we can remove them later to reduce RPC calls.
-  useReadContract({
-    address: ADDR.deployer,
-    abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: "usdc",
-    query: { enabled: open },
-  });
-  useReadContract({
-    address: ADDR.deployer,
-    abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: "entropy",
-    query: { enabled: open },
-  });
-  useReadContract({
-    address: ADDR.deployer,
-    abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: "entropyProvider",
-    query: { enabled: open },
-  });
-  useReadContract({
-    address: ADDR.deployer,
-    abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: "feeRecipient",
     query: { enabled: open },
   });
 
@@ -197,7 +168,7 @@ export function CreateRaffleModal({
           onCreated(lower);
         }
       } catch {
-        // If the deployer doesn't emit LotteryCreated, we still show confirmed state.
+        // ok
       }
     })();
   }, [tx.isSuccess, txHash, publicClient, createdAddr, onCreated]);
@@ -212,29 +183,10 @@ export function CreateRaffleModal({
         <div className="font-black text-gray-800">Connect your wallet to create a raffle.</div>
       ) : (
         <div className="grid gap-4">
-          {/* Compact header row + Shield */}
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
-                Setup
-              </div>
-              <div className="text-lg font-black text-gray-900">Create raffle</div>
-              <div className="text-xs font-bold text-gray-600 mt-1">
-                Tip: click the shield to verify on-chain defaults.
-              </div>
-            </div>
-
-            {onOpenSafety ? (
-              <button
-                type="button"
-                onClick={onOpenSafety}
-                className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-white/70 hover:bg-white border border-white/60 shadow-sm"
-                title="Transparency / On-chain defaults"
-                aria-label="Transparency / On-chain defaults"
-              >
-                <Shield size={18} />
-              </button>
-            ) : null}
+          {/* Header (no safety button here) */}
+          <div>
+            <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">Setup</div>
+            <div className="text-lg font-black text-gray-900">Create raffle</div>
           </div>
 
           {/* Form */}
