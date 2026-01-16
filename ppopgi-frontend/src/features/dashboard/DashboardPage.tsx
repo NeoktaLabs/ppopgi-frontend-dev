@@ -12,12 +12,15 @@ import {
   ArrowRight,
   Copy,
   Settings2,
+  BadgeCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 import { useDashboard } from "./useDashboard";
 import { friendlyStatus } from "../../lib/format";
 import { addrUrl } from "../../lib/explorer";
 import { RaffleActionsModal } from "./RaffleActionsModal";
+import { ADDR } from "../../lib/contracts";
 
 function shortAddr(a?: string) {
   if (!a) return "";
@@ -55,6 +58,34 @@ function statusPill(status?: string, paused?: boolean) {
     default:
       return `${base} bg-amber-100 text-amber-800 border-amber-200`;
   }
+}
+
+function verifyPillClass(tone: "ok" | "warn") {
+  const base =
+    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border shadow-sm";
+  return tone === "ok"
+    ? `${base} bg-green-100 text-green-800 border-green-200`
+    : `${base} bg-amber-100 text-amber-900 border-amber-200`;
+}
+
+function isOfficialRaffle(raffle: {
+  deployer?: string | null;
+  isRegistered?: boolean;
+}) {
+  const dep = (raffle.deployer ?? "").toLowerCase();
+  const isRegistered = raffle.isRegistered === true;
+  const matches = dep && dep === ADDR.deployer.toLowerCase();
+  return isRegistered && matches;
+}
+
+function isUnverifiedRaffle(raffle: {
+  deployer?: string | null;
+  isRegistered?: boolean;
+}) {
+  // Treat "missing data" as unverified (don't silently hide)
+  const hasAny = !!(raffle.deployer ?? "") || raffle.isRegistered !== undefined;
+  if (!hasAny) return true;
+  return !isOfficialRaffle(raffle);
 }
 
 function glassCard() {
@@ -185,6 +216,23 @@ export function DashboardPage({
                       rightBottom={`Ends: ${endsIn(raffle.deadline)} • Sold: ${raffle.sold}`}
                       pillClass={statusPill(raffle.status, raffle.paused)}
                       pillText={raffle.paused ? "Paused" : friendlyStatus(raffle.status)}
+                      verifiedBadge={
+                        isOfficialRaffle(raffle) ? (
+                          <span
+                            className={verifyPillClass("ok")}
+                            title="Registered + created from the official Ppopgi deployer"
+                          >
+                            <BadgeCheck size={14} /> Official
+                          </span>
+                        ) : isUnverifiedRaffle(raffle) ? (
+                          <span
+                            className={verifyPillClass("warn")}
+                            title="Unverified / use caution: not registered and/or not created from the official Ppopgi deployer"
+                          >
+                            <AlertTriangle size={14} /> Unverified
+                          </span>
+                        ) : null
+                      }
                       onOpen={() => onOpenRaffle(raffle.id.toLowerCase())}
                       onManage={() => openManage(raffle.id, raffle.name)}
                     />
@@ -200,6 +248,23 @@ export function DashboardPage({
                         rightBottom={`Ends: ${endsIn(r.deadline)} • Sold: ${r.sold}`}
                         pillClass={statusPill(r.status, r.paused)}
                         pillText={r.paused ? "Paused" : friendlyStatus(r.status)}
+                        verifiedBadge={
+                          isOfficialRaffle(r) ? (
+                            <span
+                              className={verifyPillClass("ok")}
+                              title="Registered + created from the official Ppopgi deployer"
+                            >
+                              <BadgeCheck size={14} /> Official
+                            </span>
+                          ) : isUnverifiedRaffle(r) ? (
+                            <span
+                              className={verifyPillClass("warn")}
+                              title="Unverified / use caution: not registered and/or not created from the official Ppopgi deployer"
+                            >
+                              <AlertTriangle size={14} /> Unverified
+                            </span>
+                          ) : null
+                        }
                         onOpen={() => onOpenRaffle(r.id.toLowerCase())}
                         onManage={() => openManage(r.id, r.name)}
                       />
@@ -244,6 +309,23 @@ export function DashboardPage({
                       meta={`Ends: ${endsIn(r.deadline)} • Sold: ${r.sold}`}
                       pillClass={statusPill(r.status, r.paused)}
                       pillText={r.paused ? "Paused" : friendlyStatus(r.status)}
+                      verifiedBadge={
+                        isOfficialRaffle(r) ? (
+                          <span
+                            className={verifyPillClass("ok")}
+                            title="Registered + created from the official Ppopgi deployer"
+                          >
+                            <BadgeCheck size={14} /> Official
+                          </span>
+                        ) : (
+                          <span
+                            className={verifyPillClass("warn")}
+                            title="Unverified / use caution: not registered and/or not created from the official Ppopgi deployer"
+                          >
+                            <AlertTriangle size={14} /> Unverified
+                          </span>
+                        )
+                      }
                       onOpen={() => onOpenRaffle(r.id.toLowerCase())}
                       onManage={() => openManage(r.id, r.name)}
                     />
@@ -309,6 +391,7 @@ function RowCard({
   rightBottom,
   pillClass,
   pillText,
+  verifiedBadge,
   onOpen,
   onManage,
 }: {
@@ -318,6 +401,7 @@ function RowCard({
   rightBottom: string;
   pillClass: string;
   pillText: string;
+  verifiedBadge?: React.ReactNode;
   onOpen: () => void;
   onManage: () => void;
 }) {
@@ -330,8 +414,10 @@ function RowCard({
       >
         <div className="font-black text-gray-900 truncate">{title}</div>
         <div className="text-xs font-bold text-gray-600 mt-1 truncate">{subtitle}</div>
+
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span className={pillClass}>{pillText}</span>
+          {verifiedBadge}
           <span className="text-xs font-black text-gray-500 inline-flex items-center gap-1">
             <Clock size={14} /> {rightBottom}
           </span>
@@ -372,6 +458,7 @@ function MiniCard({
   meta,
   pillClass,
   pillText,
+  verifiedBadge,
   onOpen,
   onManage,
 }: {
@@ -379,6 +466,7 @@ function MiniCard({
   meta: string;
   pillClass: string;
   pillText: string;
+  verifiedBadge?: React.ReactNode;
   onOpen: () => void;
   onManage: () => void;
 }) {
@@ -387,8 +475,9 @@ function MiniCard({
       <button onClick={onOpen} className="min-w-0 flex-1 text-left" type="button">
         <div className="font-black text-gray-900 truncate">{title}</div>
         <div className="text-xs font-bold text-gray-600 mt-1">{meta}</div>
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span className={pillClass}>{pillText}</span>
+          {verifiedBadge}
         </div>
       </button>
 
