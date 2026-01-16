@@ -13,14 +13,23 @@ type RaffleLite = {
   winningPot: string;
   deadline: string;
   sold: string;
+
   minTickets?: string;
   maxTickets?: string | null;
+
   createdAtTimestamp?: string;
   creationTx?: string;
+
   winner?: string | null;
   winningTicketIndex?: string | null;
+
   canceledAt?: string | null;
   canceledReason?: string | null;
+
+  // ✅ verification (from subgraph)
+  deployer?: string | null;
+  registry?: string | null;
+  isRegistered?: boolean;
 };
 
 type ActivityEvent = {
@@ -45,7 +54,10 @@ export function useDashboard() {
     enabled: isConnected && !!me,
     queryFn: async () => {
       const client = getSubgraphClient();
-      return client.request<{ raffles: RaffleLite[] }>(QUERY_MY_CREATED_RAFFLES, { me, first: 50 });
+      return client.request<{ raffles: RaffleLite[] }>(QUERY_MY_CREATED_RAFFLES, {
+        me,
+        first: 50,
+      });
     },
     retry: 1,
     refetchInterval: 20_000,
@@ -78,7 +90,6 @@ export function useDashboard() {
       } else {
         cur.latestTs = Math.max(cur.latestTs, ts);
         cur.types.add(e.type);
-        // keep freshest raffle snapshot
         cur.raffle = e.raffle ?? cur.raffle;
       }
     }
