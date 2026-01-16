@@ -13,6 +13,11 @@ function fmt(n?: string) {
   return `${a}.${b.slice(0, 4)}`;
 }
 
+function shortAddr(a?: string) {
+  if (!a) return "—";
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
 export function CashierModal({
   isOpen,
   onClose,
@@ -58,46 +63,54 @@ export function CashierModal({
   return (
     <Modal open={isOpen} onClose={onClose} title="Coin Cashier" width="2xl" height="auto">
       <div className="grid gap-4">
-        {/* Hero */}
-        <div className="rounded-3xl border border-white/20 bg-white/10 backdrop-blur-md p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 border border-white/15 flex items-center justify-center">
-                <Store size={22} className="text-white" />
-              </div>
-              <div>
-                <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
-                  Balances + quick actions
+        {/* Cashier-like header strip (matches CreateRaffle style) */}
+        <div className="rounded-3xl overflow-hidden border border-white/20">
+          <div className="bg-[#FFD700] p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-md">
+                  <Store size={22} className="text-amber-600" />
                 </div>
-                <div className="mt-1 text-xl font-black text-white">Coin Cashier 🏪</div>
-                <div className="mt-1 text-[12px] font-bold text-white/75">
-                  See your balances and jump to the right place.
+                <div>
+                  <div className="text-[11px] font-black text-amber-900/70 uppercase tracking-wider">
+                    Balances + quick actions
+                  </div>
+                  <div className="mt-1 text-xl font-black text-amber-900 leading-tight">
+                    Coin Cashier 🏪
+                  </div>
+                  <div className="mt-1 text-[12px] font-bold text-amber-900/80">
+                    See your balances and jump to the right place.
+                  </div>
+                </div>
+              </div>
+
+              <div className="hidden sm:block text-right">
+                <div className="text-[11px] font-black text-amber-900/70 uppercase tracking-wider">
+                  Wallet
+                </div>
+                <div className="mt-1 text-sm font-black text-amber-900">
+                  {address ? shortAddr(address) : "—"}
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="hidden sm:block text-right">
-              <div className="text-[11px] font-black text-white/60 uppercase tracking-wider">Wallet</div>
-              <div className="mt-1 text-sm font-black text-white/90">
-                {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"}
+          <div className="bg-white/10 backdrop-blur-md p-5">
+            {/* Safety note */}
+            <div className="rounded-3xl border border-white/15 bg-white/10 p-5">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-black text-white/80">
+                <Sparkles size={14} className="text-white/80" />
+                Safety note
               </div>
+
+              <div className="mt-3 text-sm font-black text-white">How Energy (XTZ) works</div>
+              <p className="mt-1 text-sm font-bold text-white/70 leading-relaxed">
+                Energy powers the park. Some actions can temporarily lock Energy. If it can’t be returned instantly,
+                it’s <span className="font-black text-white">always saved</span> and can be collected later from your{" "}
+                <span className="font-black text-white">Dashboard</span>.
+              </p>
             </div>
           </div>
-        </div>
-
-        {/* Safety note */}
-        <div className="rounded-3xl border border-white/15 bg-white/10 p-5">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-black text-white/80">
-            <Sparkles size={14} className="text-white/80" />
-            Safety note
-          </div>
-
-          <div className="mt-3 text-sm font-black text-white">How Energy (XTZ) works</div>
-          <p className="mt-1 text-sm font-bold text-white/70 leading-relaxed">
-            Energy powers the park. Some actions can temporarily lock Energy. If it can’t be returned instantly, it’s{" "}
-            <span className="font-black text-white">always saved</span> and can be collected later from your{" "}
-            <span className="font-black text-white">Dashboard</span>.
-          </p>
         </div>
 
         {/* Cards */}
