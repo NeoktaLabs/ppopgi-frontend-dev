@@ -1,143 +1,135 @@
-// src/features/raffles/useRaffleActions.ts
+// src/features/dashboard/useRaffleActions.ts
 import { useMemo } from "react";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { formatUnits, type Address } from "viem";
-import { LOTTERY_SINGLE_WINNER_ABI } from "../../lib/contracts";
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { isAddress, formatUnits } from "viem";
 
-const USDC_DECIMALS = 6;
+import { ADDR, ERC20_ABI, LOTTERY_SINGLE_WINNER_ABI } from "../../lib/contracts";
+
 const NATIVE_DECIMALS = 18;
 
-function toAddr(a?: string | null): Address | null {
-  if (!a) return null;
-  const s = a.toLowerCase();
-  return (s.startsWith("0x") ? (s as Address) : null);
+function safeBigint(v: unknown): bigint {
+  try {
+    if (typeof v === "bigint") return v;
+    return BigInt(String(v ?? "0"));
+  } catch {
+    return 0n;
+  }
 }
 
-function fmtUnits(value?: bigint, decimals = 18, maxFrac = 6) {
-  if (!value) return "0";
-  const s = formatUnits(value, decimals);
-  const [a, b] = s.split(".");
-  if (!b) return a;
-  return `${a}.${b.slice(0, maxFrac)}`.replace(/\.$/, "");
-}
-
-export function useRaffleActions({
-  raffleId,
-  status,
-  paused,
-}: {
-  raffleId: string | null | undefined;
-  status?: string;
-  paused?: boolean;
-}) {
+export function useRaffleActions(raffleId?: string | null) {
   const { address, isConnected } = useAccount();
-  const raffle = toAddr(raffleId);
-  const me = toAddr(address ?? null);
+  const enabled = isConnected && !!address && !!raffleId && isAddress(String(raffleId));
 
-  const enabled = isConnected && !!raffle && !!me;
+  // USDC decimals
+  const usdcDecimals = useReadContract({
+    address: ADDR.usdc,
+    abi: ERC20_ABI,
+    functionName: "decimals",
+    query: { enabled: true },
+  });
+  const usdcD = Number(usdcDecimals.data ?? 6);
 
-  // Reads
+  // Reads from raffle
   const ticketsOwnedQ = useReadContract({
-    address: raffle ?? undefined,
+    address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
     functionName: "ticketsOwned",
-    args: me ? [me] : undefined,
+    args: address ? [address] : undefined,
     query: { enabled },
   });
 
   const claimableFundsQ = useReadContract({
-    address: raffle ?? undefined,
+    address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
     functionName: "claimableFunds",
-    args: me ? [me] : undefined,
+    args: address ? [address] : undefined,
     query: { enabled },
   });
 
   const claimableNativeQ = useReadContract({
-    address: raffle ?? undefined,
+    address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
     functionName: "claimableNative",
-    args: me ? [me] : undefined,
+    args: address ? [address] : undefined,
     query: { enabled },
   });
 
-  const ticketsOwned = (ticketsOwnedQ.data as bigint | undefined) ?? 0n;
-  const claimableFunds = (claimableFundsQ.data as bigint | undefined) ?? 0n;
-  const claimableNative = (claimableNativeQ.data as bigint | undefined) ?? 0n;
+  const ticketsOwned = safeBigint(ticketsOwnedQ.data);
+  const claimableUSDC = safeBigint(claimableFundsQ.data);
+  const claimableXTZ = safeBigint(claimableNativeQ.data);
 
-  const canRefund = useMemo(() => {
-    const s = (status ?? "").toUpperCase();
-    if (paused) return false;
-    return s === "CANCELED" || s === "CANCELLED";
-  }, [status, paused]);
+  const fmt = useMemo(() => {
+    return {
+      ticketsOwned: ticketsOwned.toString(),
+      claimableUSDC: formatUnits(claimableUSDC, usdcD),
+      claimableXTZ: formatUnits(claimableXTZ, NATIVE_DECIMALS),
+    };
+  }, [ticketsOwned, claimableUSDC, claimableXTZ, usdcD]);
 
-  const canClaimUSDC = claimableFunds > 0n;
-  const canClaimXTZ = claimableNative > 0n;
+  // Writes
+  const { writeContractAsync, data: txHash, isPending } = useWriteContract();
+  const tx = useWaitForTransactionReceipt({ hash: txHash });
 
-  // Writes (one writer; we track last hash for receipt state)
-  const { writeContractAsync, data: lastHash, isPending: isWriting, error: writeError } =
-    useWriteContract();
-
-  const receiptQ = useWaitForTransactionReceipt({
-    hash: lastHash,
-    query: { enabled: !!lastHash },
-  });
-
-  async function refund() {
-    if (!raffle) throw new Error("Missing raffle address");
-    return writeContractAsync({
-      address: raffle,
-      abi: LOTTERY_SINGLE_WINNER_ABI,
-      functionName: "claimTicketRefund",
-      args: [],
-    });
-  }
+  const busy = isPending || tx.isLoading;
 
   async function claimUSDC() {
-    if (!raffle) throw new Error("Missing raffle address");
+    if (!enabled) return;
     return writeContractAsync({
-      address: raffle,
+      address: raffleId as any,
       abi: LOTTERY_SINGLE_WINNER_ABI,
       functionName: "withdrawFunds",
       args: [],
-    });
+    } as any);
   }
 
-  async function collectEnergy() {
-    if (!raffle) throw new Error("Missing raffle address");
+  async function claimXTZ() {
+    if (!enabled) return;
     return writeContractAsync({
-      address: raffle,
+      address: raffleId as any,
       abi: LOTTERY_SINGLE_WINNER_ABI,
       functionName: "withdrawNative",
       args: [],
-    });
+    } as any);
   }
+
+  async function refundTickets() {
+    if (!enabled) return;
+    return writeContractAsync({
+      address: raffleId as any,
+      abi: LOTTERY_SINGLE_WINNER_ABI,
+      functionName: "claimTicketRefund",
+      args: [],
+    } as any);
+  }
+
+  const canClaimUSDC = enabled && claimableUSDC > 0n && !busy;
+  const canClaimXTZ = enabled && claimableXTZ > 0n && !busy;
+  const canRefund = enabled && ticketsOwned > 0n && !busy;
 
   return {
     enabled,
+    address,
 
     ticketsOwned,
-    claimableFunds,
-    claimableNative,
+    claimableUSDC,
+    claimableXTZ,
+    fmt,
 
-    ticketsOwnedFmt: fmtUnits(ticketsOwned, 0, 0),
-    claimableFundsFmt: fmtUnits(claimableFunds, USDC_DECIMALS, 2),
-    claimableNativeFmt: fmtUnits(claimableNative, NATIVE_DECIMALS, 4),
-
-    canRefund,
     canClaimUSDC,
     canClaimXTZ,
+    canRefund,
 
-    refund,
     claimUSDC,
-    collectEnergy,
+    claimXTZ,
+    refundTickets,
 
-    lastHash,
-    isWriting,
-    writeError,
+    txHash,
+    tx,
+    busy,
 
-    isConfirming: receiptQ.isLoading,
-    isConfirmed: !!receiptQ.data,
-    receiptError: receiptQ.error,
+    // raw queries if needed
+    ticketsOwnedQ,
+    claimableFundsQ,
+    claimableNativeQ,
   };
 }
