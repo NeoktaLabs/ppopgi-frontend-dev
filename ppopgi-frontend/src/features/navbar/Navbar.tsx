@@ -1,8 +1,31 @@
 // src/features/navbar/Navbar.tsx
+import { useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Compass, LayoutDashboard, LogOut, Shield, Store, Ticket } from "lucide-react";
-import { useDisconnect } from "wagmi";
+import {
+  Compass,
+  LayoutDashboard,
+  LogOut,
+  Shield,
+  Store,
+  Ticket,
+  Wallet,
+} from "lucide-react";
+import {
+  useAccount,
+  useChainId,
+  useDisconnect,
+  useSwitchChain,
+  useWalletClient,
+} from "wagmi";
+import { etherlink } from "viem/chains";
 import { WalletPill } from "../wallet/WalletPill";
+
+const TARGET_CHAIN_ID = etherlink.id;
+
+function short4(addr?: string) {
+  if (!addr) return "";
+  return addr.slice(-4);
+}
 
 export function Navbar({
   onOpenCashier,
@@ -20,24 +43,99 @@ export function Navbar({
   onGoExplore: () => void;
 }) {
   const { disconnect } = useDisconnect();
+  const { address, isConnected } = useAccount();
+
+  const chainId = useChainId();
+  const { switchChainAsync, isPending: switching } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
+
+  // only show wrong network once we’re actually connected
+  const wrongNetwork = isConnected && chainId !== TARGET_CHAIN_ID;
+
+  const [switchErr, setSwitchErr] = useState<string | null>(null);
+
+  const etherlinkAddParams = useMemo(() => {
+    // Build EIP-3085 params from viem chain object
+    const rpc =
+      etherlink.rpcUrls?.default?.http?.[0] ||
+      etherlink.rpcUrls?.public?.http?.[0] ||
+      "";
+    const explorer = etherlink.blockExplorers?.default?.url;
+
+    return {
+      chainId: `0x${TARGET_CHAIN_ID.toString(16)}`, // 42793 => 0xa729
+      chainName: etherlink.name,
+      nativeCurrency: etherlink.nativeCurrency,
+      rpcUrls: rpc ? [rpc] : [],
+      blockExplorerUrls: explorer ? [explorer] : [],
+    };
+  }, []);
+
+  async function ensureEtherlink() {
+    setSwitchErr(null);
+
+    // Try normal switch first
+    try {
+      await switchChainAsync({ chainId: TARGET_CHAIN_ID });
+      return;
+    } catch (e: any) {
+      // If chain is not added in wallet => 4902 (or message contains 4902)
+      const msg = String(e?.message || e);
+      const code = e?.code;
+
+      const isNotAdded =
+        code === 4902 ||
+        msg.includes("4902") ||
+        msg.toLowerCase().includes("unrecognized chain") ||
+        msg.toLowerCase().includes("addethereumchain");
+
+      if (!isNotAdded) {
+        setSwitchErr("Could not switch network. Open MetaMask and switch to Etherlink.");
+        return;
+      }
+    }
+
+    // Try add chain (EIP-3085) then switch again
+    try {
+      if (!walletClient) {
+        setSwitchErr("Wallet client unavailable. Re-open MetaMask and try again.");
+        return;
+      }
+
+      await walletClient.request({
+        method: "wallet_addEthereumChain",
+        params: [etherlinkAddParams as any],
+      });
+
+      await switchChainAsync({ chainId: TARGET_CHAIN_ID });
+    } catch (e: any) {
+      setSwitchErr("Please add/switch to Etherlink in MetaMask, then try again.");
+    }
+  }
+
+  // Optional: once connected, if wrong network, auto-trigger switch prompt once
+  const [autoTried, setAutoTried] = useState(false);
+  useEffect(() => {
+    if (!isConnected) {
+      setAutoTried(false);
+      return;
+    }
+    if (!wrongNetwork) return;
+    if (autoTried) return;
+
+    setAutoTried(true);
+    // fire-and-forget; user may reject
+    ensureEtherlink();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, wrongNetwork]);
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 pt-4 px-4">
       <nav className="mx-auto max-w-6xl bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl shadow-sm h-16 flex items-center justify-between px-4 md:px-6">
-        {/* ✅ IMPORTANT:
-            Use RainbowKit's own account/chain state inside ConnectButton.Custom.
-            Do NOT use wagmi useAccount() here, otherwise the connect modal can get "stuck" (QR stays open). */}
         <ConnectButton.Custom>
-          {({
-            account,
-            chain,
-            mounted,
-            openConnectModal,
-            openChainModal,
-          }) => {
+          {({ openConnectModal, mounted }) => {
             const ready = mounted;
-            const connected = ready && !!account && !!chain;
-            const wrongNetwork = !!chain?.unsupported;
+            const connected = ready && isConnected && !!address;
 
             return (
               <>
@@ -78,12 +176,10 @@ export function Navbar({
 
                 {/* Right */}
                 <div className="flex items-center gap-3">
-                  {/* Stacked balances */}
                   <div className="hidden lg:block">
                     <WalletPill />
                   </div>
 
-                  {/* Safety / Proof (global) */}
                   <button
                     onClick={onOpenSafety}
                     className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
@@ -106,19 +202,20 @@ export function Navbar({
 
                   {connected ? (
                     <>
-                      {/* Wrong network helper */}
                       {wrongNetwork ? (
-                        <button
-                          onClick={openChainModal}
-                          className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 px-3 py-2 rounded-xl font-black shadow-sm text-sm"
-                          title="Switch network"
-                          type="button"
-                        >
-                          Wrong network
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={ensureEtherlink}
+                            disabled={switching}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 px-3 py-2 rounded-xl font-black shadow-sm text-sm"
+                            title="Switch to Etherlink"
+                            type="button"
+                          >
+                            {switching ? "Switching…" : "Wrong network"}
+                          </button>
+                        </div>
                       ) : null}
 
-                      {/* Player button */}
                       <button
                         onClick={onOpenDashboard}
                         className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
@@ -126,7 +223,7 @@ export function Navbar({
                         type="button"
                       >
                         <LayoutDashboard size={16} />
-                        {account?.address ? `Player ...${account.address.slice(-4)}` : "Player"}
+                        {address ? `Player ...${short4(address)}` : "Player"}
                       </button>
 
                       <button
@@ -144,15 +241,24 @@ export function Navbar({
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold shadow-[0_4px_0_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex items-center gap-2 text-sm"
                       type="button"
                     >
-                      {/* keep icon set minimal; Ticket is already imported */}
-                      <span className="inline-flex items-center justify-center w-5">
-                        <Ticket size={18} />
-                      </span>
+                      <Wallet size={18} />
                       <span className="hidden sm:inline">Join the Park</span>
                       <span className="sm:hidden">Join</span>
                     </button>
                   )}
                 </div>
+
+                {/* Tiny inline error (only when connected + wrong network) */}
+                {connected && wrongNetwork && switchErr ? (
+                  <div className="fixed top-[88px] left-0 right-0 px-4 z-50">
+                    <div className="mx-auto max-w-6xl rounded-2xl bg-white/90 border border-white/60 backdrop-blur-md shadow-sm px-4 py-3 text-xs font-black text-amber-900">
+                      {switchErr}
+                      <span className="ml-2 opacity-70">
+                        (Wallet chainId: {chainId})
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
               </>
             );
           }}
