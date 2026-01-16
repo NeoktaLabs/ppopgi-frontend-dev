@@ -5,7 +5,6 @@ export const ADDR = {
   usdc: "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9",
 } as const;
 
-// Minimal ERC20 ABI for balance + decimals + allowance + approve
 export const ERC20_ABI = [
   {
     type: "function",
@@ -50,9 +49,64 @@ export const ERC20_ABI = [
   },
 ] as const;
 
+// Minimal deployer ABI needed for CreateRaffleModal
+export const SINGLE_WINNER_DEPLOYER_ABI = [
+  {
+    type: "function",
+    name: "usdc",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "entropy",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "entropyProvider",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "feeRecipient",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "protocolFeePercent",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+
+  // create
+  {
+    type: "function",
+    name: "createSingleWinnerLottery",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "ticketPrice", type: "uint256" },
+      { name: "winningPot", type: "uint256" },
+      { name: "minTickets", type: "uint64" },
+      { name: "maxTickets", type: "uint64" },
+      { name: "durationSeconds", type: "uint64" },
+      { name: "minPurchaseAmount", type: "uint32" },
+    ],
+    outputs: [{ type: "address" }],
+  },
+] as const;
+
 // --- Minimal LotterySingleWinner ABI (reads + dashboard actions) ---
 export const LOTTERY_SINGLE_WINNER_ABI = [
-  // reads (dashboard gating)
   {
     type: "function",
     name: "ticketsOwned",
@@ -74,8 +128,6 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     inputs: [{ name: "user", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
-
-  // writes (dashboard actions)
   {
     type: "function",
     name: "withdrawFunds",
@@ -99,6 +151,4 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
   },
 ] as const;
 
-// Optional (keep if you use them elsewhere)
 export const LOTTERY_REGISTRY_ABI = [] as const;
-export const SINGLE_WINNER_DEPLOYER_ABI = [] as const;
