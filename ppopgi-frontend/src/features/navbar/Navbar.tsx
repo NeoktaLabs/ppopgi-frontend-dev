@@ -1,22 +1,7 @@
-// src/features/navbar/Navbar.tsx
 import { useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import {
-  Compass,
-  LayoutDashboard,
-  LogOut,
-  Shield,
-  Store,
-  Ticket,
-  Wallet,
-} from "lucide-react";
-import {
-  useAccount,
-  useChainId,
-  useDisconnect,
-  useSwitchChain,
-  useWalletClient,
-} from "wagmi";
+import { Compass, LayoutDashboard, LogOut, Store, Ticket, Wallet } from "lucide-react";
+import { useAccount, useChainId, useDisconnect, useSwitchChain, useWalletClient } from "wagmi";
 import { etherlink } from "viem/chains";
 import { WalletPill } from "../wallet/WalletPill";
 
@@ -31,14 +16,12 @@ export function Navbar({
   onOpenCashier,
   onOpenCreate,
   onOpenDashboard,
-  onOpenSafety,
   onGoHome,
   onGoExplore,
 }: {
   onOpenCashier: () => void;
   onOpenCreate: () => void;
   onOpenDashboard: () => void;
-  onOpenSafety: () => void;
   onGoHome: () => void;
   onGoExplore: () => void;
 }) {
@@ -55,15 +38,12 @@ export function Navbar({
   const [switchErr, setSwitchErr] = useState<string | null>(null);
 
   const etherlinkAddParams = useMemo(() => {
-    // Build EIP-3085 params from viem chain object
     const rpc =
-      etherlink.rpcUrls?.default?.http?.[0] ||
-      etherlink.rpcUrls?.public?.http?.[0] ||
-      "";
+      etherlink.rpcUrls?.default?.http?.[0] || etherlink.rpcUrls?.public?.http?.[0] || "";
     const explorer = etherlink.blockExplorers?.default?.url;
 
     return {
-      chainId: `0x${TARGET_CHAIN_ID.toString(16)}`, // 42793 => 0xa729
+      chainId: `0x${TARGET_CHAIN_ID.toString(16)}`,
       chainName: etherlink.name,
       nativeCurrency: etherlink.nativeCurrency,
       rpcUrls: rpc ? [rpc] : [],
@@ -79,7 +59,6 @@ export function Navbar({
       await switchChainAsync({ chainId: TARGET_CHAIN_ID });
       return;
     } catch (e: any) {
-      // If chain is not added in wallet => 4902 (or message contains 4902)
       const msg = String(e?.message || e);
       const code = e?.code;
 
@@ -95,7 +74,7 @@ export function Navbar({
       }
     }
 
-    // Try add chain (EIP-3085) then switch again
+    // Try add chain then switch again
     try {
       if (!walletClient) {
         setSwitchErr("Wallet client unavailable. Re-open MetaMask and try again.");
@@ -124,7 +103,6 @@ export function Navbar({
     if (autoTried) return;
 
     setAutoTried(true);
-    // fire-and-forget; user may reject
     ensureEtherlink();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, wrongNetwork]);
@@ -179,16 +157,6 @@ export function Navbar({
                   <div className="hidden lg:block">
                     <WalletPill />
                   </div>
-
-                  <button
-                    onClick={onOpenSafety}
-                    className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-gray-100 px-3 py-2 rounded-xl font-bold shadow-sm flex items-center gap-2 text-sm transition-colors"
-                    title="Safety & Proof"
-                    type="button"
-                  >
-                    <Shield size={18} />
-                    <span className="hidden md:inline">Safety</span>
-                  </button>
 
                   <button
                     onClick={onOpenCashier}
@@ -253,9 +221,7 @@ export function Navbar({
                   <div className="fixed top-[88px] left-0 right-0 px-4 z-50">
                     <div className="mx-auto max-w-6xl rounded-2xl bg-white/90 border border-white/60 backdrop-blur-md shadow-sm px-4 py-3 text-xs font-black text-amber-900">
                       {switchErr}
-                      <span className="ml-2 opacity-70">
-                        (Wallet chainId: {chainId})
-                      </span>
+                      <span className="ml-2 opacity-70">(Wallet chainId: {chainId})</span>
                     </div>
                   </div>
                 ) : null}
