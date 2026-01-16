@@ -1,7 +1,7 @@
 // src/lib/contracts.ts
 export const ADDR = {
-  registry: "0xE26d8B29d116540C7B181389D8e5a4990E41BcB5",
-  deployer: "0x6ce44c2c89779F8f20deB1435B99a96d29Cd21C3",
+  registry: "0x1CD24E0C49b1B61ff07be12fBa3ce58eCb20b098",
+  deployer: "0x6050196520e7010Aa39C8671055B674851E2426D",
   usdc: "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9",
 } as const;
 
