@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 import { etherlink } from "viem/chains";
@@ -14,13 +15,16 @@ import { CashierModal } from "./features/cashier/CashierModal";
 import { HomePage } from "./features/home/HomePage";
 import { RaffleDetailsModal } from "./features/raffles/RaffleDetailsModal";
 
+type SafetyMode = "create" | "raffle";
+
 export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
-  // ✅ Safety modal exists, but can ONLY be opened from a raffle context
+  // Safety modal
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [safetyMode, setSafetyMode] = useState<SafetyMode>("raffle");
 
   // Selected raffle (details modal)
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
@@ -68,7 +72,13 @@ export default function App() {
   }
 
   function openSafetyForRaffle(id: string) {
+    setSafetyMode("raffle");
     openRaffle(id);
+    setSafetyOpen(true);
+  }
+
+  function openSafetyForCreate() {
+    setSafetyMode("create");
     setSafetyOpen(true);
   }
 
@@ -80,10 +90,11 @@ export default function App() {
     if (!acc.isConnected) return;
     if (chainId === etherlink.id) return;
 
-    switchChainAsync({ chainId: etherlink.id }).catch(() => {
-      // user rejected or wallet can't switch automatically
-    });
+    switchChainAsync({ chainId: etherlink.id }).catch(() => {});
   }, [acc.isConnected, chainId, switchChainAsync]);
+
+  const safetyRaffleId = safetyMode === "raffle" ? (openRaffleId ?? "") : "";
+  const safetyCreator = safetyMode === "raffle" ? (openRaffleCreator ?? undefined) : undefined;
 
   return (
     <div className="min-h-screen pb-12 relative">
@@ -140,7 +151,9 @@ export default function App() {
         raffleId={openRaffleId}
         onClose={closeRaffle}
         onOpenSafety={() => {
-          if (openRaffleId) setSafetyOpen(true);
+          if (!openRaffleId) return;
+          setSafetyMode("raffle");
+          setSafetyOpen(true);
         }}
         onLoadedRaffle={(r) => {
           if (!openRaffleId) return;
@@ -151,12 +164,12 @@ export default function App() {
         }}
       />
 
-      {/* ✅ Safety modal only opens when a raffle is selected */}
       <SafetyProofModal
         open={safetyOpen}
         onClose={() => setSafetyOpen(false)}
-        raffleId={openRaffleId ?? ""}
-        creator={openRaffleCreator ?? undefined}
+        raffleId={safetyRaffleId}
+        creator={safetyCreator}
+        mode={safetyMode} // ✅ add this prop (see below)
       />
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
@@ -165,6 +178,7 @@ export default function App() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => {}}
+        onOpenSafety={openSafetyForCreate} // ✅ shield opens safety modal
       />
     </div>
   );
