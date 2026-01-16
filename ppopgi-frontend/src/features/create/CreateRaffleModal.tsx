@@ -8,11 +8,11 @@ import {
   useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
-import { parseUnits, formatUnits, isAddress } from "viem";
+import { parseUnits, formatUnits } from "viem";
 import { Shield, ExternalLink, Loader2, Sparkles, Copy, Check } from "lucide-react";
 
 import { ADDR, ERC20_ABI, SINGLE_WINNER_DEPLOYER_ABI } from "../../lib/contracts";
-import { addrUrl, txUrl } from "../../lib/explorer";
+import { txUrl } from "../../lib/explorer";
 
 function shortAddr(a?: string) {
   if (!a) return "—";
@@ -52,35 +52,38 @@ export function CreateRaffleModal({
   });
   const d = Number(usdcDecimals.data ?? 6);
 
-  // --- Deployer config reads ---
-  const qUsdc = useReadContract({
+  // --- Deployer config reads (kept for Safety/Proof modal + fee preview) ---
+  const qPercent = useReadContract({
+    address: ADDR.deployer,
+    abi: SINGLE_WINNER_DEPLOYER_ABI,
+    functionName: "protocolFeePercent",
+    query: { enabled: open },
+  });
+
+  // (Optional) keep these reads for your Safety/Proof modal, even if UI doesn't show them here.
+  // If you want, we can remove them later to reduce RPC calls.
+  useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "usdc",
     query: { enabled: open },
   });
-  const qEntropy = useReadContract({
+  useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "entropy",
     query: { enabled: open },
   });
-  const qProvider = useReadContract({
+  useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "entropyProvider",
     query: { enabled: open },
   });
-  const qFee = useReadContract({
+  useReadContract({
     address: ADDR.deployer,
     abi: SINGLE_WINNER_DEPLOYER_ABI,
     functionName: "feeRecipient",
-    query: { enabled: open },
-  });
-  const qPercent = useReadContract({
-    address: ADDR.deployer,
-    abi: SINGLE_WINNER_DEPLOYER_ABI,
-    functionName: "protocolFeePercent",
     query: { enabled: open },
   });
 
@@ -199,15 +202,9 @@ export function CreateRaffleModal({
     })();
   }, [tx.isSuccess, txHash, publicClient, createdAddr, onCreated]);
 
-  const configRows = [
-    { label: "Coins used", v: qUsdc.data ? String(qUsdc.data) : "…" },
-    { label: "Randomness system", v: qEntropy.data ? String(qEntropy.data) : "…" },
-    { label: "Randomness provider", v: qProvider.data ? String(qProvider.data) : "…" },
-    { label: "Fee receiver", v: qFee.data ? String(qFee.data) : "…" },
-    { label: "Ppopgi fee", v: percent === null ? "…" : `${percent}%` },
-  ];
-
-  const shareLink = createdAddr ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}` : null;
+  const shareLink = createdAddr
+    ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}`
+    : null;
 
   return (
     <Modal open={open} onClose={onClose} title="Create Raffle">
@@ -215,65 +212,29 @@ export function CreateRaffleModal({
         <div className="font-black text-gray-800">Connect your wallet to create a raffle.</div>
       ) : (
         <div className="grid gap-4">
-          {/* Safety/Proof header */}
-          <div className="rounded-2xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
-                  On-chain defaults
-                </div>
-                <div className="text-lg font-black text-gray-900 flex items-center gap-2">
-                  Transparency <Shield size={16} />
-                </div>
-                <div className="text-xs font-bold text-gray-600 mt-1">
-                  These come from your deployer contract.
-                </div>
+          {/* Compact header row + Shield */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
+                Setup
               </div>
-
-              {onOpenSafety ? (
-                <button
-                  type="button"
-                  onClick={onOpenSafety}
-                  className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-white/80 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-gray-800 shadow-sm"
-                >
-                  <Shield size={14} /> Safety &amp; Proof
-                </button>
-              ) : null}
+              <div className="text-lg font-black text-gray-900">Create raffle</div>
+              <div className="text-xs font-bold text-gray-600 mt-1">
+                Tip: click the shield to verify on-chain defaults.
+              </div>
             </div>
 
-            <div className="mt-3 grid gap-2 text-xs font-bold text-gray-700">
-              {configRows.map((r) => (
-                <div key={r.label} className="flex items-center justify-between gap-3">
-                  <span className="text-gray-600">{r.label}</span>
-                  <span className="font-black text-gray-900">
-                    {isAddress(String(r.v)) ? shortAddr(String(r.v)) : r.v}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {qFee.data ? (
-                <a
-                  className="inline-flex items-center gap-1 rounded-xl bg-white/70 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-blue-700"
-                  href={addrUrl(String(qFee.data))}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Fee receiver <ExternalLink size={12} />
-                </a>
-              ) : null}
-              {qProvider.data ? (
-                <a
-                  className="inline-flex items-center gap-1 rounded-xl bg-white/70 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-blue-700"
-                  href={addrUrl(String(qProvider.data))}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Provider <ExternalLink size={12} />
-                </a>
-              ) : null}
-            </div>
+            {onOpenSafety ? (
+              <button
+                type="button"
+                onClick={onOpenSafety}
+                className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-white/70 hover:bg-white border border-white/60 shadow-sm"
+                title="Transparency / On-chain defaults"
+                aria-label="Transparency / On-chain defaults"
+              >
+                <Shield size={18} />
+              </button>
+            ) : null}
           </div>
 
           {/* Form */}
