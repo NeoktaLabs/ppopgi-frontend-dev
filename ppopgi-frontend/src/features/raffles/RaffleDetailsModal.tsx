@@ -11,6 +11,7 @@ import { ADDR, LOTTERY_SINGLE_WINNER_ABI } from "../../lib/contracts";
 
 import { RaffleTimeline } from "./RaffleTimeline";
 import { RaffleActionsModal } from "../dashboard/RaffleActionsModal";
+import { RaffleSafetyModal } from "./RaffleSafetyModal";
 
 export function RaffleDetailsModal({
   raffleId,
@@ -20,10 +21,17 @@ export function RaffleDetailsModal({
 }: {
   raffleId: string | null;
   onClose: () => void;
-  onOpenSafety: () => void;
+
+  /**
+   * Optional legacy callback (ex: App-level modal routing / analytics).
+   * This component now opens RaffleSafetyModal locally.
+   */
+  onOpenSafety?: () => void;
+
   onLoadedRaffle?: (raffle: any | null) => void;
 }) {
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const raffleDetailQ = useQuery({
     queryKey: ["raffleDetail", raffleId],
@@ -52,12 +60,19 @@ export function RaffleDetailsModal({
     onLoadedRaffle?.(raffle);
   }, [raffle, onLoadedRaffle]);
 
-  // Unverified / caution (only when we actually have a raffleId)
+  // If raffle closes, ensure sub-modals close too (prevents stale open state)
+  useEffect(() => {
+    if (!raffleId) {
+      setActionsOpen(false);
+      setSafetyOpen(false);
+    }
+  }, [raffleId]);
+
+  // Unverified / caution (RPC check; only when raffle exists and modal is open)
   const rDeployer = useReadContract({
     address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
     functionName: "deployer",
-    // recommended: don’t poke RPC until raffle exists (and modal is actually open)
     query: { enabled: !!raffleId && !!raffle },
   });
 
@@ -97,8 +112,8 @@ export function RaffleDetailsModal({
               >
                 <div style={{ fontWeight: 1000 }}>Unverified / use caution</div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>
-                  This raffle was not created from the official Ppopgi site (it does
-                  not match the official deployer).
+                  This raffle was not created from the official Ppopgi site (it does not match the
+                  official deployer).
                 </div>
               </div>
             )}
@@ -138,7 +153,11 @@ export function RaffleDetailsModal({
 
               <button
                 type="button"
-                onClick={onOpenSafety}
+                onClick={() => {
+                  // keep your optional external callback
+                  onOpenSafety?.();
+                  setSafetyOpen(true);
+                }}
                 style={{
                   padding: "10px 12px",
                   borderRadius: 14,
@@ -199,6 +218,13 @@ export function RaffleDetailsModal({
         onClose={() => setActionsOpen(false)}
         raffleId={raffleId ?? ""}
         raffleName={raffle?.name}
+      />
+
+      <RaffleSafetyModal
+        open={safetyOpen}
+        onClose={() => setSafetyOpen(false)}
+        raffleId={raffleId}
+        raffle={raffle}
       />
     </>
   );
