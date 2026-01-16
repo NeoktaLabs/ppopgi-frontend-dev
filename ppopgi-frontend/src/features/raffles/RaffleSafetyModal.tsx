@@ -112,10 +112,12 @@ export function RaffleSafetyModal({
   const matchesRegistry = !!reg && reg === ADDR.registry.toLowerCase();
 
   const hasVerificationData =
-    !!raffle?.deployer || !!raffle?.registry || raffle?.isRegistered !== undefined;
+    !!raffle?.deployer ||
+    !!raffle?.registry ||
+    raffle?.isRegistered !== undefined ||
+    !!raffle?.creator;
 
   // "Official" = registered AND deployer matches AND registry matches (strongest, safest definition)
-  // If you ever want it looser, you can drop registry matching, but this is safest.
   const isOfficial = isRegistered && matchesDeployer && matchesRegistry;
 
   const reasons = useMemo(() => {
@@ -149,7 +151,14 @@ export function RaffleSafetyModal({
     }
 
     return lines;
-  }, [raffle?.deployer, raffle?.registry, raffle?.isRegistered, matchesDeployer, matchesRegistry, isRegistered]);
+  }, [
+    raffle?.deployer,
+    raffle?.registry,
+    raffle?.isRegistered,
+    matchesDeployer,
+    matchesRegistry,
+    isRegistered,
+  ]);
 
   const headline = isOfficial
     ? "Official raffle"
@@ -177,7 +186,9 @@ export function RaffleSafetyModal({
                 <div className="mt-1 text-lg font-black text-gray-900 flex items-center gap-2">
                   {headline} <Shield size={16} />
                 </div>
-                <div className="mt-1 text-xs font-bold text-gray-700/80">{explainer}</div>
+                <div className="mt-1 text-xs font-bold text-gray-700/80">
+                  {explainer}
+                </div>
               </div>
 
               <div className="shrink-0">
@@ -217,8 +228,9 @@ export function RaffleSafetyModal({
 
             {!isOfficial ? (
               <div className="mt-3 text-xs font-bold text-gray-700/80">
-                Showing unverified raffles is intentional — you can still inspect and interact, but you should
-                use caution and verify links/addresses before sending funds.
+                Showing unverified raffles is intentional — you can still inspect and
+                interact, but you should use caution and verify links/addresses
+                before sending funds.
               </div>
             ) : null}
           </div>
