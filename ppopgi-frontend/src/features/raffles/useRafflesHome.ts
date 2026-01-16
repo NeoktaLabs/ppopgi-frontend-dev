@@ -13,7 +13,11 @@ export type RaffleLite = {
   sold: string;
   winningPot: string;
   maxTickets?: string | null;
-  verified?: boolean; // NEW
+
+  // verification (subgraph)
+  deployer?: string | null;
+  isRegistered?: boolean;
+  registry?: string | null;
 };
 
 function nowBigInt(): string {
