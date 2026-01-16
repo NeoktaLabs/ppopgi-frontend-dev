@@ -47,9 +47,11 @@ body {
   /*
     ✅ Website background (PNG + soft overlays)
 
-    1) Put your image at: src/assets/bg.png
-    2) This uses the PNG as the base layer, with a soft "veil" + pastel glows above it
-       so text remains readable.
+    Put your image at:
+      public/bg.png
+
+    Then it is available at:
+      /bg.png
   */
   background:
     /* readability veil */
@@ -73,7 +75,7 @@ body {
     ),
 
     /* PNG base */
-    url("/src/assets/bg.png");
+    url("/bg.png");
 
   background-size: cover;
   background-position: center;
