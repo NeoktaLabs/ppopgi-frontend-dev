@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 
 import { PageModal } from "./ui/PageModal";
@@ -29,6 +29,9 @@ export default function App() {
   // Subscribe to wallet state so the UI reacts immediately after connect
   const acc = useAccount();
 
+  // Track which raffle we already applied creator for (prevents needless setState loops)
+  const loadedRaffleIdRef = useRef<string | null>(null);
+
   // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
     const m = window.location.hash.match(/raffle=([^&]+)/);
@@ -45,6 +48,10 @@ export default function App() {
     const lower = id.toLowerCase();
     window.location.hash = `raffle=${encodeURIComponent(lower)}`;
     setOpenRaffleId(lower);
+
+    // reset creator while loading the new raffle
+    setOpenRaffleCreator(null);
+    loadedRaffleIdRef.current = null;
   }
 
   function closeRaffle() {
@@ -52,6 +59,7 @@ export default function App() {
     setOpenRaffleCreator(null);
     setSafetyOpen(false);
     window.location.hash = "";
+    loadedRaffleIdRef.current = null;
   }
 
   return (
@@ -71,7 +79,7 @@ export default function App() {
         }}
       />
 
-      {/* Give space under fixed navbar (no banner anymore) */}
+      {/* Give space under fixed navbar */}
       <div className="pt-24" />
 
       {/* MAIN (blur/scale when overlays open) */}
@@ -106,7 +114,11 @@ export default function App() {
         onClose={closeRaffle}
         onOpenSafety={() => setSafetyOpen(true)}
         onLoadedRaffle={(r) => {
-          // Let App own creator so SafetyProofModal can link to it
+          // only apply when the modal is for this raffle + once per raffle
+          if (!openRaffleId) return;
+          if (loadedRaffleIdRef.current === openRaffleId) return;
+
+          loadedRaffleIdRef.current = openRaffleId;
           setOpenRaffleCreator(r?.creator ? String(r.creator) : null);
         }}
       />
@@ -123,7 +135,11 @@ export default function App() {
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
       {/* Create raffle modal */}
-      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {}}
+      />
     </div>
   );
 }
