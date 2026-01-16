@@ -1,188 +1,120 @@
-// src/features/raffles/RaffleActionsModal.tsx
-import { useMemo, useState } from "react";
+// src/features/dashboard/RaffleActionsModal.tsx
+import React, { useMemo, useState } from "react";
+import { Modal } from "../../ui/Modal";
 import {
   useAccount,
-  useBalance,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
-import { formatUnits, parseUnits } from "viem";
-import { Coins, Loader2, Ticket, Zap } from "lucide-react";
+import { formatUnits } from "viem";
+import {
+  Coins,
+  Wallet,
+  ArrowDownCircle,
+  ExternalLink,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  Copy,
+} from "lucide-react";
 
-import { Modal } from "../../ui/Modal";
 import { ADDR, ERC20_ABI, LOTTERY_SINGLE_WINNER_ABI } from "../../lib/contracts";
-import { txUrl } from "../../lib/explorer";
+import { addrUrl, txUrl } from "../../lib/explorer";
 
-function fmt(n?: string) {
-  if (!n) return "0";
-  const [a, b] = n.split(".");
-  if (!b) return a;
-  return `${a}.${b.slice(0, 2)}`;
+function shortAddr(a?: string | null) {
+  if (!a) return "—";
+  const s = String(a);
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
 }
 
-function fmtBigint(v: bigint | undefined, decimals: number) {
-  if (v === undefined) return "0";
-  return fmt(formatUnits(v, decimals));
+function safeBigint(v: unknown): bigint {
+  try {
+    return typeof v === "bigint" ? v : BigInt(v as any);
+  } catch {
+    return 0n;
+  }
+}
+
+function fmt(v: bigint, decimals: number, maxFrac = 6) {
+  const s = formatUnits(v, decimals);
+  // trim to maxFrac without rounding complexity (good enough for UI)
+  const [i, f] = s.split(".");
+  if (!f) return i;
+  return `${i}.${f.slice(0, maxFrac)}`.replace(/\.$/, "");
 }
 
 export function RaffleActionsModal({
   open,
   onClose,
   raffleId,
+  raffleName,
 }: {
   open: boolean;
   onClose: () => void;
-  raffleId: string | null;
+  raffleId: string; // pass "" when not set
+  raffleName?: string | null;
 }) {
-  const enabled = open && !!raffleId;
-
   const { address, isConnected } = useAccount();
 
-  // Native balance (XTZ on Etherlink)
-  const xtzBal = useBalance({
-    address,
-    query: { enabled: !!address && open },
-  });
+  const enabled = open && !!raffleId && isConnected && !!address;
 
-  // USDC decimals
-  const usdcDecimals = useReadContract({
+  // --- decimals ---
+  const usdcDecimalsQ = useReadContract({
     address: ADDR.usdc,
     abi: ERC20_ABI,
     functionName: "decimals",
     query: { enabled: open },
   });
-  const d = Number(usdcDecimals.data ?? 6);
+  const usdcDecimals = Number(usdcDecimalsQ.data ?? 6);
+  const xtzDecimals = 18;
 
-  // Read ticket price from the raffle contract (canonical)
-  const ticketPrice = useReadContract({
-    address: raffleId as any,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "ticketPrice",
-    query: { enabled },
-  });
-
-  // Contract constraint (optional but helpful)
-  const minPurchaseAmount = useReadContract({
-    address: raffleId as any,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "minPurchaseAmount",
-    query: { enabled },
-  });
-
-  // USDC balance + allowance
-  const usdcBal = useReadContract({
-    address: ADDR.usdc,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && open },
-  });
-
-  const allowance = useReadContract({
-    address: ADDR.usdc,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address && raffleId ? [address, raffleId] : undefined,
-    query: { enabled: !!address && !!raffleId && open },
-  });
-
-  // Claimable reads
-  const claimableFunds = useReadContract({
-    address: raffleId as any,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "claimableFunds",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && enabled },
-  });
-
-  const claimableNative = useReadContract({
-    address: raffleId as any,
-    abi: LOTTERY_SINGLE_WINNER_ABI,
-    functionName: "claimableNative",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && enabled },
-  });
-
-  const ticketsOwned = useReadContract({
+  // --- user state on this raffle ---
+  const qTicketsOwned = useReadContract({
     address: raffleId as any,
     abi: LOTTERY_SINGLE_WINNER_ABI,
     functionName: "ticketsOwned",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && enabled },
+    args: [address as any],
+    query: { enabled },
   });
 
-  // form: ticket count
-  const minBuy = Number(minPurchaseAmount.data ?? 1);
-  const [countStr, setCountStr] = useState(String(Math.max(1, minBuy)));
+  const qClaimableUSDC = useReadContract({
+    address: raffleId as any,
+    abi: LOTTERY_SINGLE_WINNER_ABI,
+    functionName: "claimableFunds",
+    args: [address as any],
+    query: { enabled },
+  });
 
-  const count = useMemo(() => {
-    const n = Math.floor(Number(countStr || "0"));
-    if (!Number.isFinite(n)) return 0;
-    return Math.max(0, n);
-  }, [countStr]);
+  const qClaimableXTZ = useReadContract({
+    address: raffleId as any,
+    abi: LOTTERY_SINGLE_WINNER_ABI,
+    functionName: "claimableNative",
+    args: [address as any],
+    query: { enabled },
+  });
 
-  const totalCost = useMemo(() => {
-    const tp = (ticketPrice.data as bigint | undefined) ?? 0n;
-    if (!tp || !count) return 0n;
-    return tp * BigInt(count);
-  }, [ticketPrice.data, count]);
+  const ticketsOwned = safeBigint(qTicketsOwned.data);
+  const claimableUSDC = safeBigint(qClaimableUSDC.data);
+  const claimableXTZ = safeBigint(qClaimableXTZ.data);
 
-  const usdcBalBn = (usdcBal.data as bigint | undefined) ?? 0n;
-  const allowanceBn = (allowance.data as bigint | undefined) ?? 0n;
+  const display = useMemo(() => {
+    return {
+      tickets: ticketsOwned.toString(),
+      usdc: fmt(claimableUSDC, usdcDecimals, 6),
+      xtz: fmt(claimableXTZ, xtzDecimals, 6),
+    };
+  }, [ticketsOwned, claimableUSDC, claimableXTZ, usdcDecimals]);
 
-  const hasAllowance = allowanceBn >= totalCost && totalCost > 0n;
-  const hasBalance = usdcBalBn >= totalCost && totalCost > 0n;
+  // --- write ---
+  const { writeContractAsync, data: txHash, isPending } = useWriteContract();
+  const tx = useWaitForTransactionReceipt({ hash: txHash });
 
-  // txs
-  const { writeContractAsync, data: hash, isPending } = useWriteContract();
-  const tx = useWaitForTransactionReceipt({ hash });
-
+  const [action, setAction] = useState<"refund" | "withdrawUSDC" | "withdrawXTZ" | null>(null);
   const busy = isPending || tx.isLoading;
 
-  async function doApprove() {
-    if (!raffleId) return;
-    // Approve exactly what we need (simple + safer). User can re-approve later.
-    await writeContractAsync({
-      address: ADDR.usdc,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [raffleId, totalCost],
-    });
-  }
-
-  async function doBuy() {
-    if (!raffleId) return;
-    await writeContractAsync({
-      address: raffleId as any,
-      abi: LOTTERY_SINGLE_WINNER_ABI,
-      functionName: "buyTickets",
-      args: [BigInt(count)],
-    });
-  }
-
-  async function doClaimUSDC() {
-    if (!raffleId) return;
-    await writeContractAsync({
-      address: raffleId as any,
-      abi: LOTTERY_SINGLE_WINNER_ABI,
-      functionName: "withdrawFunds",
-      args: [],
-    });
-  }
-
-  async function doClaimXTZ() {
-    if (!raffleId) return;
-    await writeContractAsync({
-      address: raffleId as any,
-      abi: LOTTERY_SINGLE_WINNER_ABI,
-      functionName: "withdrawNative",
-      args: [],
-    });
-  }
-
-  async function doRefund() {
-    if (!raffleId) return;
+  async function runRefund() {
+    setAction("refund");
     await writeContractAsync({
       address: raffleId as any,
       abi: LOTTERY_SINGLE_WINNER_ABI,
@@ -191,242 +123,274 @@ export function RaffleActionsModal({
     });
   }
 
-  const canBuyCount = count >= minBuy;
-  const canApprove = enabled && isConnected && totalCost > 0n && !hasAllowance && !busy;
-  const canBuy = enabled && isConnected && canBuyCount && hasAllowance && hasBalance && !busy;
+  async function runWithdrawUSDC() {
+    setAction("withdrawUSDC");
+    await writeContractAsync({
+      address: raffleId as any,
+      abi: LOTTERY_SINGLE_WINNER_ABI,
+      functionName: "withdrawFunds",
+      args: [],
+    });
+  }
 
-  const canClaimUSDC =
-    enabled && isConnected && ((claimableFunds.data as bigint | undefined) ?? 0n) > 0n && !busy;
-  const canClaimXTZ =
-    enabled && isConnected && ((claimableNative.data as bigint | undefined) ?? 0n) > 0n && !busy;
+  async function runWithdrawXTZ() {
+    setAction("withdrawXTZ");
+    await writeContractAsync({
+      address: raffleId as any,
+      abi: LOTTERY_SINGLE_WINNER_ABI,
+      functionName: "withdrawNative",
+      args: [],
+    });
+  }
 
-  const canRefund =
-    enabled && isConnected && ((ticketsOwned.data as bigint | undefined) ?? 0n) > 0n && !busy;
+  const canRefund = enabled && !busy && ticketsOwned > 0n;
+  const canWithdrawUSDC = enabled && !busy && claimableUSDC > 0n;
+  const canWithdrawXTZ = enabled && !busy && claimableXTZ > 0n;
+
+  const title = raffleName ? `Manage • ${raffleName}` : "Manage";
 
   return (
-    <Modal open={open} onClose={onClose} title="Actions">
+    <Modal open={open} onClose={onClose} title={title}>
       {!raffleId ? (
-        <div className="font-black text-gray-800">No raffle selected.</div>
+        <div className="font-bold text-gray-700">Select a raffle first.</div>
       ) : !isConnected ? (
-        <div className="font-black text-gray-800">Connect your wallet to use actions.</div>
+        <div className="font-black text-gray-800">Connect your wallet to manage.</div>
       ) : (
         <div className="grid gap-4">
-          {/* Balances */}
-          <div className="rounded-3xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
-            <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
-              Your balances
-            </div>
-
-            <div className="mt-3 grid gap-2">
-              <div className="flex items-center justify-between rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
-                <div className="flex items-center gap-2 font-black text-gray-900">
-                  <Zap size={16} className="text-green-600" /> Energy (XTZ)
-                </div>
-                <div className="font-black text-gray-900">
-                  {xtzBal.data ? fmt(xtzBal.data.formatted) : "…"} XTZ
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
-                <div className="flex items-center gap-2 font-black text-gray-900">
-                  <Coins size={16} className="text-amber-600" /> Entry (USDC)
-                </div>
-                <div className="font-black text-gray-900">
-                  {fmtBigint(usdcBalBn, d)} USDC
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Buy tickets */}
+          {/* Header */}
           <div className="rounded-3xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
-                  Buy tickets
+                  On-chain actions
                 </div>
-                <div className="mt-1 text-base font-black text-gray-900 flex items-center gap-2">
-                  Join raffle <Ticket size={16} />
+                <div className="mt-1 text-lg font-black text-gray-900 flex items-center gap-2">
+                  Claim / Refund <Wallet size={16} />
                 </div>
                 <div className="mt-1 text-xs font-bold text-gray-700/80">
-                  Ticket price is read from the raffle contract.
+                  These buttons call the raffle contract directly.
                 </div>
               </div>
 
-              <div className="text-right">
-                <div className="text-[11px] font-black text-gray-600 uppercase tracking-wider">
-                  Ticket
-                </div>
-                <div className="font-black text-gray-900">
-                  {ticketPrice.data ? fmtBigint(ticketPrice.data as bigint, d) : "…"} USDC
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-2">
-              <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
-                <div className="text-sm font-black text-gray-900">Count</div>
-                <input
-                  value={countStr}
-                  onChange={(e) => setCountStr(e.target.value)}
-                  inputMode="numeric"
-                  className="w-28 text-right px-3 py-2 rounded-xl border border-gray-200 bg-white font-black text-gray-900 outline-none focus:ring-2 focus:ring-amber-400/60"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-bold text-gray-700 px-1">
-                <span>Minimum buy</span>
-                <span className="font-black">{minBuy}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm font-black text-gray-900 px-1">
-                <span>Total</span>
-                <span>{fmtBigint(totalCost, d)} USDC</span>
-              </div>
-
-              {!canBuyCount ? (
-                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-xs font-bold text-amber-900">
-                  Count must be at least {minBuy}.
-                </div>
-              ) : !hasBalance && totalCost > 0n ? (
-                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-xs font-bold text-amber-900">
-                  Not enough USDC balance for this purchase.
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="shrink-0 flex items-center gap-2">
+                <a
+                  href={addrUrl(raffleId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-xl bg-white/70 hover:bg-white border border-white/60 px-3 py-2 text-xs font-black text-blue-700"
+                >
+                  Contract <ExternalLink size={12} />
+                </a>
                 <button
                   type="button"
-                  onClick={doApprove}
-                  disabled={!canApprove}
-                  className={[
-                    "w-full rounded-2xl px-4 py-3 font-black shadow-lg transition-all border border-white/60",
-                    canApprove
-                      ? "bg-white/80 hover:bg-white text-gray-900"
-                      : "bg-white/30 text-gray-500 cursor-not-allowed",
-                  ].join(" ")}
+                  onClick={() => navigator.clipboard?.writeText(raffleId)}
+                  className="p-2 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700"
+                  title="Copy raffle address"
+                  aria-label="Copy raffle address"
                 >
-                  {busy ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="animate-spin" size={16} /> Working…
-                    </span>
-                  ) : hasAllowance ? (
-                    "Approved"
-                  ) : (
-                    "Approve USDC"
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={doBuy}
-                  disabled={!canBuy}
-                  className={[
-                    "w-full rounded-2xl px-4 py-3 font-black shadow-lg transition-all border border-white/60",
-                    canBuy
-                      ? "bg-amber-500 hover:bg-amber-600 text-white active:translate-y-0.5"
-                      : "bg-white/30 text-gray-500 cursor-not-allowed",
-                  ].join(" ")}
-                >
-                  {busy ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="animate-spin" size={16} /> Working…
-                    </span>
-                  ) : (
-                    "Buy tickets"
-                  )}
+                  <Copy size={14} />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Claims + refunds */}
+          {/* Balances */}
+          <div className="grid gap-2">
+            <StatRow
+              icon={<Coins size={16} />}
+              label="Claimable USDC"
+              value={`${display.usdc} USDC`}
+              loading={qClaimableUSDC.isLoading}
+            />
+            <StatRow
+              icon={<ArrowDownCircle size={16} />}
+              label="Claimable XTZ"
+              value={`${display.xtz} XTZ`}
+              loading={qClaimableXTZ.isLoading}
+            />
+            <StatRow
+              icon={<TicketIcon />}
+              label="Tickets owned"
+              value={display.tickets}
+              loading={qTicketsOwned.isLoading}
+            />
+          </div>
+
+          {/* Actions */}
           <div className="rounded-3xl border border-white/60 bg-white/20 backdrop-blur-md p-4">
             <div className="text-xs font-black text-gray-700/80 uppercase tracking-wider">
-              Claims & refunds
+              Actions
             </div>
 
             <div className="mt-3 grid gap-2">
-              <div className="flex items-center justify-between rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
-                <div className="text-sm font-black text-gray-900">Claimable USDC</div>
-                <div className="font-black text-gray-900">
-                  {fmtBigint((claimableFunds.data as bigint | undefined) ?? 0n, d)} USDC
-                </div>
-              </div>
+              <ActionButton
+                disabled={!canWithdrawUSDC}
+                onClick={runWithdrawUSDC}
+                icon={<Coins size={16} />}
+                label={busy && action === "withdrawUSDC" ? "Withdrawing USDC…" : "Withdraw USDC"}
+                sub={
+                  claimableUSDC > 0n
+                    ? `Available: ${display.usdc} USDC`
+                    : "No USDC available"
+                }
+              />
 
-              <div className="flex items-center justify-between rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
-                <div className="text-sm font-black text-gray-900">Claimable XTZ</div>
-                <div className="font-black text-gray-900">
-                  {formatUnits(((claimableNative.data as bigint | undefined) ?? 0n), 18)} XTZ
-                </div>
-              </div>
+              <ActionButton
+                disabled={!canWithdrawXTZ}
+                onClick={runWithdrawXTZ}
+                icon={<ArrowDownCircle size={16} />}
+                label={busy && action === "withdrawXTZ" ? "Withdrawing XTZ…" : "Withdraw XTZ"}
+                sub={claimableXTZ > 0n ? `Available: ${display.xtz} XTZ` : "No XTZ available"}
+              />
 
-              <div className="flex items-center justify-between rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
-                <div className="text-sm font-black text-gray-900">Tickets owned</div>
-                <div className="font-black text-gray-900">
-                  {String((ticketsOwned.data as bigint | undefined) ?? 0n)}
-                </div>
-              </div>
+              <ActionButton
+                disabled={!canRefund}
+                onClick={runRefund}
+                icon={<RefundIcon />}
+                label={busy && action === "refund" ? "Claiming refund…" : "Claim ticket refund"}
+                sub={ticketsOwned > 0n ? `Tickets: ${display.tickets}` : "No tickets owned"}
+                tone="warn"
+              />
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={doClaimUSDC}
-                  disabled={!canClaimUSDC}
-                  className={[
-                    "rounded-2xl px-4 py-3 font-black shadow-lg transition-all border border-white/60",
-                    canClaimUSDC
-                      ? "bg-gray-900 hover:bg-gray-800 text-white"
-                      : "bg-white/30 text-gray-500 cursor-not-allowed",
-                  ].join(" ")}
-                >
-                  Claim USDC
-                </button>
-
-                <button
-                  type="button"
-                  onClick={doClaimXTZ}
-                  disabled={!canClaimXTZ}
-                  className={[
-                    "rounded-2xl px-4 py-3 font-black shadow-lg transition-all border border-white/60",
-                    canClaimXTZ
-                      ? "bg-gray-900 hover:bg-gray-800 text-white"
-                      : "bg-white/30 text-gray-500 cursor-not-allowed",
-                  ].join(" ")}
-                >
-                  Claim XTZ
-                </button>
-
-                <button
-                  type="button"
-                  onClick={doRefund}
-                  disabled={!canRefund}
-                  className={[
-                    "rounded-2xl px-4 py-3 font-black shadow-lg transition-all border border-white/60",
-                    canRefund
-                      ? "bg-white/80 hover:bg-white text-gray-900"
-                      : "bg-white/30 text-gray-500 cursor-not-allowed",
-                  ].join(" ")}
-                >
-                  Refund
-                </button>
-              </div>
+            <div className="mt-3 text-[11px] font-bold text-gray-700/80">
+              If an action fails, it usually means nothing is claimable/refundable right now (or the raffle isn’t in the right state).
             </div>
           </div>
 
-          {/* Tx status */}
-          {hash ? (
-            <a
-              href={txUrl(String(hash))}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-2xl bg-white/70 border border-white/60 p-3 text-xs font-black text-blue-700 hover:underline"
-            >
-              {tx.isLoading ? "Transaction pending…" : tx.isSuccess ? "Transaction confirmed" : "Transaction sent"} — View on explorer
-            </a>
+          {/* TX feedback */}
+          {txHash ? (
+            <div className="rounded-3xl bg-white/70 border border-white/60 p-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                  Transaction
+                </div>
+                <div className="mt-1 text-sm font-black text-gray-900 flex items-center gap-2">
+                  {tx.isLoading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} /> Pending…
+                    </>
+                  ) : tx.isSuccess ? (
+                    <>
+                      <CheckCircle2 size={16} className="text-green-700" /> Confirmed
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={16} className="text-amber-700" /> Sent
+                    </>
+                  )}
+                </div>
+                <div className="mt-1 text-xs font-bold text-gray-700/80 truncate">
+                  {shortAddr(txHash)}
+                </div>
+              </div>
+
+              <a
+                href={txUrl(String(txHash))}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 inline-flex items-center gap-1 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-black text-blue-700"
+              >
+                View <ExternalLink size={12} />
+              </a>
+            </div>
           ) : null}
         </div>
       )}
     </Modal>
+  );
+}
+
+function StatRow({
+  icon,
+  label,
+  value,
+  loading,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  loading?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/70 border border-white/60 px-4 py-3">
+      <div className="min-w-0 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-800">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[11px] font-black text-gray-600 uppercase tracking-wider">
+            {label}
+          </div>
+          <div className="mt-0.5 font-black text-gray-900 truncate">
+            {loading ? "Loading…" : value}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionButton({
+  disabled,
+  onClick,
+  icon,
+  label,
+  sub,
+  tone = "normal",
+}: {
+  disabled: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  tone?: "normal" | "warn";
+}) {
+  const base =
+    "w-full text-left rounded-2xl px-4 py-3 border shadow-sm transition-all flex items-center justify-between gap-3";
+  const left =
+    "flex items-center gap-3 min-w-0";
+  const right =
+    "shrink-0";
+
+  const skin = disabled
+    ? "bg-white/40 border-white/60 text-gray-500 cursor-not-allowed"
+    : tone === "warn"
+      ? "bg-amber-500/90 hover:bg-amber-500 border-amber-300 text-white"
+      : "bg-gray-900 hover:bg-gray-800 border-gray-700 text-white";
+
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className={`${base} ${skin}`}>
+      <div className={left}>
+        <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className="font-black truncate">{label}</div>
+          <div className="text-[11px] font-bold opacity-90 truncate">{sub}</div>
+        </div>
+      </div>
+      <div className={right}>
+        <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 border border-white/15">
+          <ExternalLink size={14} />
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function TicketIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-4 h-4 font-black">
+      🎟️
+    </span>
+  );
+}
+
+function RefundIcon() {
+  return (
+    <span className="inline-flex items-center justify-center w-4 h-4 font-black">
+      ↩️
+    </span>
   );
 }
