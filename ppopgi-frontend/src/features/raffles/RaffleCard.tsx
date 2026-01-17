@@ -8,6 +8,9 @@ import { formatToken } from "../../lib/formatMoney";
 // ✅ helper (pure formatter)
 import { endsInText } from "../../lib/endsInText";
 
+// ✅ inline buy UI
+import { BuyTicketsInline } from "./BuyTicketsInline";
+
 export function RaffleCard({
   raffle,
   nowMs,
@@ -25,8 +28,17 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  // ✅ Live countdown (helper already returns "Ends in ...", or "Ended", or "—")
+  // ✅ Live countdown (helper returns "Ends in ...", or "Ended", or "—")
   const endsLabel = endsInText(Number(raffle.deadline), nowMs);
+
+  // ✅ time-based "ended" gate for UI (subgraph may lag)
+  const deadlineSec = Number(raffle.deadline);
+  const endedByTime =
+    Number.isFinite(deadlineSec) && deadlineSec > 0 ? deadlineSec * 1000 <= nowMs : false;
+
+  // ✅ show inline buy only when open + not paused + not ended by time
+  const canBuyInline =
+    String(raffle.status || "").toUpperCase() === "OPEN" && !raffle.paused && !endedByTime;
 
   // ✅ Status pill (subgraph-based)
   const status = friendlyStatus(raffle.status, raffle.paused);
@@ -175,6 +187,25 @@ export function RaffleCard({
             </div>
           )}
         </div>
+
+        {/* ✅ Inline buy (only OPEN + not paused + not ended by time) */}
+        {canBuyInline ? (
+          <div
+            style={{ marginTop: 12 }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation(); // ✅ don't open raffle when buying
+            }}
+          >
+            <BuyTicketsInline
+              raffleId={raffle.id}
+              ticketPrice={BigInt(String(raffle.ticketPrice ?? "0"))}
+              status={String(raffle.status || "").toUpperCase()}
+              paused={!!raffle.paused}
+              endedByTime={endedByTime}
+            />
+          </div>
+        ) : null}
 
         {/* Bottom */}
         <div
