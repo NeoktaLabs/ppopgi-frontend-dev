@@ -1,6 +1,7 @@
 // src/features/explore/ExplorePage.tsx
 import React, { useMemo, useState } from "react";
 import { Filter, ArrowUpDown } from "lucide-react";
+
 import {
   useExploreRaffles,
   type ExploreSortBy,
@@ -10,19 +11,6 @@ import {
 
 import { RaffleCard } from "../raffles/RaffleCard";
 import { useNowTick } from "../../lib/useNowTick";
-
-function computeAdaptiveStepMs(deadlinesSec: number[]) {
-  const now = Date.now();
-  const soonestSec = deadlinesSec.length ? Math.min(...deadlinesSec) : 0;
-
-  if (!soonestSec || !Number.isFinite(soonestSec)) return 60_000;
-
-  const diffMs = soonestSec * 1000 - now;
-
-  if (diffMs <= 60_000) return 1_000; // last minute: 1s updates
-  if (diffMs <= 3_600_000) return 15_000; // last hour: 15s updates
-  return 60_000; // otherwise: 60s updates
-}
 
 export function ExplorePage({
   onOpenRaffle,
@@ -42,17 +30,8 @@ export function ExplorePage({
   const q = useExploreRaffles({ status, sortBy, sortDir, pageSize, skip });
   const raffles = q.data?.raffles ?? [];
 
-  // ✅ Adaptive ticking (based on soonest raffle on the page)
-  const deadlinesSec = useMemo(
-    () =>
-      raffles
-        .map((r) => Number((r as any).deadline))
-        .filter((n) => Number.isFinite(n) && n > 0),
-    [raffles]
-  );
-
-  const stepMs = useMemo(() => computeAdaptiveStepMs(deadlinesSec), [deadlinesSec]);
-  const nowMs = useNowTick(true, stepMs);
+  // ✅ One timer for whole page (shared across all cards)
+  const nowMs = useNowTick(true, 30_000);
 
   const sortLabel = useMemo(() => {
     if (sortBy === "ticketPrice") return "Ticket price";
@@ -77,6 +56,7 @@ export function ExplorePage({
 
           {/* Controls */}
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            {/* Status filter */}
             <div className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3 py-2">
               <Filter size={16} className="text-white/80" />
               <select
@@ -98,6 +78,7 @@ export function ExplorePage({
               </select>
             </div>
 
+            {/* Sort controls */}
             <div className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3 py-2">
               <ArrowUpDown size={16} className="text-white/80" />
               <select
@@ -149,7 +130,7 @@ export function ExplorePage({
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {raffles.map((r) => (
               <RaffleCard
-                key={(r as any).id}
+                key={r.id}
                 raffle={r as any}
                 nowMs={nowMs}
                 onOpen={onOpenRaffle}
