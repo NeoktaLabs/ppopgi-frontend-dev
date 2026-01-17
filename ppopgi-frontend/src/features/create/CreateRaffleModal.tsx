@@ -184,19 +184,54 @@ export function CreateRaffleModal({
     };
   }, [percent, parsed.wp, d]);
 
+  // --- Allowance check (creator must approve USDC to the deployer for winningPot) ---
+  const qAllowance = useReadContract({
+    address: ADDR.usdc,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address ? [address, ADDR.deployer] : undefined,
+    query: { enabled: open && !!address },
+  });
+  const allowance = (qAllowance.data ?? 0n) as bigint;
+  const needsApproval = isConnected && parsed.wp > 0n && allowance < parsed.wp;
+
   // --- tx ---
   const { writeContractAsync, data: txHash, isPending } = useWriteContract();
   const tx = useWaitForTransactionReceipt({ hash: txHash });
 
+  // Separate tx state for approve (so UI isn't confusing)
+  const [approveHash, setApproveHash] = useState<`0x${string}` | null>(null);
+  const approveTx = useWaitForTransactionReceipt({ hash: approveHash ?? undefined });
+
+  // Reset approve state when modal re-opens
+  useEffect(() => {
+    if (!open) return;
+    setApproveHash(null);
+  }, [open]);
+
   const canSubmit =
     isConnected &&
+    !needsApproval && // must approve first
     !isPending &&
     !tx.isLoading &&
+    !approveTx.isLoading &&
     Object.keys(errors).length === 0 &&
     parsed.tp > 0n &&
     parsed.wp > 0n &&
     parsed.minT > 0n &&
     parsed.durationSeconds > 0n;
+
+  async function onApprove() {
+    // Approve exact winningPot. (You can change to MaxUint256 if you prefer "infinite approve")
+    const h = await writeContractAsync({
+      address: ADDR.usdc,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [ADDR.deployer, parsed.wp],
+    });
+    setApproveHash(h);
+    return h;
+  }
 
   async function onCreate() {
     setCreatedAddr(null);
@@ -253,6 +288,9 @@ export function CreateRaffleModal({
 
   const shareLink = createdAddr ? `${window.location.origin}/#raffle=${encodeURIComponent(createdAddr)}` : null;
 
+  const approveBusy = approveTx.isLoading || isPending;
+  const createBusy = tx.isLoading || isPending;
+
   return (
     <Modal open={open} onClose={onClose} title="Create raffle" width="wide" height="auto">
       {!isConnected ? (
@@ -294,6 +332,55 @@ export function CreateRaffleModal({
               </div>
             </div>
 
+            {/* Approve step (shown only when needed) */}
+            {needsApproval ? (
+              <div className="mt-4 rounded-2xl bg-white/10 border border-white/15 p-3">
+                <div className="text-xs font-black text-white/80">Approve USDC first</div>
+                <div className="mt-1 text-[12px] font-bold text-white/60">
+                  The deployer needs permission to transfer the winning pot ({formatUnits(parsed.wp, d)} USDC).
+                </div>
+
+                <button
+                  onClick={onApprove}
+                  disabled={approveBusy || Object.keys(errors).length > 0 || parsed.wp <= 0n}
+                  type="button"
+                  className={[
+                    "mt-3 w-full rounded-2xl px-4 py-3 font-black transition-all",
+                    "border border-white/15",
+                    approveBusy || Object.keys(errors).length > 0 || parsed.wp <= 0n
+                      ? "bg-white/10 text-white/45 cursor-not-allowed"
+                      : "bg-white/15 hover:bg-white/20 text-white shadow-[0_12px_35px_rgba(255,255,255,0.08)] active:translate-y-0.5",
+                  ].join(" ")}
+                >
+                  {approveTx.isLoading || isPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="animate-spin" size={16} /> Confirm approve…
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      <Sparkles size={16} /> Approve USDC
+                    </span>
+                  )}
+                </button>
+
+                {approveHash ? (
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl bg-white/10 border border-white/15 p-3">
+                    <div className="text-xs font-bold text-white/75">
+                      {approveTx.isLoading ? "Approval pending…" : approveTx.isSuccess ? "Approval confirmed" : "Approval sent"}
+                    </div>
+                    <a
+                      href={txUrl(String(approveHash))}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-black text-sky-200 hover:underline inline-flex items-center gap-1"
+                    >
+                      View <ExternalLink size={12} />
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <button
               onClick={onCreate}
               disabled={!canSubmit}
@@ -306,7 +393,7 @@ export function CreateRaffleModal({
                   : "bg-amber-300 hover:bg-amber-200 text-amber-950 shadow-[0_12px_35px_rgba(251,191,36,0.22)] active:translate-y-0.5",
               ].join(" ")}
             >
-              {isPending ? (
+              {createBusy ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="animate-spin" size={16} /> Confirm in wallet…
                 </span>
@@ -368,6 +455,8 @@ export function CreateRaffleModal({
               <div className="mt-3 text-[12px] font-bold text-white/60">
                 Fix required fields on the left to enable creation.
               </div>
+            ) : needsApproval ? (
+              <div className="mt-3 text-[12px] font-bold text-white/60">Approve USDC first to avoid estimation errors.</div>
             ) : (
               <div className="mt-3 text-[12px] font-bold text-white/60">
                 Creating doesn’t pick a winner — the draw happens later.
