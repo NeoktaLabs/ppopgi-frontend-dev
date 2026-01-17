@@ -69,9 +69,17 @@ export function RaffleCard({
   const hasVerificationData = !!dep || raffle.isRegistered !== undefined;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen(raffle.id)}
+      onKeyDown={(e) => {
+        // keyboard accessibility (Enter / Space)
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(raffle.id);
+        }
+      }}
       style={cardWrap()}
       aria-label={`Open raffle ${raffle.name}`}
     >
@@ -196,10 +204,14 @@ export function RaffleCard({
               e.preventDefault();
               e.stopPropagation(); // ✅ don't open raffle when buying
             }}
+            onKeyDown={(e) => {
+              // ✅ prevent space/enter on inputs from opening card
+              e.stopPropagation();
+            }}
           >
             <BuyTicketsInline
               raffleId={raffle.id}
-              ticketPrice={BigInt(String(raffle.ticketPrice ?? "0"))}
+              ticketPrice={toSafeBigInt(raffle.ticketPrice)}
               status={String(raffle.status || "").toUpperCase()}
               paused={!!raffle.paused}
               endedByTime={endedByTime}
@@ -220,13 +232,23 @@ export function RaffleCard({
           <div style={ctaPill()}>Open</div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
 function safeNum(v: string | number | null | undefined): number {
   const n = typeof v === "number" ? v : Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+function toSafeBigInt(v: unknown): bigint {
+  try {
+    if (typeof v === "bigint") return v;
+    if (typeof v === "number") return BigInt(Math.floor(v));
+    return BigInt(String(v ?? "0"));
+  } catch {
+    return 0n;
+  }
 }
 
 function friendlyStatus(status: string, paused: boolean) {
@@ -250,6 +272,7 @@ function cardWrap(): CSSProperties {
     padding: 0,
     background: "transparent",
     cursor: "pointer",
+    outline: "none",
   };
 }
 
