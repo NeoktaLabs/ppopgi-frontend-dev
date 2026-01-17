@@ -1,7 +1,21 @@
 // src/features/home/HomePage.tsx
+import { useMemo } from "react";
 import { useBigPrizes, useEndingSoon } from "../raffles/useRafflesHome";
 import { RaffleCard } from "../raffles/RaffleCard";
 import { useNowTick } from "../../lib/useNowTick";
+
+function computeAdaptiveStepMs(deadlinesSec: number[]) {
+  const now = Date.now();
+  const soonestSec = deadlinesSec.length ? Math.min(...deadlinesSec) : 0;
+
+  if (!soonestSec || !Number.isFinite(soonestSec)) return 60_000;
+
+  const diffMs = soonestSec * 1000 - now;
+
+  if (diffMs <= 60_000) return 1_000; // last minute
+  if (diffMs <= 3_600_000) return 15_000; // last hour
+  return 60_000;
+}
 
 export function HomePage({
   onOpenRaffle,
@@ -13,10 +27,18 @@ export function HomePage({
   const big = useBigPrizes();
   const soon = useEndingSoon();
 
-  // ✅ One timer for the whole page (not one per card)
-  // - 30s refresh is enough for most
-  // - (you can later add "adaptive" per-card if you want)
-  const nowMs = useNowTick(true, 30_000);
+  const allRaffles = useMemo(() => {
+    return [...(big.data?.raffles ?? []), ...(soon.data?.raffles ?? [])];
+  }, [big.data?.raffles, soon.data?.raffles]);
+
+  // ✅ Adaptive ticking (based on soonest deadline across both sections)
+  const deadlinesSec = useMemo(
+    () => allRaffles.map((r) => Number(r.deadline)).filter((n) => Number.isFinite(n) && n > 0),
+    [allRaffles]
+  );
+
+  const stepMs = useMemo(() => computeAdaptiveStepMs(deadlinesSec), [deadlinesSec]);
+  const nowMs = useNowTick(true, stepMs);
 
   return (
     <main className="container mx-auto px-4 pt-2 max-w-[100rem] animate-fade-in">
