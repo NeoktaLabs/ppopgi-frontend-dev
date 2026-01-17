@@ -30,6 +30,23 @@ function safeNum(v: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Accept numeric inputs like: "1", "0.5", "10.00"
+function isNumericInput(s: string) {
+  const v = (s ?? "").trim();
+  if (!v) return false;
+  return /^\d+(\.\d+)?$/.test(v);
+}
+
+// Never throw during render; invalid inputs => 0n (UI shows errors + disables submit)
+function safeParseUnits(value: string, decimals: number): bigint {
+  try {
+    if (!isNumericInput(value)) return 0n;
+    return parseUnits(value, decimals);
+  } catch {
+    return 0n;
+  }
+}
+
 /**
  * Accepts:
  * - "90m", "1h", "1h30", "2d", "5400s"
@@ -135,11 +152,17 @@ export function CreateRaffleModal({
 
     if (!draft.name.trim()) e.name = "Name is required.";
 
-    // ticketPrice / winningPot must parse > 0
-    const tp = safeNum(draft.ticketPrice);
-    const wp = safeNum(draft.winningPot);
-    if (!(tp > 0)) e.ticketPrice = "Ticket price must be > 0.";
-    if (!(wp > 0)) e.winningPot = "Winning pot must be > 0.";
+    // ticketPrice / winningPot must parse > 0, but must not crash if user types letters
+    const tpStr = (draft.ticketPrice ?? "").trim();
+    const wpStr = (draft.winningPot ?? "").trim();
+
+    if (!isNumericInput(tpStr)) e.ticketPrice = "Enter a number (ex: 1 or 0.5).";
+    if (!isNumericInput(wpStr)) e.winningPot = "Enter a number (ex: 10 or 2.5).";
+
+    const tp = safeNum(tpStr);
+    const wp = safeNum(wpStr);
+    if (isNumericInput(tpStr) && !(tp > 0)) e.ticketPrice = "Ticket price must be > 0.";
+    if (isNumericInput(wpStr) && !(wp > 0)) e.winningPot = "Winning pot must be > 0.";
 
     const durSec = parseDurationToSeconds(draft.durationText);
     if (!durSec || durSec <= 0) e.durationText = "Enter a valid duration (ex: 90m or 1h30).";
@@ -150,10 +173,10 @@ export function CreateRaffleModal({
     return e;
   }, [draft]);
 
-  // derived (contract-ready)
+  // derived (contract-ready) — safe parsing (no throw)
   const parsed = useMemo(() => {
-    const tp = parseUnits(draft.ticketPrice || "0", d);
-    const wp = parseUnits(draft.winningPot || "0", d);
+    const tp = safeParseUnits(draft.ticketPrice || "", d);
+    const wp = safeParseUnits(draft.winningPot || "", d);
 
     const durSecRaw = parseDurationToSeconds(draft.durationText) ?? 0;
 
@@ -175,6 +198,9 @@ export function CreateRaffleModal({
   const feePreview = useMemo(() => {
     if (percent === null) return null;
     const wp = parsed.wp;
+    if (wp <= 0n) {
+      return { percent, fee: "0", net: "0" };
+    }
     const fee = (wp * BigInt(percent)) / BigInt(100);
     const net = wp - fee;
     return {
@@ -222,7 +248,6 @@ export function CreateRaffleModal({
     parsed.durationSeconds > 0n;
 
   async function onApprove() {
-    // Approve exact winningPot. (You can change to MaxUint256 if you prefer "infinite approve")
     const h = await writeContractAsync({
       address: ADDR.usdc,
       abi: ERC20_ABI,
@@ -366,7 +391,11 @@ export function CreateRaffleModal({
                 {approveHash ? (
                   <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl bg-white/10 border border-white/15 p-3">
                     <div className="text-xs font-bold text-white/75">
-                      {approveTx.isLoading ? "Approval pending…" : approveTx.isSuccess ? "Approval confirmed" : "Approval sent"}
+                      {approveTx.isLoading
+                        ? "Approval pending…"
+                        : approveTx.isSuccess
+                        ? "Approval confirmed"
+                        : "Approval sent"}
                     </div>
                     <a
                       href={txUrl(String(approveHash))}
