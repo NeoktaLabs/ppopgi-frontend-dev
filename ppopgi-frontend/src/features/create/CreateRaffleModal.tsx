@@ -7,7 +7,7 @@ import {
   useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, parseEventLogs } from "viem";
 import { ExternalLink, Loader2, Sparkles, Copy, Check } from "lucide-react";
 
 import { Modal } from "../../ui/Modal";
@@ -227,17 +227,14 @@ export function CreateRaffleModal({
     (async () => {
       try {
         const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
-        const event = publicClient.parseEventLogs({
+
+        const decoded = parseEventLogs({
           abi: SINGLE_WINNER_DEPLOYER_ABI as any,
           logs: receipt.logs,
-          eventName: "LotteryCreated",
-        })?.[0];
+          eventName: "LotteryDeployed",
+        });
 
-        const addr =
-          (event as any)?.args?.lottery ||
-          (event as any)?.args?.lotteryAddress ||
-          (event as any)?.args?.addr ||
-          null;
+        const addr = (decoded?.[0] as any)?.args?.lottery ?? null;
 
         if (addr && typeof addr === "string") {
           const lower = addr.toLowerCase();
