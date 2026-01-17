@@ -51,8 +51,8 @@ export function RaffleCard({
     if (s.includes("completed")) return "Completed";
     if (s.includes("canceled") || s.includes("cancelled")) return "Canceled";
 
-    // If still OPEN but timer hit 0, show “Awaiting draw…”
-    if (s.includes("open") && endsLabel === "Ended") return "Awaiting draw…";
+    // If still OPEN but time hit 0, show “Awaiting draw…”
+    if (s.includes("open") && endedByTime) return "Awaiting draw…";
 
     return endsLabel;
   })();
@@ -68,17 +68,14 @@ export function RaffleCard({
   // If we don't have deployer info, we treat as unverified (don't silently hide)
   const hasVerificationData = !!dep || raffle.isRegistered !== undefined;
 
+  // ✅ IMPORTANT: card cannot be a <button> (we have buttons/inputs inside)
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => onOpen(raffle.id)}
       onKeyDown={(e) => {
-        // keyboard accessibility (Enter / Space)
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen(raffle.id);
-        }
+        if (e.key === "Enter" || e.key === " ") onOpen(raffle.id);
       }}
       style={cardWrap()}
       aria-label={`Open raffle ${raffle.name}`}
@@ -204,14 +201,10 @@ export function RaffleCard({
               e.preventDefault();
               e.stopPropagation(); // ✅ don't open raffle when buying
             }}
-            onKeyDown={(e) => {
-              // ✅ prevent space/enter on inputs from opening card
-              e.stopPropagation();
-            }}
           >
             <BuyTicketsInline
               raffleId={raffle.id}
-              ticketPrice={toSafeBigInt(raffle.ticketPrice)}
+              ticketPrice={BigInt(String(raffle.ticketPrice ?? "0"))}
               status={String(raffle.status || "").toUpperCase()}
               paused={!!raffle.paused}
               endedByTime={endedByTime}
@@ -241,16 +234,6 @@ function safeNum(v: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function toSafeBigInt(v: unknown): bigint {
-  try {
-    if (typeof v === "bigint") return v;
-    if (typeof v === "number") return BigInt(Math.floor(v));
-    return BigInt(String(v ?? "0"));
-  } catch {
-    return 0n;
-  }
-}
-
 function friendlyStatus(status: string, paused: boolean) {
   if (paused) return { label: "Paused", kind: "warn" as const };
 
@@ -272,7 +255,6 @@ function cardWrap(): CSSProperties {
     padding: 0,
     background: "transparent",
     cursor: "pointer",
-    outline: "none",
   };
 }
 
