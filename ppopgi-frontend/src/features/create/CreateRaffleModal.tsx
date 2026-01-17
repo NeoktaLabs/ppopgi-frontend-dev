@@ -96,6 +96,20 @@ function parseDurationToSeconds(input: string): number | null {
   return Math.floor(total);
 }
 
+function prettifySimError(err: any) {
+  const raw =
+    err?.shortMessage ||
+    err?.cause?.shortMessage ||
+    err?.details ||
+    err?.message ||
+    "Transaction would fail. Check your inputs and try again.";
+
+  // keep it readable; wallets can include giant blobs
+  const s = String(raw);
+  if (s.length > 320) return `${s.slice(0, 320)}…`;
+  return s;
+}
+
 export function CreateRaffleModal({
   open,
   onClose,
@@ -139,12 +153,14 @@ export function CreateRaffleModal({
 
   const [createdAddr, setCreatedAddr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Reset local state when modal re-opens
   useEffect(() => {
     if (!open) return;
     setCreatedAddr(null);
     setCopied(false);
+    setCreateError(null);
   }, [open]);
 
   // derived (contract-ready) — safe parsing (no throw)
@@ -158,8 +174,10 @@ export function CreateRaffleModal({
     const durationSecondsNum = clampInt(durSecRaw, 1, 60 * 60 * 24 * 365 * 10);
     const durationSeconds = BigInt(durationSecondsNum);
 
-    const minT = BigInt(clampInt(Math.floor(safeNum(draft.minTickets) || 1), 1, 10_000_000));
+    const minTNum = clampInt(Math.floor(safeNum(draft.minTickets) || 1), 1, 10_000_000);
+    const minT = BigInt(minTNum);
 
+    // NOTE: keep your behavior, but 0 may revert depending on contract
     const maxTNum = Math.floor(safeNum(draft.maxTickets));
     const maxT = BigInt(draft.maxTickets ? clampInt(maxTNum, 0, 10_000_000) : 0);
 
@@ -266,6 +284,7 @@ export function CreateRaffleModal({
     parsed.durationSeconds > 0n;
 
   async function onApprove() {
+    setCreateError(null);
     const h = await writeContractAsync({
       address: ADDR.usdc,
       abi: ERC20_ABI,
@@ -276,26 +295,43 @@ export function CreateRaffleModal({
     return h;
   }
 
+  // ✅ Preflight simulate-before-send:
+  // - Avoids "crazy fees" when wallet can't estimate gas (revert during eth_estimateGas)
+  // - Gives a readable error and prevents opening the wallet for a doomed tx
   async function onCreate() {
     setCreatedAddr(null);
     setCopied(false);
+    setCreateError(null);
 
-    const hash = await writeContractAsync({
-      address: ADDR.deployer,
-      abi: SINGLE_WINNER_DEPLOYER_ABI,
-      functionName: "createSingleWinnerLottery",
-      args: [
-        draft.name.trim(),
-        parsed.tp,
-        parsed.wp,
-        parsed.minT,
-        parsed.maxT,
-        parsed.durationSeconds,
-        parsed.minBuyU32,
-      ] as any,
-    });
+    if (!publicClient || !address) {
+      setCreateError("Wallet not ready. Please reconnect and try again.");
+      return;
+    }
 
-    return hash;
+    const args = [
+      draft.name.trim(),
+      parsed.tp,
+      parsed.wp,
+      parsed.minT,
+      parsed.maxT,
+      parsed.durationSeconds,
+      parsed.minBuyU32,
+    ] as const;
+
+    try {
+      const sim = await publicClient.simulateContract({
+        account: address,
+        address: ADDR.deployer,
+        abi: SINGLE_WINNER_DEPLOYER_ABI as any,
+        functionName: "createSingleWinnerLottery",
+        args: args as any,
+      });
+
+      const hash = await writeContractAsync(sim.request as any);
+      return hash;
+    } catch (err: any) {
+      setCreateError(prettifySimError(err));
+    }
   }
 
   // When confirmed, extract created raffle address from receipt logs
@@ -474,6 +510,14 @@ export function CreateRaffleModal({
               </div>
             ) : null}
 
+            {/* create preflight error */}
+            {createError ? (
+              <div className="mt-3 rounded-2xl bg-white/10 border border-white/15 p-3">
+                <div className="text-xs font-black text-white/80">Can’t create raffle</div>
+                <div className="mt-1 text-[12px] font-bold text-white/60 break-words">{createError}</div>
+              </div>
+            ) : null}
+
             {shareLink ? (
               <div className="mt-3 rounded-2xl bg-white/10 border border-white/15 p-3">
                 <div className="text-xs font-black text-white/70 uppercase tracking-wider">Share link</div>
@@ -508,10 +552,16 @@ export function CreateRaffleModal({
               <div className="mt-3 text-[12px] font-bold text-white/60">
                 Fix required fields on the left to enable creation.
               </div>
+            ) : createError ? (
+              <div className="mt-3 text-[12px] font-bold text-white/60">Fix the issue above, then try again.</div>
             ) : insufficientUsdc ? (
-              <div className="mt-3 text-[12px] font-bold text-white/60">Insufficient USDC for the chosen winning pot.</div>
+              <div className="mt-3 text-[12px] font-bold text-white/60">
+                Insufficient USDC for the chosen winning pot.
+              </div>
             ) : needsApproval ? (
-              <div className="mt-3 text-[12px] font-bold text-white/60">Approve USDC first to avoid estimation errors.</div>
+              <div className="mt-3 text-[12px] font-bold text-white/60">
+                Approve USDC first to avoid estimation errors.
+              </div>
             ) : (
               <div className="mt-3 text-[12px] font-bold text-white/60">
                 Creating doesn’t pick a winner — the draw happens later.
