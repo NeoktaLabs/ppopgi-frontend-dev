@@ -234,7 +234,11 @@ export function CreateRaffleModal({
           eventName: "LotteryDeployed",
         });
 
-        const addr = (decoded?.[0] as any)?.args?.lottery ?? null;
+        // Prefer the log emitted by the deployer address (hardening)
+        const fromDeployer =
+          decoded.find((e: any) => String(e.address).toLowerCase() === ADDR.deployer.toLowerCase()) ?? decoded[0];
+
+        const addr = (fromDeployer as any)?.args?.lottery ?? null;
 
         if (addr && typeof addr === "string") {
           const lower = addr.toLowerCase();
