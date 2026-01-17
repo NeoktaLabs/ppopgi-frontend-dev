@@ -27,9 +27,13 @@ export default function App() {
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
   const [openRaffleCreator, setOpenRaffleCreator] = useState<string | null>(null);
 
+  // Used to force a re-render after disclaimer acceptance
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
+  // wallet state
   const acc = useAccount();
+
+  // prevent needless loops
   const loadedRaffleIdRef = useRef<string | null>(null);
 
   // ✅ Track last “main page” so closing a raffle returns correctly
@@ -39,7 +43,7 @@ export default function App() {
   const route = useMemo(() => {
     const h = window.location.hash || "";
     if (h.includes("raffle=")) return "raffle";
-    if (h === "#explore" || h.startsWith("#explore") || h === "#explore") return "explore";
+    if (h === "#explore" || h.startsWith("#explore")) return "explore";
     return "home";
   }, [disclaimerTick, acc.address]);
 
@@ -131,9 +135,15 @@ export default function App() {
         }`}
       >
         {route === "explore" ? (
-          <ExplorePage onOpenRaffle={openRaffle} onOpenSafety={openSafetyForRaffle} />
+          <ExplorePage
+            onOpenRaffle={openRaffle}
+            onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)}
+          />
         ) : (
-          <HomePage onOpenRaffle={openRaffle} onOpenSafety={openSafetyForRaffle} />
+          <HomePage
+            onOpenRaffle={openRaffle}
+            onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)}
+          />
         )}
       </div>
 
@@ -178,7 +188,11 @@ export default function App() {
 
       <CashierModal isOpen={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-      <CreateRaffleModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
+      <CreateRaffleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {}}
+      />
     </div>
   );
 }
