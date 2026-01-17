@@ -11,6 +11,19 @@ import {
 import { RaffleCard } from "../raffles/RaffleCard";
 import { useNowTick } from "../../lib/useNowTick";
 
+function computeAdaptiveStepMs(deadlinesSec: number[]) {
+  const now = Date.now();
+  const soonestSec = deadlinesSec.length ? Math.min(...deadlinesSec) : 0;
+
+  if (!soonestSec || !Number.isFinite(soonestSec)) return 60_000;
+
+  const diffMs = soonestSec * 1000 - now;
+
+  if (diffMs <= 60_000) return 1_000; // last minute: 1s updates
+  if (diffMs <= 3_600_000) return 15_000; // last hour: 15s updates
+  return 60_000; // otherwise: 60s updates
+}
+
 export function ExplorePage({
   onOpenRaffle,
   onOpenSafety,
@@ -29,8 +42,17 @@ export function ExplorePage({
   const q = useExploreRaffles({ status, sortBy, sortDir, pageSize, skip });
   const raffles = q.data?.raffles ?? [];
 
-  // ✅ One timer for whole page
-  const nowMs = useNowTick(true, 30_000);
+  // ✅ Adaptive ticking (based on soonest raffle on the page)
+  const deadlinesSec = useMemo(
+    () =>
+      raffles
+        .map((r) => Number((r as any).deadline))
+        .filter((n) => Number.isFinite(n) && n > 0),
+    [raffles]
+  );
+
+  const stepMs = useMemo(() => computeAdaptiveStepMs(deadlinesSec), [deadlinesSec]);
+  const nowMs = useNowTick(true, stepMs);
 
   const sortLabel = useMemo(() => {
     if (sortBy === "ticketPrice") return "Ticket price";
@@ -44,7 +66,9 @@ export function ExplorePage({
       <div className="rounded-3xl border border-white/20 bg-white/10 backdrop-blur-md p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">Explore</div>
+            <div className="text-[11px] font-black text-white/70 uppercase tracking-wider">
+              Explore
+            </div>
             <div className="mt-1 text-2xl font-black text-white">Find a raffle</div>
             <div className="mt-1 text-sm font-bold text-white/70">
               Filter by status, then sort by price, pot, or remaining time.
@@ -125,7 +149,7 @@ export function ExplorePage({
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {raffles.map((r) => (
               <RaffleCard
-                key={r.id}
+                key={(r as any).id}
                 raffle={r as any}
                 nowMs={nowMs}
                 onOpen={onOpenRaffle}
