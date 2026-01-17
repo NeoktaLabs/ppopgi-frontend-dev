@@ -1,31 +1,23 @@
 // src/features/explore/ExplorePage.tsx
 import React, { useMemo, useState } from "react";
 import { Filter, ArrowUpDown } from "lucide-react";
-import { useExploreRaffles, type ExploreSortBy, type ExploreSortDir, type ExploreStatusFilter } from "../raffles/useRafflesExplore";
+import {
+  useExploreRaffles,
+  type ExploreSortBy,
+  type ExploreSortDir,
+  type ExploreStatusFilter,
+} from "../raffles/useRafflesExplore";
 
-// IMPORTANT: use your existing RaffleCard component path.
-// If your card is elsewhere, update this import.
 import { RaffleCard } from "../raffles/RaffleCard";
+import { useNowTick } from "../../lib/useNowTick";
 
-function nowSec() {
-  return Math.floor(Date.now() / 1000);
-}
-
-function uiStatus(raffle: { status: string; deadline: string; paused: boolean }) {
-  const s = raffle.status;
-  if (raffle.paused) return "PAUSED";
-
-  // UI-only expired
-  if (s === "OPEN") {
-    const d = Number(raffle.deadline);
-    if (Number.isFinite(d) && d <= nowSec()) return "EXPIRED";
-    return "ACTIVE";
-  }
-
-  return s; // FUNDING_PENDING / DRAWING / COMPLETED / CANCELED
-}
-
-export function ExplorePage() {
+export function ExplorePage({
+  onOpenRaffle,
+  onOpenSafety,
+}: {
+  onOpenRaffle: (id: string) => void;
+  onOpenSafety?: (raffleId: string) => void;
+}) {
   const [status, setStatus] = useState<ExploreStatusFilter>("ALL");
   const [sortBy, setSortBy] = useState<ExploreSortBy>("deadline");
   const [sortDir, setSortDir] = useState<ExploreSortDir>("asc");
@@ -35,10 +27,11 @@ export function ExplorePage() {
   const skip = page * pageSize;
 
   const q = useExploreRaffles({ status, sortBy, sortDir, pageSize, skip });
-
   const raffles = q.data?.raffles ?? [];
 
-  // Small label helper
+  // ✅ One timer for whole page
+  const nowMs = useNowTick(true, 30_000);
+
   const sortLabel = useMemo(() => {
     if (sortBy === "ticketPrice") return "Ticket price";
     if (sortBy === "winningPot") return "Winning pot";
@@ -133,11 +126,10 @@ export function ExplorePage() {
             {raffles.map((r) => (
               <RaffleCard
                 key={r.id}
-                raffle={{
-                  ...r,
-                  // optional: pass ui status if your card supports it
-                  // status: uiStatus(r as any),
-                } as any}
+                raffle={r as any}
+                nowMs={nowMs}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
               />
             ))}
           </div>
