@@ -5,7 +5,7 @@ import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
 import { ADDR } from "../../lib/contracts";
 import { formatToken } from "../../lib/formatMoney";
 
-// ✅ NEW helper (pure formatter)
+// ✅ helper (pure formatter)
 import { endsInText } from "../../lib/endsInText";
 
 export function RaffleCard({
@@ -25,10 +25,8 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  // ✅ Live countdown (text only)
-  const endsRaw = endsInText(Number(raffle.deadline), nowMs); // "5m" | "12s" | "0s" | "—"
-  const endsLabel =
-    endsRaw === "—" ? "—" : endsRaw === "0s" ? "Ended" : `Ends in ${endsRaw}`;
+  // ✅ Live countdown (helper already returns "Ends in ...", or "Ended", or "—")
+  const endsLabel = endsInText(Number(raffle.deadline), nowMs);
 
   // ✅ Status pill (subgraph-based)
   const status = friendlyStatus(raffle.status, raffle.paused);
@@ -42,7 +40,7 @@ export function RaffleCard({
     if (s.includes("canceled") || s.includes("cancelled")) return "Canceled";
 
     // If still OPEN but timer hit 0, show “Awaiting draw…”
-    if (s.includes("open") && endsRaw === "0s") return "Awaiting draw…";
+    if (s.includes("open") && endsLabel === "Ended") return "Awaiting draw…";
 
     return endsLabel;
   })();
@@ -207,7 +205,8 @@ function friendlyStatus(status: string, paused: boolean) {
   if (s.includes("open")) return { label: "Open", kind: "ok" as const };
   if (s.includes("drawing")) return { label: "Drawing", kind: "info" as const };
   if (s.includes("completed")) return { label: "Completed", kind: "muted" as const };
-  if (s.includes("canceled") || s.includes("cancelled")) return { label: "Canceled", kind: "muted" as const };
+  if (s.includes("canceled") || s.includes("cancelled"))
+    return { label: "Canceled", kind: "muted" as const };
 
   return { label: status || "Unknown", kind: "muted" as const };
 }
