@@ -14,8 +14,6 @@ import { CashierModal } from "./features/cashier/CashierModal";
 
 import { HomePage } from "./features/home/HomePage";
 import { RaffleDetailsModal } from "./features/raffles/RaffleDetailsModal";
-
-// ✅ NEW: Explore page
 import { ExplorePage } from "./features/explore/ExplorePage";
 
 export default function App() {
@@ -23,31 +21,34 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
 
-  // ✅ Safety modal: raffle-only
+  // Safety modal: raffle-only (legacy, separate from RaffleSafetyModal inside details)
   const [safetyOpen, setSafetyOpen] = useState(false);
 
-  // Selected raffle (details modal)
   const [openRaffleId, setOpenRaffleId] = useState<string | null>(null);
-
-  // Creator cache for safety modal (optional)
   const [openRaffleCreator, setOpenRaffleCreator] = useState<string | null>(null);
 
-  // Used to force a re-render after disclaimer acceptance
   const [disclaimerTick, setDisclaimerTick] = useState(0);
 
-  // wallet state
   const acc = useAccount();
-
-  // prevent needless loops
   const loadedRaffleIdRef = useRef<string | null>(null);
+
+  // ✅ Track last “main page” so closing a raffle returns correctly
+  const lastMainRouteRef = useRef<"home" | "explore">("home");
 
   // --- routing via hash ---
   const route = useMemo(() => {
     const h = window.location.hash || "";
     if (h.includes("raffle=")) return "raffle";
-    if (h === "#explore" || h.startsWith("#explore")) return "explore";
+    if (h === "#explore" || h.startsWith("#explore") || h === "#explore") return "explore";
     return "home";
   }, [disclaimerTick, acc.address]);
+
+  // keep last main route in sync (but never overwrite it while viewing a raffle)
+  useEffect(() => {
+    if (route === "home" || route === "explore") {
+      lastMainRouteRef.current = route;
+    }
+  }, [route]);
 
   // shared link support: /#raffle=0x...
   const raffleFromHash = useMemo(() => {
@@ -63,6 +64,9 @@ export default function App() {
   const anyOverlayOpen = !!openRaffleId || createOpen || dashboardOpen || safetyOpen;
 
   function openRaffle(id: string) {
+    // ✅ remember where user came from (home/explore) BEFORE switching hash to raffle
+    lastMainRouteRef.current = route === "explore" ? "explore" : "home";
+
     const lower = id.toLowerCase();
     window.location.hash = `raffle=${encodeURIComponent(lower)}`;
     setOpenRaffleId(lower);
@@ -76,8 +80,8 @@ export default function App() {
     setOpenRaffleCreator(null);
     setSafetyOpen(false);
 
-    // return to explore if user came from explore, otherwise home
-    window.location.hash = route === "explore" ? "explore" : "";
+    // ✅ return to previous main page
+    window.location.hash = lastMainRouteRef.current === "explore" ? "explore" : "";
     loadedRaffleIdRef.current = null;
   }
 
@@ -108,11 +112,13 @@ export default function App() {
           window.location.hash = "";
           setOpenRaffleId(null);
           setSafetyOpen(false);
+          lastMainRouteRef.current = "home";
         }}
         onGoExplore={() => {
           window.location.hash = "explore";
           setOpenRaffleId(null);
           setSafetyOpen(false);
+          lastMainRouteRef.current = "explore";
         }}
       />
 
@@ -125,9 +131,9 @@ export default function App() {
         }`}
       >
         {route === "explore" ? (
-          <ExplorePage />
+          <ExplorePage onOpenRaffle={openRaffle} onOpenSafety={openSafetyForRaffle} />
         ) : (
-          <HomePage onOpenRaffle={openRaffle} onOpenSafety={(raffleId) => openSafetyForRaffle(raffleId)} />
+          <HomePage onOpenRaffle={openRaffle} onOpenSafety={openSafetyForRaffle} />
         )}
       </div>
 
@@ -162,7 +168,7 @@ export default function App() {
         }}
       />
 
-      {/* Safety modal only opens when a raffle is selected */}
+      {/* Legacy safety modal (raffle-only) */}
       <SafetyProofModal
         open={safetyOpen && !!openRaffleId}
         onClose={() => setSafetyOpen(false)}
