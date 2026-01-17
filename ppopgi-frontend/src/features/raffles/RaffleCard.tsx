@@ -28,7 +28,7 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  // ✅ Live countdown (helper returns "Xd Yh", "Xm", "Xs", or "—")
+  // ✅ Live countdown (helper returns "Ends in ...", "Ended", or "—")
   const endsLabel = endsInText(Number(raffle.deadline), nowMs);
 
   // ✅ time-based "ended" gate for UI (subgraph may lag)
@@ -45,14 +45,13 @@ export function RaffleCard({
 
   // ✅ Right-side label: better UX while subgraph catches up
   const rightLabel = (() => {
-    const s = (raffle.status || "").toLowerCase();
     if (raffle.paused) return "Paused";
-    if (s.includes("drawing")) return "Drawing…";
-    if (s.includes("completed")) return "Completed";
-    if (s.includes("canceled") || s.includes("cancelled")) return "Canceled";
+    if (statusUpper === "DRAWING") return "Drawing…";
+    if (statusUpper === "COMPLETED") return "Completed";
+    if (statusUpper === "CANCELED" || statusUpper === "CANCELLED") return "Canceled";
 
     // If still OPEN but time is over, show “Awaiting draw…”
-    if (s.includes("open") && endedByTime) return "Awaiting draw…";
+    if (statusUpper === "OPEN" && endedByTime) return "Awaiting draw…";
 
     // Otherwise show countdown-ish label
     return endsLabel;
@@ -75,6 +74,9 @@ export function RaffleCard({
       tabIndex={0}
       onClick={() => onOpen(raffle.id)}
       onKeyDown={(e) => {
+        // ✅ only trigger open when the card itself has focus (not inputs/buttons inside)
+        if (e.target !== e.currentTarget) return;
+
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onOpen(raffle.id);
@@ -204,7 +206,10 @@ export function RaffleCard({
               e.preventDefault();
               e.stopPropagation(); // ✅ don't open raffle when buying
             }}
-            onKeyDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              // ✅ don't let key events bubble up to the card
+              e.stopPropagation();
+            }}
           >
             <BuyTicketsInline
               raffleId={raffle.id}
