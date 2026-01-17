@@ -3,7 +3,8 @@ import type { CSSProperties } from "react";
 import type { RaffleLite } from "./useRafflesHome";
 import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
 import { ADDR } from "../../lib/contracts";
-import { formatToken } from "../../lib/formatMoney"; // ✅ NEW (USDC formatting)
+import { formatToken } from "../../lib/formatMoney";
+import { useEndsIn } from "../../lib/useEndsIn"; // ✅ NEW (live countdown)
 
 export function RaffleCard({
   raffle,
@@ -20,7 +21,9 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  const endsIn = formatEndsIn(raffle.deadline);
+  // ✅ Live "Ends in ..." (updates automatically)
+  const endsIn = useEndsIn(Number(raffle.deadline));
+
   const status = friendlyStatus(raffle.status, raffle.paused);
 
   // --- verification (subgraph) ---
@@ -172,23 +175,6 @@ export function RaffleCard({
 function safeNum(v: string | number | null | undefined): number {
   const n = typeof v === "number" ? v : Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
-}
-
-function formatEndsIn(deadline: string): string {
-  const dl = Number(deadline);
-  if (!Number.isFinite(dl) || dl <= 0) return "—";
-
-  const diffMs = dl * 1000 - Date.now();
-  if (diffMs <= 0) return "Ended";
-
-  const mins = Math.floor(diffMs / 60000);
-  const days = Math.floor(mins / (60 * 24));
-  const hours = Math.floor((mins % (60 * 24)) / 60);
-  const m = mins % 60;
-
-  if (days > 0) return `Ends in ${days}d ${hours}h`;
-  if (hours > 0) return `Ends in ${hours}h ${m}m`;
-  return `Ends in ${m}m`;
 }
 
 function friendlyStatus(status: string, paused: boolean) {
