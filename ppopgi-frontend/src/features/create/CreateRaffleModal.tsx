@@ -147,32 +147,6 @@ export function CreateRaffleModal({
     setCopied(false);
   }, [open]);
 
-  const errors = useMemo(() => {
-    const e: Partial<Record<keyof EditableRaffleCardValue, string>> = {};
-
-    if (!draft.name.trim()) e.name = "Name is required.";
-
-    // ticketPrice / winningPot must parse > 0, but must not crash if user types letters
-    const tpStr = (draft.ticketPrice ?? "").trim();
-    const wpStr = (draft.winningPot ?? "").trim();
-
-    if (!isNumericInput(tpStr)) e.ticketPrice = "Enter a number (ex: 1 or 0.5).";
-    if (!isNumericInput(wpStr)) e.winningPot = "Enter a number (ex: 10 or 2.5).";
-
-    const tp = safeNum(tpStr);
-    const wp = safeNum(wpStr);
-    if (isNumericInput(tpStr) && !(tp > 0)) e.ticketPrice = "Ticket price must be > 0.";
-    if (isNumericInput(wpStr) && !(wp > 0)) e.winningPot = "Winning pot must be > 0.";
-
-    const durSec = parseDurationToSeconds(draft.durationText);
-    if (!durSec || durSec <= 0) e.durationText = "Enter a valid duration (ex: 90m or 1h30).";
-
-    const minT = Math.floor(safeNum(draft.minTickets));
-    if (!(minT > 0)) e.minTickets = "Min tickets must be at least 1.";
-
-    return e;
-  }, [draft]);
-
   // derived (contract-ready) — safe parsing (no throw)
   const parsed = useMemo(() => {
     const tp = safeParseUnits(draft.ticketPrice || "", d);
@@ -194,6 +168,49 @@ export function CreateRaffleModal({
 
     return { tp, wp, durationSeconds, minT, maxT, minBuyU32 };
   }, [draft, d]);
+
+  // --- USDC balance ---
+  const qUsdcBal = useReadContract({
+    address: ADDR.usdc,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: open && !!address },
+  });
+  const usdcBal = (qUsdcBal.data ?? 0n) as bigint;
+
+  const insufficientUsdc = isConnected && parsed.wp > 0n && usdcBal < parsed.wp;
+
+  const errors = useMemo(() => {
+    const e: Partial<Record<keyof EditableRaffleCardValue, string>> = {};
+
+    if (!draft.name.trim()) e.name = "Name is required.";
+
+    // ticketPrice / winningPot must parse > 0, but must not crash if user types letters
+    const tpStr = (draft.ticketPrice ?? "").trim();
+    const wpStr = (draft.winningPot ?? "").trim();
+
+    if (!isNumericInput(tpStr)) e.ticketPrice = "Enter a number (ex: 1 or 0.5).";
+    if (!isNumericInput(wpStr)) e.winningPot = "Enter a number (ex: 10 or 2.5).";
+
+    const tp = safeNum(tpStr);
+    const wp = safeNum(wpStr);
+    if (isNumericInput(tpStr) && !(tp > 0)) e.ticketPrice = "Ticket price must be > 0.";
+    if (isNumericInput(wpStr) && !(wp > 0)) e.winningPot = "Winning pot must be > 0.";
+
+    // Balance check (only show when numeric + parsed.wp is meaningful)
+    if (isConnected && isNumericInput(wpStr) && parsed.wp > 0n && usdcBal < parsed.wp) {
+      e.winningPot = `Insufficient USDC (balance: ${formatUnits(usdcBal, d)}).`;
+    }
+
+    const durSec = parseDurationToSeconds(draft.durationText);
+    if (!durSec || durSec <= 0) e.durationText = "Enter a valid duration (ex: 90m or 1h30).";
+
+    const minT = Math.floor(safeNum(draft.minTickets));
+    if (!(minT > 0)) e.minTickets = "Min tickets must be at least 1.";
+
+    return e;
+  }, [draft, isConnected, parsed.wp, usdcBal, d]);
 
   const feePreview = useMemo(() => {
     if (percent === null) return null;
@@ -237,6 +254,7 @@ export function CreateRaffleModal({
 
   const canSubmit =
     isConnected &&
+    !insufficientUsdc &&
     !needsApproval && // must approve first
     !isPending &&
     !tx.isLoading &&
@@ -355,6 +373,12 @@ export function CreateRaffleModal({
               <div className="mt-2 text-[11px] font-bold text-white/60">
                 {feePreview ? `${feePreview.percent}% fee taken at payout.` : "Loading fee…"}
               </div>
+
+              {/* Optional: show balance */}
+              <div className="mt-3 text-[11px] font-bold text-white/60">
+                Your USDC balance:{" "}
+                <span className="text-white font-black">{formatUnits(usdcBal, d)}</span>
+              </div>
             </div>
 
             {/* Approve step (shown only when needed) */}
@@ -367,12 +391,12 @@ export function CreateRaffleModal({
 
                 <button
                   onClick={onApprove}
-                  disabled={approveBusy || Object.keys(errors).length > 0 || parsed.wp <= 0n}
+                  disabled={approveBusy || insufficientUsdc || Object.keys(errors).length > 0 || parsed.wp <= 0n}
                   type="button"
                   className={[
                     "mt-3 w-full rounded-2xl px-4 py-3 font-black transition-all",
                     "border border-white/15",
-                    approveBusy || Object.keys(errors).length > 0 || parsed.wp <= 0n
+                    approveBusy || insufficientUsdc || Object.keys(errors).length > 0 || parsed.wp <= 0n
                       ? "bg-white/10 text-white/45 cursor-not-allowed"
                       : "bg-white/15 hover:bg-white/20 text-white shadow-[0_12px_35px_rgba(255,255,255,0.08)] active:translate-y-0.5",
                   ].join(" ")}
@@ -484,6 +508,8 @@ export function CreateRaffleModal({
               <div className="mt-3 text-[12px] font-bold text-white/60">
                 Fix required fields on the left to enable creation.
               </div>
+            ) : insufficientUsdc ? (
+              <div className="mt-3 text-[12px] font-bold text-white/60">Insufficient USDC for the chosen winning pot.</div>
             ) : needsApproval ? (
               <div className="mt-3 text-[12px] font-bold text-white/60">Approve USDC first to avoid estimation errors.</div>
             ) : (
