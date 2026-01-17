@@ -5,10 +5,7 @@ import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
 import { ADDR } from "../../lib/contracts";
 import { formatToken } from "../../lib/formatMoney";
 
-// ✅ helper (pure formatter)
 import { endsInText } from "../../lib/endsInText";
-
-// ✅ inline buy UI
 import { BuyTicketsInline } from "./BuyTicketsInline";
 
 export function RaffleCard({
@@ -18,7 +15,7 @@ export function RaffleCard({
   onOpenSafety,
 }: {
   raffle: RaffleLite;
-  nowMs: number; // ✅ passed from Home/Explore (one shared ticking clock)
+  nowMs: number; // passed from Home/Explore (one shared ticking clock)
   onOpen: (id: string) => void;
   onOpenSafety?: (raffleId: string) => void;
 }) {
@@ -28,22 +25,22 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  // ✅ Live countdown (helper returns "Ends in ...", or "Ended", or "—")
+  // Live countdown label
   const endsLabel = endsInText(Number(raffle.deadline), nowMs);
 
-  // ✅ time-based "ended" gate for UI (subgraph may lag)
+  // Time-based "ended" gate (subgraph may lag)
   const deadlineSec = Number(raffle.deadline);
   const endedByTime =
     Number.isFinite(deadlineSec) && deadlineSec > 0 ? deadlineSec * 1000 <= nowMs : false;
 
-  // ✅ show inline buy only when open + not paused + not ended by time
+  // Show inline buy only when OPEN + not paused + not ended by time
   const canBuyInline =
     String(raffle.status || "").toUpperCase() === "OPEN" && !raffle.paused && !endedByTime;
 
-  // ✅ Status pill (subgraph-based)
+  // Status pill
   const status = friendlyStatus(raffle.status, raffle.paused);
 
-  // ✅ Right-side label: better UX while subgraph catches up
+  // Right-side label
   const rightLabel = (() => {
     const s = (raffle.status || "").toLowerCase();
     if (raffle.paused) return "Paused";
@@ -51,31 +48,29 @@ export function RaffleCard({
     if (s.includes("completed")) return "Completed";
     if (s.includes("canceled") || s.includes("cancelled")) return "Canceled";
 
-    // If still OPEN but time hit 0, show “Awaiting draw…”
-    if (s.includes("open") && endedByTime) return "Awaiting draw…";
+    // If still OPEN but timer hit 0, show “Awaiting draw…”
+    if (s.includes("open") && endsLabel === "Ended") return "Awaiting draw…";
 
     return endsLabel;
   })();
 
-  // --- verification (subgraph) ---
+  // Verification (subgraph)
   const dep = (raffle.deployer ?? "").toLowerCase();
   const isRegistered = raffle.isRegistered === true;
   const matchesDeployer = dep && dep === ADDR.deployer.toLowerCase();
-
-  // "Official" requires BOTH: registered + matches known deployer
   const isOfficial = isRegistered && matchesDeployer;
-
-  // If we don't have deployer info, we treat as unverified (don't silently hide)
   const hasVerificationData = !!dep || raffle.isRegistered !== undefined;
 
-  // ✅ IMPORTANT: card cannot be a <button> (we have buttons/inputs inside)
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => onOpen(raffle.id)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onOpen(raffle.id);
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(raffle.id);
+        }
       }}
       style={cardWrap()}
       aria-label={`Open raffle ${raffle.name}`}
@@ -135,7 +130,7 @@ export function RaffleCard({
             )}
           </div>
 
-          {/* ✅ Live right label */}
+          {/* Live right label */}
           <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>
             {rightLabel}
           </div>
@@ -193,13 +188,17 @@ export function RaffleCard({
           )}
         </div>
 
-        {/* ✅ Inline buy (only OPEN + not paused + not ended by time) */}
+        {/* Inline buy */}
         {canBuyInline ? (
           <div
             style={{ marginTop: 12 }}
             onClick={(e) => {
               e.preventDefault();
-              e.stopPropagation(); // ✅ don't open raffle when buying
+              e.stopPropagation(); // don't open raffle when buying
+            }}
+            onKeyDown={(e) => {
+              // prevent Space/Enter from triggering card open while focused inside buy box
+              e.stopPropagation();
             }}
           >
             <BuyTicketsInline
@@ -255,6 +254,7 @@ function cardWrap(): CSSProperties {
     padding: 0,
     background: "transparent",
     cursor: "pointer",
+    outline: "none",
   };
 }
 
