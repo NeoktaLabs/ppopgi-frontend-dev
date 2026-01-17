@@ -1,11 +1,14 @@
 // src/lib/contracts.ts
+
 export const ADDR = {
   registry: "0x1CD24E0C49b1B61ff07be12fBa3ce58eCb20b098",
   deployer: "0x6050196520e7010Aa39C8671055B674851E2426D",
   usdc: "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9",
 } as const;
 
-// Minimal ERC20 ABI for balance + decimals + allowance + approve
+// ============================================================
+// Minimal ERC20 ABI (balance + decimals + allowance + approve)
+// ============================================================
 export const ERC20_ABI = [
   {
     type: "function",
@@ -50,9 +53,11 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-// --- Minimal LotterySingleWinner ABI (reads used across UI + dashboard actions) ---
+// ============================================================
+// LotterySingleWinner ABI (reads + user actions)
+// ============================================================
 export const LOTTERY_SINGLE_WINNER_ABI = [
-  // --- reads used by SafetyProofModal ---
+  // --- Safety proof reads ---
   {
     type: "function",
     name: "deployer",
@@ -96,7 +101,7 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     outputs: [{ type: "uint256" }],
   },
 
-  // --- reads for actions (buy calc + contract constraints) ---
+  // --- Buy ticket reads ---
   {
     type: "function",
     name: "ticketPrice",
@@ -112,7 +117,7 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     outputs: [{ type: "uint32" }],
   },
 
-  // --- write for actions (buy) ---
+  // --- Buy ticket write ---
   {
     type: "function",
     name: "buyTickets",
@@ -121,7 +126,7 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     outputs: [],
   },
 
-  // --- reads (dashboard gating) ---
+  // --- Dashboard reads ---
   {
     type: "function",
     name: "ticketsOwned",
@@ -144,7 +149,7 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
     outputs: [{ type: "uint256" }],
   },
 
-  // --- writes (dashboard actions) ---
+  // --- Dashboard writes ---
   {
     type: "function",
     name: "withdrawFunds",
@@ -168,8 +173,11 @@ export const LOTTERY_SINGLE_WINNER_ABI = [
   },
 ] as const;
 
-// --- Minimal Deployer ABI (reads used by Create + Safety) ---
+// ============================================================
+// SingleWinnerDeployer ABI (create + safety reads + event)
+// ============================================================
 export const SINGLE_WINNER_DEPLOYER_ABI = [
+  // --- reads ---
   {
     type: "function",
     name: "usdc",
@@ -205,6 +213,8 @@ export const SINGLE_WINNER_DEPLOYER_ABI = [
     inputs: [],
     outputs: [{ type: "uint256" }],
   },
+
+  // --- create ---
   {
     type: "function",
     name: "createSingleWinnerLottery",
@@ -220,7 +230,28 @@ export const SINGLE_WINNER_DEPLOYER_ABI = [
     ],
     outputs: [{ type: "address" }],
   },
+
+  // --- emitted on successful creation ---
+  {
+    type: "event",
+    name: "LotteryDeployed",
+    inputs: [
+      { indexed: true, name: "lottery", type: "address" },
+      { indexed: true, name: "creator", type: "address" },
+      { indexed: false, name: "winningPot", type: "uint256" },
+      { indexed: false, name: "ticketPrice", type: "uint256" },
+      { indexed: false, name: "name", type: "string" },
+      { indexed: false, name: "usdc", type: "address" },
+      { indexed: false, name: "entropy", type: "address" },
+      { indexed: false, name: "entropyProvider", type: "address" },
+      { indexed: false, name: "feeRecipient", type: "address" },
+      { indexed: false, name: "protocolFeePercent", type: "uint256" },
+      { indexed: false, name: "deadline", type: "uint64" },
+      { indexed: false, name: "minTickets", type: "uint64" },
+      { indexed: false, name: "maxTickets", type: "uint64" },
+    ],
+  },
 ] as const;
 
-// Optional
+// Optional (currently unused)
 export const LOTTERY_REGISTRY_ABI = [] as const;
