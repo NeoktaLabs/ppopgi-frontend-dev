@@ -1,6 +1,7 @@
 // src/features/home/HomePage.tsx
 import { useBigPrizes, useEndingSoon } from "../raffles/useRafflesHome";
 import { RaffleCard } from "../raffles/RaffleCard";
+import { useNowTick } from "../../lib/useNowTick";
 
 export function HomePage({
   onOpenRaffle,
@@ -11,6 +12,11 @@ export function HomePage({
 }) {
   const big = useBigPrizes();
   const soon = useEndingSoon();
+
+  // ✅ One timer for the whole page (not one per card)
+  // - 30s refresh is enough for most
+  // - (you can later add "adaptive" per-card if you want)
+  const nowMs = useNowTick(true, 30_000);
 
   return (
     <main className="container mx-auto px-4 pt-2 max-w-[100rem] animate-fade-in">
@@ -40,7 +46,12 @@ export function HomePage({
 
           {(big.data?.raffles ?? []).map((r) => (
             <div key={r.id} className="w-full flex justify-center">
-              <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} />
+              <RaffleCard
+                raffle={r}
+                nowMs={nowMs}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
+              />
             </div>
           ))}
         </div>
@@ -72,7 +83,12 @@ export function HomePage({
 
           {(soon.data?.raffles ?? []).map((r) => (
             <div key={r.id} className="w-full flex justify-center">
-              <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} />
+              <RaffleCard
+                raffle={r}
+                nowMs={nowMs}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
+              />
             </div>
           ))}
         </div>
