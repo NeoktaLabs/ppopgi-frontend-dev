@@ -5,16 +5,17 @@ import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
 import { ADDR } from "../../lib/contracts";
 import { formatToken } from "../../lib/formatMoney";
 
-// ✅ NEW helpers (global ticking + pure text formatter)
-import { useNowTick } from "../../lib/useNowTick";
+// ✅ NEW helper (pure formatter)
 import { endsInText } from "../../lib/endsInText";
 
 export function RaffleCard({
   raffle,
+  nowMs,
   onOpen,
   onOpenSafety,
 }: {
   raffle: RaffleLite;
+  nowMs: number; // ✅ passed from Home/Explore (one shared ticking clock)
   onOpen: (id: string) => void;
   onOpenSafety?: (raffleId: string) => void;
 }) {
@@ -24,31 +25,37 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  // ✅ One shared "clock" (preferred)
-  const nowMs = useNowTick();
+  // ✅ Live countdown (text only)
+  const endsRaw = endsInText(Number(raffle.deadline), nowMs); // "5m" | "12s" | "0s" | "—"
+  const endsLabel =
+    endsRaw === "—" ? "—" : endsRaw === "0s" ? "Ended" : `Ends in ${endsRaw}`;
 
-  // ✅ Live "Ends in ..."
-  const endsIn = endsInText(Number(raffle.deadline), nowMs);
-
-  // ✅ Status pill should still come from subgraph, but we can improve copy when ended
+  // ✅ Status pill (subgraph-based)
   const status = friendlyStatus(raffle.status, raffle.paused);
 
-  // Optional: nicer label when timer hits 0 but subgraph still says OPEN
+  // ✅ Right-side label: better UX while subgraph catches up
   const rightLabel = (() => {
     const s = (raffle.status || "").toLowerCase();
     if (raffle.paused) return "Paused";
     if (s.includes("drawing")) return "Drawing…";
     if (s.includes("completed")) return "Completed";
     if (s.includes("canceled") || s.includes("cancelled")) return "Canceled";
-    if (s.includes("open") && endsIn === "Ended") return "Awaiting draw…";
-    return endsIn;
+
+    // If still OPEN but timer hit 0, show “Awaiting draw…”
+    if (s.includes("open") && endsRaw === "0s") return "Awaiting draw…";
+
+    return endsLabel;
   })();
 
   // --- verification (subgraph) ---
   const dep = (raffle.deployer ?? "").toLowerCase();
   const isRegistered = raffle.isRegistered === true;
   const matchesDeployer = dep && dep === ADDR.deployer.toLowerCase();
+
+  // "Official" requires BOTH: registered + matches known deployer
   const isOfficial = isRegistered && matchesDeployer;
+
+  // If we don't have deployer info, we treat as unverified (don't silently hide)
   const hasVerificationData = !!dep || raffle.isRegistered !== undefined;
 
   return (
@@ -113,7 +120,7 @@ export function RaffleCard({
             )}
           </div>
 
-          {/* ✅ Live right side label */}
+          {/* ✅ Live right label */}
           <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>
             {rightLabel}
           </div>
@@ -200,10 +207,7 @@ function friendlyStatus(status: string, paused: boolean) {
   if (s.includes("open")) return { label: "Open", kind: "ok" as const };
   if (s.includes("drawing")) return { label: "Drawing", kind: "info" as const };
   if (s.includes("completed")) return { label: "Completed", kind: "muted" as const };
-  if (s.includes("ended") || s.includes("closed") || s.includes("finished"))
-    return { label: "Ended", kind: "muted" as const };
-  if (s.includes("canceled") || s.includes("cancelled"))
-    return { label: "Canceled", kind: "muted" as const };
+  if (s.includes("canceled") || s.includes("cancelled")) return { label: "Canceled", kind: "muted" as const };
 
   return { label: status || "Unknown", kind: "muted" as const };
 }
