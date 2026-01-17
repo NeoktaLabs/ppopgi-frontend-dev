@@ -17,6 +17,9 @@ import { RaffleSafetyModal } from "./RaffleSafetyModal";
 import { useNowTick } from "../../lib/useNowTick";
 import { endsInText } from "../../lib/endsInText";
 
+// ✅ buy UI (details modal)
+import { BuyTicketsInline } from "./BuyTicketsInline";
+
 export function RaffleDetailsModal({
   raffleId,
   onClose,
@@ -85,15 +88,13 @@ export function RaffleDetailsModal({
 
   // ✅ UI gating (buy should NOT be possible after deadline)
   const statusUpper = String(raffle?.status ?? "").toUpperCase();
-  const canBuyUi =
-    !!raffle && statusUpper === "OPEN" && !raffle.paused && !endedByTime;
+  const canBuyUi = !!raffle && statusUpper === "OPEN" && !raffle.paused && !endedByTime;
 
   // ✅ Better “state line” for the user while subgraph catches up
   const stateLine = useMemo(() => {
     if (!raffle) return null;
 
     if (raffle.paused) return "Paused — buying disabled.";
-
     if (statusUpper === "DRAWING") return "Draw is happening…";
     if (statusUpper === "COMPLETED") return "Completed.";
     if (statusUpper === "CANCELED" || statusUpper === "CANCELLED") return "Canceled.";
@@ -212,29 +213,41 @@ export function RaffleDetailsModal({
               >
                 Safety &amp; Proof
               </button>
-
-              {/* ✅ Optional: show a disabled “Buying closed” pill-button (nice UX) */}
-              {!canBuyUi ? (
-                <div
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 14,
-                    border: "1px solid rgba(255,255,255,0.35)",
-                    background: "rgba(255,255,255,0.10)",
-                    fontWeight: 1000,
-                    opacity: 0.75,
-                  }}
-                  title="Buying is disabled"
-                >
-                  Buying closed
-                </div>
-              ) : null}
             </div>
 
             {/* Stats */}
             <div style={{ marginTop: 2 }}>Ticket: {raffle.ticketPrice} USDC</div>
             <div>Win: {raffle.winningPot} USDC</div>
             <div>Joined: {raffle.sold}</div>
+
+            {/* ✅ BUY BOX (only when OPEN + not paused + not ended by time) */}
+            {canBuyUi ? (
+              <div style={{ marginTop: 6 }}>
+                <BuyTicketsInline
+                  raffleId={String(raffle.id)}
+                  ticketPrice={BigInt(String(raffle.ticketPrice ?? "0"))}
+                  status={statusUpper}
+                  paused={!!raffle.paused}
+                  endedByTime={endedByTime}
+                />
+              </div>
+            ) : (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: 10,
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,0.35)",
+                  background: "rgba(255,255,255,0.10)",
+                  fontWeight: 900,
+                  opacity: 0.8,
+                  width: "fit-content",
+                }}
+                title="Buying is disabled"
+              >
+                Buying closed
+              </div>
+            )}
 
             {/* ✅ Explainer for ended-but-not-finalized window */}
             {statusUpper === "OPEN" && endedByTime ? (
@@ -276,11 +289,6 @@ export function RaffleDetailsModal({
 
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
               This view is fast. Before any action, we confirm live on-chain values.
-            </div>
-
-            {/* ✅ dev-friendly note: you can pass canBuyUi down once your buy UI exists */}
-            <div style={{ marginTop: 2, fontSize: 11, opacity: 0.55 }}>
-              UI buy enabled: {String(canBuyUi)}
             </div>
           </div>
         )}
