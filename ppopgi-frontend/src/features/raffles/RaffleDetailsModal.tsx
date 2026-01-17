@@ -78,6 +78,8 @@ export function RaffleDetailsModal({
   // ✅ One ticking clock for this modal
   const nowMs = useNowTick(!!raffleId, 30_000);
 
+  const statusUpper = String(raffle?.status ?? "").toUpperCase();
+
   // ✅ time-based ended (independent from subgraph lag)
   const deadlineSec = Number(raffle?.deadline ?? 0);
   const hasDeadline = Number.isFinite(deadlineSec) && deadlineSec > 0;
@@ -87,7 +89,6 @@ export function RaffleDetailsModal({
   const endsLabel = raffle ? endsInText(deadlineSec, nowMs) : "—";
 
   // ✅ UI gating (buy should NOT be possible after deadline)
-  const statusUpper = String(raffle?.status ?? "").toUpperCase();
   const canBuyUi = !!raffle && statusUpper === "OPEN" && !raffle.paused && !endedByTime;
 
   // ✅ Better “state line” for the user while subgraph catches up
@@ -220,7 +221,7 @@ export function RaffleDetailsModal({
             <div>Win: {raffle.winningPot} USDC</div>
             <div>Joined: {raffle.sold}</div>
 
-            {/* ✅ BUY BOX (only when OPEN + not paused + not ended by time) */}
+            {/* ✅ BUY BOX */}
             {canBuyUi ? (
               <div style={{ marginTop: 6 }}>
                 <BuyTicketsInline
@@ -243,7 +244,13 @@ export function RaffleDetailsModal({
                   opacity: 0.8,
                   width: "fit-content",
                 }}
-                title="Buying is disabled"
+                title={
+                  !hasDeadline
+                    ? "Deadline not available yet"
+                    : statusUpper === "OPEN" && endedByTime
+                      ? "Deadline reached"
+                      : "Buying disabled"
+                }
               >
                 Buying closed
               </div>
