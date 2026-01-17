@@ -13,7 +13,7 @@ import { RaffleTimeline } from "./RaffleTimeline";
 import { RaffleActionsModal } from "../dashboard/RaffleActionsModal";
 import { RaffleSafetyModal } from "./RaffleSafetyModal";
 
-// ✅ add these
+// ✅ helpers
 import { useNowTick } from "../../lib/useNowTick";
 import { endsInText } from "../../lib/endsInText";
 
@@ -25,7 +25,13 @@ export function RaffleDetailsModal({
 }: {
   raffleId: string | null;
   onClose: () => void;
+
+  /**
+   * Optional legacy callback (ex: App-level modal routing / analytics).
+   * This component now opens RaffleSafetyModal locally.
+   */
   onOpenSafety?: () => void;
+
   onLoadedRaffle?: (raffle: any | null) => void;
 }) {
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -58,6 +64,7 @@ export function RaffleDetailsModal({
     onLoadedRaffle?.(raffle);
   }, [raffle, onLoadedRaffle]);
 
+  // If raffle closes, ensure sub-modals close too (prevents stale open state)
   useEffect(() => {
     if (!raffleId) {
       setActionsOpen(false);
@@ -65,38 +72,40 @@ export function RaffleDetailsModal({
     }
   }, [raffleId]);
 
-  // ✅ page-level ticking clock (30s is fine; last-minute precision is not critical here)
+  // ✅ One ticking clock for this modal
   const nowMs = useNowTick(!!raffleId, 30_000);
 
-  // ✅ ended logic + label
+  // ✅ time-based ended (independent from subgraph lag)
   const deadlineSec = Number(raffle?.deadline ?? 0);
-  const endedByTime =
-    Number.isFinite(deadlineSec) && deadlineSec > 0 ? deadlineSec * 1000 <= nowMs : false;
+  const hasDeadline = Number.isFinite(deadlineSec) && deadlineSec > 0;
+  const endedByTime = hasDeadline ? deadlineSec * 1000 <= nowMs : false;
 
+  // ✅ label ("Ends in ..." OR "Ended" OR "—")
   const endsLabel = raffle ? endsInText(deadlineSec, nowMs) : "—";
 
-  // ✅ buy gating (UI)
+  // ✅ UI gating (buy should NOT be possible after deadline)
+  const statusUpper = String(raffle?.status ?? "").toUpperCase();
   const canBuyUi =
-    !!raffle && raffle.status === "OPEN" && !raffle.paused && !endedByTime;
+    !!raffle && statusUpper === "OPEN" && !raffle.paused && !endedByTime;
 
-  // ✅ nicer “state” text for the user while subgraph catches up
+  // ✅ Better “state line” for the user while subgraph catches up
   const stateLine = useMemo(() => {
     if (!raffle) return null;
+
     if (raffle.paused) return "Paused — buying disabled.";
 
-    const s = String(raffle.status || "").toUpperCase();
+    if (statusUpper === "DRAWING") return "Draw is happening…";
+    if (statusUpper === "COMPLETED") return "Completed.";
+    if (statusUpper === "CANCELED" || statusUpper === "CANCELLED") return "Canceled.";
 
-    if (s === "DRAWING") return "Draw in progress…";
-    if (s === "COMPLETED") return "Completed.";
-    if (s === "CANCELED") return "Canceled.";
+    // Subgraph may still say OPEN for a short while after deadline
+    if (statusUpper === "OPEN" && endedByTime) return "Raffle ended — awaiting draw…";
 
-    if (s === "OPEN" && endedByTime) return "Raffle ended — awaiting draw…";
-
-    // still open & not ended
-    if (s === "OPEN") return endsLabel;
+    // Normal open state
+    if (statusUpper === "OPEN") return endsLabel;
 
     return endsLabel;
-  }, [raffle, endedByTime, endsLabel]);
+  }, [raffle, statusUpper, endedByTime, endsLabel]);
 
   // Unverified / caution (RPC check; only when raffle exists and modal is open)
   const rDeployer = useReadContract({
@@ -148,6 +157,7 @@ export function RaffleDetailsModal({
               </div>
             )}
 
+            {/* Status pill */}
             <div
               style={{
                 display: "inline-flex",
@@ -165,9 +175,10 @@ export function RaffleDetailsModal({
               {raffle.paused ? " (paused)" : ""}
             </div>
 
-            {/* ✅ new “state line” */}
+            {/* ✅ State line */}
             <div style={{ fontWeight: 900, opacity: 0.85 }}>{stateLine}</div>
 
+            {/* Top actions */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -201,20 +212,38 @@ export function RaffleDetailsModal({
               >
                 Safety &amp; Proof
               </button>
+
+              {/* ✅ Optional: show a disabled “Buying closed” pill-button (nice UX) */}
+              {!canBuyUi ? (
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,255,255,0.35)",
+                    background: "rgba(255,255,255,0.10)",
+                    fontWeight: 1000,
+                    opacity: 0.75,
+                  }}
+                  title="Buying is disabled"
+                >
+                  Buying closed
+                </div>
+              ) : null}
             </div>
 
+            {/* Stats */}
             <div style={{ marginTop: 2 }}>Ticket: {raffle.ticketPrice} USDC</div>
             <div>Win: {raffle.winningPot} USDC</div>
             <div>Joined: {raffle.sold}</div>
 
-            {!canBuyUi && raffle.status === "OPEN" && endedByTime && (
-              <div style={{ fontSize: 12, opacity: 0.8 }}>
-                Buying is closed. Your bot will finalize when eligible.
+            {/* ✅ Explainer for ended-but-not-finalized window */}
+            {statusUpper === "OPEN" && endedByTime ? (
+              <div style={{ fontSize: 12, opacity: 0.85 }}>
+                This raffle reached its deadline. Your bot will finalize it shortly.
               </div>
-            )}
+            ) : null}
 
-            {/* ...rest unchanged */}
-            {raffle.winner && (
+            {raffle.winner ? (
               <div
                 style={{
                   marginTop: 12,
@@ -230,7 +259,7 @@ export function RaffleDetailsModal({
                   Winning ticket: {raffle.winningTicketIndex}
                 </div>
               </div>
-            )}
+            ) : null}
 
             <div style={{ marginTop: 10 }}>
               <div style={{ fontWeight: 1000, marginBottom: 8 }}>Timeline</div>
@@ -248,6 +277,11 @@ export function RaffleDetailsModal({
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
               This view is fast. Before any action, we confirm live on-chain values.
             </div>
+
+            {/* ✅ dev-friendly note: you can pass canBuyUi down once your buy UI exists */}
+            <div style={{ marginTop: 2, fontSize: 11, opacity: 0.55 }}>
+              UI buy enabled: {String(canBuyUi)}
+            </div>
           </div>
         )}
       </Modal>
@@ -257,8 +291,6 @@ export function RaffleDetailsModal({
         onClose={() => setActionsOpen(false)}
         raffleId={raffleId ?? ""}
         raffleName={raffle?.name}
-        // ✅ later: optionally pass canBuyUi if you add prop support
-        // canBuyUi={canBuyUi}
       />
 
       <RaffleSafetyModal
