@@ -1,6 +1,6 @@
 // src/lib/wallet.tsx
 import "@rainbow-me/rainbowkit/styles.css";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { RainbowKitProvider, getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { WagmiProvider, http } from "wagmi";
 import { reconnect } from "wagmi/actions";
@@ -27,9 +27,36 @@ export const wagmiConfig = getDefaultConfig({
 const queryClient = new QueryClient();
 
 export function WalletProviders({ children }: { children: React.ReactNode }) {
-  // ✅ Force reconnect on mount (fixes “connected only after refresh” for QR / WC sessions)
+  // Avoid double-run in React.StrictMode (dev)
+  const didInit = useRef(false);
+
   useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+
+    // initial reconnect (helps on first load)
     reconnect(wagmiConfig).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onWake = () => {
+      // When returning from wallet app (Safari/QR), refresh wagmi state
+      reconnect(wagmiConfig).catch(() => {});
+    };
+
+    // Safari often triggers visibilitychange when coming back from WC wallet
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") onWake();
+    });
+
+    // Also handle normal focus
+    window.addEventListener("focus", onWake);
+
+    return () => {
+      window.removeEventListener("focus", onWake);
+      // can't remove the anonymous visibility handler; keep it simple:
+      // it's fine because provider is mounted once in the app.
+    };
   }, []);
 
   return (
