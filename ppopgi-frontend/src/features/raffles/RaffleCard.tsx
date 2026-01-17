@@ -5,7 +5,10 @@ import { Shield, BadgeCheck, AlertTriangle } from "lucide-react";
 import { ADDR } from "../../lib/contracts";
 import { formatToken } from "../../lib/formatMoney";
 
+// ✅ helper (pure formatter)
 import { endsInText } from "../../lib/endsInText";
+
+// ✅ inline buy UI
 import { BuyTicketsInline } from "./BuyTicketsInline";
 
 export function RaffleCard({
@@ -15,7 +18,7 @@ export function RaffleCard({
   onOpenSafety,
 }: {
   raffle: RaffleLite;
-  nowMs: number; // passed from Home/Explore (one shared ticking clock)
+  nowMs: number; // ✅ passed from Home/Explore (one shared ticking clock)
   onOpen: (id: string) => void;
   onOpenSafety?: (raffleId: string) => void;
 }) {
@@ -25,22 +28,22 @@ export function RaffleCard({
   const hasHardCap = !!maxNum && maxNum > 0;
   const percent = hasHardCap ? Math.min((soldNum / maxNum) * 100, 100) : 0;
 
-  // Live countdown label
+  // ✅ Live countdown (helper returns "Xd Yh", "Xm", "Xs", or "—")
   const endsLabel = endsInText(Number(raffle.deadline), nowMs);
 
-  // Time-based "ended" gate (subgraph may lag)
+  // ✅ time-based "ended" gate for UI (subgraph may lag)
   const deadlineSec = Number(raffle.deadline);
   const endedByTime =
     Number.isFinite(deadlineSec) && deadlineSec > 0 ? deadlineSec * 1000 <= nowMs : false;
 
-  // Show inline buy only when OPEN + not paused + not ended by time
-  const canBuyInline =
-    String(raffle.status || "").toUpperCase() === "OPEN" && !raffle.paused && !endedByTime;
+  // ✅ show inline buy only when open + not paused + not ended by time
+  const statusUpper = String(raffle.status || "").toUpperCase();
+  const canBuyInline = statusUpper === "OPEN" && !raffle.paused && !endedByTime;
 
-  // Status pill
+  // ✅ Status pill (subgraph-based)
   const status = friendlyStatus(raffle.status, raffle.paused);
 
-  // Right-side label
+  // ✅ Right-side label: better UX while subgraph catches up
   const rightLabel = (() => {
     const s = (raffle.status || "").toLowerCase();
     if (raffle.paused) return "Paused";
@@ -48,17 +51,22 @@ export function RaffleCard({
     if (s.includes("completed")) return "Completed";
     if (s.includes("canceled") || s.includes("cancelled")) return "Canceled";
 
-    // If still OPEN but timer hit 0, show “Awaiting draw…”
-    if (s.includes("open") && endsLabel === "Ended") return "Awaiting draw…";
+    // If still OPEN but time is over, show “Awaiting draw…”
+    if (s.includes("open") && endedByTime) return "Awaiting draw…";
 
+    // Otherwise show countdown-ish label
     return endsLabel;
   })();
 
-  // Verification (subgraph)
+  // --- verification (subgraph) ---
   const dep = (raffle.deployer ?? "").toLowerCase();
   const isRegistered = raffle.isRegistered === true;
   const matchesDeployer = dep && dep === ADDR.deployer.toLowerCase();
+
+  // "Official" requires BOTH: registered + matches known deployer
   const isOfficial = isRegistered && matchesDeployer;
+
+  // If we don't have deployer info, we treat as unverified (don't silently hide)
   const hasVerificationData = !!dep || raffle.isRegistered !== undefined;
 
   return (
@@ -130,7 +138,7 @@ export function RaffleCard({
             )}
           </div>
 
-          {/* Live right label */}
+          {/* ✅ Live right label */}
           <div style={{ fontWeight: 900, fontSize: 12, opacity: 0.75, whiteSpace: "nowrap" }}>
             {rightLabel}
           </div>
@@ -188,23 +196,20 @@ export function RaffleCard({
           )}
         </div>
 
-        {/* Inline buy */}
+        {/* ✅ Inline buy (only OPEN + not paused + not ended by time) */}
         {canBuyInline ? (
           <div
             style={{ marginTop: 12 }}
             onClick={(e) => {
               e.preventDefault();
-              e.stopPropagation(); // don't open raffle when buying
+              e.stopPropagation(); // ✅ don't open raffle when buying
             }}
-            onKeyDown={(e) => {
-              // prevent Space/Enter from triggering card open while focused inside buy box
-              e.stopPropagation();
-            }}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <BuyTicketsInline
               raffleId={raffle.id}
               ticketPrice={BigInt(String(raffle.ticketPrice ?? "0"))}
-              status={String(raffle.status || "").toUpperCase()}
+              status={statusUpper}
               paused={!!raffle.paused}
               endedByTime={endedByTime}
             />
@@ -254,7 +259,6 @@ function cardWrap(): CSSProperties {
     padding: 0,
     background: "transparent",
     cursor: "pointer",
-    outline: "none",
   };
 }
 
