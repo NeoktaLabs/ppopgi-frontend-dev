@@ -1,0 +1,43 @@
+/* src/pages/HomePage.css */
+.hp-section {
+  margin-top: 18px; padding: 16px; border-radius: 24px; position: relative; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04)),
+              radial-gradient(900px 240px at 10% 0%, rgba(255,141,187,0.10), rgba(255,141,187,0) 55%),
+              radial-gradient(900px 240px at 90% 0%, rgba(203,183,246,0.10), rgba(203,183,246,0) 55%);
+  backdrop-filter: blur(2px); border: 2px solid rgba(255,255,255,0.55);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.16);
+}
+
+.hp-inner-stroke {
+  position: absolute; inset: 6px; border-radius: 20px; pointer-events: none;
+  border: 1px solid rgba(242,166,198,0.55);
+}
+
+.hp-accent {
+  position: absolute; top: 12px; bottom: 12px; left: 12px; width: 6px; border-radius: 999px;
+  background: linear-gradient(180deg, #FF8DBB, #CBB7F6, #FFD89A);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.12);
+}
+
+.hp-title-row { display: flex; align-items: center; gap: 12px; padding-left: 18px; }
+
+.hp-pill {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-radius: 999px; font-weight: 1000; font-size: 16px; letter-spacing: 0.25px;
+  background: rgba(255,255,255,0.88); border: 1px solid rgba(0,0,0,0.10); color: #4A0F2B;
+  box-shadow: 0 10px 18px rgba(0,0,0,0.10);
+}
+
+.hp-notch {
+  width: 12px; height: 12px; border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255,141,187,0.95), rgba(203,183,246,0.95));
+  box-shadow: 0 6px 12px rgba(0,0,0,0.12);
+}
+
+.hp-scroll-row {
+  margin-top: 12px; padding-left: 18px; display: flex; gap: 12px; overflow-x: auto;
+  padding-bottom: 8px; scroll-snap-type: x mandatory;
+}
+.hp-scroll-item { scroll-snap-align: start; flex: 0 0 auto; }
+
+.hp-podium { display: flex; justify-content: center; padding-left: 18px; margin-top: 12px; gap: 16px; flex-wrap: wrap; }
