@@ -19,7 +19,7 @@ export type RaffleListItem = {
   registeredAt: string | null;
   creator: string;
   createdAtBlock: string;
-  createdAtTimestamp: string; // ✅ This is the field we need
+  createdAtTimestamp: string; // ✅ Field needed for "Created" date
   creationTx: string;
   usdc: string;
   entropy: string;
@@ -142,8 +142,7 @@ export async function fetchRafflesFromSubgraph(
 
 /**
  * ✅ FETCH TICKETS for Leaderboard
- * We request 'owner' directly. 
- * Note: If your subgraph stores owner as a relationship, change 'owner' to 'owner { id }' below.
+ * Queries the specific 'Ticket' entity linked to the raffle.
  */
 export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
@@ -174,9 +173,8 @@ export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]
     const json = await res.json();
     const raw = (json.data?.tickets ?? []) as any[];
     
-    // Defensive mapping: handles if owner is string OR object
     return raw.map(t => ({
-      owner: typeof t.owner === 'object' ? t.owner.id : t.owner
+      owner: t.owner // Graph returns address bytes as hex string automatically
     }));
   } catch (e) {
     console.error("Error fetching tickets:", e);
