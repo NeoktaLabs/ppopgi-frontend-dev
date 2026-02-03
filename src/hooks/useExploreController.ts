@@ -6,7 +6,6 @@ import type { RaffleStatus } from "../indexer/subgraph";
 
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 
-// Helper functions
 const norm = (s: string) => (s || "").trim().toLowerCase();
 const safeNum = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const isActiveStatus = (s: RaffleStatus) => s === "OPEN" || s === "FUNDING_PENDING";
@@ -16,14 +15,15 @@ export function useExploreController() {
   const activeAccount = useActiveAccount();
   const me = activeAccount?.address ? norm(activeAccount.address) : null;
 
-  // --- Filter States ---
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<RaffleStatus | "ALL">("ALL");
-  const [sort, setSort] = useState<SortMode>("endingSoon");
+  
+  // ✅ CHANGE: Default sort is now "newest"
+  const [sort, setSort] = useState<SortMode>("newest");
+  
   const [openOnly, setOpenOnly] = useState(false);
   const [myRafflesOnly, setMyRafflesOnly] = useState(false);
 
-  // --- The Heavy Logic ---
   const list = useMemo(() => {
     const all = items ?? [];
     let filtered = status === "ALL" ? all : all.filter((r) => r.status === status);
@@ -40,29 +40,28 @@ export function useExploreController() {
     }
 
     return filtered.sort((a, b) => {
+      // Newest logic: Sort by timestamp, fallback to ID (assuming larger ID = newer)
+      if (sort === "newest") {
+        const timeDiff = safeNum(b.lastUpdatedTimestamp) - safeNum(a.lastUpdatedTimestamp);
+        return timeDiff !== 0 ? timeDiff : String(b.id).localeCompare(String(a.id));
+      }
       if (sort === "endingSoon") return safeNum(a.deadline) - safeNum(b.deadline);
       if (sort === "bigPrize") {
         const A = BigInt(a.winningPot || "0"), B = BigInt(b.winningPot || "0");
         return A === B ? 0 : A > B ? -1 : 1;
       }
-      // "newest"
-      const timeDiff = safeNum(b.lastUpdatedTimestamp) - safeNum(a.lastUpdatedTimestamp);
-      return timeDiff !== 0 ? timeDiff : String(a.id).localeCompare(String(b.id));
+      return 0;
     });
   }, [items, q, status, sort, openOnly, myRafflesOnly, me]);
 
   const resetFilters = () => {
-    setQ(""); setStatus("ALL"); setSort("endingSoon");
+    setQ(""); setStatus("ALL"); setSort("newest"); // ✅ Reset to newest
     setOpenOnly(false); setMyRafflesOnly(false);
   };
 
   return {
     state: { items, list, note, q, status, sort, openOnly, myRafflesOnly, me },
     actions: { setQ, setStatus, setSort, setOpenOnly, setMyRafflesOnly, resetFilters },
-    meta: { 
-      totalCount: items?.length || 0, 
-      shownCount: list.length,
-      isLoading: !items 
-    }
+    meta: { totalCount: items?.length || 0, shownCount: list.length, isLoading: !items }
   };
 }
