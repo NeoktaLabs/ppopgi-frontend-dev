@@ -1,43 +1,179 @@
 /* src/pages/HomePage.css */
-.hp-section {
-  margin-top: 18px; padding: 16px; border-radius: 24px; position: relative; overflow: hidden;
-  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04)),
-              radial-gradient(900px 240px at 10% 0%, rgba(255,141,187,0.10), rgba(255,141,187,0) 55%),
-              radial-gradient(900px 240px at 90% 0%, rgba(203,183,246,0.10), rgba(203,183,246,0) 55%);
-  backdrop-filter: blur(2px); border: 2px solid rgba(255,255,255,0.55);
-  box-shadow: 0 18px 40px rgba(0,0,0,0.16);
+
+.hp-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 0;
+  color: #4A0F2B;
+  overflow-x: hidden; /* Prevent horizontal scroll from podium effects */
 }
 
-.hp-inner-stroke {
-  position: absolute; inset: 6px; border-radius: 20px; pointer-events: none;
-  border: 1px solid rgba(242,166,198,0.55);
+/* --- 1. HERO RE-DESIGN --- */
+.hp-hero {
+  text-align: center;
+  padding: 80px 20px 100px 20px; /* Extra bottom padding for Podium overlap */
+  margin-bottom: -60px; /* Pull podium up into hero */
+  position: relative;
+  
+  /* Deep, rich gradient background */
+  background: radial-gradient(circle at 50% 30%, rgba(255,255,255,0.8) 0%, rgba(255,235,246,0.2) 60%, transparent 100%);
 }
 
-.hp-accent {
-  position: absolute; top: 12px; bottom: 12px; left: 12px; width: 6px; border-radius: 999px;
-  background: linear-gradient(180deg, #FF8DBB, #CBB7F6, #FFD89A);
-  box-shadow: 0 10px 18px rgba(0,0,0,0.12);
+.hp-hero-title {
+  font-size: 56px;
+  font-weight: 1000;
+  margin: 0;
+  letter-spacing: -2px;
+  line-height: 1;
+  
+  /* Text Gradient */
+  background: linear-gradient(180deg, #4A0F2B 0%, #9A2A58 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  
+  /* Subtle drop shadow for depth */
+  filter: drop-shadow(0 4px 12px rgba(180, 70, 120, 0.2));
 }
 
-.hp-title-row { display: flex; align-items: center; gap: 12px; padding-left: 18px; }
-
-.hp-pill {
-  display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border-radius: 999px; font-weight: 1000; font-size: 16px; letter-spacing: 0.25px;
-  background: rgba(255,255,255,0.88); border: 1px solid rgba(0,0,0,0.10); color: #4A0F2B;
-  box-shadow: 0 10px 18px rgba(0,0,0,0.10);
+.hp-hero-sub {
+  font-size: 18px;
+  font-weight: 600;
+  opacity: 0.6;
+  margin-top: 16px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.hp-notch {
-  width: 12px; height: 12px; border-radius: 999px;
-  background: linear-gradient(135deg, rgba(255,141,187,0.95), rgba(203,183,246,0.95));
-  box-shadow: 0 6px 12px rgba(0,0,0,0.12);
+/* The Jackpot Pill */
+.hp-stat-pill {
+  margin-top: 32px;
+  padding: 12px 32px;
+  background: #ffffff;
+  display: inline-block;
+  border-radius: 99px;
+  box-shadow: 0 20px 40px -6px rgba(180, 70, 120, 0.2);
+  border: 1px solid rgba(0,0,0,0.04);
+  transform: scale(1);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.hp-stat-pill:hover { transform: scale(1.05); }
+
+.hp-stat-label { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; color: #4A0F2B; }
+.hp-stat-val { font-size: 36px; font-weight: 1000; color: #4A0F2B; letter-spacing: -1px; line-height: 1; margin-top: 2px; }
+
+
+/* --- 2. PODIUM 2.0 (The Floating Stage) --- */
+.hp-podium-section {
+  position: relative;
+  z-index: 10;
+  margin-bottom: 60px;
 }
 
-.hp-scroll-row {
-  margin-top: 12px; padding-left: 18px; display: flex; gap: 12px; overflow-x: auto;
-  padding-bottom: 8px; scroll-snap-type: x mandatory;
+.hp-podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end; /* Align bottom */
+  gap: 0px; /* Overlap slightly */
+  padding-top: 40px; /* Space for crown */
+  perspective: 1000px; /* Enable 3D effects */
 }
-.hp-scroll-item { scroll-snap-align: start; flex: 0 0 auto; }
 
-.hp-podium { display: flex; justify-content: center; padding-left: 18px; margin-top: 12px; gap: 16px; flex-wrap: wrap; }
+/* GOLD (Center) */
+.pp-gold-wrapper {
+  z-index: 10;
+  transform: scale(1.15) translateY(-10px);
+  position: relative;
+  /* Gold Glow behind */
+  box-shadow: 0 40px 80px -20px rgba(255, 180, 50, 0.4);
+  border-radius: 14px;
+}
+
+/* SILVER (Left) */
+.pp-silver-wrapper {
+  z-index: 5;
+  transform: scale(0.9) translateX(20px) rotateY(15deg);
+  opacity: 0.9;
+  filter: brightness(0.95);
+  transition: all 0.3s;
+}
+.pp-silver-wrapper:hover { transform: scale(0.95) translateX(10px) rotateY(5deg); opacity: 1; filter: brightness(1); z-index: 11; }
+
+/* BRONZE (Right) */
+.pp-bronze-wrapper {
+  z-index: 5;
+  transform: scale(0.9) translateX(-20px) rotateY(-15deg);
+  opacity: 0.9;
+  filter: brightness(0.95);
+  transition: all 0.3s;
+}
+.pp-bronze-wrapper:hover { transform: scale(0.95) translateX(-10px) rotateY(-5deg); opacity: 1; filter: brightness(1); z-index: 11; }
+
+/* The Crown Animation */
+@keyframes hp-float {
+  0%, 100% { transform: translateY(0px) rotate(-5deg); }
+  50% { transform: translateY(-12px) rotate(5deg); }
+}
+
+.hp-crown {
+  position: absolute;
+  top: -55px;
+  left: 50%;
+  margin-left: -24px;
+  font-size: 48px;
+  filter: drop-shadow(0 10px 10px rgba(0,0,0,0.2));
+  animation: hp-float 3s ease-in-out infinite;
+  z-index: 20;
+}
+
+/* Mobile Stack for Podium */
+@media (max-width: 850px) {
+  .hp-podium { flex-direction: column; align-items: center; gap: 30px; margin-top: 40px; }
+  .pp-gold-wrapper { transform: scale(1.1); order: -1; margin-bottom: 20px; }
+  .pp-silver-wrapper, .pp-bronze-wrapper { transform: none; opacity: 1; }
+  .hp-crown { top: -60px; }
+}
+
+
+/* --- 3. SECTIONS (Cleaner Look) --- */
+.hp-section-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 24px;
+  margin-bottom: 16px;
+  margin-top: 40px;
+}
+
+.hp-section-title {
+  font-size: 20px; font-weight: 1000; 
+  display: flex; align-items: center; gap: 8px;
+}
+.hp-section-line {
+  flex: 1; height: 2px; 
+  background: linear-gradient(90deg, rgba(0,0,0,0.05), transparent);
+  border-radius: 99px;
+}
+
+/* Horizontal Scroll Strip */
+.hp-strip {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 10px 24px 40px 24px; /* Bottom padding for hover lift */
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  
+  /* Hide Scrollbar */
+  scrollbar-width: none;
+}
+.hp-strip::-webkit-scrollbar { display: none; }
+
+.hp-strip-item {
+  scroll-snap-align: center;
+  flex: 0 0 auto;
+  width: 300px;
+}
+
+.hp-empty-msg { 
+  margin: 0 24px; padding: 40px; background: rgba(0,0,0,0.02); 
+  border-radius: 16px; text-align: center; font-weight: 700; opacity: 0.5; 
+}
