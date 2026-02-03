@@ -1,8 +1,8 @@
 // src/main.tsx
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "./app/styles/globals.css";
-import App from "./app/App";
+import "./index.css";
+import App from "./App";
 
 import { ThirdwebProvider } from "thirdweb/react";
 
