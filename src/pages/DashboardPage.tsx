@@ -1,4 +1,4 @@
-// src/pages/DashboardPageV2.tsx
+// src/pages/DashboardPage.tsx
 import React, { useState, useEffect } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
@@ -13,7 +13,13 @@ const fmtTime = (s: number) => {
   return d > 0 ? `${d}d ${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(h)}:${pad(m)}:${pad(sec)}`;
 };
 
-export function DashboardPage({ account, onOpenRaffle }: { account: string | null, onOpenRaffle: (id: string) => void }) {
+type Props = {
+  account: string | null;
+  onOpenRaffle: (id: string) => void;
+  onOpenSafety: (id: string) => void; // ✅ Added prop type
+};
+
+export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   const { data, hatch, actions } = useDashboardController();
   
   // Local clock for UI countdowns
@@ -61,7 +67,8 @@ export function DashboardPage({ account, onOpenRaffle }: { account: string | nul
              <RaffleCard 
                 key={r.id} 
                 raffle={r} 
-                onOpen={onOpenRaffle} 
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety} // ✅ Passed down
                 nowMs={nowS * 1000} 
                 hatch={getHatchProps(r.id, r.creator)} 
              />
@@ -74,7 +81,15 @@ export function DashboardPage({ account, onOpenRaffle }: { account: string | nul
         <div className="db-section-title">Joined</div>
         <div className="db-grid">
            {data.joined?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>No raffles joined.</span>}
-           {data.joined?.map((r: any) => <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} nowMs={nowS * 1000} />)}
+           {data.joined?.map((r: any) => (
+             <RaffleCard 
+               key={r.id} 
+               raffle={r} 
+               onOpen={onOpenRaffle} 
+               onOpenSafety={onOpenSafety} // ✅ Passed down
+               nowMs={nowS * 1000} 
+             />
+           ))}
         </div>
       </div>
 
@@ -94,9 +109,13 @@ export function DashboardPage({ account, onOpenRaffle }: { account: string | nul
              const hasNative = BigInt(it.claimableNative || 0) > 0n;
              
              return (
-               // ✅ Added class to prevent squashing
                <div key={r.id} className="db-claim-wrapper">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} nowMs={nowS * 1000} />
+                  <RaffleCard 
+                    raffle={r} 
+                    onOpen={onOpenRaffle} 
+                    onOpenSafety={onOpenSafety} // ✅ Passed down
+                    nowMs={nowS * 1000} 
+                  />
                   <div className="db-claim-box">
                      <div className="db-claim-text">
                         Claimable: {fmt(it.claimableUsdc, 6)} USDC • {fmt(it.claimableNative, 18)} Native
