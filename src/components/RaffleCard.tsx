@@ -4,7 +4,6 @@ import { formatUnits } from "ethers";
 import "./RaffleCard.css";
 
 // --- Types ---
-// (Adjust based on your actual types from subgraph/indexer)
 type RaffleData = {
   id: string;
   name: string;
@@ -15,7 +14,6 @@ type RaffleData = {
   maxTickets: string;
   deadline: string;
   creator: string;
-  // ... other fields
 };
 
 type Props = {
@@ -24,7 +22,6 @@ type Props = {
   onOpenSafety?: (id: string) => void;
   ribbon?: "gold" | "silver" | "bronze";
   nowMs?: number;
-  // Optional hatch/action props if you use them
   hatch?: { show: boolean; label: string; onClick: () => void; disabled?: boolean };
 };
 
@@ -64,8 +61,7 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
     return `${hours}h ${Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))}m left`;
   }, [raffle.deadline, nowMs]);
 
-  // Handle click: if clicking the badge, open safety; otherwise open raffle
-  const handleBadgeClick = (e: React.MouseEvent) => {
+  const handleShieldClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onOpenSafety) onOpenSafety(raffle.id);
   };
@@ -76,25 +72,25 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       {/* Ribbon for Podium */}
       {ribbon && <div className={`rc-ribbon ${ribbon}`}>{ribbon === "gold" ? "1st" : ribbon === "silver" ? "2nd" : "3rd"}</div>}
 
-      {/* HEADER: Status + Verified Badge */}
+      {/* HEADER: Status + Shield */}
       <div className="rc-header">
         <span className={`rc-status-pill ${raffle.status === "OPEN" ? "open" : "closed"}`}>
           {raffle.status === "FUNDING_PENDING" ? "Opening..." : raffle.status}
         </span>
 
-        {/* ✅ NEW PROMINENT BADGE */}
+        {/* Restore subtle shield button */}
         <div 
-           className="rc-verified-badge" 
-           onClick={handleBadgeClick} 
+           className="rc-shield-btn" 
+           onClick={handleShieldClick} 
            title="Verified Randomness & Contract"
         >
           🛡️
         </div>
       </div>
 
-      {/* BODY: THE PRIZE HERO */}
+      {/* BODY: Prize Section */}
       <div className="rc-prize-section">
-        <div className="rc-prize-label">Win This Pot</div>
+        <div className="rc-prize-label">Winning Pot</div>
         <div className="rc-prize-val">{potDisplay}</div>
         
         <div className="rc-host-row">
@@ -111,7 +107,7 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         
         <div className="rc-stat-grid">
            <div className="rc-stat">
-              <div className="rc-stat-lbl">Ticket Price</div>
+              <div className="rc-stat-lbl">Price</div>
               <div className="rc-stat-val">{priceDisplay}</div>
            </div>
            <div className="rc-stat">
@@ -130,10 +126,10 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
            <span>{timeLeft}</span>
         </div>
         
-        {/* Optional Hatch Action (for dashboard) */}
+        {/* Optional Hatch Action */}
         {hatch?.show && (
            <button 
-             className="rc-hatch-btn" // You can style this in CSS if needed
+             className="rc-hatch-btn"
              onClick={(e) => { e.stopPropagation(); hatch.onClick(); }}
              disabled={hatch.disabled}
              style={{ width: "100%", marginTop: 12, padding: 10, borderRadius: 8, background: "#1e293b", color: "white", fontWeight: "bold", cursor: hatch.disabled ? "not-allowed" : "pointer", opacity: hatch.disabled ? 0.6 : 1 }}
