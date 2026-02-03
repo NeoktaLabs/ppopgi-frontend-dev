@@ -1,0 +1,57 @@
+/* src/components/CreateRaffleModal.css */
+.crm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; z-index: 10500;
+}
+.crm-modal {
+  width: min(980px, 100%); max-height: min(88vh, 860px);
+  border-radius: 20px; background: rgba(255,255,255,0.96);
+  box-shadow: 0 20px 70px rgba(0,0,0,0.30); color: #14141c;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.crm-header {
+  padding: 18px; border-bottom: 1px solid rgba(0,0,0,0.06);
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.crm-body {
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px;
+  padding: 14px; overflow-y: auto;
+}
+.crm-section {
+  border-radius: 16px; border: 1px solid rgba(0,0,0,0.06); padding: 14px;
+  margin-bottom: 12px;
+}
+.crm-section.blue { background: rgba(245,247,255,0.9); }
+.crm-section.green { background: rgba(245,255,248,0.9); }
+.crm-section.orange { background: rgba(255,248,245,0.9); }
+.crm-section.gray { background: rgba(250,250,252,0.95); }
+
+.crm-input-group { margin-bottom: 10px; }
+.crm-label { font-size: 12px; font-weight: 900; margin-bottom: 6px; display: block; }
+.crm-input {
+  width: 100%; border: 1px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.92);
+  border-radius: 12px; padding: 12px; font-weight: 800; outline: none;
+}
+.crm-tip { font-size: 12px; opacity: 0.75; margin-top: 6px; line-height: 1.35; }
+.crm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.crm-grid-dur { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 10px; }
+
+.crm-pill {
+  display: inline-flex; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 900;
+  border: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.78);
+}
+.crm-pill.good { border-color: rgba(20,140,80,0.25); background: rgba(210,255,230,0.65); }
+.crm-pill.warn { border-color: rgba(180,40,40,0.22); background: rgba(255,220,220,0.70); }
+
+.crm-btn {
+  width: 100%; padding: 12px; border-radius: 14px; font-weight: 950; cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.1); margin-top: 6px;
+}
+.crm-btn.primary { background: #191923; color: white; }
+.crm-btn.secondary { background: white; color: #14141c; }
+.crm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 768px) {
+  .crm-body { grid-template-columns: 1fr; }
+}
