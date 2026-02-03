@@ -1,0 +1,81 @@
+/* src/components/SafetyProofModal.css */
+
+.sp-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid; place-items: center; padding: 16px;
+  z-index: 11000;
+  backdrop-filter: blur(4px);
+}
+
+.sp-card {
+  width: min(720px, 100%);
+  max-height: min(85vh, 900px);
+  display: flex; flex-direction: column;
+  
+  /* Blue-tinted Glass Theme for Safety */
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(240,248,255,0.95));
+  border: 1px solid rgba(255,255,255,0.8);
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(11, 46, 92, 0.15);
+  color: #0B2E5C; /* Dark Blue Ink */
+  overflow: hidden;
+}
+
+/* Header */
+.sp-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  background: rgba(255,255,255,0.5);
+}
+
+.sp-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 99px;
+  background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD;
+  font-weight: 1000; font-size: 14px; letter-spacing: 0.25px;
+}
+
+.sp-close-btn {
+  padding: 8px 14px; border-radius: 12px; font-weight: 950; cursor: pointer;
+  background: white; border: 1px solid rgba(0,0,0,0.1); color: #0B2E5C;
+}
+.sp-close-btn:hover { background: #f0f9ff; }
+
+/* Body */
+.sp-body {
+  padding: 24px; overflow-y: auto; display: grid; gap: 20px;
+}
+
+.sp-intro { text-align: center; margin-bottom: 10px; }
+.sp-intro-title { font-size: 22px; font-weight: 1000; letter-spacing: -0.5px; margin-bottom: 8px; }
+.sp-intro-text { font-size: 13px; opacity: 0.8; max-width: 480px; margin: 0 auto; line-height: 1.4; }
+
+.sp-tear {
+  height: 1px; margin: 0 10px; opacity: 0.6;
+  background-image: linear-gradient(to right, #0B2E5C 30%, rgba(255, 255, 255, 0) 0%);
+  background-position: bottom; background-size: 10px 1px; background-repeat: repeat-x;
+}
+
+/* Sections */
+.sp-panel {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(11, 46, 92, 0.08);
+  border-radius: 18px; padding: 18px;
+  display: grid; gap: 10px;
+}
+.sp-panel-title { font-weight: 1000; font-size: 14px; opacity: 0.9; margin-bottom: 4px; display: flex; justify-content: space-between; }
+
+.sp-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.sp-lbl { opacity: 0.75; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.sp-val { font-weight: 950; text-align: right; }
+.sp-mono { font-family: "Courier New", monospace; letter-spacing: -0.5px; }
+
+.sp-link {
+  color: #0284c7; text-decoration: none; border-bottom: 1px dotted rgba(2, 132, 199, 0.4);
+  transition: all 0.2s; cursor: pointer;
+}
+.sp-link:hover { background: rgba(2, 132, 199, 0.05); border-bottom-style: solid; }
+
+.sp-note { font-size: 12px; opacity: 0.75; font-style: italic; margin-top: 4px; }
