@@ -1,0 +1,1 @@
+export { CashierModal } from "./CashierModal";

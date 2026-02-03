@@ -1,0 +1,42 @@
+/* src/components/raffleCard.css */
+
+/* ✅ 2-line clamp for long raffle names */
+.pp-rc-titleClamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* nicer in compact cards */
+  line-height: 1.12;
+}
+
+/* ✅ pulse animation moved out of the component */
+@keyframes ppPulse {
+  0% {
+    transform: scale(1);
+    filter: saturate(1);
+  }
+  50% {
+    transform: scale(1.045);
+    filter: saturate(1.2);
+  }
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+  }
+}
+
+/* apply only when needed */
+.pp-rc-pulse {
+  animation: ppPulse 950ms ease-in-out infinite;
+}
+
+/* respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .pp-rc-pulse {
+    animation: none;
+  }
+}
