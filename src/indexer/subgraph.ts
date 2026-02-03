@@ -7,29 +7,20 @@ export type RaffleStatus =
   | "COMPLETED"
   | "CANCELED";
 
-/**
- * Home list item.
- */
 export type RaffleListItem = {
-  id: string; // raffle address
+  id: string;
   name: string;
   status: RaffleStatus;
-
-  // canonical discovery
   deployer: string | null;
   registry: string | null;
   typeId: string | null;
   registryIndex: string | null;
   isRegistered: boolean;
   registeredAt: string | null;
-
-  // creation metadata
   creator: string;
   createdAtBlock: string;
-  createdAtTimestamp: string;
+  createdAtTimestamp: string; // ✅ This is the field we need
   creationTx: string;
-
-  // config / contracts
   usdc: string;
   entropy: string;
   entropyProvider: string;
@@ -37,37 +28,28 @@ export type RaffleListItem = {
   protocolFeePercent: string;
   callbackGasLimit: string;
   minPurchaseAmount: string;
-
-  // economics
   winningPot: string;
   ticketPrice: string;
   deadline: string;
   minTickets: string;
   maxTickets: string;
-
-  // lifecycle / state
   sold: string;
   ticketRevenue: string;
   paused: boolean;
-
   finalizeRequestId: string | null;
   finalizedAt: string | null;
   selectedProvider: string | null;
-
   winner: string | null;
   winningTicketIndex: string | null;
   completedAt: string | null;
-
   canceledReason: string | null;
   canceledAt: string | null;
   soldAtCancel: string | null;
-
-  // indexing metadata
   lastUpdatedBlock: string;
   lastUpdatedTimestamp: string;
 };
 
-// Simple Ticket Type for the Leaderboard
+// Simple Ticket Type
 export type TicketItem = {
   owner: string; 
 };
@@ -83,9 +65,6 @@ type FetchRafflesOptions = {
   signal?: AbortSignal;
 };
 
-/**
- * Fetch latest raffles
- */
 export async function fetchRafflesFromSubgraph(
   opts: FetchRafflesOptions = {}
 ): Promise<RaffleListItem[]> {
@@ -162,7 +141,9 @@ export async function fetchRafflesFromSubgraph(
 }
 
 /**
- * ✅ NEW: Fetch Tickets for a specific Raffle to build the Leaderboard
+ * ✅ FETCH TICKETS for Leaderboard
+ * We request 'owner' directly. 
+ * Note: If your subgraph stores owner as a relationship, change 'owner' to 'owner { id }' below.
  */
 export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
@@ -178,18 +159,27 @@ export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]
     }
   `;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, variables: { raffleId: raffleId.toLowerCase() } }),
-  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, variables: { raffleId: raffleId.toLowerCase() } }),
+    });
 
-  if (!res.ok) return [];
-  const json = await res.json();
-  
-  // Robust check for owner field (handles if it's an object or string)
-  const raw = (json.data?.tickets ?? []) as any[];
-  return raw.map(t => ({
-    owner: typeof t.owner === 'object' ? t.owner.id : t.owner
-  }));
+    if (!res.ok) {
+      console.error("Subgraph ticket fetch failed", res.status);
+      return [];
+    }
+    
+    const json = await res.json();
+    const raw = (json.data?.tickets ?? []) as any[];
+    
+    // Defensive mapping: handles if owner is string OR object
+    return raw.map(t => ({
+      owner: typeof t.owner === 'object' ? t.owner.id : t.owner
+    }));
+  } catch (e) {
+    console.error("Error fetching tickets:", e);
+    return [];
+  }
 }
