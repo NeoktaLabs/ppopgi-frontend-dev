@@ -42,6 +42,8 @@ export default function App() {
   const [signInOpen, setSignInOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
+  
+  // Safety Modal Logic
   const [safetyId, setSafetyId] = useState<string | null>(null);
   
   // 5. Global Clock (One tick for the whole app)
@@ -56,9 +58,14 @@ export default function App() {
 
   // Actions
   const handleSignOut = () => { if (activeWallet) disconnect(activeWallet); };
-  const handleOpenSafety = (id: string) => { closeRaffle(); setSafetyId(id); };
+  
+  // ✅ FIX: Close details if open, then open safety
+  const handleOpenSafety = (id: string) => { 
+    closeRaffle(); 
+    setSafetyId(id); 
+  };
 
-  // Data for Safety Modal (Only fetches when open)
+  // Data for Safety Modal (Fetches only when ID is set)
   const { data: safetyData } = useRaffleDetails(safetyId, !!safetyId);
 
   return (
@@ -73,15 +80,26 @@ export default function App() {
     >
       {/* --- Page Routing --- */}
       {page === "home" && (
-        <HomePage nowMs={nowMs} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />
+        <HomePage 
+          nowMs={nowMs} 
+          onOpenRaffle={openRaffle} 
+          onOpenSafety={handleOpenSafety} 
+        />
       )}
       
       {page === "explore" && (
-        <ExplorePage onOpenRaffle={openRaffle} />
+        <ExplorePage 
+          onOpenRaffle={openRaffle} 
+          onOpenSafety={handleOpenSafety} // ✅ Added
+        />
       )}
       
       {page === "dashboard" && (
-        <DashboardPage account={account} onOpenRaffle={openRaffle} />
+        <DashboardPage 
+          account={account} 
+          onOpenRaffle={openRaffle} 
+          onOpenSafety={handleOpenSafety} // ✅ Added
+        />
       )}
 
       {/* --- Global Modals --- */}
