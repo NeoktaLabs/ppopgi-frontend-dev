@@ -1,7 +1,6 @@
 // src/components/RaffleDetailsModal.tsx
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
-import { useRaffleParticipants } from "../hooks/useRaffleParticipants"; 
 import type { RaffleListItem } from "../indexer/subgraph"; 
 import "./RaffleDetailsModal.css";
 
@@ -27,15 +26,12 @@ type Props = {
   open: boolean;
   raffleId: string | null;
   onClose: () => void;
-  initialRaffle?: RaffleListItem | null; // Optional fallback data
+  // We accept initial data to show dates immediately
+  initialRaffle?: RaffleListItem | null; 
 };
 
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
-  const [tab, setTab] = useState<"receipt" | "holders">("receipt");
-  
-  // Fetch Participants
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId);
 
   // Combine live state with initial data fallback
   const displayData = state.data || initialRaffle;
@@ -46,16 +42,18 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const price = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
     const sold = Number(displayData.sold || "0");
     const max = Number(displayData.maxTickets || "0");
+    
     const roi = price > 0 ? (pot / price).toFixed(1) : "0";
     const odds = sold > 0 ? `1 in ${sold + 1}` : "100%";
+    
     return { roi, odds, pot, price, max };
   }, [displayData, math]);
 
   if (!open) return null;
 
-  // ✅ Fix: Use the correct timestamp field from schema
-  const createdTs = state.data?.createdAtTimestamp || initialRaffle?.createdAtTimestamp;
-  const deadlineTs = state.data?.deadline || initialRaffle?.deadline;
+  // Safe Date Access: Use the specific field from your subgraph types
+  const createdTs = displayData?.createdAtTimestamp;
+  const deadlineTs = displayData?.deadline;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -134,51 +132,28 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
            )}
         </div>
 
-        {/* TABS */}
-        <div className="rdm-tab-group">
-           <button className={`rdm-tab-btn ${tab === 'receipt' ? 'active' : ''}`} onClick={() => setTab('receipt')}>Technical Receipt</button>
-           <button className={`rdm-tab-btn ${tab === 'holders' ? 'active' : ''}`} onClick={() => setTab('holders')}>Ticket Holders</button>
-        </div>
-
-        {/* TAB 1: RECEIPT */}
-        {tab === 'receipt' && displayData && (
+        {/* TECHNICAL RECEIPT (Always visible now) */}
+        {displayData && (
            <div className="rdm-receipt">
               <div className="rdm-receipt-title">TECHNICAL SPECS</div>
-              <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
               
-              {/* ✅ Correct usage of timestamp */}
+              <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
               <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(createdTs)}</span></div>
               <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(deadlineTs)}</span></div>
-              
               <div className="rdm-info-row"><span>Tickets Sold</span><span className="rdm-info-val">{displayData.sold} / {displayData.maxTickets === "0" ? "∞" : displayData.maxTickets}</span></div>
-              <div className="rdm-info-row" style={{ marginTop: 12 }}><span>Randomness</span><span className="rdm-info-val"><ExplorerLink addr={displayData.entropyProvider}>{math.short(displayData.entropyProvider)}</ExplorerLink></span></div>
-              <div className="rdm-info-row"><span>Contract</span><span className="rdm-info-val"><ExplorerLink addr={raffleId || ""}>{math.short(raffleId || "")}</ExplorerLink></span></div>
-           </div>
-        )}
-
-        {/* TAB 2: HOLDERS */}
-        {tab === 'holders' && (
-           <div className="rdm-leaderboard-section">
-              <div className="rdm-lb-header">
-                 <span>Address</span>
-                 <span>Holdings</span>
+              
+              <div className="rdm-info-row" style={{ marginTop: 12 }}>
+                 <span>Randomness</span>
+                 <span className="rdm-info-val">
+                    <ExplorerLink addr={displayData.entropyProvider}>{math.short(displayData.entropyProvider)}</ExplorerLink>
+                 </span>
               </div>
-              <div className="rdm-lb-list">
-                 {loadingPart && <div className="rdm-lb-empty">Loading holders...</div>}
-                 
-                 {!loadingPart && participants.length === 0 && <div className="rdm-lb-empty">No tickets sold yet.</div>}
-
-                 {!loadingPart && participants.map((p, i) => (
-                    <div key={i} className="rdm-lb-row">
-                       <span className="rdm-lb-addr">
-                          <ExplorerLink addr={p.address}>{p.address.slice(0,10)}...</ExplorerLink>
-                       </span>
-                       <div className="rdm-lb-stats">
-                          <span className="rdm-lb-count">{p.count} 🎟</span>
-                          <span className="rdm-lb-pct">({p.percentage}%)</span>
-                       </div>
-                    </div>
-                 ))}
+              
+              <div className="rdm-info-row">
+                 <span>Contract</span>
+                 <span className="rdm-info-val">
+                    <ExplorerLink addr={raffleId || ""}>{math.short(raffleId || "")}</ExplorerLink>
+                 </span>
               </div>
            </div>
         )}
