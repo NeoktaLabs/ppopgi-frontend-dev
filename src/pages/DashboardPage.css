@@ -1,43 +1,111 @@
 /* src/pages/DashboardPage.css */
-.db-container { padding: 20px; color: #4A0F2B; }
+
+.db-container { 
+  padding: 20px; 
+  color: #4A0F2B; 
+  max-width: 1400px;
+  margin: 0 auto;
+}
 
 .db-header {
-  display: flex; justify-content: space-between; align-items: baseline; 
-  gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+  display: flex; 
+  justify-content: space-between; 
+  align-items: baseline; 
+  gap: 12px; 
+  flex-wrap: wrap; 
+  margin-bottom: 20px;
 }
-.db-header h2 { margin: 0; font-weight: 1000; font-size: 28px; }
+.db-header h2 { 
+  margin: 0; 
+  font-weight: 1000; 
+  font-size: 28px; 
+}
 
 .db-section {
-  margin-top: 18px; padding: 16px; border-radius: 18px;
+  margin-top: 24px; 
+  padding: 20px; 
+  border-radius: 24px;
   border: 1px solid rgba(255,255,255,0.55);
   background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.10)),
               radial-gradient(900px 220px at 15% 0%, rgba(255,141,187,0.10), transparent 55%),
               radial-gradient(900px 220px at 85% 0%, rgba(203,183,246,0.10), transparent 55%);
-  box-shadow: 0 16px 34px rgba(0,0,0,0.12); backdrop-filter: blur(10px);
+  box-shadow: 0 16px 34px rgba(0,0,0,0.12); 
+  backdrop-filter: blur(10px);
 }
 
-.db-section-title { font-weight: 1000; color: #4A0F2B; font-size: 16px; margin-bottom: 12px; }
+.db-section-title { 
+  font-weight: 1000; 
+  color: #4A0F2B; 
+  font-size: 18px; 
+  margin-bottom: 16px; 
+}
 
-.db-grid { display: grid; gap: 12px; }
+/* ✅ RESPONSIVE GRID LAYOUT */
+.db-grid { 
+  display: grid; 
+  /* Fills row with as many 290px+ cards as possible */
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); 
+  gap: 20px; 
+  
+  /* Centers the cards if the row isn't full */
+  justify-items: center;
+}
 
+/* Ensure the wrapper divs inside the grid behave */
+.db-grid > div {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Buttons & Pills */
 .db-btn {
-  border: 1px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.82);
-  border-radius: 14px; padding: 12px; cursor: pointer; font-weight: 1000; color: #4A0F2B;
+  border: 1px solid rgba(0,0,0,0.10); 
+  background: rgba(255,255,255,0.82);
+  border-radius: 14px; 
+  padding: 12px; 
+  cursor: pointer; 
+  font-weight: 1000; 
+  color: #4A0F2B;
   transition: opacity 0.2s;
+  width: 100%;
 }
-.db-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.db-btn:disabled { 
+  opacity: 0.55; 
+  cursor: not-allowed; 
+}
 
 .db-pill {
-  border: 1px solid rgba(0,0,0,0.12); background: rgba(255,255,255,0.78);
-  border-radius: 99px; padding: 8px 12px; cursor: pointer; color: #4A0F2B;
-  font-weight: 950; font-size: 12px;
+  border: 1px solid rgba(0,0,0,0.12); 
+  background: rgba(255,255,255,0.78);
+  border-radius: 99px; 
+  padding: 8px 12px; 
+  cursor: pointer; 
+  color: #4A0F2B;
+  font-weight: 950; 
+  font-size: 12px;
 }
 
-/* Sub-card for claims */
+/* Sub-card for claims (attached to bottom of raffle card) */
 .db-claim-box {
-  margin-top: 10px; padding: 12px; border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.55); background: rgba(255,255,255,0.20);
-  display: grid; gap: 10px;
+  margin-top: 10px; 
+  padding: 16px; 
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.55); 
+  background: rgba(255,255,255,0.40);
+  display: grid; 
+  gap: 12px;
+  width: 100%;
+  max-width: 320px; /* Match card width */
 }
-.db-claim-text { font-size: 13px; opacity: 0.92; font-weight: 900; }
-.db-claim-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.db-claim-text { 
+  font-size: 13px; 
+  opacity: 0.92; 
+  font-weight: 900; 
+  text-align: center;
+}
+.db-claim-actions { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 10px; 
+}
