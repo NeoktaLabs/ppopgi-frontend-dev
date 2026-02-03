@@ -1,10 +1,11 @@
-// src/components/RaffleCard.tsx
 import React from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { useRaffleCard } from "../hooks/useRaffleCard";
 import "./RaffleCard.css";
 
-// --- Types (kept from your original file) ---
+// ✅ Helper for Explorer URL
+const EXPLORER_URL = "https://explorer.etherlink.com/address/";
+
 type HatchUI = {
   show: boolean;
   ready: boolean;
@@ -25,11 +26,9 @@ type Props = {
 };
 
 export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch }: Props) {
-  // Use the hook for all logic
   const { ui, actions } = useRaffleCard(raffle, nowMs);
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
-  // Combine base class with optional ribbon class (e.g., "rc-card gold")
   const cardClass = `rc-card ${ribbon || ""}`;
   const showHatch = hatch && hatch.show;
 
@@ -40,13 +39,12 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       role="button"
       tabIndex={0}
     >
-      {/* The deep ticket notches on the sides */}
+      {/* Decorations */}
       <div className="rc-notch left" />
       <div className="rc-notch right" />
-      
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
 
-      {/* Header: Status + Buttons */}
+      {/* Header */}
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
         <div className="rc-actions">
@@ -64,18 +62,14 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       </div>
 
-      {/* Title Section */}
       <div className="rc-brand">Ppopgi Ticket</div>
       <div className="rc-title" title={raffle.name}>{raffle.name}</div>
 
-      {/* Prize Section */}
       <div className="rc-prize-lbl">Winner Prize</div>
       <div className="rc-prize-val">{ui.formattedPot} USDC</div>
 
-      {/* The perforated tear line */}
       <div className="rc-perforation" />
 
-      {/* "Ticket Stub" Bottom Section */}
       <div className="rc-grid">
         <div className="rc-stat">
           <div className="rc-stat-lbl">Price</div>
@@ -89,7 +83,6 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       </div>
 
-      {/* Progress Bars (Only if live) */}
       {ui.isLive && ui.hasMin && (
         <div className="rc-bar-group">
           {!ui.minReached ? (
@@ -109,7 +102,6 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       )}
 
-      {/* Emergency Hatch UI */}
       {showHatch && (
         <div className="rc-hatch" onClick={e => e.stopPropagation()}>
            <div className="rc-bar-row">
@@ -127,11 +119,27 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer with Clickable Address */}
       <div className="rc-footer">
         <span>{ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}</span>
-        {/* Replaced sparkle emoji with a ticket ID look */}
-        <span style={{ opacity: 0.6 }}>#{raffle.id.slice(2, 8).toUpperCase()}</span>
+        
+        {/* ✅ CLICKABLE LINK */}
+        <a 
+          href={`${EXPLORER_URL}${raffle.id}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()} 
+          style={{ 
+            opacity: 0.6, 
+            textDecoration: "none", 
+            color: "inherit", 
+            borderBottom: "1px dotted currentColor",
+            cursor: "pointer"
+          }}
+          title="View Contract on Explorer"
+        >
+          #{raffle.id.slice(2, 8).toUpperCase()}
+        </a>
       </div>
     </div>
   );
