@@ -9,65 +9,67 @@ export type RaffleStatus =
 
 /**
  * Home list item.
- * - Mirrors your schema.graphql (V2) field nullability.
- * - Uses string for BigInt fields because The Graph returns BigInt as string.
- * - Uses `string | null` for nullable Graph fields.
  */
 export type RaffleListItem = {
-  id: string; // raffle address (Bytes as hex string)
+  id: string; // raffle address
   name: string;
   status: RaffleStatus;
 
   // canonical discovery
   deployer: string | null;
   registry: string | null;
-  typeId: string | null; // BigInt
-  registryIndex: string | null; // BigInt
+  typeId: string | null;
+  registryIndex: string | null;
   isRegistered: boolean;
-  registeredAt: string | null; // BigInt (timestamp-ish)
+  registeredAt: string | null;
 
   // creation metadata
   creator: string;
-  createdAtBlock: string; // BigInt
-  createdAtTimestamp: string; // BigInt
-  creationTx: string; // Bytes
+  createdAtBlock: string;
+  createdAtTimestamp: string;
+  creationTx: string;
 
   // config / contracts
   usdc: string;
   entropy: string;
   entropyProvider: string;
   feeRecipient: string;
-  protocolFeePercent: string; // BigInt
-  callbackGasLimit: string; // BigInt
-  minPurchaseAmount: string; // BigInt
+  protocolFeePercent: string;
+  callbackGasLimit: string;
+  minPurchaseAmount: string;
 
   // economics
-  winningPot: string; // BigInt
-  ticketPrice: string; // BigInt
-  deadline: string; // BigInt (seconds)
-  minTickets: string; // BigInt
-  maxTickets: string; // BigInt
+  winningPot: string;
+  ticketPrice: string;
+  deadline: string;
+  minTickets: string;
+  maxTickets: string;
 
   // lifecycle / state
-  sold: string; // BigInt
-  ticketRevenue: string; // BigInt
+  sold: string;
+  ticketRevenue: string;
   paused: boolean;
 
-  finalizeRequestId: string | null; // BigInt
-  finalizedAt: string | null; // BigInt
-  selectedProvider: string | null; // Bytes (address)
+  finalizeRequestId: string | null;
+  finalizedAt: string | null;
+  selectedProvider: string | null;
 
   winner: string | null;
-  winningTicketIndex: string | null; // BigInt
-  completedAt: string | null; // BigInt
+  winningTicketIndex: string | null;
+  completedAt: string | null;
 
   canceledReason: string | null;
-  canceledAt: string | null; // BigInt
-  soldAtCancel: string | null; // BigInt
+  canceledAt: string | null;
+  soldAtCancel: string | null;
 
   // indexing metadata
-  lastUpdatedBlock: string; // BigInt
-  lastUpdatedTimestamp: string; // BigInt
+  lastUpdatedBlock: string;
+  lastUpdatedTimestamp: string;
+};
+
+// Simple Ticket Type for the Leaderboard
+export type TicketItem = {
+  owner: string; 
 };
 
 function mustEnv(name: string): string {
@@ -82,10 +84,7 @@ type FetchRafflesOptions = {
 };
 
 /**
- * Fetch latest raffles ordered by lastUpdatedTimestamp descending.
- *
- * NOTE: This query intentionally includes "extra" fields so you don't have to
- * revisit it later when adding UI detail.
+ * Fetch latest raffles
  */
 export async function fetchRafflesFromSubgraph(
   opts: FetchRafflesOptions = {}
@@ -103,22 +102,16 @@ export async function fetchRafflesFromSubgraph(
         id
         name
         status
-
-        # canonical discovery
         deployer
         registry
         typeId
         registryIndex
         isRegistered
         registeredAt
-
-        # immutable creation metadata
         creator
         createdAtBlock
         createdAtTimestamp
         creationTx
-
-        # config / contracts
         usdc
         entropy
         entropyProvider
@@ -126,32 +119,23 @@ export async function fetchRafflesFromSubgraph(
         protocolFeePercent
         callbackGasLimit
         minPurchaseAmount
-
-        # economics
         winningPot
         ticketPrice
         deadline
         minTickets
         maxTickets
-
-        # lifecycle / state
         sold
         ticketRevenue
         paused
-
         finalizeRequestId
         finalizedAt
         selectedProvider
-
         winner
         winningTicketIndex
         completedAt
-
         canceledReason
         canceledAt
         soldAtCancel
-
-        # indexing metadata
         lastUpdatedBlock
         lastUpdatedTimestamp
       }
@@ -166,17 +150,46 @@ export async function fetchRafflesFromSubgraph(
   });
 
   if (!res.ok) throw new Error("SUBGRAPH_HTTP_ERROR");
-
   const json = await res.json();
-  if (json?.errors?.length) {
-    throw new Error("SUBGRAPH_GQL_ERROR");
-  }
+  if (json?.errors?.length) throw new Error("SUBGRAPH_GQL_ERROR");
 
   const raffles = (json.data?.raffles ?? []) as RaffleListItem[];
 
-  // ✅ normalize ids for stable comparisons + map keys across the app
   return raffles.map((r) => ({
     ...r,
     id: String(r.id).toLowerCase(),
+  }));
+}
+
+/**
+ * ✅ NEW: Fetch Tickets for a specific Raffle to build the Leaderboard
+ */
+export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+
+  const query = `
+    query GetTickets($raffleId: String!) {
+      tickets(
+        where: { raffle: $raffleId }
+        first: 1000
+      ) {
+        owner
+      }
+    }
+  `;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query, variables: { raffleId: raffleId.toLowerCase() } }),
+  });
+
+  if (!res.ok) return [];
+  const json = await res.json();
+  
+  // Robust check for owner field (handles if it's an object or string)
+  const raw = (json.data?.tickets ?? []) as any[];
+  return raw.map(t => ({
+    owner: typeof t.owner === 'object' ? t.owner.id : t.owner
   }));
 }
