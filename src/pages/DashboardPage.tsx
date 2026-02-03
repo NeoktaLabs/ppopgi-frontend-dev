@@ -1,7 +1,8 @@
-// src/pages/DashboardPage.tsx
+// src/pages/DashboardPageV2.tsx
 import React, { useState, useEffect } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
+import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton"; // ✅ Import
 import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 
@@ -16,7 +17,7 @@ const fmtTime = (s: number) => {
 type Props = {
   account: string | null;
   onOpenRaffle: (id: string) => void;
-  onOpenSafety: (id: string) => void; // ✅ Added prop type
+  onOpenSafety: (id: string) => void;
 };
 
 export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
@@ -62,13 +63,21 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       <div className="db-section">
         <div className="db-section-title">Created by you</div>
         <div className="db-grid">
-           {data.created?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>No raffles created.</span>}
+           {/* Loading State */}
+           {data.isPending && data.created?.length === 0 && (
+             <>
+               <RaffleCardSkeleton /><RaffleCardSkeleton /><RaffleCardSkeleton />
+             </>
+           )}
+
+           {!data.isPending && data.created?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>No raffles created.</span>}
+           
            {data.created?.map((r: any) => (
              <RaffleCard 
                 key={r.id} 
                 raffle={r} 
                 onOpen={onOpenRaffle}
-                onOpenSafety={onOpenSafety} // ✅ Passed down
+                onOpenSafety={onOpenSafety} 
                 nowMs={nowS * 1000} 
                 hatch={getHatchProps(r.id, r.creator)} 
              />
@@ -80,13 +89,19 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       <div className="db-section">
         <div className="db-section-title">Joined</div>
         <div className="db-grid">
-           {data.joined?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>No raffles joined.</span>}
+           {/* Loading State */}
+           {data.isPending && data.joined?.length === 0 && (
+             <><RaffleCardSkeleton /><RaffleCardSkeleton /></>
+           )}
+
+           {!data.isPending && data.joined?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>No raffles joined.</span>}
+           
            {data.joined?.map((r: any) => (
              <RaffleCard 
                key={r.id} 
                raffle={r} 
                onOpen={onOpenRaffle} 
-               onOpenSafety={onOpenSafety} // ✅ Passed down
+               onOpenSafety={onOpenSafety}
                nowMs={nowS * 1000} 
              />
            ))}
@@ -101,7 +116,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
         </div>
         
         <div className="db-grid">
-          {data.claimables?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>Nothing to claim.</span>}
+          {!data.isPending && data.claimables?.length === 0 && <span style={{ opacity: 0.6, fontSize: 13 }}>Nothing to claim.</span>}
           
           {data.claimables?.map((it: any) => {
              const r = it.raffle;
@@ -113,7 +128,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                   <RaffleCard 
                     raffle={r} 
                     onOpen={onOpenRaffle} 
-                    onOpenSafety={onOpenSafety} // ✅ Passed down
+                    onOpenSafety={onOpenSafety}
                     nowMs={nowS * 1000} 
                   />
                   <div className="db-claim-box">
