@@ -16,7 +16,7 @@ const ExplorerLink = ({ addr, children }: { addr: string; children: React.ReactN
 
 // Date Formatter
 const formatDate = (ts: any) => {
-  if (!ts) return "—";
+  if (!ts || ts === "0") return "—";
   return new Date(Number(ts) * 1000).toLocaleString("en-US", {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
   });
@@ -30,14 +30,11 @@ type Props = {
 
 export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
-  
-  // Tab State: "receipt" or "holders"
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
   
-  // Fetch Participants
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, Number(state.data?.sold || 0));
+  // ✅ FIX 1: Simplified hook call (doesn't wait for sold count)
+  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId);
 
-  // Smart Stats Calculator
   const stats = useMemo(() => {
     if (!state.data) return null;
     const pot = parseFloat(math.fmtUsdc(state.data.winningPot || "0"));
@@ -66,7 +63,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
            <button className="rdm-close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* HERO: The Prize */}
+        {/* HERO */}
         <div className="rdm-hero">
            <div className="rdm-hero-lbl">Current Prize Pot</div>
            <div className="rdm-hero-val">{math.fmtUsdc(state.data?.winningPot || "0")}</div>
@@ -78,7 +75,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
            </div>
         </div>
 
-        {/* STATS: ROI & Odds */}
+        {/* STATS */}
         {stats && (
           <div className="rdm-stats-grid">
              <div className="rdm-stat-box highlight">
@@ -98,7 +95,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
 
         <div className="rdm-tear" />
 
-        {/* ACTION: The Cashier */}
+        {/* BUY SECTION */}
         <div className="rdm-buy-section">
            {!flags.raffleIsOpen ? (
               <div style={{ textAlign: 'center', padding: 20, opacity: 0.6, fontWeight: 700 }}>
@@ -128,7 +125,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
            )}
         </div>
 
-        {/* --- TABS: Receipt vs Holders --- */}
+        {/* TABS */}
         <div className="rdm-tab-group">
            <button className={`rdm-tab-btn ${tab === 'receipt' ? 'active' : ''}`} onClick={() => setTab('receipt')}>Technical Receipt</button>
            <button className={`rdm-tab-btn ${tab === 'holders' ? 'active' : ''}`} onClick={() => setTab('holders')}>Ticket Holders</button>
@@ -139,15 +136,18 @@ export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
            <div className="rdm-receipt">
               <div className="rdm-receipt-title">TECHNICAL SPECS</div>
               <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
-              <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(state.data.createdAt)}</span></div>
-              <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(state.data.drawTimestamp || state.data.deadline)}</span></div>
+              
+              {/* ✅ FIX 2: Correct property names */}
+              <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(state.data.createdAtTimestamp)}</span></div>
+              <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(state.data.deadline)}</span></div>
+              
               <div className="rdm-info-row"><span>Tickets Sold</span><span className="rdm-info-val">{state.data.sold} / {state.data.maxTickets === "0" ? "∞" : state.data.maxTickets}</span></div>
               <div className="rdm-info-row" style={{ marginTop: 12 }}><span>Randomness</span><span className="rdm-info-val"><ExplorerLink addr={state.data.entropyProvider}>{math.short(state.data.entropyProvider)}</ExplorerLink></span></div>
               <div className="rdm-info-row"><span>Contract</span><span className="rdm-info-val"><ExplorerLink addr={raffleId || ""}>{math.short(raffleId || "")}</ExplorerLink></span></div>
            </div>
         )}
 
-        {/* TAB 2: HOLDERS (LEADERBOARD) */}
+        {/* TAB 2: HOLDERS */}
         {tab === 'holders' && (
            <div className="rdm-leaderboard-section">
               <div className="rdm-lb-header">
