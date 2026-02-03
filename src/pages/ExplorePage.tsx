@@ -1,12 +1,13 @@
 // src/pages/ExplorePage.tsx
 import React from "react";
 import { RaffleCard } from "../components/RaffleCard";
+import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton"; // ✅ Import
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 
 type Props = { 
   onOpenRaffle: (id: string) => void; 
-  onOpenSafety: (id: string) => void; // ✅ Added prop type
+  onOpenSafety: (id: string) => void; 
 };
 
 export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
@@ -29,8 +30,8 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span className="xp-meta-tag">{meta.isLoading ? "..." : `${meta.totalCount} raffles`}</span>
-            <span className="xp-meta-tag">{meta.isLoading ? "Loading..." : `${meta.shownCount} shown`}</span>
+            <span className="xp-meta-tag">{meta.isLoading ? "Syncing..." : `${meta.totalCount} raffles`}</span>
+            <span className="xp-meta-tag">{meta.isLoading ? "..." : `${meta.shownCount} shown`}</span>
           </div>
         </div>
 
@@ -45,7 +46,6 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
               </div>
             </div>
 
-            {/* Toggles */}
             <div className="xp-toggles">
               <button 
                 className={`xp-pill-btn ${state.openOnly ? "active" : ""}`} 
@@ -64,7 +64,6 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
               </button>
             </div>
 
-            {/* Inputs Grid */}
             <div className="xp-filter-grid">
               <div>
                 <div className="xp-label">Search</div>
@@ -112,8 +111,16 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
 
         {/* Results List */}
         <div className="xp-results">
-          {meta.isLoading && <div className="xp-empty">Loading raffles...</div>}
+          {/* ✅ SKELETON LOADING STATE */}
+          {meta.isLoading && (
+            <>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <RaffleCardSkeleton key={i} />
+              ))}
+            </>
+          )}
           
+          {/* Empty State */}
           {!meta.isLoading && state.list.length === 0 && (
              <div className="xp-empty">
                No raffles match your filters.
@@ -121,12 +128,13 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
              </div>
           )}
 
-          {state.list.map((r) => (
+          {/* Real Cards */}
+          {!meta.isLoading && state.list.map((r) => (
             <RaffleCard 
               key={r.id} 
               raffle={r} 
               onOpen={onOpenRaffle} 
-              onOpenSafety={onOpenSafety} // ✅ Passed down
+              onOpenSafety={onOpenSafety} 
             />
           ))}
         </div>
