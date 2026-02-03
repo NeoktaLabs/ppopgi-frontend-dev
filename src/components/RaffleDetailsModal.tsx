@@ -26,15 +26,20 @@ type Props = {
   open: boolean;
   raffleId: string | null;
   onClose: () => void;
-  // We accept initial data to show dates immediately
-  initialRaffle?: RaffleListItem | null; 
+  initialRaffle?: RaffleListItem | null; // This comes from the Indexer
 };
 
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
 
-  // Combine live state with initial data fallback
+  // 1. Merge Data: Prefer Live Data for status, but keep Indexer data for static fields
   const displayData = state.data || initialRaffle;
+
+  // 2. TIMESTAMPS: Always prefer the Indexer (initialRaffle) because the Blockchain doesn't store 'createdAt'
+  const createdTs = initialRaffle?.createdAtTimestamp || state.data?.createdAtTimestamp;
+  
+  // For deadline, we prefer the live contract data in case it was extended, but fallback to indexer
+  const deadlineTs = state.data?.deadline || initialRaffle?.deadline;
 
   const stats = useMemo(() => {
     if (!displayData) return null;
@@ -50,10 +55,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   }, [displayData, math]);
 
   if (!open) return null;
-
-  // Safe Date Access: Use the specific field from your subgraph types
-  const createdTs = displayData?.createdAtTimestamp;
-  const deadlineTs = displayData?.deadline;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -132,14 +133,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
            )}
         </div>
 
-        {/* TECHNICAL RECEIPT (Always visible now) */}
+        {/* TECHNICAL RECEIPT */}
         {displayData && (
            <div className="rdm-receipt">
               <div className="rdm-receipt-title">TECHNICAL SPECS</div>
               
               <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
+              
+              {/* ✅ USING INDEXER TIMESTAMP */}
               <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(createdTs)}</span></div>
               <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(deadlineTs)}</span></div>
+              
               <div className="rdm-info-row"><span>Tickets Sold</span><span className="rdm-info-val">{displayData.sold} / {displayData.maxTickets === "0" ? "∞" : displayData.maxTickets}</span></div>
               
               <div className="rdm-info-row" style={{ marginTop: 12 }}>
