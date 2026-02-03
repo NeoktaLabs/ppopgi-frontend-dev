@@ -1,51 +1,69 @@
 /* src/components/RaffleDetailsModal.css */
 
-/* 1. Use Grid for safer centering (prevents top-cropping on small screens) */
+/* 1. Container with Perspective */
 .rdm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45); /* Slightly darker for better contrast */
+  background: rgba(0, 0, 0, 0.45);
   display: grid; 
   place-items: center;
   padding: 16px; 
-  z-index: 10500; /* Extremely high to sit above TopNav */
-  overflow-y: auto; /* Allows the overlay itself to scroll if needed */
+  z-index: 10500; 
+  overflow-y: auto;
+  
+  /* ✅ Creates the 3D space for the flip illusion */
+  perspective: 1500px;
+}
+
+/* 2. The Flip Animation (Opening Book style) */
+@keyframes rdmFlipIn {
+  0% {
+    opacity: 0;
+    transform: rotateY(-90deg) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1);
+  }
 }
 
 .rdm-card {
   position: relative;
   width: min(780px, 100%);
-  
-  /* 2. Strict height limits to ensure internal scrolling works */
   max-height: min(85vh, 900px);
+  
   display: flex;
   flex-direction: column;
-  
-  /* 3. Global box-sizing safety */
   box-sizing: border-box;
   
   border-radius: 22px;
-  padding: 24px; /* Increased padding for breathing room */
+  padding: 24px;
   user-select: none;
 
-  /* Glassmorphism Background */
+  /* Glass Theme */
   background: linear-gradient(180deg, rgba(255,190,215,0.96), rgba(255,210,230,0.85) 42%, rgba(255,235,246,0.90));
   border: 1px solid rgba(255,255,255,0.78);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(14px);
   color: #4A0F2B;
   
-  /* 4. Smooth scrolling */
   overflow-y: auto;
-  overscroll-behavior: contain; /* Prevents body scroll when modal ends */
+  overscroll-behavior: contain;
+
+  /* ✅ Apply Animation */
+  animation: rdmFlipIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  
+  /* 3D Properties */
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
 }
 
-/* Ensure all children respect box model */
+/* Ensure children respect sizing */
 .rdm-card * {
   box-sizing: border-box;
 }
 
-/* Notches & Decorations */
+/* --- Notches --- */
 .rdm-notch {
   position: absolute;
   top: 52%;
@@ -66,17 +84,16 @@
   background: repeating-linear-gradient(90deg, rgba(180,70,120,0.62), rgba(180,70,120,0.62) 7px, transparent 7px, transparent 14px);
 }
 
-/* Layouts */
+/* --- Layouts --- */
 .rdm-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
-  /* Ensure header doesn't shrink */
   flex-shrink: 0; 
 }
 
-/* ... (Keep existing chip styles) ... */
+/* Chips */
 .rdm-chip {
   padding: 6px 10px; border-radius: 99px; font-size: 12px; font-weight: 950;
   letter-spacing: 0.35px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
@@ -95,14 +112,11 @@
 .rdm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .rdm-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
 
-/* Responsive adjustments for mobile */
 @media (max-width: 600px) {
-  .rdm-grid-2, .rdm-grid-3 {
-    grid-template-columns: 1fr; /* Stack vertically on small screens */
-  }
+  .rdm-grid-2, .rdm-grid-3 { grid-template-columns: 1fr; }
 }
 
-/* ... (Keep remaining styles: buttons, inputs, panels) ... */
+/* Buttons & Inputs */
 .rdm-btn-mini {
   border-radius: 12px; background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08);
   padding: 8px 12px; font-weight: 950; cursor: pointer; color: #4A0F2B; font-size: 13px;
@@ -130,7 +144,7 @@
 .rdm-input-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 10px; margin-top: 12px; }
 .rdm-input {
   width: 100%; text-align: center; border: 1px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.82);
-  border-radius: 14px; padding: 10px; outline: none; font-weight: 900; color: #4A0F2B; font-size: 16px; /* Prevents zoom on iOS */
+  border-radius: 14px; padding: 10px; outline: none; font-weight: 900; color: #4A0F2B; font-size: 16px;
 }
 
 .rdm-btn-big {
