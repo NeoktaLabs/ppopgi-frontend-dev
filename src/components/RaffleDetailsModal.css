@@ -1,0 +1,89 @@
+/* src/components/RaffleDetailsModal.css */
+.rdm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; z-index: 10500;
+}
+
+.rdm-card {
+  position: relative; width: min(780px, 100%); max-height: min(86vh, 920px);
+  overflow-y: auto; border-radius: 22px; padding: 18px; user-select: none;
+  background: linear-gradient(180deg, rgba(255,190,215,0.92), rgba(255,210,230,0.78) 42%, rgba(255,235,246,0.82));
+  border: 1px solid rgba(255,255,255,0.78);
+  box-shadow: 0 22px 46px rgba(0,0,0,0.18); backdrop-filter: blur(14px);
+  color: #4A0F2B; /* inkStrong */
+}
+
+/* Notches & Decorations */
+.rdm-notch {
+  position: absolute; top: 52%; width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(255,255,255,0.62); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.14);
+  transform: translateY(-50%); pointer-events: none;
+}
+.rdm-tear {
+  margin-top: 14px; height: 1px; opacity: 0.8;
+  background: repeating-linear-gradient(90deg, rgba(180,70,120,0.62), rgba(180,70,120,0.62) 7px, transparent 7px, transparent 14px);
+}
+
+/* Status Chips */
+.rdm-chip {
+  padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 950;
+  letter-spacing: 0.35px; box-shadow: 0 10px 18px rgba(0,0,0,0.1);
+  border: 1px solid rgba(0,0,0,0.08); display: inline-block;
+}
+.rdm-chip.open { background: rgba(145, 247, 184, 0.92); color: #0B4A24; }
+.rdm-chip.finalizing, .rdm-chip.drawing { background: rgba(169, 212, 255, 0.95); color: #0B2E5C; animation: rdm-pulse 2s infinite; }
+.rdm-chip.settled { background: rgba(255, 216, 154, 0.92); color: #4A2A00; }
+.rdm-chip.canceled { background: rgba(255, 120, 140, 0.92); color: #5A0012; }
+.rdm-chip.getting-ready { background: rgba(203, 183, 246, 0.92); color: #2E1C5C; }
+.rdm-chip.unknown { background: rgba(255,255,255,0.72); color: #5C2A3E; }
+
+@keyframes rdm-pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+/* Layouts */
+.rdm-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.rdm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.rdm-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+
+/* Components */
+.rdm-btn-mini {
+  border-radius: 12px; background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08);
+  padding: 8px 10px; font-weight: 950; cursor: pointer; color: #4A0F2B;
+}
+.rdm-btn-mini:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.rdm-title {
+  margin-top: 4px; font-size: 22px; fontWeight: 950; letter-spacing: 0.1px; line-height: 1.15;
+  text-align: center; color: #4A0F2B;
+}
+
+.rdm-prize-val {
+  margin-top: 8px; font-size: 40px; font-weight: 1000; line-height: 1; text-align: center;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+}
+
+.rdm-panel {
+  border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.56);
+  border: 1px solid rgba(0,0,0,0.06); display: grid; gap: 8px; margin-top: 12px;
+}
+.rdm-row { display: flex; justify-content: space-between; font-size: 13px; }
+.rdm-label { opacity: 0.85; color: #5C1F3B; }
+.rdm-val { font-weight: 950; color: #4A0F2B; }
+
+.rdm-input-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 10px; margin-top: 10px; }
+.rdm-input {
+  width: 100%; text-align: center; border: 1px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.82);
+  border-radius: 14px; padding: 10px; outline: none; font-weight: 900; color: #4A0F2B;
+}
+
+.rdm-btn-big {
+  width: 100%; border-radius: 14px; padding: 12px; font-weight: 1000; margin-top: 10px;
+  background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08); cursor: pointer; color: #4A0F2B;
+}
+.rdm-btn-big:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.rdm-copy-toast {
+  position: absolute; top: 54px; left: 12px; right: 12px; padding: 8px;
+  background: rgba(255,255,255,0.9); border-radius: 14px; text-align: center; font-weight: 950;
+  box-shadow: 0 14px 26px rgba(0,0,0,0.12); z-index: 10;
+}
