@@ -181,3 +181,36 @@ export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]
     return [];
   }
 }
+
+/**
+ * ✅ NEW: Fetch a single raffle's static metadata (timestamps/provider)
+ * This allows the Modal to fetch the 'Created' date on demand.
+ */
+export async function fetchRaffleMetadata(raffleId: string): Promise<Partial<RaffleListItem> | null> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+
+  const query = `
+    query GetMetadata($id: ID!) {
+      raffle(id: $id) {
+        createdAtTimestamp
+        deadline
+        entropyProvider
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, variables: { id: raffleId.toLowerCase() } }),
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data?.raffle || null;
+  } catch (e) {
+    console.error("Metadata fetch failed:", e);
+    return null;
+  }
+}
