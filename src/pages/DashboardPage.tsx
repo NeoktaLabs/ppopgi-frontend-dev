@@ -1,3 +1,4 @@
+// src/pages/DashboardPageV2.tsx
 import React, { useState, useEffect } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
@@ -93,7 +94,8 @@ export function DashboardPage({ account, onOpenRaffle }: { account: string | nul
              const hasNative = BigInt(it.claimableNative || 0) > 0n;
              
              return (
-               <div key={r.id}>
+               // ✅ Added class to prevent squashing
+               <div key={r.id} className="db-claim-wrapper">
                   <RaffleCard raffle={r} onOpen={onOpenRaffle} nowMs={nowS * 1000} />
                   <div className="db-claim-box">
                      <div className="db-claim-text">
