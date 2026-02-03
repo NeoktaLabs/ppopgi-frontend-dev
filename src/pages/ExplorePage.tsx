@@ -1,6 +1,6 @@
 import React from "react";
 import { RaffleCard } from "../components/RaffleCard";
-import { useExploreController, SortMode } from "../hooks/useExploreController";
+import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 
 type Props = { onOpenRaffle: (id: string) => void; };
