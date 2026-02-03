@@ -24,6 +24,7 @@ export function useRaffleParticipants(raffleId: string | null) {
       setIsLoading(true);
       try {
         // 1. Fetch raw tickets (up to 1000)
+        // Ensure you have added fetchRaffleTickets to your src/indexer/subgraph.ts!
         const tickets = await fetchRaffleTickets(raffleId);
         
         if (!active) return;
