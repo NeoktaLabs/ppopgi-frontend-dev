@@ -1,7 +1,7 @@
 // src/components/RaffleDetailsModal.tsx
-import React, { useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
-import type { RaffleListItem } from "../indexer/subgraph"; 
+import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph"; // ✅ Import the new fetcher
 import "./RaffleDetailsModal.css";
 
 // Helper for clickable addresses
@@ -26,20 +26,44 @@ type Props = {
   open: boolean;
   raffleId: string | null;
   onClose: () => void;
-  initialRaffle?: RaffleListItem | null; // This comes from the Indexer
+  initialRaffle?: RaffleListItem | null;
 };
 
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
-
-  // 1. Merge Data: Prefer Live Data for status, but keep Indexer data for static fields
-  const displayData = state.data || initialRaffle;
-
-  // 2. TIMESTAMPS: Always prefer the Indexer (initialRaffle) because the Blockchain doesn't store 'createdAt'
-  const createdTs = initialRaffle?.createdAtTimestamp || state.data?.createdAtTimestamp;
   
-  // For deadline, we prefer the live contract data in case it was extended, but fallback to indexer
-  const deadlineTs = state.data?.deadline || initialRaffle?.deadline;
+  // ✅ NEW: Local state to hold the fetched metadata (dates)
+  const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
+
+  // ✅ NEW: Fetch timestamps from Subgraph on mount
+  useEffect(() => {
+    if (!raffleId || !open) {
+      setMetadata(null); // Reset on close
+      return;
+    }
+    
+    // If we already have the date passed in, don't fetch
+    if (initialRaffle?.createdAtTimestamp) {
+      setMetadata(initialRaffle);
+      return;
+    }
+
+    let active = true;
+    fetchRaffleMetadata(raffleId).then((data) => {
+      if (active && data) setMetadata(data);
+    });
+
+    return () => { active = false; };
+  }, [raffleId, open, initialRaffle]);
+
+
+  // MERGE DATA:
+  // 1. Live Contract Data (state.data) -> High priority for status/pot
+  // 2. Metadata (Indexer) -> High priority for Dates
+  const displayData = state.data || initialRaffle || metadata;
+  
+  const createdTs = metadata?.createdAtTimestamp || initialRaffle?.createdAtTimestamp || state.data?.createdAtTimestamp;
+  const deadlineTs = state.data?.deadline || metadata?.deadline || initialRaffle?.deadline;
 
   const stats = useMemo(() => {
     if (!displayData) return null;
@@ -140,7 +164,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               
               <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
               
-              {/* ✅ USING INDEXER TIMESTAMP */}
+              {/* ✅ USING THE FETCHED TIMESTAMP */}
               <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(createdTs)}</span></div>
               <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(deadlineTs)}</span></div>
               
