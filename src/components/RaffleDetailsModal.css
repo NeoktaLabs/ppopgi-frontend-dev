@@ -1,34 +1,85 @@
 /* src/components/RaffleDetailsModal.css */
+
+/* 1. Use Grid for safer centering (prevents top-cropping on small screens) */
 .rdm-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px; z-index: 10500;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45); /* Slightly darker for better contrast */
+  display: grid; 
+  place-items: center;
+  padding: 16px; 
+  z-index: 10500; /* Extremely high to sit above TopNav */
+  overflow-y: auto; /* Allows the overlay itself to scroll if needed */
 }
 
 .rdm-card {
-  position: relative; width: min(780px, 100%); max-height: min(86vh, 920px);
-  overflow-y: auto; border-radius: 22px; padding: 18px; user-select: none;
-  background: linear-gradient(180deg, rgba(255,190,215,0.92), rgba(255,210,230,0.78) 42%, rgba(255,235,246,0.82));
+  position: relative;
+  width: min(780px, 100%);
+  
+  /* 2. Strict height limits to ensure internal scrolling works */
+  max-height: min(85vh, 900px);
+  display: flex;
+  flex-direction: column;
+  
+  /* 3. Global box-sizing safety */
+  box-sizing: border-box;
+  
+  border-radius: 22px;
+  padding: 24px; /* Increased padding for breathing room */
+  user-select: none;
+
+  /* Glassmorphism Background */
+  background: linear-gradient(180deg, rgba(255,190,215,0.96), rgba(255,210,230,0.85) 42%, rgba(255,235,246,0.90));
   border: 1px solid rgba(255,255,255,0.78);
-  box-shadow: 0 22px 46px rgba(0,0,0,0.18); backdrop-filter: blur(14px);
-  color: #4A0F2B; /* inkStrong */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+  color: #4A0F2B;
+  
+  /* 4. Smooth scrolling */
+  overflow-y: auto;
+  overscroll-behavior: contain; /* Prevents body scroll when modal ends */
+}
+
+/* Ensure all children respect box model */
+.rdm-card * {
+  box-sizing: border-box;
 }
 
 /* Notches & Decorations */
 .rdm-notch {
-  position: absolute; top: 52%; width: 18px; height: 18px; border-radius: 50%;
-  background: rgba(255,255,255,0.62); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.14);
-  transform: translateY(-50%); pointer-events: none;
+  position: absolute;
+  top: 52%;
+  width: 18px; 
+  height: 18px; 
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
 }
+
 .rdm-tear {
-  margin-top: 14px; height: 1px; opacity: 0.8;
+  margin-top: 14px;
+  height: 1px;
+  opacity: 0.8;
   background: repeating-linear-gradient(90deg, rgba(180,70,120,0.62), rgba(180,70,120,0.62) 7px, transparent 7px, transparent 14px);
 }
 
-/* Status Chips */
+/* Layouts */
+.rdm-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  /* Ensure header doesn't shrink */
+  flex-shrink: 0; 
+}
+
+/* ... (Keep existing chip styles) ... */
 .rdm-chip {
-  padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 950;
-  letter-spacing: 0.35px; box-shadow: 0 10px 18px rgba(0,0,0,0.1);
+  padding: 6px 10px; border-radius: 99px; font-size: 12px; font-weight: 950;
+  letter-spacing: 0.35px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   border: 1px solid rgba(0,0,0,0.08); display: inline-block;
 }
 .rdm-chip.open { background: rgba(145, 247, 184, 0.92); color: #0B4A24; }
@@ -40,50 +91,57 @@
 
 @keyframes rdm-pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
-/* Layouts */
-.rdm-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+/* Grids */
 .rdm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .rdm-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
 
-/* Components */
+/* Responsive adjustments for mobile */
+@media (max-width: 600px) {
+  .rdm-grid-2, .rdm-grid-3 {
+    grid-template-columns: 1fr; /* Stack vertically on small screens */
+  }
+}
+
+/* ... (Keep remaining styles: buttons, inputs, panels) ... */
 .rdm-btn-mini {
   border-radius: 12px; background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08);
-  padding: 8px 10px; font-weight: 950; cursor: pointer; color: #4A0F2B;
+  padding: 8px 12px; font-weight: 950; cursor: pointer; color: #4A0F2B; font-size: 13px;
 }
 .rdm-btn-mini:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .rdm-title {
-  margin-top: 4px; font-size: 22px; fontWeight: 950; letter-spacing: 0.1px; line-height: 1.15;
+  margin-top: 6px; font-size: 24px; font-weight: 950; letter-spacing: 0.1px; line-height: 1.15;
   text-align: center; color: #4A0F2B;
 }
 
 .rdm-prize-val {
-  margin-top: 8px; font-size: 40px; font-weight: 1000; line-height: 1; text-align: center;
+  margin-top: 8px; font-size: 42px; font-weight: 1000; line-height: 1; text-align: center;
   text-shadow: 0 1px 0 rgba(255,255,255,0.35);
 }
 
 .rdm-panel {
-  border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.56);
+  border-radius: 14px; padding: 14px; background: rgba(255,255,255,0.56);
   border: 1px solid rgba(0,0,0,0.06); display: grid; gap: 8px; margin-top: 12px;
 }
-.rdm-row { display: flex; justify-content: space-between; font-size: 13px; }
+.rdm-row { display: flex; justify-content: space-between; font-size: 13px; align-items: center; }
 .rdm-label { opacity: 0.85; color: #5C1F3B; }
 .rdm-val { font-weight: 950; color: #4A0F2B; }
 
-.rdm-input-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 10px; margin-top: 10px; }
+.rdm-input-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 10px; margin-top: 12px; }
 .rdm-input {
   width: 100%; text-align: center; border: 1px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.82);
-  border-radius: 14px; padding: 10px; outline: none; font-weight: 900; color: #4A0F2B;
+  border-radius: 14px; padding: 10px; outline: none; font-weight: 900; color: #4A0F2B; font-size: 16px; /* Prevents zoom on iOS */
 }
 
 .rdm-btn-big {
-  width: 100%; border-radius: 14px; padding: 12px; font-weight: 1000; margin-top: 10px;
+  width: 100%; border-radius: 14px; padding: 14px; font-weight: 1000; margin-top: 12px; font-size: 15px;
   background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08); cursor: pointer; color: #4A0F2B;
 }
 .rdm-btn-big:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .rdm-copy-toast {
-  position: absolute; top: 54px; left: 12px; right: 12px; padding: 8px;
-  background: rgba(255,255,255,0.9); border-radius: 14px; text-align: center; font-weight: 950;
-  box-shadow: 0 14px 26px rgba(0,0,0,0.12); z-index: 10;
+  position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+  padding: 8px 16px; background: rgba(255,255,255,0.95); border-radius: 99px; 
+  text-align: center; font-weight: 950; box-shadow: 0 14px 26px rgba(0,0,0,0.12); z-index: 10;
+  width: max-content;
 }
