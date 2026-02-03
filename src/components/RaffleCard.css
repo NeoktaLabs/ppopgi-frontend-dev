@@ -1,6 +1,6 @@
 /* src/components/RaffleCard.css */
 
-/* --- Base Card Structure --- */
+/* --- Card Container --- */
 .rc-card {
   position: relative;
   width: 100%;
@@ -10,9 +10,12 @@
   overflow: hidden;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
   cursor: pointer;
+  
+  /* Glass / Light Theme */
   background: #ffffff;
   border: 1px solid rgba(0,0,0,0.06);
   box-shadow: 0 12px 24px -6px rgba(0,0,0,0.08);
+
   display: flex; flex-direction: column;
 }
 
@@ -22,10 +25,10 @@
   z-index: 10;
 }
 
-/* --- Status Strip (Top) --- */
+/* --- Header / Status --- */
 .rc-header {
   padding: 16px 20px 0 20px;
-  display: flex; justify-content: space-between; align-items: flex-start;
+  display: flex; justify-content: space-between; align-items: center;
 }
 
 .rc-status-pill {
@@ -36,52 +39,40 @@
 .rc-status-pill.open { background: #dcfce7; color: #166534; }
 .rc-status-pill.closed { background: #f1f5f9; color: #94a3b8; }
 
-/* ✅ NEW: Prominent Safety Badge */
-.rc-verified-badge {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-  color: #0284c7;
+.rc-shield-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(0,0,0,0.03); color: #64748b;
   display: grid; place-items: center;
-  font-size: 18px;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
-  transition: transform 0.2s;
+  font-size: 14px; cursor: pointer; transition: all 0.2s;
 }
-.rc-verified-badge:hover { transform: scale(1.15) rotate(10deg); background: #fff; color: #0ea5e9; }
+.rc-shield-btn:hover { background: #e0f2fe; color: #0284c7; transform: scale(1.1); }
 
-/* --- ✅ NEW: SUPER PRIZE HERO --- */
+/* --- Hero Section (Prize) --- */
 .rc-prize-section {
   text-align: center;
-  padding: 24px 10px 10px 10px;
+  padding: 24px 20px 10px 20px;
   flex: 1; /* Pushes content to fill space */
   display: flex; flex-direction: column; justify-content: center;
 }
 
 .rc-prize-label {
-  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;
   color: #94a3b8; margin-bottom: 8px;
 }
 
 .rc-prize-val {
-  font-size: 44px; /* Massive Size */
+  font-size: 36px; /* Restored normal size */
   font-weight: 1000;
+  color: #4A0F2B;
   line-height: 1;
   font-family: "Courier New", Courier, monospace; /* Ticker style */
-  letter-spacing: -2px;
-  
-  /* Gradient Text */
-  background: linear-gradient(135deg, #4A0F2B 0%, #BE185D 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  
-  /* Drop Shadow */
-  filter: drop-shadow(0 4px 0px rgba(0,0,0,0.05));
+  letter-spacing: -1.5px;
 }
 
 .rc-host-row {
-  margin-top: 12px;
+  margin-top: 8px;
   display: flex; justify-content: center; align-items: center; gap: 6px;
-  font-size: 13px; font-weight: 600; color: #64748b;
+  font-size: 12px; font-weight: 600; color: #64748b;
 }
 
 /* --- Tear Line --- */
@@ -109,10 +100,10 @@
 }
 .rc-stat { text-align: center; background: white; padding: 8px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04); }
 .rc-stat-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #94a3b8; }
-.rc-stat-val { font-size: 15px; font-weight: 800; color: #334155; }
+.rc-stat-val { font-size: 14px; font-weight: 800; color: #334155; }
 
 /* Progress Bar */
-.rc-progress-track { height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
+.rc-progress-track { height: 6px; background: #e2e8f0; border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
 .rc-progress-fill { height: 100%; background: #4A0F2B; border-radius: 99px; transition: width 0.5s ease; }
 
 .rc-footer-meta {
