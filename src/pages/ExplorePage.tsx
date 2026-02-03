@@ -1,11 +1,15 @@
+// src/pages/ExplorePage.tsx
 import React from "react";
 import { RaffleCard } from "../components/RaffleCard";
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 
-type Props = { onOpenRaffle: (id: string) => void; };
+type Props = { 
+  onOpenRaffle: (id: string) => void; 
+  onOpenSafety: (id: string) => void; // ✅ Added prop type
+};
 
-export function ExplorePage({ onOpenRaffle }: Props) {
+export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
   const { state, actions, meta } = useExploreController();
 
   return (
@@ -118,7 +122,12 @@ export function ExplorePage({ onOpenRaffle }: Props) {
           )}
 
           {state.list.map((r) => (
-            <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} />
+            <RaffleCard 
+              key={r.id} 
+              raffle={r} 
+              onOpen={onOpenRaffle} 
+              onOpenSafety={onOpenSafety} // ✅ Passed down
+            />
           ))}
         </div>
 
