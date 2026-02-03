@@ -1,28 +1,14 @@
 // src/components/RaffleDetailsModal.tsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { ADDRESSES } from "../config/contracts";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import "./RaffleDetailsModal.css";
-import "./RaffleCard.css"; // Reuse existing title clamp if needed
 
-// ✅ Helper Component for Clickable Addresses
+// Helper for clickable addresses
 const ExplorerLink = ({ addr, children }: { addr: string; children: React.ReactNode }) => {
-  if (!addr || addr === "0x0000000000000000000000000000000000000000") {
-    return <span>{children}</span>;
-  }
+  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{children}</span>;
   return (
-    <a
-      href={`https://explorer.etherlink.com/address/${addr}`}
-      target="_blank"
-      rel="noreferrer"
-      style={{
-        color: "inherit",
-        textDecoration: "underline",
-        textDecorationStyle: "dotted",
-        cursor: "pointer",
-      }}
-      title="View on Explorer"
-    >
+    <a href={`https://explorer.etherlink.com/address/${addr}`} target="_blank" rel="noreferrer">
       {children}
     </a>
   );
@@ -35,293 +21,133 @@ type Props = {
 };
 
 export function RaffleDetailsModal({ open, raffleId, onClose }: Props) {
-  // 1. All Logic & State is here
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
   const [safetyOpen, setSafetyOpen] = useState(false);
 
-  // 2. Simple Formatting Helpers for View
-  const statusClass = state.displayStatus.toLowerCase().replace(" ", "-");
+  // --- 1. SMART STATS CALCULATOR ---
+  const stats = useMemo(() => {
+    if (!state.data) return null;
+    
+    // Convert to numbers for estimates
+    const pot = parseFloat(math.fmtUsdc(state.data.winningPot || "0"));
+    const price = parseFloat(math.fmtUsdc(state.data.ticketPrice || "0"));
+    const sold = Number(state.data.sold || "0");
+    const max = Number(state.data.maxTickets || "0");
 
-  // Format the countdown or status text
-  const getBottomText = () => {
-    if (state.displayStatus === "Open") {
-      const diff = Math.max(0, math.deadlineMs - math.nowMs) / 1000;
-      const d = Math.floor(diff / 86400);
-      const h = Math.floor((diff % 86400) / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      return `Ends in ${d > 0 ? d + "d " : ""}${h}h ${m}m`;
-    }
-    return state.displayStatus;
-  };
+    // ROI: (Pot / Price) x
+    const roi = price > 0 ? (pot / price).toFixed(1) : "0";
+    
+    // Odds: 1 in (Sold + 1)
+    const odds = sold > 0 ? `1 in ${sold + 1}` : "100%";
+    
+    // Fill %
+    const fillPct = max > 0 ? Math.round((sold / max) * 100) : 0;
+
+    return { roi, odds, fillPct, pot, price };
+  }, [state.data, math]);
 
   if (!open) return null;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Decorations */}
-        <div className="rdm-notch" style={{ left: -9 }} />
-        <div className="rdm-notch" style={{ right: -9 }} />
-        {state.copyMsg && <div className="rdm-copy-toast">{state.copyMsg}</div>}
-
-        {/* Header */}
-        <div className="rdm-top">
-          <div className={`rdm-chip ${statusClass}`}>{state.displayStatus}</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="rdm-btn-mini" onClick={actions.handleShare}>
-              Copy Link
-            </button>
-            <button
-              className="rdm-btn-mini"
-              onClick={() => setSafetyOpen(!safetyOpen)}
-              disabled={!state.data}
-            >
-              🛡️ Safety
-            </button>
-            <button className="rdm-btn-mini" onClick={onClose}>
-              Close
-            </button>
-          </div>
+        
+        {/* HEADER: Nav & Tools */}
+        <div className="rdm-header">
+           <div style={{ display: 'flex', gap: 8 }}>
+             <button className="rdm-close-btn" onClick={actions.handleShare} title="Copy Link">🔗</button>
+             {/* Note: In a real app, clicking Safety should open the other modal. 
+                 For now, we just show a toast or log it since SafetyModal is global. */}
+           </div>
+           <div style={{ fontWeight: 800, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+              TICKET #{raffleId?.slice(2, 8).toUpperCase()}
+           </div>
+           <button className="rdm-close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* Title & Prize */}
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <div className="rdm-label" style={{ fontSize: 12, fontWeight: 800 }}>
-            Ppopgi
-          </div>
-          <div
-            className="rdm-title pp-rc-titleClamp"
-            title={state.data?.name}
-          >
-            {state.data?.name || "Loading..."}
-          </div>
-          
-          {/* Raffle ID Link */}
-          {raffleId && (
-             <div style={{ marginTop: 4, fontSize: 11, opacity: 0.6 }}>
-                <ExplorerLink addr={raffleId}>
-                   #{raffleId.slice(2, 8).toUpperCase()}
-                </ExplorerLink>
+        {/* HERO: The Prize */}
+        <div className="rdm-hero">
+           <div className="rdm-hero-lbl">Current Prize Pot</div>
+           <div className="rdm-hero-val">{math.fmtUsdc(state.data?.winningPot || "0")}</div>
+           <div className="rdm-host">
+              <span>Hosted by</span>
+              <ExplorerLink addr={state.data?.owner || state.data?.creator || ""}>
+                 {math.short(state.data?.owner || state.data?.creator || "")}
+              </ExplorerLink>
+           </div>
+        </div>
+
+        {/* STATS: ROI & Odds */}
+        {stats && (
+          <div className="rdm-stats-grid">
+             <div className="rdm-stat-box highlight">
+                <div className="rdm-sb-lbl">Payout</div>
+                <div className="rdm-sb-val rdm-roi-badge">{stats.roi}x</div>
              </div>
-          )}
-
-          <div
-            className="rdm-label"
-            style={{ fontSize: 12, marginTop: 14, letterSpacing: 0.5 }}
-          >
-            WINNER GETS
+             <div className="rdm-stat-box">
+                <div className="rdm-sb-lbl">Win Odds</div>
+                <div className="rdm-sb-val">{stats.odds}</div>
+             </div>
+             <div className="rdm-stat-box">
+                <div className="rdm-sb-lbl">Price</div>
+                <div className="rdm-sb-val">${stats.price}</div>
+             </div>
           </div>
-          <div className="rdm-prize-val">
-            {math.fmtUsdc(state.data?.winningPot || "0")} USDC
-          </div>
-        </div>
+        )}
 
         <div className="rdm-tear" />
 
-        {/* Stats Grid */}
-        <div className="rdm-grid-2">
-          <div className="rdm-panel" style={{ marginTop: 0 }}>
-            <span className="rdm-label" style={{ fontSize: 11 }}>
-              Ticket Price
-            </span>
-            <span className="rdm-val">
-              {math.fmtUsdc(state.data?.ticketPrice || "0")} USDC
-            </span>
-          </div>
-          <div className="rdm-panel" style={{ marginTop: 0 }}>
-            <span className="rdm-label" style={{ fontSize: 11 }}>
-              Sold / Max
-            </span>
-            <span className="rdm-val">
-              {state.data?.sold || "0"} /{" "}
-              {state.data?.maxTickets === "0" ? "∞" : state.data?.maxTickets}
-            </span>
-          </div>
+        {/* ACTION: The Cashier */}
+        <div className="rdm-buy-section">
+           
+           {!flags.raffleIsOpen ? (
+              <div style={{ textAlign: 'center', padding: 20, opacity: 0.6, fontWeight: 700 }}>
+                 {state.displayStatus === "Open" ? "Raffle is finalizing..." : "Raffle Closed"}
+              </div>
+           ) : (
+             <>
+               <div className="rdm-balance-row">
+                  <span>Bal: {math.fmtUsdc(state.usdcBal?.toString() || "0")}</span>
+                  <span>Max: {math.maxBuy} Tickets</span>
+               </div>
+
+               <div className="rdm-stepper">
+                  <button className="rdm-step-btn" onClick={() => actions.setTickets(String(math.ticketCount - 1))}>−</button>
+                  <div className="rdm-input-wrapper">
+                     <input 
+                       className="rdm-amount" 
+                       value={state.tickets} 
+                       onChange={(e) => actions.setTickets(e.target.value)}
+                       placeholder="1"
+                     />
+                     <div className="rdm-cost-preview">
+                        Total: {math.fmtUsdc(math.totalCostU.toString())} USDC
+                     </div>
+                  </div>
+                  <button className="rdm-step-btn" onClick={() => actions.setTickets(String(math.ticketCount + 1))}>+</button>
+               </div>
+
+               {!flags.hasEnoughAllowance ? (
+                  <button className="rdm-cta approve" onClick={actions.approve} disabled={state.isPending}>
+                     {state.isPending ? "Approving USDC..." : "1. Approve USDC"}
+                  </button>
+               ) : (
+                  <button className="rdm-cta buy" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
+                     {state.isPending ? "Confirming..." : `Buy ${state.tickets || 1} Ticket${math.ticketCount !== 1 ? 's' : ''}`}
+                  </button>
+               )}
+               
+               {state.buyMsg && <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: '#D32F2F', fontWeight: 700 }}>{state.buyMsg}</div>}
+             </>
+           )}
         </div>
 
-        {/* Join Panel */}
-        <div className="rdm-panel">
-          <span className="rdm-val" style={{ fontSize: 16 }}>
-            {flags.raffleIsOpen ? "Join Raffle" : "Join Unavailable"}
-          </span>
-
-          {!flags.raffleIsOpen ? (
-            <span className="rdm-label" style={{ fontSize: 13 }}>
-              {state.displayStatus === "Open"
-                ? "Time ended. Finalizing..."
-                : `Raffle is ${state.displayStatus.toLowerCase()}.`}
-            </span>
-          ) : (
-            <>
-              <div className="rdm-row">
-                <span>Total Cost</span>
-                <span className="rdm-val">
-                  {math.fmtUsdc(math.totalCostU.toString())} USDC
-                </span>
-              </div>
-
-              <div className="rdm-input-row">
-                <button
-                  className="rdm-btn-mini"
-                  onClick={() => actions.setTickets(String(math.ticketCount - 1))}
-                >
-                  −
-                </button>
-                <input
-                  className="rdm-input"
-                  value={state.tickets}
-                  onChange={(e) => actions.setTickets(e.target.value)}
-                />
-                <button
-                  className="rdm-btn-mini"
-                  onClick={() => actions.setTickets(String(math.ticketCount + 1))}
-                >
-                  +
-                </button>
-              </div>
-
-              <div className="rdm-row" style={{ marginTop: 6, fontSize: 11 }}>
-                <span>
-                  Min: {math.minBuy} • Max: {math.maxBuy}
-                </span>
-                <span>
-                  {state.usdcBal !== null &&
-                    `Bal: ${math.fmtUsdc(state.usdcBal.toString())}`}
-                  {state.allowance !== null &&
-                    ` • Allow: ${math.fmtUsdc(state.allowance.toString())}`}
-                </span>
-              </div>
-
-              {!flags.hasEnoughAllowance ? (
-                <button
-                  className="rdm-btn-big"
-                  onClick={actions.approve}
-                  disabled={state.isPending}
-                >
-                  {state.isPending ? "Approving..." : "1. Approve USDC"}
-                </button>
-              ) : (
-                <button
-                  className="rdm-btn-big"
-                  onClick={actions.buy}
-                  disabled={!flags.canBuy || state.isPending}
-                >
-                  {state.isPending ? "Buying..." : "2. Buy Tickets"}
-                </button>
-              )}
-
-              {state.buyMsg && (
-                <div
-                  className="rdm-label"
-                  style={{
-                    textAlign: "center",
-                    marginTop: 8,
-                    fontWeight: 800,
-                  }}
-                >
-                  {state.buyMsg}
-                </div>
-              )}
-            </>
-          )}
+        {/* FOOTER: Details */}
+        <div className="rdm-footer">
+           <span>Status: {state.displayStatus}</span>
+           <span>Sold: {state.data?.sold} / {state.data?.maxTickets === "0" ? "∞" : state.data?.maxTickets}</span>
         </div>
 
-        {/* Winner Panel */}
-        {state.displayStatus === "Settled" && (
-          <div className="rdm-panel">
-            <span className="rdm-val">Winner</span>
-            <div className="rdm-row">
-              <span>Address</span>
-              <span className="rdm-val">
-                <ExplorerLink addr={state.data?.winner || ""}>
-                   {math.short(state.data?.winner || "")}
-                </ExplorerLink>
-              </span>
-            </div>
-            <div className="rdm-row">
-              <span>Prize</span>
-              <span className="rdm-val">
-                {math.fmtUsdc(state.data?.winningPot || "0")} USDC
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Safety Details (Toggle) */}
-        {safetyOpen && state.data && (
-          <div className="rdm-panel">
-            <span className="rdm-val">Safety Info</span>
-            
-            <div className="rdm-row">
-              <span>USDC</span>
-              <span>
-                 <ExplorerLink addr={state.data.usdcToken || ADDRESSES.USDC}>
-                    {math.short(state.data.usdcToken || ADDRESSES.USDC)}
-                 </ExplorerLink>
-              </span>
-            </div>
-            
-            <div className="rdm-row">
-              <span>Fee Receiver</span>
-              <span>
-                 <ExplorerLink addr={state.data.feeRecipient}>
-                    {math.short(state.data.feeRecipient)}
-                 </ExplorerLink>
-              </span>
-            </div>
-            
-            <div className="rdm-row">
-              <span>Entropy</span>
-              <span>
-                 <ExplorerLink addr={state.data.entropy}>
-                    {math.short(state.data.entropy)}
-                 </ExplorerLink>
-              </span>
-            </div>
-
-            <div className="rdm-row">
-              <span>Entropy Provider</span>
-              <span>
-                 <ExplorerLink addr={state.data.entropyProvider}>
-                    {math.short(state.data.entropyProvider)}
-                 </ExplorerLink>
-              </span>
-            </div>
-
-            <div className="rdm-row">
-              <span>Selected Provider</span>
-              <span>
-                 <ExplorerLink addr={state.data.selectedProvider}>
-                    {math.short(state.data.selectedProvider)}
-                 </ExplorerLink>
-              </span>
-            </div>
-
-            <div className="rdm-row">
-              <span>Deployer</span>
-              <span>
-                 <ExplorerLink addr={ADDRESSES.SingleWinnerDeployer}>
-                    {math.short(ADDRESSES.SingleWinnerDeployer)}
-                 </ExplorerLink>
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div
-          style={{
-            marginTop: 18,
-            display: "flex",
-            justifyContent: "space-between",
-            opacity: 0.8,
-          }}
-        >
-          <span className="rdm-val" style={{ fontSize: 14 }}>
-            {getBottomText()}
-          </span>
-          <span>✨</span>
-        </div>
       </div>
     </div>
   );
