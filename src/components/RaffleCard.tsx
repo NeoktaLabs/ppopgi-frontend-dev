@@ -1,10 +1,11 @@
-import React from "react";
+// src/components/RaffleCard.tsx
+import React, { useMemo } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { useRaffleCard } from "../hooks/useRaffleCard";
 import "./RaffleCard.css";
 
-// ✅ Helper for Explorer URL
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
+const USDC_ICON = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=026"; 
 
 type HatchUI = {
   show: boolean;
@@ -25,12 +26,30 @@ type Props = {
   hatch?: HatchUI | null;
 };
 
+const short = (addr: string) => addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown";
+
 export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch }: Props) {
   const { ui, actions } = useRaffleCard(raffle, nowMs);
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
   const showHatch = hatch && hatch.show;
+
+  const hostAddr = (raffle as any).owner || (raffle as any).creator;
+
+  // Calculate Win Chance (Odds for 1 Ticket)
+  const odds = useMemo(() => {
+    if (!ui.isLive) return null;
+    const max = Number(raffle.maxTickets);
+    const sold = Number(raffle.sold);
+    
+    // Fixed capacity
+    if (max > 0) return { pct: (100 / max).toFixed(2), label: `1 in ${max}` };
+    
+    // Unlimited (dynamic odds)
+    const pool = sold + 1; 
+    return { pct: (100 / pool).toFixed(2), label: `1 in ~${pool}` };
+  }, [raffle.maxTickets, raffle.sold, ui.isLive]);
 
   return (
     <div 
@@ -39,7 +58,6 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       role="button"
       tabIndex={0}
     >
-      {/* Decorations */}
       <div className="rc-notch left" />
       <div className="rc-notch right" />
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
@@ -47,6 +65,14 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       {/* Header */}
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
+        
+        {/* Win Chance Badge */}
+        {odds && (
+           <div className="rc-odds-badge" title={`Win chance: ${odds.pct}% per ticket`}>
+              🎲 {odds.pct}% Chance
+           </div>
+        )}
+
         <div className="rc-actions">
           <button 
             className="rc-btn-icon" 
@@ -62,13 +88,38 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       </div>
 
-      <div className="rc-brand">Ppopgi Ticket</div>
+      <div className="rc-host">
+        <span>Hosted by</span>
+        {hostAddr ? (
+           <a 
+             href={`${EXPLORER_URL}${hostAddr}`}
+             target="_blank"
+             rel="noreferrer"
+             className="rc-host-link"
+             onClick={(e) => e.stopPropagation()}
+           >
+             {short(hostAddr)}
+           </a>
+        ) : <span>PPOPGI</span>}
+      </div>
+
       <div className="rc-title" title={raffle.name}>{raffle.name}</div>
 
       <div className="rc-prize-lbl">Winner Prize</div>
-      <div className="rc-prize-val">{ui.formattedPot} USDC</div>
+      <div className="rc-prize-row">
+        <img src={USDC_ICON} alt="USDC" className="rc-token-icon" />
+        <div className="rc-prize-val">{ui.formattedPot}</div>
+      </div>
 
-      <div className="rc-perforation" />
+      {/* Quick Buy Button */}
+      <div className="rc-quick-buy-wrapper">
+         <div className="rc-perforation" />
+         {ui.isLive && (
+            <button className="rc-quick-buy-btn" onClick={() => onOpen(raffle.id)}>
+               ⚡ Buy Ticket
+            </button>
+         )}
+      </div>
 
       <div className="rc-grid">
         <div className="rc-stat">
@@ -119,11 +170,9 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       )}
 
-      {/* Footer with Clickable Address */}
       <div className="rc-footer">
         <span>{ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}</span>
         
-        {/* ✅ CLICKABLE LINK */}
         <a 
           href={`${EXPLORER_URL}${raffle.id}`}
           target="_blank"
