@@ -3,7 +3,7 @@ import React, { ReactNode, useMemo } from "react";
 import { TopNav } from "../components/TopNav";
 import { DisclaimerGate } from "../components/DisclaimerGate";
 import { Toast } from "../components/Toast"; 
-import { WrongNetworkNotice } from "../components/WrongNetworkNotice";
+// WrongNetworkNotice removed to prevent false positives
 import "./MainLayout.css";
 
 // Import your backgrounds
@@ -50,7 +50,7 @@ export function MainLayout({
 
       {/* 2. Global Gates & Modals */}
       <DisclaimerGate />
-      <WrongNetworkNotice />
+      {/* Network notice removed here */}
       <Toast /> 
 
       {/* 3. Navigation */}
