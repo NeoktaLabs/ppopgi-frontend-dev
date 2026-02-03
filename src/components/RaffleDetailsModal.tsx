@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from "react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants"; 
-import type { RaffleListItem } from "../indexer/subgraph"; // Import type
+import type { RaffleListItem } from "../indexer/subgraph"; 
 import "./RaffleDetailsModal.css";
 
 // Helper for clickable addresses
@@ -27,8 +27,7 @@ type Props = {
   open: boolean;
   raffleId: string | null;
   onClose: () => void;
-  // ✅ NEW: Accept initial data to populate fields immediately
-  initialRaffle?: RaffleListItem | null; 
+  initialRaffle?: RaffleListItem | null; // Optional fallback data
 };
 
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
@@ -54,7 +53,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
   if (!open) return null;
 
-  // Prefer data from hook, fallback to initial passed data
+  // ✅ Fix: Use the correct timestamp field from schema
   const createdTs = state.data?.createdAtTimestamp || initialRaffle?.createdAtTimestamp;
   const deadlineTs = state.data?.deadline || initialRaffle?.deadline;
 
@@ -147,7 +146,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               <div className="rdm-receipt-title">TECHNICAL SPECS</div>
               <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
               
-              {/* ✅ USING CORRECT FIELD */}
+              {/* ✅ Correct usage of timestamp */}
               <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(createdTs)}</span></div>
               <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(deadlineTs)}</span></div>
               
