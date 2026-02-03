@@ -1,3 +1,4 @@
+/* src/components/CreateRaffleModal.tsx */
 import React, { useState, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { ADDRESSES } from "../config/contracts";
