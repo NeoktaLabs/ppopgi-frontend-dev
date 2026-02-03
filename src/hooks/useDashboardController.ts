@@ -7,7 +7,7 @@ import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { useDashboardData } from "./useDashboardData";
 import { useClaimableRaffles } from "./useClaimableRaffles";
 
-// ABI Constants
+// ... (Keep ABIs from previous step) ...
 const RAFFLE_HATCH_ABI = [
   { type: "function", name: "drawingRequestedAt", stateMutability: "view", inputs: [], outputs: [{ type: "uint64" }] },
   { type: "function", name: "forceCancelStuck", stateMutability: "nonpayable", inputs: [], outputs: [] },
@@ -35,7 +35,23 @@ export function useDashboardController() {
   const [hatchNoteById, setHatchNoteById] = useState<Record<string, string>>({});
   const [hatchBusyById, setHatchBusyById] = useState<Record<string, boolean>>({});
 
-  // 1. Logic: Filter & Sort Claimables
+  // ✅ Helper: Sort by ID descending (assuming new raffles = higher ID/address or recent graph entry)
+  // If your subgraph has 'createdAt', usage: b.createdAt - a.createdAt
+  const sortByRecent = (list: any[] | null) => {
+    if (!list) return null;
+    return [...list].sort((a, b) => {
+       const tA = Number(a.lastUpdatedTimestamp || 0);
+       const tB = Number(b.lastUpdatedTimestamp || 0);
+       // Sort by time, then by ID string descending
+       return tB - tA || String(b.id).localeCompare(String(a.id));
+    });
+  };
+
+  // 1. Sort the raw dashboard lists
+  const createdSorted = useMemo(() => sortByRecent(dash.created), [dash.created]);
+  const joinedSorted = useMemo(() => sortByRecent(dash.joined), [dash.joined]);
+
+  // 2. Logic: Filter & Sort Claimables
   const claimables = useMemo(() => {
     if (!claim.items) return null;
     return claim.items
@@ -50,12 +66,14 @@ export function useDashboardController() {
       });
   }, [claim.items, hiddenClaimables]);
 
-  // 2. Logic: Hatch Polling (Fetch timestamps for created raffles)
+  // 3. Logic: Hatch Polling
   useEffect(() => {
-    if (!account || !dash.created) return;
+    if (!account || !createdSorted) return; // Use sorted list
     let alive = true;
     
-    const targets = dash.created
+    // Only poll for the top 20 most recent to save RPC calls
+    const targets = createdSorted
+        .slice(0, 20)
         .filter((r: any) => r.creator.toLowerCase() === account.toLowerCase())
         .map((r: any) => r.id).filter(id => id && !(id in drawingAtById));
 
@@ -77,9 +95,9 @@ export function useDashboardController() {
     });
 
     return () => { alive = false; };
-  }, [account, dash.created, drawingAtById]);
+  }, [account, createdSorted, drawingAtById]);
 
-  // 3. Actions: Hatch Trigger
+  // ... (Keep actions: triggerHatch, withdraw, refresh same as before) ...
   const triggerHatch = async (raffleId: string) => {
     if (!account) return setMsg("Sign in first.");
     setHatchBusyById(p => ({ ...p, [raffleId]: true }));
@@ -87,21 +105,20 @@ export function useDashboardController() {
         const c = getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId, abi: RAFFLE_HATCH_ABI });
         await sendAndConfirm(prepareContractCall({ contract: c, method: "forceCancelStuck", params: [] }));
         setMsg("Hatch triggered. Refreshing...");
-        setDrawingAtById(p => { const n = { ...p }; delete n[raffleId]; return n; }); // Force re-fetch
+        setDrawingAtById(p => { const n = { ...p }; delete n[raffleId]; return n; });
         dash.refetch();
     } catch(e: any) {
         setHatchNoteById(p => ({ ...p, [raffleId]: String(e.message).includes("rejected") ? "Cancelled." : "Failed." }));
     } finally { setHatchBusyById(p => ({ ...p, [raffleId]: false })); }
   };
 
-  // 4. Actions: Withdraw
   const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
     if (!account) return setMsg("Sign in first.");
     setMsg(null);
     try {
         const c = getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId, abi: RAFFLE_MIN_ABI });
         await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
-        setHiddenClaimables(p => ({ ...p, [raffleId]: true })); // Optimistic hide
+        setHiddenClaimables(p => ({ ...p, [raffleId]: true }));
         setMsg("Claim successful.");
         claim.refetch();
     } catch { setMsg("Claim failed or rejected."); }
@@ -113,7 +130,8 @@ export function useDashboardController() {
   };
 
   return {
-    data: { created: dash.created, joined: dash.joined, claimables, msg, isPending },
+    // ✅ Return the sorted lists
+    data: { created: createdSorted, joined: joinedSorted, claimables, msg, isPending },
     hatch: { timestamps: drawingAtById, notes: hatchNoteById, busy: hatchBusyById, trigger: triggerHatch },
     actions: { withdraw, refresh },
     account
