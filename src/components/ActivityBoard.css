@@ -1,70 +1,105 @@
 /* src/components/ActivityBoard.css */
 
 .ab-board {
-  /* ✅ Fix Width: Narrower and Centered */
-  max-width: 600px;
-  margin: 120px auto 40px auto; /* 120px Top margin clears the Nav */
+  max-width: 480px;
+  /* ✅ FIX: Reduced top margin from 120px to 90px */
+  margin: 90px auto 40px auto;
   
   background: white;
-  border-radius: 20px;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,0.08); /* Slightly darker border for better definition */
+  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.06);
   overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .ab-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 12px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 1px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;
   display: flex; align-items: center; gap: 8px;
-  background: #f8fafc;
+  background: #fff; /* Clean white header */
 }
 
 .ab-pulse {
-  width: 8px; height: 8px; background: #22c55e; border-radius: 50%;
+  width: 6px; height: 6px; background: #22c55e; border-radius: 50%;
   box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
   animation: ab-pulse-anim 2s infinite;
 }
 @keyframes ab-pulse-anim {
   0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
 
-/* ✅ Fix Layout: Vertical List */
 .ab-list {
   display: flex;
-  flex-direction: column; /* Forces one per line */
+  flex-direction: column;
   padding: 0;
 }
 
 .ab-row {
-  display: flex; align-items: center; gap: 16px;
-  padding: 14px 24px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
   border-bottom: 1px solid #f1f5f9;
   transition: background 0.1s;
+  height: 44px;
+  background: #ffffff; /* Default row color */
 }
+
+/* ✅ NEW: Zebra Striping for distinct rows */
+.ab-row:nth-child(even) {
+  background: #f8fafc; /* Subtle grey for even rows */
+}
+
 .ab-row:last-child { border-bottom: none; }
-.ab-row:hover { background: #f8fafc; }
+
+/* Darker hover for both types */
+.ab-row:hover { 
+  background: #f1f5f9; 
+  cursor: default; /* Optional: indicates it's static info */
+}
+
 
 .ab-icon {
-  width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 18px;
+  width: 28px; height: 28px;
+  border-radius: 8px; 
+  display: grid; place-items: center; 
+  font-size: 14px;
   flex-shrink: 0;
+  background: white; /* Icons always white bg to pop against rows */
+  border: 1px solid #e2e8f0;
 }
-.ab-icon.buy { background: #eff6ff; border: 1px solid #dbeafe; }
-.ab-icon.create { background: #fdf4ff; border: 1px solid #fce7f3; }
+/* Optional: keep color tinting if preferred, but white usually looks cleaner on zebra rows */
+.ab-icon.buy { color: #2563eb; }
+.ab-icon.create { color: #d946ef; }
 
-.ab-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ab-content { 
+  flex: 1; min-width: 0; 
+  display: flex; justify-content: space-between; align-items: center; 
+  gap: 8px;
+}
 
-.ab-main-text { font-size: 13px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ab-user { font-weight: 700; color: #0f172a; font-family: monospace; }
+.ab-main-text { 
+  font-size: 12px;
+  color: #334155; 
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+}
+.ab-user { font-weight: 700; color: #0f172a; font-family: monospace; font-size: 11px; }
 .ab-link { font-weight: 700; color: #2563eb; text-decoration: none; }
 .ab-link:hover { text-decoration: underline; }
 
-.ab-sub-text { font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
-
-.ab-pot-tag {
-  background: #fdf4ff; color: #d946ef; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;
+.ab-meta {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
 
-.ab-loading { text-align: center; padding: 30px; color: #94a3b8; font-size: 13px; }
+.ab-time { 
+  font-size: 10px; color: #94a3b8; font-weight: 600; 
+}
+
+.ab-pot-tag {
+  background: #fdf4ff; color: #d946ef; padding: 2px 5px; border-radius: 4px; 
+  font-weight: 700; font-size: 9px; border: 1px solid #fce7f3;
+}
+
+.ab-loading { text-align: center; padding: 20px; color: #94a3b8; font-size: 12px; }
