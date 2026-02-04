@@ -10,37 +10,24 @@ type Props = {
   raffle: RaffleDetails;
 };
 
-// Helper: Status Text
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    FUNDING_PENDING: "Getting Ready",
-    OPEN: "Open",
-    DRAWING: "Drawing",
-    COMPLETED: "Settled",
-    CANCELED: "Canceled"
-  };
-  return map[s] || "Unknown";
-}
-
 // Helper: Clickable Link
-const ExplorerLink = ({ addr, children }: { addr?: string, children: React.ReactNode }) => {
-  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>—</span>;
+const ExplorerLink = ({ addr, label }: { addr?: string, label: string }) => {
+  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span className="sp-mono">—</span>;
   return (
     <a 
       href={`https://explorer.etherlink.com/address/${addr}`} 
       target="_blank" rel="noreferrer" 
       className="sp-link"
+      title={addr}
     >
-      {children}
+      {label} ↗
     </a>
   );
 };
 
-// Helper: Truncate
-const short = (s?: string) => s ? `${s.slice(0,6)}…${s.slice(-4)}` : "—";
+const short = (s?: string) => s ? `${s.slice(0,6)}...${s.slice(-4)}` : "—";
 
 export function SafetyProofModal({ open, onClose, raffle }: Props) {
-  // 1. Hook for Math
   const breakdown = useSafetyBreakdown(raffle);
 
   if (!open) return null;
@@ -49,86 +36,84 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
     <div className="sp-overlay" onMouseDown={onClose}>
       <div className="sp-card" onMouseDown={e => e.stopPropagation()}>
         
-        {/* Header */}
+        {/* Header: Verified Badge Style */}
         <div className="sp-header">
-           <div className="sp-badge">
-             🛡️ Safety Proof
+           <div className="sp-header-left">
+             <div className="sp-shield-icon">🛡️</div>
+             <div>
+               <h3 className="sp-title">Verified Contract</h3>
+               <div className="sp-subtitle">Immutable • Non-Custodial • On-Chain</div>
+             </div>
            </div>
-           <button className="sp-close-btn" onClick={onClose}>Close</button>
+           <button className="sp-close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* Intro */}
         <div className="sp-body">
-           <div className="sp-intro">
-              <div className="sp-intro-title">Verified On-Chain Data</div>
-              <div className="sp-intro-text">
-                The app only reads contract state. It cannot change rules, select winners, or move funds unexpectedly.
+           
+           {/* 1. STATUS GRID */}
+           <div className="sp-section-grid">
+              <div className="sp-data-box">
+                 <div className="sp-lbl">Contract Status</div>
+                 <div className={`sp-status-pill ${raffle.status.toLowerCase()}`}>
+                    {raffle.status.replace("_", " ")}
+                 </div>
+              </div>
+              <div className="sp-data-box">
+                 <div className="sp-lbl">Raffle Address</div>
+                 <ExplorerLink addr={raffle.address} label={short(raffle.address)} />
+              </div>
+              <div className="sp-data-box">
+                 <div className="sp-lbl">Asset Token</div>
+                 <ExplorerLink addr={raffle.usdcToken} label="USDC (Standard)" />
+              </div>
+              <div className="sp-data-box">
+                 <div className="sp-lbl">Creator</div>
+                 <ExplorerLink addr={raffle.creator} label={short(raffle.creator)} />
               </div>
            </div>
 
-           <div className="sp-tear" />
-
-           {/* SECTION 1: STATUS & CONTRACTS */}
-           <div className="sp-panel">
-              <div className="sp-panel-title">📜 Contract Status</div>
+           {/* 2. THE MONEY TRAIL */}
+           <div className="sp-panel money-panel">
+              <div className="sp-panel-header">
+                 <span>💰 Funds Allocation</span>
+                 <span className="sp-verified-check">✓ Verified Logic</span>
+              </div>
               
-              <div className="sp-row">
-                 <span className="sp-lbl">State</span>
-                 <span className="sp-val">{statusLabel(raffle.status)}</span>
+              <div className="sp-money-row highlight">
+                 <span>Winner Prize Pool</span>
+                 <span className="sp-money-val">{breakdown.pot} USDC</span>
               </div>
-              <div className="sp-row">
-                 <span className="sp-lbl">Raffle Contract</span>
-                 <span className="sp-val sp-mono">
-                    <ExplorerLink addr={raffle.address}>{short(raffle.address)}</ExplorerLink>
-                 </span>
+
+              <div className="sp-divider" />
+
+              <div className="sp-money-row">
+                 <span>Platform Fee ({breakdown.pct}%)</span>
+                 <span>{breakdown.fee} USDC</span>
               </div>
-              <div className="sp-row">
-                 <span className="sp-lbl">USDC Asset</span>
-                 <span className="sp-val sp-mono">
-                    <ExplorerLink addr={raffle.usdcToken}>{short(raffle.usdcToken)}</ExplorerLink>
-                 </span>
+              <div className="sp-money-row">
+                 <span>Creator Earnings</span>
+                 <span>{breakdown.creatorSoFar} USDC</span>
+              </div>
+              
+              <div className="sp-micro-note">
+                 Funds are held by the smart contract, not by Ppopgi. Only the winner or the creator (for their share) can withdraw.
               </div>
            </div>
 
-           {/* SECTION 2: MONEY FLOW (Your Breakdown Logic) */}
-           <div className="sp-panel">
-              <div className="sp-panel-title">💰 Who Gets What</div>
-              
-              <div className="sp-row">
-                 <span className="sp-lbl">Winner Prize</span>
-                 <span className="sp-val">{breakdown.pot} USDC</span>
+           {/* 3. RANDOMNESS */}
+           <div className="sp-panel rng-panel">
+              <div className="sp-panel-header">
+                 <span>🎲 Fairness Engine</span>
               </div>
-              <div className="sp-row">
-                 <span className="sp-lbl">Creator Share (So Far)</span>
-                 <span className="sp-val">{breakdown.creatorSoFar} USDC</span>
-              </div>
-              <div className="sp-row">
-                 <span className="sp-lbl">Protocol Fee ({breakdown.pct}%)</span>
-                 <span className="sp-val">{breakdown.fee} USDC</span>
-              </div>
-              
-              <div className="sp-tear" style={{ margin: "10px 0", opacity: 0.3 }} />
-              
-              <div className="sp-row">
-                 <span className="sp-lbl">Fee Receiver</span>
-                 <span className="sp-val sp-mono">
-                    <ExplorerLink addr={raffle.feeRecipient}>{short(raffle.feeRecipient)}</ExplorerLink>
-                 </span>
-              </div>
-              <div className="sp-note">Creator share is calculated based on tickets sold to date.</div>
-           </div>
-
-           {/* SECTION 3: RANDOMNESS */}
-           <div className="sp-panel">
-              <div className="sp-panel-title">🎲 Fairness Engine</div>
-              <div className="sp-row">
-                 <span className="sp-lbl">Entropy Source</span>
-                 <span className="sp-val sp-mono">
-                    <ExplorerLink addr={raffle.entropyProvider}>{short(raffle.entropyProvider)}</ExplorerLink>
-                 </span>
-              </div>
-              <div className="sp-note">
-                 Winner selection uses provable on-chain randomness. No one (including the admin) can predict the result.
+              <div className="sp-rng-content">
+                 <div className="sp-rng-text">
+                    Winner selection is determined by a <strong>Verifiable Random Function (VRF)</strong>. 
+                    This ensures the result cannot be predicted, manipulated, or timed by anyone—including the creator.
+                 </div>
+                 <div className="sp-data-box compact">
+                    <div className="sp-lbl">Entropy Source</div>
+                    <ExplorerLink addr={raffle.entropyProvider} label={short(raffle.entropyProvider)} />
+                 </div>
               </div>
            </div>
 
