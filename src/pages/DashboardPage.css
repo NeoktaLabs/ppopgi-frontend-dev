@@ -58,6 +58,23 @@
 
 .db-stat.highlight .db-stat-num { color: #db2777; }
 
+
+/* --- STATUS BANNER --- */
+.db-msg-banner {
+  padding: 12px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-weight: 700;
+  text-align: center;
+  font-size: 14px;
+  animation: db-slide-down 0.3s ease-out;
+}
+@keyframes db-slide-down { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+.db-msg-banner.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.db-msg-banner.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+
 /* --- CLAIM SECTION --- */
 .db-section { margin-bottom: 40px; }
 .db-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
@@ -94,6 +111,28 @@
   font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px;
 }
 
+/* Specific Layouts for Claim/Refund Text */
+.db-refund-layout {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.db-refund-val {
+  font-size: 20px; font-weight: 900; color: #1e293b;
+}
+.db-refund-sub {
+  font-size: 12px; color: #64748b;
+}
+.db-refund-sub b { color: #0f172a; }
+
+.db-win-layout {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.db-win-label {
+  font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase;
+}
+.db-win-val {
+  font-size: 20px; font-weight: 1000; color: #14532d;
+}
+
 .db-btn {
   width: 100%; padding: 10px; border-radius: 8px; border: none;
   font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 12px;
@@ -104,22 +143,55 @@
 .db-btn.secondary { background: white; border: 2px solid #e2e8f0; color: #334155; }
 .db-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* --- TABS --- */
-.db-tabs { display: flex; gap: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 24px; align-items: center; }
+
+/* --- NEW TABS (Floating Segmented Control) --- */
+.db-tabs-container {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 10;
+}
+
+.db-tabs {
+  background: white;
+  padding: 6px;
+  border-radius: 16px;
+  display: inline-flex;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.05);
+}
 
 .db-tab {
-  background: none; border: none; padding: 8px 16px; border-radius: 99px;
-  font-weight: 700; color: #64748b; cursor: pointer; font-size: 14px;
+  background: transparent;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-weight: 800;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
-.db-tab.active { background: #1e293b; color: white; }
-.db-tab:hover:not(.active) { background: #f1f5f9; }
+
+.db-tab:hover:not(.active) {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.db-tab.active {
+  background: #1e293b;
+  color: white;
+  box-shadow: 0 4px 10px rgba(30, 41, 59, 0.2);
+}
 
 .db-refresh-btn {
-  width: 32px; height: 32px; border-radius: 50%; border: 1px solid #e2e8f0; background: white; cursor: pointer;
-  display: grid; place-items: center; font-size: 14px;
+  /* Hidden in UI, keeping style just in case needed later, otherwise redundant */
+  display: none; 
 }
-.db-refresh-btn:hover { background: #f8fafc; }
-.db-refresh-btn:disabled { opacity: 0.5; cursor: wait; }
+
 
 /* --- GRID --- */
 .db-grid-area { min-height: 200px; }
@@ -131,28 +203,43 @@
   background: #f8fafc; border-radius: 16px; color: #94a3b8; font-weight: 600;
 }
 
-/* --- History Cards with Badges --- */
+
+/* --- HISTORY CARD BADGES --- */
 .db-history-card-wrapper {
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; /* Center horizontally */
+  width: 100%; 
   position: relative;
-  display: flex; flex-direction: column; gap: 8px;
 }
 
-/* ✅ NEW BADGE STYLES */
+/* ✅ FIXED BADGE: Centered & Constrained Width */
 .db-history-badge {
   text-align: center;
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
-  padding: 6px;
-  border-radius: 8px;
-  margin-top: -10px; /* Pull it slightly up towards the card */
+  padding: 8px 16px;
+  border-radius: 12px;
+  
+  /* Pull up over the card slightly */
+  margin-top: -12px; 
   z-index: 5;
+  
+  /* Prevent overflow */
+  width: auto;
+  max-width: 90%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .db-history-badge.refunded {
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #64748b;
   border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
 
 .db-history-badge.won {
@@ -162,10 +249,20 @@
   box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1);
 }
 
-/* Mobile */
+/* Mobile adjustments */
 @media (max-width: 600px) {
   .db-hero { flex-direction: column; text-align: center; gap: 32px; }
   .db-hero-content { flex-direction: column; }
   .db-hero-addr { font-size: 14px; }
-  .db-tabs { overflow-x: auto; padding-bottom: 10px; }
+  
+  /* Make tabs scrollable on mobile */
+  .db-tabs-container {
+    overflow-x: auto;
+    padding-bottom: 5px;
+    display: block;
+  }
+  .db-tabs {
+    display: flex;
+    width: max-content;
+  }
 }
