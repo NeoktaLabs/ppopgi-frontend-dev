@@ -1,5 +1,5 @@
 // src/components/TopNav.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo } from "react";
 import "./TopNav.css";
 
 type Page = "home" | "explore" | "dashboard";
@@ -21,7 +21,8 @@ function short(a: string) {
   return `${a.slice(0, 5)}…${a.slice(-4)}`;
 }
 
-export function TopNav({
+// ✅ WRAPPED IN MEMO TO PREVENT FLICKERING
+export const TopNav = memo(function TopNav({
   page,
   account,
   onNavigate,
@@ -34,8 +35,8 @@ export function TopNav({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close menu on navigation
-  useEffect(() => { setMenuOpen(false); }, [page, account]);
+  // ✅ FIX: Only close menu when changing PAGE, not when account updates
+  useEffect(() => { setMenuOpen(false); }, [page]);
 
   // Navigation Handlers
   const handleNav = (action: () => void, targetPage?: Page) => {
@@ -82,9 +83,11 @@ export function TopNav({
           
           {/* Desktop Only Actions */}
           <div className="desktop-actions">
-            <button className="nav-icon-btn" onClick={onOpenCashier} title="Cashier">
-              💳
+            {/* ✅ NEW CASHIER BUTTON */}
+            <button className="nav-link cashier-btn" onClick={onOpenCashier} title="Open Cashier">
+              🏦 Cashier
             </button>
+
             {!account ? (
               <button className="nav-link signin-btn" onClick={onOpenSignIn}>Sign In</button>
             ) : (
@@ -116,7 +119,7 @@ export function TopNav({
            
            <div className="mobile-divider" />
            
-           <button onClick={onOpenCashier}>💳 Cashier</button>
+           <button onClick={onOpenCashier}>🏦 Cashier</button>
            
            {!account ? (
              <button className="primary" onClick={onOpenSignIn}>Sign In</button>
@@ -130,4 +133,4 @@ export function TopNav({
       {menuOpen && <div className="mobile-overlay" onClick={() => setMenuOpen(false)} />}
     </div>
   );
-}
+});
