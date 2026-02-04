@@ -1,143 +1,194 @@
 // src/components/RaffleCard.tsx
 import React, { useMemo } from "react";
-import { formatUnits } from "ethers";
+import type { RaffleListItem } from "../indexer/subgraph";
+import { useRaffleCard } from "../hooks/useRaffleCard";
 import "./RaffleCard.css";
 
-// --- Types ---
-type RaffleData = {
-  id: string;
-  name: string;
-  status: string;
-  winningPot: string;
-  ticketPrice: string;
-  sold: string;
-  maxTickets: string;
-  deadline: string;
-  creator: string;
+const EXPLORER_URL = "https://explorer.etherlink.com/address/";
+const USDC_ICON = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=026"; 
+
+type HatchUI = {
+  show: boolean;
+  ready: boolean;
+  label: string;
+  disabled?: boolean;
+  busy?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+  note?: string | null;
 };
 
 type Props = {
-  raffle: RaffleData;
+  raffle: RaffleListItem;
   onOpen: (id: string) => void;
   onOpenSafety?: (id: string) => void;
   ribbon?: "gold" | "silver" | "bronze";
   nowMs?: number;
-  hatch?: { show: boolean; label: string; onClick: () => void; disabled?: boolean };
+  hatch?: HatchUI | null;
 };
 
-// --- Helpers ---
-const fmtUSDC = (val: string) => {
-  try {
-    const n = parseFloat(formatUnits(val || "0", 6));
-    // Remove decimals if whole number for cleaner look
-    return n % 1 === 0 
-      ? "$" + n.toLocaleString("en-US") 
-      : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  } catch { return "$0"; }
-};
-
-const shortAddr = (a: string) => a ? `${a.slice(0, 6)}...${a.slice(-4)}` : "";
+const short = (addr: string) => addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown";
 
 export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch }: Props) {
-  
-  // 1. Calculations
-  const potDisplay = useMemo(() => fmtUSDC(raffle.winningPot), [raffle.winningPot]);
-  const priceDisplay = useMemo(() => fmtUSDC(raffle.ticketPrice), [raffle.ticketPrice]);
-  
-  const sold = Number(raffle.sold || 0);
-  const max = Number(raffle.maxTickets || 0);
-  const pct = max > 0 ? Math.min(100, Math.round((sold / max) * 100)) : 0;
+  const { ui, actions } = useRaffleCard(raffle, nowMs);
 
-  // Time remaining
-  const timeLeft = useMemo(() => {
-    const end = Number(raffle.deadline || 0) * 1000;
-    const diff = end - nowMs;
-    if (diff <= 0) return "Ended";
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
-    if (days > 0) return `${days}d ${hours}h left`;
-    return `${hours}h ${Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))}m left`;
-  }, [raffle.deadline, nowMs]);
+  const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
+  const cardClass = `rc-card ${ribbon || ""}`;
+  const showHatch = hatch && hatch.show;
 
-  const handleShieldClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onOpenSafety) onOpenSafety(raffle.id);
-  };
+  const hostAddr = (raffle as any).owner || (raffle as any).creator;
+
+  // Calculate Win Chance (Odds for 1 Ticket)
+  const odds = useMemo(() => {
+    if (!ui.isLive) return null;
+    const max = Number(raffle.maxTickets);
+    const sold = Number(raffle.sold);
+    
+    // Fixed capacity
+    if (max > 0) return { pct: (100 / max).toFixed(2), label: `1 in ${max}` };
+    
+    // Unlimited (dynamic odds)
+    const pool = sold + 1; 
+    return { pct: (100 / pool).toFixed(2), label: `1 in ~${pool}` };
+  }, [raffle.maxTickets, raffle.sold, ui.isLive]);
 
   return (
-    <div className="rc-card" onClick={() => onOpen(raffle.id)}>
-      
-      {/* Ribbon for Podium */}
-      {ribbon && <div className={`rc-ribbon ${ribbon}`}>{ribbon === "gold" ? "1st" : ribbon === "silver" ? "2nd" : "3rd"}</div>}
+    <div 
+      className={cardClass}
+      onClick={() => onOpen(raffle.id)}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="rc-notch left" />
+      <div className="rc-notch right" />
+      {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
 
-      {/* HEADER: Status + Shield */}
+      {/* Header */}
       <div className="rc-header">
-        <span className={`rc-status-pill ${raffle.status === "OPEN" ? "open" : "closed"}`}>
-          {raffle.status === "FUNDING_PENDING" ? "Opening..." : raffle.status}
-        </span>
-
-        {/* Restore subtle shield button */}
-        <div 
-           className="rc-shield-btn" 
-           onClick={handleShieldClick} 
-           title="Verified Randomness & Contract"
-        >
-          🛡️
-        </div>
-      </div>
-
-      {/* BODY: Prize Section */}
-      <div className="rc-prize-section">
-        <div className="rc-prize-label">Winning Pot</div>
-        <div className="rc-prize-val">{potDisplay}</div>
+        <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
         
-        <div className="rc-host-row">
-           <span style={{opacity: 0.5}}>by</span> 
-           <span style={{textDecoration: 'underline'}}>{shortAddr(raffle.creator)}</span>
-        </div>
-      </div>
-
-      {/* Visual Tear Line */}
-      <div className="rc-tear" />
-
-      {/* FOOTER: Stats */}
-      <div className="rc-footer">
-        
-        <div className="rc-stat-grid">
-           <div className="rc-stat">
-              <div className="rc-stat-lbl">Price</div>
-              <div className="rc-stat-val">{priceDisplay}</div>
+        {/* Win Chance Badge */}
+        {odds && (
+           <div className="rc-odds-badge" title={`Win chance: ${odds.pct}% per ticket`}>
+              🎲 {odds.pct}% Chance
            </div>
-           <div className="rc-stat">
-              <div className="rc-stat-lbl">Odds</div>
-              <div className="rc-stat-val">1 in {sold + 1}</div>
-           </div>
-        </div>
-
-        {/* Progress */}
-        <div className="rc-progress-track">
-           <div className="rc-progress-fill" style={{ width: `${pct}%` }} />
-        </div>
-
-        <div className="rc-footer-meta">
-           <span>{sold} / {max === 0 ? "∞" : max} sold</span>
-           <span>{timeLeft}</span>
-        </div>
-        
-        {/* Optional Hatch Action */}
-        {hatch?.show && (
-           <button 
-             className="rc-hatch-btn"
-             onClick={(e) => { e.stopPropagation(); hatch.onClick(); }}
-             disabled={hatch.disabled}
-             style={{ width: "100%", marginTop: 12, padding: 10, borderRadius: 8, background: "#1e293b", color: "white", fontWeight: "bold", cursor: hatch.disabled ? "not-allowed" : "pointer", opacity: hatch.disabled ? 0.6 : 1 }}
-           >
-             {hatch.label}
-           </button>
         )}
 
+        <div className="rc-actions">
+          <button 
+            className="rc-btn-icon" 
+            onClick={(e) => { e.stopPropagation(); onOpenSafety?.(raffle.id); }} 
+            title="Safety Info"
+            disabled={!onOpenSafety}
+          >
+            🛡️
+          </button>
+          <button className="rc-btn-icon" onClick={actions.handleShare} title="Share Link">
+             🔗
+          </button>
+        </div>
+      </div>
+
+      <div className="rc-host">
+        <span>Hosted by</span>
+        {hostAddr ? (
+           <a 
+             href={`${EXPLORER_URL}${hostAddr}`}
+             target="_blank"
+             rel="noreferrer"
+             className="rc-host-link"
+             onClick={(e) => e.stopPropagation()}
+           >
+             {short(hostAddr)}
+           </a>
+        ) : <span>PPOPGI</span>}
+      </div>
+
+      <div className="rc-title" title={raffle.name}>{raffle.name}</div>
+
+      <div className="rc-prize-lbl">Winner Prize</div>
+      <div className="rc-prize-row">
+        <img src={USDC_ICON} alt="USDC" className="rc-token-icon" />
+        <div className="rc-prize-val">{ui.formattedPot}</div>
+      </div>
+
+      {/* Quick Buy Button */}
+      <div className="rc-quick-buy-wrapper">
+         <div className="rc-perforation" />
+         {ui.isLive && (
+            <button className="rc-quick-buy-btn" onClick={() => onOpen(raffle.id)}>
+               ⚡ Buy Ticket
+            </button>
+         )}
+      </div>
+
+      <div className="rc-grid">
+        <div className="rc-stat">
+          <div className="rc-stat-lbl">Price</div>
+          <div className="rc-stat-val">{ui.formattedPrice} USDC</div>
+        </div>
+        <div className="rc-stat">
+           <div className="rc-stat-lbl">Sold</div>
+           <div className="rc-stat-val">
+             {ui.sold} {ui.hasMax && `/ ${ui.max}`}
+           </div>
+        </div>
+      </div>
+
+      {ui.isLive && ui.hasMin && (
+        <div className="rc-bar-group">
+          {!ui.minReached ? (
+            <>
+               <div className="rc-bar-row"><span>Min To Draw</span><span>{ui.sold} / {ui.min}</span></div>
+               <div className="rc-track"><div className="rc-fill blue" style={{ width: ui.progressMinPct }} /></div>
+            </>
+          ) : (
+            <>
+               <div className="rc-bar-row"><span>Min Reached</span><span>Ready</span></div>
+               <div className="rc-track"><div className="rc-fill green" style={{ width: "100%" }} /></div>
+               
+               <div className="rc-bar-row" style={{ marginTop: 8 }}><span>Capacity</span><span>{ui.hasMax ? `${ui.sold} / ${ui.max}` : "Unlimited"}</span></div>
+               <div className="rc-track"><div className="rc-fill purple" style={{ width: ui.progressMaxPct }} /></div>
+            </>
+          )}
+        </div>
+      )}
+
+      {showHatch && (
+        <div className="rc-hatch" onClick={e => e.stopPropagation()}>
+           <div className="rc-bar-row">
+              <span>⚠️ Emergency Hatch</span>
+              <span>{hatch.label}</span>
+           </div>
+           <button 
+             className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`}
+             disabled={hatch.disabled || hatch.busy}
+             onClick={hatch.onClick}
+           >
+             {hatch.busy ? "CONFIRMING..." : hatch.ready ? "HATCH (CANCEL)" : "LOCKED"}
+           </button>
+           {hatch.note && <div style={{ fontSize: 10, marginTop: 4, textAlign: "center", fontWeight: 800, textTransform: 'uppercase' }}>{hatch.note}</div>}
+        </div>
+      )}
+
+      <div className="rc-footer">
+        <span>{ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}</span>
+        
+        <a 
+          href={`${EXPLORER_URL}${raffle.id}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()} 
+          style={{ 
+            opacity: 0.6, 
+            textDecoration: "none", 
+            color: "inherit", 
+            borderBottom: "1px dotted currentColor",
+            cursor: "pointer"
+          }}
+          title="View Contract on Explorer"
+        >
+          #{raffle.id.slice(2, 8).toUpperCase()}
+        </a>
       </div>
     </div>
   );
