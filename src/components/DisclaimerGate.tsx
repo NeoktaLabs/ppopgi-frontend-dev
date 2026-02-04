@@ -1,5 +1,6 @@
 // src/components/DisclaimerGate.tsx
 import React from "react";
+import "./DisclaimerGate.css";
 
 type Props = {
   open: boolean;
@@ -9,69 +10,42 @@ type Props = {
 export function DisclaimerGate({ open, onAccept }: Props) {
   if (!open) return null;
 
-  const overlay: React.CSSProperties = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.35)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    zIndex: 10000,
-  };
-
-  const card: React.CSSProperties = {
-    width: "min(520px, 100%)",
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.35)",
-    background: "rgba(255,255,255,0.22)",
-    backdropFilter: "blur(14px)",
-    WebkitBackdropFilter: "blur(14px)",
-    boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-    padding: 18,
-    color: "#2B2B33",
-  };
-
-  const h1: React.CSSProperties = { margin: 0, fontSize: 20 };
-
-  const ul: React.CSSProperties = {
-    margin: "12px 0 0",
-    paddingLeft: 18,
-    lineHeight: 1.5,
-    fontSize: 14,
-  };
-
-  const btn: React.CSSProperties = {
-    marginTop: 14,
-    width: "100%",
-    border: "1px solid rgba(255,255,255,0.45)",
-    background: "rgba(255,255,255,0.24)",
-    borderRadius: 14,
-    padding: "12px 12px",
-    cursor: "pointer",
-    color: "#2B2B33",
-    fontWeight: 700,
-    fontSize: 14,
-  };
-
-  const small: React.CSSProperties = { marginTop: 10, fontSize: 13, opacity: 0.85 };
-
   return (
-    <div style={overlay}>
-      <div style={card} role="dialog" aria-modal="true" aria-label="Before you play">
-        <h1 style={h1}>Before you play</h1>
+    <div className="dg-overlay">
+      <div className="dg-card" role="dialog" aria-modal="true">
+        
+        {/* Header with Icon */}
+        <div className="dg-header">
+          <div className="dg-icon">⚠️</div>
+          <h1 className="dg-title">Before you enter</h1>
+        </div>
 
-        <ul style={ul}>
-          <li>This is an experimental app.</li>
-          <li>You’re responsible for your choices.</li>
-          <li>Only play with money you can afford to lose.</li>
-        </ul>
+        <div className="dg-body">
+          <p className="dg-text">
+            Ppopgi is a decentralized, experimental application running on the Etherlink Mainnet.
+            By continuing, you acknowledge and agree to the following:
+          </p>
 
-        <button style={btn} onClick={onAccept}>
-          I understand — let’s go
-        </button>
+          <ul className="dg-list">
+            <li>
+              <strong>No Guarantees:</strong> The protocol is provided "as is" without warranty of any kind.
+            </li>
+            <li>
+              <strong>User Responsibility:</strong> You are solely responsible for your funds and interactions.
+            </li>
+            <li>
+              <strong>Risk Awareness:</strong> Only participate with assets you can afford to lose.
+            </li>
+          </ul>
 
-        <div style={small}>Nothing happens automatically. You always confirm actions yourself.</div>
+          <button className="dg-accept-btn" onClick={onAccept}>
+            I Understand & Agree
+          </button>
+
+          <div className="dg-footer">
+            Transactions are irreversible. Please proceed with caution.
+          </div>
+        </div>
       </div>
     </div>
   );
