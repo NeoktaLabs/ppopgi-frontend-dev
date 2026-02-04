@@ -39,31 +39,26 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
   
-  // ✅ 1. Ribbon handles class only, logic to render text is removed below
+  // ✅ 1. Ribbon CSS class only (Gold/Silver text removed)
   const cardClass = `rc-card ${ribbon || ""}`;
   const showHatch = hatch && hatch.show;
 
   const hostAddr = (raffle as any).owner || (raffle as any).creator;
 
-  // ✅ 2. Odds as Percentage
+  // ✅ 2. Odds Calculation (Percentage)
   const oddsLabel = useMemo(() => {
     if (!ui.isLive) return null;
     const max = Number(raffle.maxTickets);
     const sold = Number(raffle.sold);
     
-    // Calculate denominator (Total pool size)
-    // If capped (max > 0), odds are fixed at 1/Max. 
-    // If uncapped (max == 0), odds are 1/(Sold + You).
+    // If capped, odds are 1/Max. If uncapped, odds are 1/(Sold + You).
     const denominator = max > 0 ? max : sold + 1;
-    
-    if (denominator === 0) return "0%"; // Safety
+    if (denominator === 0) return "0%"; 
 
     const pct = (1 / denominator) * 100;
 
-    // Formatting
     if (pct >= 100) return "100%";
-    if (pct < 0.01) return "< 0.01%";
-    // Show decimals only if needed (e.g. 0.5% vs 50%)
+    if (pct < 0.01) return "<0.01%";
     return pct < 1 ? `${pct.toFixed(2)}%` : `${Math.round(pct)}%`;
   }, [raffle.maxTickets, raffle.sold, ui.isLive]);
 
@@ -78,16 +73,14 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       <div className="rc-notch right" />
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
       
-      {/* ✅ REMOVED: The block that rendered {ribbon} text is deleted */}
-
       {/* Header */}
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
         
-        {/* Updated Label */}
+        {/* ✅ 3. Shortened Label: "Win: X%" */}
         {oddsLabel && !userEntry && (
-           <div className="rc-odds-badge" title="Your chance to win if you buy 1 ticket">
-              🎲 Win Chance: {oddsLabel}
+           <div className="rc-odds-badge" title="Win chance per ticket">
+              🎲 Win: {oddsLabel}
            </div>
         )}
 
@@ -193,21 +186,28 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       )}
 
-      {/* ✅ 3. Footer Layout Change */}
+      {/* Footer */}
       <div className="rc-footer">
-        {/* Only Time and Barcode here */}
         <span>{ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}</span>
-        {/* CSS ::after handles the barcode on the right */}
-      </div>
-
-      {/* ID Link: Moved below the barcode/footer */}
-      <div style={{ textAlign: 'center', marginTop: -12, paddingBottom: 6 }}>
+        
+        {/* ✅ 4. ID Link: Absolute positioned to bottom-right (Under Barcode) */}
         <a 
           href={`${EXPLORER_URL}${raffle.id}`}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()} 
-          style={{ fontSize: 10, fontWeight: 900, opacity: 0.4, textDecoration: "none", color: "inherit", letterSpacing: 1 }}
+          style={{ 
+            position: "absolute",
+            bottom: "4px", // Puts it right at the bottom edge of the card (inside footer bg)
+            right: "16px", // Aligns with the right padding
+            fontSize: "9px", 
+            fontWeight: 800, 
+            opacity: 0.5, 
+            textDecoration: "none", 
+            color: "inherit", 
+            letterSpacing: "0.5px",
+            zIndex: 5
+          }}
           title="View Contract"
         >
           #{raffle.id.slice(2, 8).toUpperCase()}
