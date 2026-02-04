@@ -42,7 +42,7 @@
   font-size: 20px; font-weight: 800; color: #1e293b;
   font-family: monospace;
   display: flex; align-items: center; gap: 8px;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s; cursor: pointer;
 }
 .db-hero-addr:hover { opacity: 0.7; }
 .db-copy-icon { font-size: 14px; opacity: 0.5; }
@@ -129,6 +129,37 @@
 .db-empty {
   grid-column: 1 / -1; padding: 60px; text-align: center;
   background: #f8fafc; border-radius: 16px; color: #94a3b8; font-weight: 600;
+}
+
+/* --- History Cards with Badges --- */
+.db-history-card-wrapper {
+  position: relative;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ✅ NEW BADGE STYLES */
+.db-history-badge {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 6px;
+  border-radius: 8px;
+  margin-top: -10px; /* Pull it slightly up towards the card */
+  z-index: 5;
+}
+
+.db-history-badge.refunded {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.db-history-badge.won {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+  box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1);
 }
 
 /* Mobile */
