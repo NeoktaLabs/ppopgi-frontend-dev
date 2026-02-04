@@ -4,7 +4,7 @@ import { formatUnits } from "ethers";
 import { ADDRESSES } from "../config/contracts";
 import { RaffleCard } from "./RaffleCard";
 import { useCreateRaffleForm } from "../hooks/useCreateRaffleForm";
-import { useConfetti } from "../hooks/useConfetti"; // ✅ Import Confetti
+import { useConfetti } from "../hooks/useConfetti"; 
 import "./CreateRaffleModal.css";
 
 type Props = {
@@ -14,10 +14,8 @@ type Props = {
 };
 
 export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
-  // ✅ Setup Confetti
   const { fireConfetti } = useConfetti();
 
-  // Intercept success to fire confetti
   const handleSuccess = (addr?: string) => {
     fireConfetti();
     if (onCreated) onCreated(addr);
@@ -31,7 +29,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const previewRaffle = useMemo(() => ({
     id: "preview",
     name: form.name || "Your Raffle Name",
-    status: "OPEN", // Force open for preview visuals
+    status: "OPEN", 
     winningPot: String(derived.winningPotU),
     ticketPrice: String(derived.ticketPriceU),
     deadline: String(Math.floor(Date.now() / 1000) + validation.durationSecondsN),
@@ -174,8 +172,9 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           <div className="crm-preview-col">
             <div className="crm-preview-label">Live Preview</div>
             <div className="crm-card-wrapper">
+               {/* ✅ REMOVED ribbon="gold" */}
                {/* @ts-ignore */}
-               <RaffleCard raffle={previewRaffle} onOpen={()=>{}} ribbon="gold" />
+               <RaffleCard raffle={previewRaffle} onOpen={()=>{}} />
             </div>
             <div className="crm-network-tip">
                Network: Etherlink Mainnet
