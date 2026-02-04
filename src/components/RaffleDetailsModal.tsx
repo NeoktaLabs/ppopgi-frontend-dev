@@ -1,21 +1,25 @@
 // src/components/RaffleDetailsModal.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
-import { useRaffleParticipants } from "../hooks/useRaffleParticipants"; // ✅ Import Hook
+import { useRaffleParticipants } from "../hooks/useRaffleParticipants"; 
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph"; 
 import "./RaffleDetailsModal.css";
 
 // Helper for clickable addresses
-const ExplorerLink = ({ addr, children }: { addr: string; children: React.ReactNode }) => {
-  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{children}</span>;
+const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
+  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{label || "—"}</span>;
   return (
     <a href={`https://explorer.etherlink.com/address/${addr}`} target="_blank" rel="noreferrer" className="rdm-info-link">
-      {children}
+      {label || `${addr.slice(0,6)}...${addr.slice(-4)}`}
     </a>
   );
 };
 
-// Date Formatter
+const TxLink = ({ hash }: { hash?: string }) => {
+  if (!hash) return null;
+  return <a href={`https://explorer.etherlink.com/tx/${hash}`} target="_blank" rel="noreferrer" className="rdm-tl-tx">View Tx ↗</a>;
+};
+
 const formatDate = (ts: any) => {
   if (!ts || ts === "0") return "—";
   return new Date(Number(ts) * 1000).toLocaleString("en-US", {
@@ -33,16 +37,15 @@ type Props = {
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
   
-  // ✅ Tabs: "receipt" or "holders"
+  // Tabs: "receipt" (Timeline) or "holders" (Leaderboard)
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
-  
-  // ✅ Metadata (Self-healing date)
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
 
+  // Self-healing metadata fetch
   useEffect(() => {
     if (!raffleId || !open) {
       setMetadata(null);
-      setTab("receipt"); // Reset tab on close
+      setTab("receipt");
       return;
     }
     if (initialRaffle?.createdAtTimestamp) {
@@ -56,29 +59,92 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return () => { active = false; };
   }, [raffleId, open, initialRaffle]);
 
-  // Combine data sources
+  // Merge Data
   const displayData = state.data || initialRaffle || metadata;
   
-  // ✅ Fetch Participants using the new hook
-  // We pass displayData.sold so we can calculate % ownership
+  // Fetch Participants
   const { participants, isLoading: loadingPart } = useRaffleParticipants(
     raffleId, 
     Number(displayData?.sold || 0)
   );
 
-  const createdTs = metadata?.createdAtTimestamp || initialRaffle?.createdAtTimestamp || state.data?.createdAtTimestamp;
-  const deadlineTs = state.data?.deadline || metadata?.deadline || initialRaffle?.deadline;
+  // --- BUILD TIMELINE ---
+  const timeline = useMemo(() => {
+    if (!displayData) return [];
+    
+    const steps = [];
 
+    // 1. Initialization
+    steps.push({
+      label: "Initialized",
+      date: displayData.createdAtTimestamp,
+      tx: displayData.creationTx,
+      status: "done"
+    });
+
+    // 2. Registration (Factory check)
+    if (displayData.registeredAt) {
+      steps.push({
+        label: "Registered on Factory",
+        date: displayData.registeredAt,
+        status: "done"
+      });
+    }
+
+    const isCompleted = displayData.status === "COMPLETED";
+    const isDrawing = displayData.status === "DRAWING" || isCompleted;
+    const isOpen = displayData.status === "OPEN" || isDrawing;
+
+    // 3. Sales Period
+    steps.push({
+      label: "Ticket Sales Open",
+      date: displayData.createdAtTimestamp, 
+      status: isOpen ? (isDrawing ? "done" : "active") : "future"
+    });
+
+    // 4. Drawing Phase
+    if (displayData.finalizedAt) {
+       steps.push({
+         label: "Randomness Requested",
+         date: displayData.finalizedAt,
+         status: "done"
+       });
+    } else {
+       steps.push({
+         label: "Draw Deadline",
+         date: displayData.deadline,
+         status: isDrawing ? "active" : "future"
+       });
+    }
+
+    // 5. Completion
+    if (displayData.completedAt) {
+       steps.push({
+         label: "Winner Selected",
+         date: displayData.completedAt,
+         status: "done",
+         winner: displayData.winner
+       });
+    } else {
+       steps.push({
+         label: "Settlement",
+         date: null,
+         status: "future"
+       });
+    }
+
+    return steps;
+  }, [displayData]);
+
+  // Stats
   const stats = useMemo(() => {
     if (!displayData) return null;
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const price = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
     const sold = Number(displayData.sold || "0");
     const max = Number(displayData.maxTickets || "0");
-    
     const roi = price > 0 ? (pot / price).toFixed(1) : "0";
     const odds = sold > 0 ? `1 in ${sold + 1}` : "100%";
-    
     return { roi, odds, pot, price, max };
   }, [displayData, math]);
 
@@ -105,9 +171,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
            <div className="rdm-hero-val">{math.fmtUsdc(displayData?.winningPot || "0")}</div>
            <div className="rdm-host">
               <span>Hosted by</span>
-              <ExplorerLink addr={displayData?.owner || displayData?.creator || ""}>
-                 {math.short(displayData?.owner || displayData?.creator || "")}
-              </ExplorerLink>
+              <ExplorerLink addr={displayData?.owner || displayData?.creator || ""} label={math.short(displayData?.owner || displayData?.creator || "")} />
            </div>
         </div>
 
@@ -161,42 +225,48 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
            )}
         </div>
 
-        {/* ✅ TABS */}
+        {/* TABS */}
         <div className="rdm-tab-group">
-           <button className={`rdm-tab-btn ${tab === 'receipt' ? 'active' : ''}`} onClick={() => setTab('receipt')}>Technical Receipt</button>
+           <button className={`rdm-tab-btn ${tab === 'receipt' ? 'active' : ''}`} onClick={() => setTab('receipt')}>Lifecycle</button>
            <button className={`rdm-tab-btn ${tab === 'holders' ? 'active' : ''}`} onClick={() => setTab('holders')}>Top Holders</button>
         </div>
 
-        {/* TAB 1: RECEIPT */}
-        {tab === 'receipt' && displayData && (
+        {/* TAB 1: LIFECYCLE (TIMELINE) */}
+        {tab === 'receipt' && (
            <div className="rdm-receipt">
-              <div className="rdm-receipt-title">TECHNICAL SPECS</div>
-              <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
-              <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(createdTs)}</span></div>
-              <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(deadlineTs)}</span></div>
-              <div className="rdm-info-row"><span>Tickets Sold</span><span className="rdm-info-val">{displayData.sold} / {displayData.maxTickets === "0" ? "∞" : displayData.maxTickets}</span></div>
-              <div className="rdm-info-row" style={{ marginTop: 12 }}><span>Randomness</span><span className="rdm-info-val"><ExplorerLink addr={displayData.entropyProvider}>{math.short(displayData.entropyProvider)}</ExplorerLink></span></div>
-              <div className="rdm-info-row"><span>Contract</span><span className="rdm-info-val"><ExplorerLink addr={raffleId || ""}>{math.short(raffleId || "")}</ExplorerLink></span></div>
+              <div className="rdm-receipt-title" style={{ marginBottom: 0 }}>BLOCKCHAIN JOURNEY</div>
+              
+              <div className="rdm-timeline">
+                 {timeline.map((step, i) => (
+                    <div key={i} className={`rdm-tl-item ${step.status}`}>
+                       <div className="rdm-tl-dot" />
+                       <div className="rdm-tl-title">{step.label}</div>
+                       <div className="rdm-tl-date">
+                          {formatDate(step.date)}
+                          <TxLink hash={step.tx} />
+                       </div>
+                       {step.winner && (
+                          <div className="rdm-tl-winner-box">
+                             <span>🏆 Winner:</span>
+                             <ExplorerLink addr={step.winner} />
+                          </div>
+                       )}
+                    </div>
+                 ))}
+              </div>
            </div>
         )}
 
-        {/* TAB 2: HOLDERS */}
+        {/* TAB 2: HOLDERS (LEADERBOARD) */}
         {tab === 'holders' && (
            <div className="rdm-leaderboard-section">
-              <div className="rdm-lb-header">
-                 <span>Address</span>
-                 <span>Holdings</span>
-              </div>
+              <div className="rdm-lb-header"><span>Address</span><span>Holdings</span></div>
               <div className="rdm-lb-list">
                  {loadingPart && <div className="rdm-lb-empty">Loading holders...</div>}
-                 
                  {!loadingPart && participants.length === 0 && <div className="rdm-lb-empty">No tickets sold yet.</div>}
-
                  {!loadingPart && participants.map((p, i) => (
                     <div key={i} className="rdm-lb-row">
-                       <span className="rdm-lb-addr">
-                          <ExplorerLink addr={p.buyer}>{p.buyer.slice(0,10)}...</ExplorerLink>
-                       </span>
+                       <span className="rdm-lb-addr"><ExplorerLink addr={p.buyer} /></span>
                        <div className="rdm-lb-stats">
                           <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>
                           <span className="rdm-lb-pct">({p.percentage}%)</span>
