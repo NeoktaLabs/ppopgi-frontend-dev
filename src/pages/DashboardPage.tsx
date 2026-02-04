@@ -113,17 +113,15 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
              {data.claimables.map((it: any) => {
                 const r = it.raffle;
                 const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
-                const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
-                // Logic: Refund vs Win
+                // Refund Check
                 const isRefund = it.type === "REFUND" || r.status === "CANCELED";
+                const ticketCount = it.userTicketsOwned ? Number(it.userTicketsOwned) : 0;
+
                 const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
                 const label = isRefund ? "Reclaim Funds" : "Claim Prize";
                 const title = isRefund ? "Refund Available" : "Winner!";
                 
-                // ✅ NEW: Prefix label for clarity
-                const amountLabel = isRefund ? "Refund:" : "Prize:";
-
                 return (
                   <div key={r.id} className="db-claim-wrapper">
                      <RaffleCard 
@@ -139,17 +137,28 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                            </span>
                         </div>
                         
-                        {/* ✅ UPDATED: Explicitly label the amount */}
+                        {/* ✅ UPDATED: Clear visual distinction */}
                         <div className="db-claim-text">
-                           {hasUsdc && (
-                             <div>
-                               <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.6, marginRight: 6 }}>
-                                 {amountLabel}
-                               </span>
-                               {fmt(it.claimableUsdc, 6)} USDC
+                           {isRefund ? (
+                             // REFUND LAYOUT
+                             <div className="db-refund-layout">
+                               <div className="db-refund-val">{fmt(it.claimableUsdc, 6)} USDC</div>
+                               {ticketCount > 0 && (
+                                 <div className="db-refund-sub">
+                                   Refund for <b>{ticketCount}</b> Ticket{ticketCount > 1 ? 's' : ''}
+                                 </div>
+                               )}
+                             </div>
+                           ) : (
+                             // WINNER LAYOUT
+                             <div className="db-win-layout">
+                               <div className="db-win-label">Prize Amount:</div>
+                               <div className="db-win-val">
+                                 {hasUsdc && <span>{fmt(it.claimableUsdc, 6)} USDC</span>}
+                                 {BigInt(it.claimableNative || 0) > 0n && <span> + {fmt(it.claimableNative, 18)} ETH</span>}
+                               </div>
                              </div>
                            )}
-                           {hasNative && <div>+ {fmt(it.claimableNative, 18)} ETH</div>}
                         </div>
 
                         <div className="db-claim-actions">
