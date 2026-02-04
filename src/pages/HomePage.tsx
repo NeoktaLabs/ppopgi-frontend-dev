@@ -1,5 +1,5 @@
 // src/pages/HomePage.tsx
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";

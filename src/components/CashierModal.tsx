@@ -1,5 +1,5 @@
 // src/components/CashierModal.tsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { useCashierData } from "../hooks/useCashierData";
 import "./CashierModal.css";
 

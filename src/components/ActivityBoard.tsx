@@ -1,5 +1,5 @@
 // src/components/ActivityBoard.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
 import "./ActivityBoard.css";

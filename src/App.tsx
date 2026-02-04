@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAutoConnect, useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { thirdwebClient } from "./thirdweb/client";
