@@ -27,7 +27,7 @@ type Props = {
 };
 
 export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
-  const { data, hatch, actions } = useDashboardController();
+  const { data, actions } = useDashboardController(); // Removed 'hatch' if not using it directly
   const [tab, setTab] = useState<"active" | "history" | "created">("active");
   const [copied, setCopied] = useState(false);
   
@@ -52,6 +52,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
     data.joined.forEach((item: any) => {
       const r = item; 
+      // userTicketsOwned comes from the Hook's contract read
       const userCount = Number(item.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
       const percentage = userCount > 0 ? ((userCount / sold) * 100).toFixed(1) : "0.0";
@@ -68,31 +69,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     return { active, past };
   }, [data.joined]);
 
-
-  // --- HATCH LOGIC ---
-  const getHatchProps = (raffleId: string, creator: string) => {
-    if (!account || creator?.toLowerCase() !== account.toLowerCase()) return null;
-    const drawAt = Number(hatch.timestamps[raffleId] || "0");
-    if (drawAt <= 0) return null; 
-
-    const unlockAt = drawAt + 86400; // 24h delay
-    const secLeft = unlockAt - nowS;
-    const ready = secLeft <= 0;
-
-    return {
-      show: true,
-      label: ready ? "Hatch Ready" : `Hatch in ${fmtTime(secLeft)}`,
-      disabled: !ready || hatch.busy[raffleId] || data.isPending,
-      onClick: () => hatch.trigger(raffleId),
-      busy: hatch.busy[raffleId],
-      note: hatch.notes[raffleId]
-    };
-  };
-
   return (
     <div className="db-container">
       
-      {/* 1. PLAYER HERO */}
+      {/* 1. HERO */}
       <div className="db-hero">
          <div className="db-hero-content">
             <div className="db-avatar-circle">👤</div>
@@ -104,11 +84,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                  title="Click to copy"
                >
                  {account ? account : "Not Connected"}
-                 {account && (
-                   <span className="db-copy-icon">
-                     {copied ? "✅" : "📋"}
-                   </span>
-                 )}
+                 {account && <span className="db-copy-icon">{copied ? "✅" : "📋"}</span>}
                </div>
             </div>
          </div>
@@ -119,7 +95,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             </div>
             <div className="db-stat">
                <div className="db-stat-num">{pastEntries.length}</div>
-               <div className="db-stat-lbl">Completed</div>
+               <div className="db-stat-lbl">History</div>
             </div>
             {data.claimables?.length > 0 && (
                <div className="db-stat highlight">
@@ -144,10 +120,9 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                 const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
                 const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
-                // ✅ LOGIC FIX: Robust check for Canceled status
+                // ✅ LOGIC: Robust check for Canceled status
                 const isRefund = it.type === "REFUND" || r.status === "CANCELED";
                 
-                // ✅ UPDATED TEXT
                 const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
                 const label = isRefund ? "Reclaim Funds" : "Claim Prize";
                 const title = isRefund ? "Refund Available" : "Winner!";
@@ -193,13 +168,12 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
          <button className={`db-tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>History</button>
          <button className={`db-tab ${tab === 'created' ? 'active' : ''}`} onClick={() => setTab('created')}>Created</button>
          <div style={{flex:1}} />
-         <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending} title="Refresh Data">
-            🔄
-         </button>
+         <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending} title="Refresh Data">🔄</button>
       </div>
 
       {/* 4. CONTENT GRID */}
       <div className="db-grid-area">
+         
          {/* ACTIVE */}
          {tab === 'active' && (
             <div className="db-grid">
@@ -217,11 +191,41 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
          {tab === 'history' && (
             <div className="db-grid">
                {!data.isPending && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
-               {pastEntries.map((r: any) => (
-                  <RaffleCard 
-                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry}
-                  />
-               ))}
+               {pastEntries.map((r: any) => {
+                  // ✅ LOGIC: Determine "Refunded" state
+                  const isCanceled = r.status === "CANCELED";
+                  const tickets = r.userEntry?.count || 0;
+                  
+                  // If it's canceled AND I have 0 tickets left, it means I already reclaimed.
+                  // (Because subgraph says I joined, but contract says I have 0 tickets)
+                  const isRefunded = isCanceled && tickets === 0;
+
+                  return (
+                    <div key={r.id} className="db-history-card-wrapper">
+                      <RaffleCard 
+                         raffle={r} 
+                         onOpen={onOpenRaffle} 
+                         onOpenSafety={onOpenSafety} 
+                         nowMs={nowS * 1000} 
+                         userEntry={r.userEntry}
+                      />
+                      
+                      {/* ✅ BADGE: Show "Refunded" explicitly */}
+                      {isRefunded && (
+                        <div className="db-history-badge refunded">
+                           ↩ Ticket Refunded
+                        </div>
+                      )}
+                      
+                      {/* Optional: Show "Won" badge if needed */}
+                      {r.status === "COMPLETED" && r.winner?.toLowerCase() === account?.toLowerCase() && (
+                        <div className="db-history-badge won">
+                           🏆 Winner
+                        </div>
+                      )}
+                    </div>
+                  );
+               })}
             </div>
          )}
 
@@ -231,11 +235,12 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                {!data.isPending && data.created?.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
                {data.created?.map((r: any) => (
                   <RaffleCard 
-                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} hatch={getHatchProps(r.id, r.creator)}
+                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000}
                   />
                ))}
             </div>
          )}
+
       </div>
     </div>
   );
