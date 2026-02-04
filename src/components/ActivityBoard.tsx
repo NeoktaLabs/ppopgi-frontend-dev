@@ -8,9 +8,9 @@ const short = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)}` : "—";
 
 const timeAgo = (ts: string) => {
   const diff = Math.floor(Date.now() / 1000) - Number(ts);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
-  return `${Math.floor(diff/3600)}h ago`;
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m`;
+  return `${Math.floor(diff/3600)}h`;
 };
 
 export function ActivityBoard() {
@@ -19,8 +19,8 @@ export function ActivityBoard() {
 
   const load = async () => {
     try {
-      // ✅ Fetch 15 items as requested
-      const data = await fetchGlobalActivity({ first: 15 });
+      // ✅ Fetch 10 items (Compact)
+      const data = await fetchGlobalActivity({ first: 10 });
       setItems(data);
     } catch (e) {
       console.error(e);
@@ -35,14 +35,14 @@ export function ActivityBoard() {
     return () => clearInterval(t);
   }, []);
 
-  if (loading && items.length === 0) return <div className="ab-board"><div className="ab-loading">Loading live activity...</div></div>;
+  if (loading && items.length === 0) return <div className="ab-board"><div className="ab-loading">Loading...</div></div>;
   if (items.length === 0) return null;
 
   return (
     <div className="ab-board">
        <div className="ab-header">
           <div className="ab-pulse" />
-          Live Activity (Last 15)
+          Live Feed (Last 10)
        </div>
        
        <div className="ab-list">
@@ -57,7 +57,7 @@ export function ActivityBoard() {
                      <div className="ab-main-text">
                         <span className="ab-user">{short(item.subject)}</span>
                         {isBuy ? (
-                           <> bought <b>{item.value} tickets</b> in </>
+                           <> bought <b>{item.value} tix</b> in </>
                         ) : (
                            <> created </>
                         )}
@@ -65,9 +65,9 @@ export function ActivityBoard() {
                            {item.raffleName}
                         </a>
                      </div>
-                     <div className="ab-sub-text">
-                        {timeAgo(item.timestamp)}
-                        {!isBuy && <span className="ab-pot-tag">Pot: {formatUnits(item.value, 6)} USDC</span>}
+                     <div className="ab-meta">
+                        <span className="ab-time">{timeAgo(item.timestamp)}</span>
+                        {!isBuy && <span className="ab-pot-tag">Pot: {formatUnits(item.value, 6)}</span>}
                      </div>
                   </div>
                </div>
