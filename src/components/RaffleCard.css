@@ -266,3 +266,29 @@
     box-shadow: 0 4px 10px rgba(0,0,0,0.1); pointer-events: none;
     border: 1px solid rgba(0,0,0,0.1);
 }
+
+/* src/components/RaffleCard.css */
+
+/* ... (Keep all your existing styles) ... */
+
+/* ✅ NEW: User Stats Badge (Dashboard) */
+.rc-user-badge {
+  background: #EAB308; /* Gold to stand out against pink/white */
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 99px;
+  
+  /* Centering logic */
+  margin: -4px auto 8px auto; 
+  display: table;
+  
+  box-shadow: 0 4px 10px rgba(234, 179, 8, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 5;
+  position: relative;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
