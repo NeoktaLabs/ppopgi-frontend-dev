@@ -36,8 +36,6 @@ type Props = {
 
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
-  
-  // Tabs: "receipt" (Timeline) or "holders" (Leaderboard)
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
 
@@ -59,10 +57,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return () => { active = false; };
   }, [raffleId, open, initialRaffle]);
 
-  // Merge Data
   const displayData = state.data || initialRaffle || metadata;
   
-  // Fetch Participants
   const { participants, isLoading: loadingPart } = useRaffleParticipants(
     raffleId, 
     Number(displayData?.sold || 0)
@@ -75,20 +71,11 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const steps = [];
 
     // 1. Initialization
-    steps.push({
-      label: "Initialized",
-      date: displayData.createdAtTimestamp,
-      tx: displayData.creationTx,
-      status: "done"
-    });
+    steps.push({ label: "Initialized", date: displayData.createdAtTimestamp, tx: displayData.creationTx, status: "done" });
 
-    // 2. Registration (Factory check)
+    // 2. Registration
     if (displayData.registeredAt) {
-      steps.push({
-        label: "Registered on Factory",
-        date: displayData.registeredAt,
-        status: "done"
-      });
+      steps.push({ label: "Registered on Factory", date: displayData.registeredAt, status: "done" });
     }
 
     const isCompleted = displayData.status === "COMPLETED";
@@ -96,43 +83,21 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const isOpen = displayData.status === "OPEN" || isDrawing;
 
     // 3. Sales Period
-    steps.push({
-      label: "Ticket Sales Open",
-      date: displayData.createdAtTimestamp, 
-      status: isOpen ? (isDrawing ? "done" : "active") : "future"
-    });
+    steps.push({ label: "Ticket Sales Open", date: displayData.createdAtTimestamp, status: isOpen ? (isDrawing ? "done" : "active") : "future" });
 
     // 4. Drawing Phase
     if (displayData.finalizedAt) {
-       steps.push({
-         label: "Randomness Requested",
-         date: displayData.finalizedAt,
-         status: "done"
-       });
+       steps.push({ label: "Randomness Requested", date: displayData.finalizedAt, status: "done" });
     } else {
-       steps.push({
-         label: "Draw Deadline",
-         date: displayData.deadline,
-         status: isDrawing ? "active" : "future"
-       });
+       steps.push({ label: "Draw Deadline", date: displayData.deadline, status: isDrawing ? "active" : "future" });
     }
 
     // 5. Completion
     if (displayData.completedAt) {
-       steps.push({
-         label: "Winner Selected",
-         date: displayData.completedAt,
-         status: "done",
-         winner: displayData.winner
-       });
+       steps.push({ label: "Winner Selected", date: displayData.completedAt, status: "done", winner: displayData.winner });
     } else {
-       steps.push({
-         label: "Settlement",
-         date: null,
-         status: "future"
-       });
+       steps.push({ label: "Settlement", date: null, status: "future" });
     }
-
     return steps;
   }, [displayData]);
 
@@ -231,51 +196,39 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
            <button className={`rdm-tab-btn ${tab === 'holders' ? 'active' : ''}`} onClick={() => setTab('holders')}>Top Holders</button>
         </div>
 
-        {/* TAB 1: LIFECYCLE (TIMELINE) */}
-        {tab === 'receipt' && (
-           <div className="rdm-receipt">
-              <div className="rdm-receipt-title" style={{ marginBottom: 0 }}>BLOCKCHAIN JOURNEY</div>
-              
-              <div className="rdm-timeline">
-                 {timeline.map((step, i) => (
-                    <div key={i} className={`rdm-tl-item ${step.status}`}>
-                       <div className="rdm-tl-dot" />
-                       <div className="rdm-tl-title">{step.label}</div>
-                       <div className="rdm-tl-date">
-                          {formatDate(step.date)}
-                          <TxLink hash={step.tx} />
-                       </div>
-                       {step.winner && (
-                          <div className="rdm-tl-winner-box">
-                             <span>🏆 Winner:</span>
-                             <ExplorerLink addr={step.winner} />
-                          </div>
-                       )}
-                    </div>
-                 ))}
-              </div>
-           </div>
-        )}
-
-        {/* TAB 2: HOLDERS (LEADERBOARD) */}
-        {tab === 'holders' && (
-           <div className="rdm-leaderboard-section">
-              <div className="rdm-lb-header"><span>Address</span><span>Holdings</span></div>
-              <div className="rdm-lb-list">
-                 {loadingPart && <div className="rdm-lb-empty">Loading holders...</div>}
-                 {!loadingPart && participants.length === 0 && <div className="rdm-lb-empty">No tickets sold yet.</div>}
-                 {!loadingPart && participants.map((p, i) => (
-                    <div key={i} className="rdm-lb-row">
-                       <span className="rdm-lb-addr"><ExplorerLink addr={p.buyer} /></span>
-                       <div className="rdm-lb-stats">
-                          <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>
-                          <span className="rdm-lb-pct">({p.percentage}%)</span>
-                       </div>
-                    </div>
-                 ))}
-              </div>
-           </div>
-        )}
+        {/* TAB CONTENT */}
+        <div className="rdm-scroll-content">
+          {tab === 'receipt' && (
+             <div className="rdm-receipt">
+                <div className="rdm-receipt-title" style={{ marginBottom: 0 }}>BLOCKCHAIN JOURNEY</div>
+                <div className="rdm-timeline">
+                   {timeline.map((step, i) => (
+                      <div key={i} className={`rdm-tl-item ${step.status}`}>
+                         <div className="rdm-tl-dot" />
+                         <div className="rdm-tl-title">{step.label}</div>
+                         <div className="rdm-tl-date">{formatDate(step.date)} <TxLink hash={step.tx} /></div>
+                         {step.winner && <div className="rdm-tl-winner-box"><span>🏆 Winner:</span> <ExplorerLink addr={step.winner} /></div>}
+                      </div>
+                   ))}
+                </div>
+             </div>
+          )}
+          {tab === 'holders' && (
+             <div className="rdm-leaderboard-section">
+                <div className="rdm-lb-header"><span>Address</span><span>Holdings</span></div>
+                <div className="rdm-lb-list">
+                   {loadingPart && <div className="rdm-lb-empty">Loading holders...</div>}
+                   {!loadingPart && participants.length === 0 && <div className="rdm-lb-empty">No tickets sold yet.</div>}
+                   {!loadingPart && participants.map((p, i) => (
+                      <div key={i} className="rdm-lb-row">
+                         <span className="rdm-lb-addr"><ExplorerLink addr={p.buyer} /></span>
+                         <div className="rdm-lb-stats"><span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span><span className="rdm-lb-pct">({p.percentage}%)</span></div>
+                      </div>
+                   ))}
+                </div>
+             </div>
+          )}
+        </div>
 
       </div>
     </div>
