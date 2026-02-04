@@ -10,7 +10,6 @@ import "./DashboardPage.css";
 const fmt = (v: string, dec = 18) => { 
   try { 
     const val = formatUnits(BigInt(v || "0"), dec);
-    // Show 2 decimals max, strip trailing zeros
     return parseFloat(val).toLocaleString("en-US", { maximumFractionDigits: 2 }); 
   } catch { return "0"; } 
 };
@@ -36,7 +35,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => { const t = setInterval(() => setNowS(Math.floor(Date.now() / 1000)), 1000); return () => clearInterval(t); }, []);
 
-  // --- ACTIONS ---
   const handleCopy = () => {
     if (account) {
       navigator.clipboard.writeText(account);
@@ -53,9 +51,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     if (!data.joined) return { active, past };
 
     data.joined.forEach((item: any) => {
-      // Handle if item is { raffle: ..., userTicketsOwned: ... }
       const r = item; 
-      // The hook returns `userTicketsOwned` as a string
       const userCount = Number(item.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
       const percentage = userCount > 0 ? ((userCount / sold) * 100).toFixed(1) : "0.0";
@@ -148,11 +144,13 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                 const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
                 const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
-                // ✅ Logic: Distinguish Refund vs Win
-                const isRefund = it.type === "REFUND";
+                // ✅ LOGIC FIX: Robust check for Canceled status
+                const isRefund = it.type === "REFUND" || r.status === "CANCELED";
+                
+                // ✅ UPDATED TEXT
                 const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
-                const label = isRefund ? "Claim Refund" : "Claim Prize";
-                const title = isRefund ? "Ticket Refund" : "Winner!";
+                const label = isRefund ? "Reclaim Funds" : "Claim Prize";
+                const title = isRefund ? "Refund Available" : "Winner!";
                 
                 return (
                   <div key={r.id} className="db-claim-wrapper">
@@ -161,7 +159,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                        onOpen={onOpenRaffle} 
                        onOpenSafety={onOpenSafety} 
                        nowMs={nowS * 1000}
-                       // Hide status chip on card to reduce noise, or keep it
                      />
                      <div className="db-claim-box">
                         <div className="db-claim-header">
@@ -203,7 +200,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
       {/* 4. CONTENT GRID */}
       <div className="db-grid-area">
-         
          {/* ACTIVE */}
          {tab === 'active' && (
             <div className="db-grid">
@@ -211,12 +207,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                {!data.isPending && activeEntries.length === 0 && <div className="db-empty">You have no active tickets. Good luck next time!</div>}
                {activeEntries.map((r: any) => (
                   <RaffleCard 
-                     key={r.id} 
-                     raffle={r} 
-                     onOpen={onOpenRaffle} 
-                     onOpenSafety={onOpenSafety}
-                     nowMs={nowS * 1000}
-                     userEntry={r.userEntry}
+                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry}
                   />
                ))}
             </div>
@@ -228,12 +219,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                {!data.isPending && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
                {pastEntries.map((r: any) => (
                   <RaffleCard 
-                     key={r.id} 
-                     raffle={r} 
-                     onOpen={onOpenRaffle} 
-                     onOpenSafety={onOpenSafety}
-                     nowMs={nowS * 1000}
-                     userEntry={r.userEntry}
+                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry}
                   />
                ))}
             </div>
@@ -245,17 +231,11 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                {!data.isPending && data.created?.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
                {data.created?.map((r: any) => (
                   <RaffleCard 
-                     key={r.id} 
-                     raffle={r} 
-                     onOpen={onOpenRaffle} 
-                     onOpenSafety={onOpenSafety}
-                     nowMs={nowS * 1000}
-                     hatch={getHatchProps(r.id, r.creator)}
+                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} hatch={getHatchProps(r.id, r.creator)}
                   />
                ))}
             </div>
          )}
-
       </div>
     </div>
   );
