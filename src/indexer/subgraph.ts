@@ -340,21 +340,23 @@ export async function fetchGlobalActivity(opts: { first?: number; signal?: Abort
   const first = Math.min(Math.max(opts.first ?? 15, 1), 1000);
 
   const query = `
-    query GlobalActivity($first: Int!) {
-      raffleEvents(
-        first: $first
-        orderBy: blockTimestamp
-        orderDirection: desc
-        where: { type: TICKETS_PURCHASED }
-      ) {
-        raffle { id name }
-        actor
-        uintValue
-        blockTimestamp
-        txHash
-      }
+  query GlobalActivity($first: Int!) {
+    raffleEvents(
+      first: $first
+      orderBy: blockTimestamp
+      orderDirection: desc
+      where: { type: TICKETS_PURCHASED }
+    ) {
+      id
+      raffle { id name }
+      actor
+      uintValue
+      blockTimestamp
+      txHash
+      logIndex
     }
-  `;
+  }
+`;
 
   try {
     const res = await fetch(url, {
