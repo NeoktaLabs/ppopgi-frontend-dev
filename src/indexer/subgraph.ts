@@ -435,6 +435,50 @@ export async function fetchRaffleMetadata(
   }
 }
 
+export async function fetchMyJoinedRaffleIds(
+  buyer: string,
+  opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
+): Promise<string[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const first = Math.min(Math.max(opts.first ?? 1000, 1), 1000);
+  const skip = Math.max(opts.skip ?? 0, 0);
+
+  const query = `
+    query MyJoined($buyer: Bytes!, $first: Int!, $skip: Int!) {
+      raffleParticipants(
+        first: $first
+        skip: $skip
+        where: { buyer: $buyer }
+      ) {
+        raffle { id }
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        query,
+        variables: { buyer: buyer.toLowerCase(), first, skip },
+      }),
+      signal: opts.signal,
+    });
+
+    if (!res.ok) return [];
+    const json = await res.json();
+    if (json?.errors?.length) return [];
+
+    const rows = (json.data?.raffleParticipants ?? []) as any[];
+    return rows
+      .map((x) => String(x?.raffle?.id ?? "").toLowerCase())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * ❌ OLD (Ticket entity) — remove if your subgraph does not have `Ticket`.
  * If you keep Ticket-based functions, they WILL GQL error unless Ticket exists in schema.
