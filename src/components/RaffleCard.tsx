@@ -17,6 +17,12 @@ type HatchUI = {
   note?: string | null;
 };
 
+// ✅ NEW: Stats type
+export type UserEntryStats = {
+  count: number;
+  percentage: string;
+};
+
 type Props = {
   raffle: RaffleListItem;
   onOpen: (id: string) => void;
@@ -24,11 +30,13 @@ type Props = {
   ribbon?: "gold" | "silver" | "bronze";
   nowMs?: number;
   hatch?: HatchUI | null;
+  // ✅ NEW: Optional prop for dashboard view
+  userEntry?: UserEntryStats; 
 };
 
 const short = (addr: string) => addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown";
 
-export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch }: Props) {
+export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch, userEntry }: Props) {
   const { ui, actions } = useRaffleCard(raffle, nowMs);
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
@@ -61,13 +69,16 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       <div className="rc-notch left" />
       <div className="rc-notch right" />
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
+      
+      {/* Ribbon (if provided) */}
+      {ribbon && <div className={`rc-ribbon ${ribbon}`}>{ribbon}</div>}
 
       {/* Header */}
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
         
-        {/* Win Chance Badge */}
-        {odds && (
+        {/* Win Chance Badge (Only show if NOT showing user stats to avoid clutter) */}
+        {odds && !userEntry && (
            <div className="rc-odds-badge" title={`Win chance: ${odds.pct}% per ticket`}>
               🎲 {odds.pct}% Chance
            </div>
@@ -87,6 +98,13 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
           </button>
         </div>
       </div>
+
+      {/* ✅ NEW: User Stats Badge (Replaces Odds Badge location visually) */}
+      {userEntry && (
+        <div className="rc-user-badge">
+          🎟️ <strong>{userEntry.count}</strong> Owned ({userEntry.percentage}%)
+        </div>
+      )}
 
       <div className="rc-host">
         <span>Hosted by</span>
