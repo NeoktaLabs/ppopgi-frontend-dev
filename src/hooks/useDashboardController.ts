@@ -12,10 +12,11 @@ const RAFFLE_HATCH_ABI = [
   { type: "function", name: "forceCancelStuck", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const;
 
+// Minimal ABI to check balance and claim
 const RAFFLE_MIN_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
 ] as const;
 
 export function useDashboardController() {
@@ -59,49 +60,69 @@ export function useDashboardController() {
         const parts = (r.participants || []).map((p: string) => p.toLowerCase());
         return parts.includes(myAddr);
       }).map(r => {
-         // Mock entry stats
          return { ...r, userEntry: { count: 1, percentage: "0.0" } };
       });
 
       // 3. Claimables (Wins & Refunds)
-      // ✅ FIX: Combine Created + Joined to ensure we catch refunds even if I am the creator
-      const uniqueCandidates = new Map();
-      myCreated.forEach(r => uniqueCandidates.set(r.id, r));
-      myJoined.forEach(r => uniqueCandidates.set(r.id, r));
+      // ✅ FIX: Use a Set to handle duplicates if you are both creator and participant
+      const candidateIds = new Set<string>();
+      myCreated.forEach(r => candidateIds.add(r.id));
+      myJoined.forEach(r => candidateIds.add(r.id));
 
-      const myClaimables = [];
+      const candidates = Array.from(candidateIds).map(id => allRaffles.find(r => r.id === id)).filter(Boolean) as RaffleListItem[];
 
-      for (const r of Array.from(uniqueCandidates.values()) as any[]) {
-        const amIParticipant = myJoined.some(j => j.id === r.id);
-        const amICreator = r.creator.toLowerCase() === myAddr;
+      const newClaimables: any[] = [];
 
-        // A. Winnings (Must be winner)
-        if (r.status === "COMPLETED" && r.winner && r.winner.toLowerCase() === myAddr) {
-           myClaimables.push({
-             raffle: r,
-             claimableUsdc: r.winningPot, 
-             claimableNative: "0",
-             type: "WIN",
-             roles: { participated: true }
-           });
+      // Process candidates in parallel to speed up checking
+      await Promise.all(candidates.map(async (r) => {
+        try {
+          // A. Winnings (Must be winner)
+          if (r.status === "COMPLETED" && r.winner && r.winner.toLowerCase() === myAddr) {
+             // For winnings, we assume the full pot is available if winner matches
+             newClaimables.push({
+               raffle: r,
+               claimableUsdc: r.winningPot, 
+               claimableNative: "0",
+               type: "WIN",
+               roles: { participated: true }
+             });
+          }
+          
+          // B. Refunds (Canceled)
+          // ✅ FIX: Verify actual on-chain balance to confirm eligibility and amount
+          if (r.status === "CANCELED") {
+             const contract = getContract({ 
+               client: thirdwebClient, 
+               chain: ETHERLINK_CHAIN, 
+               address: r.id, 
+               abi: RAFFLE_MIN_ABI 
+             });
+             
+             // Check how many tickets I *actually* hold right now
+             const bal = await readContract({ contract, method: "balanceOf", params: [account] });
+             
+             if (bal > 0n) {
+                // Calculate accurate refund: Balance * TicketPrice
+                const price = BigInt(r.ticketPrice || 0);
+                const refundAmt = bal * price;
+                
+                newClaimables.push({
+                  raffle: r,
+                  claimableUsdc: refundAmt.toString(), // Real amount
+                  claimableNative: "0",
+                  type: "REFUND",
+                  roles: { participated: true }
+                });
+             }
+          }
+        } catch (err) {
+          console.warn(`Failed to check claim status for ${r.id}`, err);
         }
-        
-        // B. Refunds (Canceled + (Participant OR Creator))
-        // We include Creator here because they often buy tickets to test
-        if (r.status === "CANCELED" && (amIParticipant || amICreator)) {
-           myClaimables.push({
-             raffle: r,
-             claimableUsdc: r.ticketPrice, // Approximation
-             claimableNative: "0",
-             type: "REFUND",
-             roles: { participated: amIParticipant }
-           });
-        }
-      }
+      }));
 
       setCreated(myCreated);
       setJoined(myJoined);
-      setClaimables(myClaimables);
+      setClaimables(newClaimables);
 
     } catch (e) {
       console.error("Dashboard fetch error", e);
