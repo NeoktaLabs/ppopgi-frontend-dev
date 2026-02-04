@@ -13,56 +13,65 @@ function numOr0(v?: string | null) {
 
 export function useHomeRaffles() {
   const [items, setItems] = useState<RaffleListItem[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // ✅ Added explicit loading state
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
 
-  const [refreshKey, setRefreshKey] = useState(0);
-  const refetch = useCallback(() => setRefreshKey((x) => x + 1), []);
-
-  useEffect(() => {
-    let alive = true;
+  // Core Fetch Logic
+  const fetchData = useCallback(async (isBackground = false) => {
+    // Only show spinner on first load
+    if (!isBackground) setIsLoading(true);
+    
     const controller = new AbortController();
 
-    (async () => {
+    // 1) Try Subgraph (Fast)
+    try {
+      // Short timeout for indexer
+      const t = window.setTimeout(() => controller.abort(), 4500);
+      const data = await fetchRafflesFromSubgraph({ signal: controller.signal });
+      window.clearTimeout(t);
+
+      setMode("indexer");
       setNote(null);
-
-      // 1) indexer-first (with timeout)
-      try {
-        const t = window.setTimeout(() => controller.abort(), 4500);
-        const data = await fetchRafflesFromSubgraph({ signal: controller.signal });
-        window.clearTimeout(t);
-
-        if (!alive) return;
-        setMode("indexer");
-        setNote(null);
-        setItems(data);
-        return;
-      } catch {
-        // fall through
+      setItems(data);
+    } catch (err) {
+      // 2) Fallback: On-Chain (Slow)
+      // Only attempt fallback on the FIRST load.
+      // We don't want to spam RPCs in the background every 5s.
+      if (!isBackground) {
+        try {
+          setMode("live");
+          setNote("Indexer unavailable. Showing live blockchain data.");
+          const data = await fetchRafflesOnChainFallback(50); // Limit to 50 for speed
+          setItems(data);
+        } catch (fallbackErr) {
+          console.error("Fallback failed", fallbackErr);
+          if (!items) setItems([]); // Only clear if we have nothing
+          setNote("Could not load raffles. Please refresh.");
+        }
+      } else {
+        // If background refresh fails, just do nothing (keep old data)
+        console.warn("Background refresh failed, keeping stale data");
       }
+    } finally {
+      if (!isBackground) setIsLoading(false);
+    }
+  }, [items]);
 
-      // 2) automatic fallback: on-chain reads
-      try {
-        if (!alive) return;
-        setMode("live");
-        setNote("Showing live data. This may take a moment.");
+  // Initial Load + Polling
+  useEffect(() => {
+    // 1. Initial Load
+    fetchData(false);
 
-        const data = await fetchRafflesOnChainFallback(120);
-        if (!alive) return;
+    // 2. Silent Polling (every 10 seconds)
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 10000);
 
-        setItems(data);
-      } catch {
-        if (!alive) return;
-        setNote("Could not load raffles right now. Please refresh.");
-        setItems([]);
-      }
-    })();
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
-    return () => {
-      alive = false;
-      controller.abort();
-    };
-  }, [refreshKey]);
+  // --- Derived Data Filters (Memoized for performance) ---
 
   const all = useMemo(() => items ?? [], [items]);
 
@@ -70,7 +79,7 @@ export function useHomeRaffles() {
     return all.filter((r) => r.status === "OPEN" || r.status === "FUNDING_PENDING");
   }, [all]);
 
-  // ✅ Big prizes: top 3 active by winningPot (descending)
+  // Big prizes: top 3 active by winningPot (descending)
   const bigPrizes = useMemo(() => {
     return [...active]
       .sort((a, b) => {
@@ -82,7 +91,7 @@ export function useHomeRaffles() {
       .slice(0, 3);
   }, [active]);
 
-  // ✅ Ending soon: top 5 OPEN by deadline ascending
+  // Ending soon: top 5 OPEN by deadline ascending
   const endingSoon = useMemo(() => {
     return [...active]
       .filter((r) => r.status === "OPEN")
@@ -90,21 +99,27 @@ export function useHomeRaffles() {
       .slice(0, 5);
   }, [active]);
 
-  // ✅ Recently finalized/settled: top 5 COMPLETED by completedAt (fallback to finalizedAt)
+  // Recently finalized
   const recentlyFinalized = useMemo(() => {
-    // In live fallback mode, these timestamps might not exist → return empty list (calm degradation).
     if (mode === "live") return [];
-
     const settled = all.filter((r) => r.status === "COMPLETED");
-
     return [...settled]
       .sort((a, b) => {
         const aKey = numOr0(a.completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
         const bKey = numOr0(b.completedAt) || numOr0(b.finalizedAt) || numOr0(b.lastUpdatedTimestamp);
-        return bKey - aKey; // newest first
+        return bKey - aKey;
       })
       .slice(0, 5);
   }, [all, mode]);
 
-  return { items, bigPrizes, endingSoon, recentlyFinalized, mode, note, refetch };
+  return { 
+    items, 
+    bigPrizes, 
+    endingSoon, 
+    recentlyFinalized, 
+    mode, 
+    note, 
+    isLoading, // ✅ Now properly exported
+    refetch: () => fetchData(false) // Manual refresh triggers spinner
+  };
 }
