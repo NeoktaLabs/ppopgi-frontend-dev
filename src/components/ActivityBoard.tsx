@@ -19,7 +19,7 @@ export function ActivityBoard() {
 
   const load = async () => {
     try {
-      const data = await fetchGlobalActivity({ first: 15 });
+      const data = await fetchGlobalActivity({ first: 10 });
       setItems(data);
     } catch (e) {
       console.error(e);
@@ -41,15 +41,15 @@ export function ActivityBoard() {
     <div className="ab-board">
        <div className="ab-header">
           <div className="ab-pulse" />
-          Live Feed (Last 15)
+          {/* ✅ UPDATED TEXT */}
+          Live Feed (Last 10)
        </div>
        
        <div className="ab-list">
           {items.map((item, i) => {
              const isBuy = item.type === "BUY";
-             const isWin = item.type === "WIN"; // ✅ Check for WIN
+             const isWin = item.type === "WIN";
 
-             // Icon Selection
              let icon = "✨";
              let iconClass = "create";
              if (isBuy) { icon = "🎟️"; iconClass = "buy"; }
@@ -62,9 +62,16 @@ export function ActivityBoard() {
                   </div>
                   <div className="ab-content">
                      <div className="ab-main-text">
-                        <span className="ab-user">{short(item.subject)}</span>
-                        
-                        {/* Text Logic */}
+                        {/* ✅ CLICKABLE ADDRESS LINK */}
+                        <a 
+                          href={`https://explorer.etherlink.com/address/${item.subject}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ab-user"
+                        >
+                          {short(item.subject)}
+                        </a>
+
                         {isBuy && <> bought <b>{item.value} tix</b> in </>}
                         {item.type === "CREATE" && <> created </>}
                         {isWin && <> <b style={{color:'#166534'}}>won</b> the pot on </>}
@@ -76,7 +83,6 @@ export function ActivityBoard() {
                      <div className="ab-meta">
                         <span className="ab-time">{timeAgo(item.timestamp)}</span>
                         
-                        {/* Show Prize for Creates and Wins */}
                         {!isBuy && (
                            <span className={`ab-pot-tag ${isWin ? 'win' : ''}`}>
                               {isWin ? 'Won: ' : 'Pot: '} 
