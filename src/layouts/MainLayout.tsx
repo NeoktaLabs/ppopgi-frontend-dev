@@ -1,9 +1,8 @@
 // src/layouts/MainLayout.tsx
 import React, { ReactNode, useMemo } from "react";
 import { TopNav } from "../components/TopNav";
-import { DisclaimerGate } from "../components/DisclaimerGate";
 import { Toast } from "../components/Toast"; 
-// WrongNetworkNotice removed to prevent false positives
+import { Footer } from "../components/Footer"; // ✅ Import Footer
 import "./MainLayout.css";
 
 // Import your backgrounds
@@ -49,8 +48,7 @@ export function MainLayout({
       <div className="layout-overlay" />
 
       {/* 2. Global Gates & Modals */}
-      <DisclaimerGate />
-      {/* Network notice removed here */}
+      {/* Note: DisclaimerGate is now in App.tsx to cover the whole screen */}
       <Toast /> 
 
       {/* 3. Navigation */}
@@ -70,6 +68,9 @@ export function MainLayout({
       <main className="layout-content">
         {children}
       </main>
+
+      {/* 5. Footer */}
+      <Footer />
     </div>
   );
 }
