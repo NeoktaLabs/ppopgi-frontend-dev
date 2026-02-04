@@ -5,7 +5,7 @@ import { useRaffleCard } from "../hooks/useRaffleCard";
 import "./RaffleCard.css";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
-const USDC_ICON = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=026"; 
+// ✅ REMOVED: const USDC_ICON = ...
 
 type HatchUI = {
   show: boolean;
@@ -117,10 +117,16 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
       <div className="rc-title" title={raffle.name}>{raffle.name}</div>
 
-      <div className="rc-prize-lbl">Winner Prize</div>
+      {/* ✅ UPDATED: Prize Section with text instead of logo */}
+      <div className="rc-prize-lbl">Current Prize Pool</div>
       <div className="rc-prize-row">
-        <img src={USDC_ICON} alt="USDC" className="rc-token-icon" />
-        <div className="rc-prize-val">{ui.formattedPot}</div>
+        {/* <img src={USDC_ICON} alt="USDC" className="rc-token-icon" /> <-- REMOVED */}
+        <div className="rc-prize-val">
+          {ui.formattedPot} <span style={{ fontSize: '0.7em', opacity: 0.8 }}>USDC</span>
+        </div>
+      </div>
+      <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'right', marginTop: 2, fontWeight: 700, opacity: 0.8 }}>
+        *Winner receives 90%
       </div>
 
       <div className="rc-quick-buy-wrapper">
@@ -181,15 +187,11 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       )}
 
-      {/* ✅ NEW FOOTER STRUCTURE */}
+      {/* Footer */}
       <div className="rc-footer-new">
-        
-        {/* Left Side: Time */}
         <div className="rc-footer-left">
            {ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}
         </div>
-
-        {/* Right Side: Stacked Barcode & ID */}
         <div className="rc-footer-right">
            <div className="rc-barcode-div" />
            <a 
@@ -203,7 +205,6 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
              #{raffle.id.slice(2, 8).toUpperCase()}
            </a>
         </div>
-
       </div>
 
     </div>
