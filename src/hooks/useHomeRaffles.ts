@@ -3,12 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { fetchRafflesOnChainFallback } from "../onchain/fallbackRaffles";
 
-import {
-  getSnapshot,
-  subscribe,
-  startRaffleStore,
-  refresh as refreshRaffleStore,
-} from "./useRaffleStore";
+import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
 type Mode = "indexer" | "live";
 
@@ -40,8 +35,8 @@ function shouldFallback(note: string | null) {
 }
 
 export function useHomeRaffles() {
-  // Store snapshot (indexer)
-  const [storeSnap, setStoreSnap] = useState(() => getSnapshot());
+  // ✅ Shared store snapshot (indexer)
+  const store = useRaffleStore("home", 20_000);
 
   // Local override (live fallback)
   const [mode, setMode] = useState<Mode>("indexer");
@@ -53,37 +48,10 @@ export function useHomeRaffles() {
   const lastLiveAtRef = useRef<number>(0);
   const LIVE_CACHE_MS = 20_000;
 
-  // Start store + subscribe
-  useEffect(() => {
-    // Home needs fresh-ish but not crazy; store will pick the minimum interval across consumers.
-    const stop = startRaffleStore("home", 20_000);
-    const unsub = subscribe(() => setStoreSnap(getSnapshot()));
-    setStoreSnap(getSnapshot());
-
-    const onFocus = () => {
-      void refreshRaffleStore(true, true);
-    };
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        void refreshRaffleStore(true, true);
-      }
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-      unsub();
-      stop();
-    };
-  }, []);
-
-  // Decide what to show (indexer vs live)
-  const indexerItems = storeSnap.items ?? null;
-  const isIndexerLoading = !!storeSnap.isLoading;
-  const indexerNote = storeSnap.note ?? null;
+  // Store-derived state
+  const indexerItems = store.items ?? null;
+  const isIndexerLoading = !!store.isLoading;
+  const indexerNote = store.note ?? null;
 
   // If we have indexer data, always prefer it and exit live mode
   useEffect(() => {
@@ -131,9 +99,7 @@ export function useHomeRaffles() {
   }, [indexerItems, isIndexerLoading, indexerNote]);
 
   // Final items/loading state exposed to UI
-  const items: RaffleListItem[] | null =
-    mode === "live" ? liveItems : indexerItems;
-
+  const items: RaffleListItem[] | null = mode === "live" ? liveItems : indexerItems;
   const isLoading = mode === "live" ? liveLoading : isIndexerLoading;
 
   // ----------------- Derived lists -----------------
@@ -167,9 +133,13 @@ export function useHomeRaffles() {
     return [...settled]
       .sort((a, b) => {
         const aKey =
-          numOr0((a as any).completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
+          numOr0((a as any).completedAt) ||
+          numOr0((a as any).finalizedAt) ||
+          numOr0((a as any).lastUpdatedTimestamp);
         const bKey =
-          numOr0((b as any).completedAt) || numOr0(b.finalizedAt) || numOr0(b.lastUpdatedTimestamp);
+          numOr0((b as any).completedAt) ||
+          numOr0((b as any).finalizedAt) ||
+          numOr0((b as any).lastUpdatedTimestamp);
         return bKey - aKey;
       })
       .slice(0, 5);
