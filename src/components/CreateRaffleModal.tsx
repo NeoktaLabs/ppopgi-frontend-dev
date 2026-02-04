@@ -16,16 +16,37 @@ type Props = {
 export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const { fireConfetti } = useConfetti();
 
+  // ✅ New State for the Success View
+  const [step, setStep] = useState<"form" | "success">("form");
+  const [createdAddr, setCreatedAddr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Intercept success
   const handleSuccess = (addr?: string) => {
     fireConfetti();
+    if (addr) {
+      setCreatedAddr(addr);
+      setStep("success"); // Switch view instead of closing
+    }
     if (onCreated) onCreated(addr);
   };
 
   const { form, validation, derived, status, helpers } = useCreateRaffleForm(open, handleSuccess);
-  
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // Construct Preview
+  // Generate Share Links
+  const shareLink = createdAddr ? `${window.location.origin}/?raffle=${createdAddr}` : "";
+  const tweetText = `I just launched a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
+  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(shareLink)}`;
+  const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(tweetText)}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(shareLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Preview Logic
   const previewRaffle = useMemo(() => ({
     id: "preview",
     name: form.name || "Your Raffle Name",
@@ -43,145 +64,177 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     lastUpdatedTimestamp: String(Math.floor(Date.now() / 1000)),
   }), [form.name, derived, validation.durationSecondsN]);
 
+  // Reset on close
+  const handleClose = () => {
+    setStep("form");
+    setCreatedAddr(null);
+    onClose();
+  };
+
   if (!open) return null;
 
   return (
-    <div className="crm-overlay" onMouseDown={onClose}>
+    <div className="crm-overlay" onMouseDown={handleClose}>
       <div className="crm-modal" onMouseDown={(e) => e.stopPropagation()}>
         
         {/* Header */}
         <div className="crm-header">
           <div className="crm-header-text">
-            <h3>Creator Studio</h3>
-            <span>Launch your provably fair raffle in seconds.</span>
+            <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
+            <span>{step === "success" ? "Your raffle has been deployed to the blockchain." : "Launch your provably fair raffle in seconds."}</span>
           </div>
-          <button className="crm-close-btn" onClick={onClose}>✕</button>
+          <button className="crm-close-btn" onClick={handleClose}>✕</button>
         </div>
 
-        <div className="crm-body">
-          
-          {/* LEFT: Configuration */}
-          <div className="crm-form-col">
-            
-            {/* Balance Badge */}
-            <div className="crm-bal-row">
-               <span className="crm-bal-label">My Balance</span>
-               <span className="crm-bal-val">
-                 {status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC
-               </span>
+        {/* --- VIEW 1: SUCCESS (SHARE) --- */}
+        {step === "success" ? (
+          <div className="crm-success-view">
+            <div className="crm-success-icon">✓</div>
+            <div className="crm-success-title">Raffle Created!</div>
+            <div className="crm-success-sub">
+              Your contract is deployed and verified. Share the link below to start selling tickets.
             </div>
 
-            {/* Inputs */}
-            <div className="crm-input-group">
-              <label>Raffle Name</label>
-              <input 
-                className="crm-input" 
-                value={form.name} 
-                onChange={e => form.setName(e.target.value)} 
-                placeholder="e.g. Bored Ape #8888" 
-                maxLength={32}
-              />
-            </div>
-
-            <div className="crm-grid-2">
-              <div className="crm-input-group">
-                <label>Ticket Price</label>
-                <div className="crm-input-wrapper">
-                  <input inputMode="numeric" value={form.ticketPrice} onChange={e => form.setTicketPrice(helpers.sanitizeInt(e.target.value))} />
-                  <span className="crm-suffix">USDC</span>
-                </div>
-              </div>
-              <div className="crm-input-group">
-                <label>Total Prize</label>
-                <div className="crm-input-wrapper">
-                  <input inputMode="numeric" value={form.winningPot} onChange={e => form.setWinningPot(helpers.sanitizeInt(e.target.value))} />
-                  <span className="crm-suffix">USDC</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="crm-grid-dur">
-               <div className="crm-input-group">
-                 <label>Duration</label>
-                 <input className="crm-input" inputMode="numeric" value={form.durationValue} onChange={e => form.setDurationValue(helpers.sanitizeInt(e.target.value))} />
-               </div>
-               <div className="crm-input-group">
-                 <label>Unit</label>
-                 <select className="crm-select" value={form.durationUnit} onChange={e => form.setDurationUnit(e.target.value as any)}>
-                   <option value="minutes">Minutes</option>
-                   <option value="hours">Hours</option>
-                   <option value="days">Days</option>
-                 </select>
+            <div className="crm-share-box">
+               <label className="crm-label" style={{textAlign:'left'}}>Direct Link</label>
+               <div className="crm-link-row">
+                  <input className="crm-link-input" readOnly value={shareLink} onClick={(e) => (e.target as HTMLInputElement).select()} />
+                  <button className={`crm-copy-btn ${copied ? "copied" : ""}`} onClick={handleCopy}>
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
                </div>
             </div>
 
-            {/* Advanced Accordion */}
-            <div className="crm-advanced">
-              <button type="button" className="crm-adv-toggle" onClick={() => setAdvancedOpen(!advancedOpen)}>
-                {advancedOpen ? "− Less Options" : "+ Advanced Options (Limits)"}
-              </button>
-              
-              {advancedOpen && (
-                <div className="crm-adv-content">
-                   <div className="crm-grid-2">
-                     <div className="crm-input-group">
-                       <label>Min Tickets to Draw</label>
-                       <input className="crm-input" value={form.minTickets} onChange={e => form.setMinTickets(helpers.sanitizeInt(e.target.value))} />
-                     </div>
-                     <div className="crm-input-group">
-                       <label>Max Capacity (Opt)</label>
-                       <input className="crm-input" value={form.maxTickets} onChange={e => form.setMaxTickets(helpers.sanitizeInt(e.target.value))} placeholder="∞" />
-                     </div>
-                   </div>
-                </div>
-              )}
+            <div className="crm-social-row">
+               <a href={tweetUrl} target="_blank" rel="noreferrer" className="crm-social-btn twitter">
+                  Share on 𝕏
+               </a>
+               <a href={tgUrl} target="_blank" rel="noreferrer" className="crm-social-btn telegram">
+                  Telegram
+               </a>
             </div>
 
-            {/* ACTION FOOTER */}
-            <div className="crm-actions">
-              <div className="crm-steps">
-                {/* Step 1: Approve */}
-                <button 
-                  className={`crm-step-btn ${status.approvedOnce ? "done" : "active"}`}
-                  onClick={status.approve}
-                  disabled={!validation.needsAllow || status.approvedOnce}
-                >
-                  <span className="crm-step-icon">{status.approvedOnce ? "✓" : "1"}</span>
-                  <span>{status.approvedOnce ? "USDC Approved" : "Approve USDC"}</span>
-                </button>
-
-                <div className="crm-step-line" />
-
-                {/* Step 2: Create */}
-                <button 
-                  className={`crm-step-btn ${status.approvedOnce ? "active primary" : ""}`}
-                  onClick={status.create}
-                  disabled={!validation.canSubmit || status.isPending}
-                >
-                  <span className="crm-step-icon">{status.isPending ? "⏳" : "2"}</span>
-                  <span>{status.isPending ? "Creating..." : "Launch Raffle"}</span>
-                </button>
+            <button className="crm-done-btn" onClick={handleClose}>
+               Skip and view dashboard →
+            </button>
+          </div>
+        ) : (
+          /* --- VIEW 2: FORM (EXISTING) --- */
+          <div className="crm-body">
+            {/* LEFT: Configuration */}
+            <div className="crm-form-col">
+              <div className="crm-bal-row">
+                 <span className="crm-bal-label">My Balance</span>
+                 <span className="crm-bal-val">
+                   {status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC
+                 </span>
               </div>
-              
-              {status.msg && <div className="crm-status-msg">{status.msg}</div>}
+
+              <div className="crm-input-group">
+                <label>Raffle Name</label>
+                <input 
+                  className="crm-input" 
+                  value={form.name} 
+                  onChange={e => form.setName(e.target.value)} 
+                  placeholder="e.g. Bored Ape #8888" 
+                  maxLength={32}
+                />
+              </div>
+
+              <div className="crm-grid-2">
+                <div className="crm-input-group">
+                  <label>Ticket Price</label>
+                  <div className="crm-input-wrapper">
+                    <input inputMode="numeric" value={form.ticketPrice} onChange={e => form.setTicketPrice(helpers.sanitizeInt(e.target.value))} />
+                    <span className="crm-suffix">USDC</span>
+                  </div>
+                </div>
+                <div className="crm-input-group">
+                  <label>Total Prize</label>
+                  <div className="crm-input-wrapper">
+                    <input inputMode="numeric" value={form.winningPot} onChange={e => form.setWinningPot(helpers.sanitizeInt(e.target.value))} />
+                    <span className="crm-suffix">USDC</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="crm-grid-dur">
+                 <div className="crm-input-group">
+                   <label>Duration</label>
+                   <input className="crm-input" inputMode="numeric" value={form.durationValue} onChange={e => form.setDurationValue(helpers.sanitizeInt(e.target.value))} />
+                 </div>
+                 <div className="crm-input-group">
+                   <label>Unit</label>
+                   <select className="crm-select" value={form.durationUnit} onChange={e => form.setDurationUnit(e.target.value as any)}>
+                     <option value="minutes">Minutes</option>
+                     <option value="hours">Hours</option>
+                     <option value="days">Days</option>
+                   </select>
+                 </div>
+              </div>
+
+              <div className="crm-advanced">
+                <button type="button" className="crm-adv-toggle" onClick={() => setAdvancedOpen(!advancedOpen)}>
+                  {advancedOpen ? "− Less Options" : "+ Advanced Options (Limits)"}
+                </button>
+                
+                {advancedOpen && (
+                  <div className="crm-adv-content">
+                     <div className="crm-grid-2">
+                       <div className="crm-input-group">
+                         <label>Min Tickets to Draw</label>
+                         <input className="crm-input" value={form.minTickets} onChange={e => form.setMinTickets(helpers.sanitizeInt(e.target.value))} />
+                       </div>
+                       <div className="crm-input-group">
+                         <label>Max Capacity (Opt)</label>
+                         <input className="crm-input" value={form.maxTickets} onChange={e => form.setMaxTickets(helpers.sanitizeInt(e.target.value))} placeholder="∞" />
+                       </div>
+                     </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="crm-actions">
+                <div className="crm-steps">
+                  <button 
+                    className={`crm-step-btn ${status.approvedOnce ? "done" : "active"}`}
+                    onClick={status.approve}
+                    disabled={!validation.needsAllow || status.approvedOnce}
+                  >
+                    <span className="crm-step-icon">{status.approvedOnce ? "✓" : "1"}</span>
+                    <span>{status.approvedOnce ? "USDC Approved" : "Approve USDC"}</span>
+                  </button>
+
+                  <div className="crm-step-line" />
+
+                  <button 
+                    className={`crm-step-btn ${status.approvedOnce ? "active primary" : ""}`}
+                    onClick={status.create}
+                    disabled={!validation.canSubmit || status.isPending}
+                  >
+                    <span className="crm-step-icon">{status.isPending ? "⏳" : "2"}</span>
+                    <span>{status.isPending ? "Creating..." : "Launch Raffle"}</span>
+                  </button>
+                </div>
+                
+                {status.msg && <div className="crm-status-msg">{status.msg}</div>}
+              </div>
             </div>
 
+            {/* RIGHT: Preview */}
+            <div className="crm-preview-col">
+              <div className="crm-preview-label">Live Preview</div>
+              <div className="crm-card-wrapper">
+                 {/* @ts-ignore */}
+                 <RaffleCard raffle={previewRaffle} onOpen={()=>{}} />
+              </div>
+              <div className="crm-network-tip">
+                 Network: Etherlink Mainnet
+              </div>
+            </div>
           </div>
+        )}
 
-          {/* RIGHT: Preview (Sticky) */}
-          <div className="crm-preview-col">
-            <div className="crm-preview-label">Live Preview</div>
-            <div className="crm-card-wrapper">
-               {/* ✅ REMOVED ribbon="gold" */}
-               {/* @ts-ignore */}
-               <RaffleCard raffle={previewRaffle} onOpen={()=>{}} />
-            </div>
-            <div className="crm-network-tip">
-               Network: Etherlink Mainnet
-            </div>
-          </div>
-
-        </div>
       </div>
     </div>
   );
