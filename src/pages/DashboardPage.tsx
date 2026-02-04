@@ -112,9 +112,11 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
            <div className="db-grid">
              {data.claimables.map((it: any) => {
                 const r = it.raffle;
-                const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
+                const rawVal = BigInt(it.claimableUsdc || 0);
+                const hasUsdc = rawVal > 0n;
+                const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
-                // Refund Check
+                // Refund vs Win Logic
                 const isRefund = it.type === "REFUND" || r.status === "CANCELED";
                 const ticketCount = it.userTicketsOwned ? Number(it.userTicketsOwned) : 0;
 
@@ -137,25 +139,34 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                            </span>
                         </div>
                         
-                        {/* ✅ UPDATED: Clear visual distinction */}
                         <div className="db-claim-text">
                            {isRefund ? (
-                             // REFUND LAYOUT
+                             // --- REFUND LAYOUT ---
                              <div className="db-refund-layout">
-                               <div className="db-refund-val">{fmt(it.claimableUsdc, 6)} USDC</div>
-                               {ticketCount > 0 && (
-                                 <div className="db-refund-sub">
-                                   Refund for <b>{ticketCount}</b> Ticket{ticketCount > 1 ? 's' : ''}
+                               {hasUsdc ? (
+                                 // Option A: We know the value (e.g. 5.00 USDC)
+                                 <>
+                                   <div className="db-refund-val">{fmt(it.claimableUsdc, 6)} USDC</div>
+                                   {ticketCount > 0 && (
+                                     <div className="db-refund-sub">
+                                       Refund for <b>{ticketCount}</b> Ticket{ticketCount > 1 ? 's' : ''}
+                                     </div>
+                                   )}
+                                 </>
+                               ) : (
+                                 // Option B: Value is 0/Unknown -> Just show Tickets
+                                 <div className="db-refund-val" style={{ fontSize: '18px' }}>
+                                   Reclaim {ticketCount > 0 ? ticketCount : "your"} Ticket{ticketCount !== 1 ? 's' : ''}
                                  </div>
                                )}
                              </div>
                            ) : (
-                             // WINNER LAYOUT
+                             // --- WINNER LAYOUT ---
                              <div className="db-win-layout">
                                <div className="db-win-label">Prize Amount:</div>
                                <div className="db-win-val">
                                  {hasUsdc && <span>{fmt(it.claimableUsdc, 6)} USDC</span>}
-                                 {BigInt(it.claimableNative || 0) > 0n && <span> + {fmt(it.claimableNative, 18)} ETH</span>}
+                                 {hasNative && <span> + {fmt(it.claimableNative, 18)} ETH</span>}
                                </div>
                              </div>
                            )}
@@ -178,13 +189,13 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
         </div>
       )}
 
-      {/* 3. TABS */}
+      {/* 3. TABS (Active / History / Created) */}
       <div className="db-tabs">
          <button className={`db-tab ${tab === 'active' ? 'active' : ''}`} onClick={() => setTab('active')}>Active Entries</button>
          <button className={`db-tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>History</button>
          <button className={`db-tab ${tab === 'created' ? 'active' : ''}`} onClick={() => setTab('created')}>Created</button>
          <div style={{flex:1}} />
-         <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending} title="Refresh Data">🔄</button>
+         <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending}>🔄</button>
       </div>
 
       {/* 4. CONTENT GRID */}
