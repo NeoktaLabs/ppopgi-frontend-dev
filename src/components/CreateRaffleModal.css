@@ -4,23 +4,19 @@
 .crm-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(20, 20, 28, 0.6); /* Darker dim for focus */
-  backdrop-filter: blur(4px); /* Nice blur effect behind */
-  
-  /* ✅ FIX 1: Higher Z-Index than TopNav (1000) */
+  background-color: rgba(20, 20, 28, 0.6); 
+  backdrop-filter: blur(4px);
   z-index: 2000;
   
   display: flex;
   justify-content: center;
-  
-  /* ✅ FIX 2: Start from top, not center, and add spacing */
-  align-items: flex-start;
-  padding-top: 120px; /* Leaves space for the TopNav */
+  align-items: flex-start; /* Start from top */
+  padding-top: 120px; /* Spacing from TopNav */
   padding-bottom: 40px;
   padding-left: 20px;
   padding-right: 20px;
   
-  overflow-y: auto; /* Allow scrolling if screen is short */
+  overflow-y: auto;
   animation: crm-fade-in 0.2s ease-out;
 }
 
@@ -34,13 +30,12 @@
   border-radius: 24px;
   box-shadow: 
     0 20px 60px -10px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(0,0,0,0.05); /* Subtle border */
+    0 0 0 1px rgba(0,0,0,0.05);
     
   display: flex;
   flex-direction: column;
   overflow: hidden;
   
-  /* Animation */
   animation: crm-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: top center;
 }
@@ -73,10 +68,10 @@
 }
 .crm-close-btn:hover { background: #fee2e2; color: #ef4444; transform: rotate(90deg); }
 
-/* --- Body Layout (2 Columns) --- */
+/* --- Body Layout --- */
 .crm-body {
   display: flex;
-  flex-direction: row; /* Side by side on desktop */
+  flex-direction: row; 
   background: white;
 }
 
@@ -86,7 +81,7 @@
 }
 
 .crm-preview-col {
-  width: 360px; /* Fixed width for card preview */
+  width: 360px; 
   padding: 32px;
   background: #f8fafc;
   display: flex; flex-direction: column; align-items: center;
@@ -107,13 +102,36 @@
   text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
 }
 
-.crm-input, .crm-select {
+/* ✅ UPDATED INPUTS (Removes default spinners) */
+.crm-input, .crm-select, .crm-input-wrapper input {
   width: 100%; padding: 14px;
   border-radius: 12px; border: 2px solid #e2e8f0;
   font-size: 16px; font-weight: 600; color: #1e293b;
   transition: border-color 0.2s; outline: none;
+  background: #ffffff;
+  
+  /* Kill the shadow/inset look */
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
 }
-.crm-input:focus, .crm-select:focus { border-color: #4A0F2B; }
+
+/* Remove Arrows/Spinners */
+.crm-input::-webkit-outer-spin-button,
+.crm-input::-webkit-inner-spin-button,
+.crm-input-wrapper input::-webkit-outer-spin-button,
+.crm-input-wrapper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Firefox */
+.crm-input[type=number], .crm-input-wrapper input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.crm-input:focus, .crm-select:focus, .crm-input-wrapper input:focus { 
+  border-color: #4A0F2B; 
+}
 
 /* Input with Suffix (USDC) */
 .crm-input-wrapper { position: relative; display: flex; align-items: center; }
@@ -160,7 +178,7 @@
 
 /* --- Preview Column --- */
 .crm-preview-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #94a3b8; margin-bottom: 16px; }
-.crm-card-wrapper { transform: scale(0.9); transform-origin: top center; } /* Shrink card slightly to fit */
+.crm-card-wrapper { transform: scale(0.9); transform-origin: top center; }
 .crm-network-tip { margin-top: auto; font-size: 11px; font-weight: 600; color: #cbd5e1; }
 
 
@@ -198,7 +216,7 @@
 @media (max-width: 800px) {
   .crm-overlay { padding-top: 80px; padding-left: 10px; padding-right: 10px; }
   .crm-body { flex-direction: column; }
-  .crm-preview-col { display: none; } /* Hide preview on mobile to save space */
+  .crm-preview-col { display: none; }
   .crm-form-col { border-right: none; }
   .crm-grid-2, .crm-grid-dur { grid-template-columns: 1fr; }
 }
