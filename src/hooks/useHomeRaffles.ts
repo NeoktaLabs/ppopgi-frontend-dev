@@ -1,4 +1,4 @@
-la// src/hooks/useHomeRaffles.ts
+// src/hooks/useHomeRaffles.ts
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { fetchRafflesFromSubgraph } from "../indexer/subgraph";
@@ -95,7 +95,7 @@ export function useHomeRaffles() {
     
     // 1. Settled Volume (Sum of pot for completed raffles)
     const settledVolume = all.reduce((acc, r) => {
-        if (r.status === "COMPLETED" {
+        if (r.status === "COMPLETED") {
             return acc + BigInt(r.winningPot || "0");
         }
         return acc;
