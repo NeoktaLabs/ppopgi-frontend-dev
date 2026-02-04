@@ -24,6 +24,8 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
   const [winningPot, setWinningPot] = useState("100");
   const [durationValue, setDurationValue] = useState("24");
   const [durationUnit, setDurationUnit] = useState<"minutes" | "hours" | "days">("hours");
+  
+  // Limits
   const [minTickets, setMinTickets] = useState("1");
   const [maxTickets, setMaxTickets] = useState(""); 
   const [minPurchaseAmount, setMinPurchaseAmount] = useState("1");
@@ -62,9 +64,8 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
   const minPurchaseU32 = Math.max(1, toInt(minPurchaseAmount, 1));
 
   // --- Validation ---
-  const durOk = durationSecondsN >= 300; 
+  const durOk = durationSecondsN >= 60; // Min 1 min
   
-  // ✅ PURE SOURCE OF TRUTH
   const hasEnoughAllowance = allowance !== null && allowance >= winningPotU;
   const hasEnoughBalance = usdcBal !== null && usdcBal >= winningPotU;
 
@@ -90,18 +91,19 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     }
   }, [isOpen, me, usdcContract]);
 
+  // 1. APPROVE
   const approve = async () => {
     setMsg(null);
     if (!me || !usdcContract) return;
     try {
-      setMsg("Please confirm in wallet...");
+      setMsg("Please confirm approval in wallet...");
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "function approve(address,uint256) returns (bool)",
         params: [ADDRESSES.SingleWinnerDeployer, winningPotU],
       });
       await sendAndConfirm(tx);
-      setMsg(null);
+      setMsg("Approval successful!");
       await refreshAllowance(); 
     } catch (e) { 
       console.error("Approve failed", e);
@@ -109,32 +111,59 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     }
   };
 
+  // 2. CREATE
   const create = async () => {
     setMsg(null);
     if (!canSubmit) return;
     try {
-      setMsg("Please confirm creation...");
+      setMsg("Please confirm creation in wallet...");
+      
       const tx = prepareContractCall({
         contract: factoryContract,
         method: "function createSingleWinnerLottery(string,uint256,uint256,uint64,uint64,uint64,uint32) returns (address)",
-        params: [name.trim(), ticketPriceU, winningPotU, minT, maxT, BigInt(durationSecondsN), minPurchaseU32],
+        params: [
+          name.trim(), 
+          ticketPriceU, 
+          winningPotU, 
+          minT, 
+          maxT, 
+          BigInt(durationSecondsN), 
+          minPurchaseU32
+        ],
       });
 
       const receipt = await sendAndConfirm(tx);
-      const newAddr = ""; // Placeholder
+      
+      // ✅ FIX: Find the new address from logs
+      // The factory emits RaffleCreated(address indexed raffle, address indexed creator)
+      // We look for the log emitted by the factory address
+      let newAddr = "";
+      if (receipt.logs && receipt.logs.length > 0) {
+        for (const log of receipt.logs) {
+           if (log.address.toLowerCase() === ADDRESSES.SingleWinnerDeployer.toLowerCase()) {
+              // The first topic is the event signature, the second (index 1) is the raffle address
+              if (log.topics && log.topics[1]) {
+                 newAddr = "0x" + log.topics[1].slice(26); // Remove padding
+              }
+           }
+        }
+      }
+
       setMsg("🎉 Success!");
-      onCreated?.(newAddr);
+      if (onCreated) onCreated(newAddr);
+
     } catch (e) { 
       console.error("Create failed", e);
       setMsg("Creation failed."); 
     }
   };
 
+  // Poll for allowance updates while open
   useEffect(() => { 
     if (isOpen && me) { 
       setMsg(null); 
       refreshAllowance();
-      const t = setInterval(refreshAllowance, 5000); // Polling
+      const t = setInterval(refreshAllowance, 5000); 
       return () => clearInterval(t);
     } 
   }, [isOpen, me, refreshAllowance]);
@@ -155,7 +184,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     },
     status: { 
       msg, isPending, allowLoading, usdcBal, 
-      // ✅ VITAL: This ensures the UI turns green if allowance exists
+      // ✅ VITAL: UI uses this to disable the "Approve" button
       isReady: hasEnoughAllowance, 
       approve, create 
     },
