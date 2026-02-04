@@ -27,7 +27,7 @@ type Props = {
 };
 
 export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
-  const { data, actions } = useDashboardController(); // Removed 'hatch' if not using it directly
+  const { data, actions } = useDashboardController(); 
   const [tab, setTab] = useState<"active" | "history" | "created">("active");
   const [copied, setCopied] = useState(false);
   
@@ -52,7 +52,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
     data.joined.forEach((item: any) => {
       const r = item; 
-      // userTicketsOwned comes from the Hook's contract read
       const userCount = Number(item.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
       const percentage = userCount > 0 ? ((userCount / sold) * 100).toFixed(1) : "0.0";
@@ -78,11 +77,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             <div className="db-avatar-circle">👤</div>
             <div>
                <div className="db-hero-label">Player Dashboard</div>
-               <div 
-                 className="db-hero-addr" 
-                 onClick={handleCopy} 
-                 title="Click to copy"
-               >
+               <div className="db-hero-addr" onClick={handleCopy} title="Click to copy">
                  {account ? account : "Not Connected"}
                  {account && <span className="db-copy-icon">{copied ? "✅" : "📋"}</span>}
                </div>
@@ -120,13 +115,15 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                 const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
                 const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
-                // ✅ LOGIC: Robust check for Canceled status
+                // Logic: Refund vs Win
                 const isRefund = it.type === "REFUND" || r.status === "CANCELED";
-                
                 const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
                 const label = isRefund ? "Reclaim Funds" : "Claim Prize";
                 const title = isRefund ? "Refund Available" : "Winner!";
                 
+                // ✅ NEW: Prefix label for clarity
+                const amountLabel = isRefund ? "Refund:" : "Prize:";
+
                 return (
                   <div key={r.id} className="db-claim-wrapper">
                      <RaffleCard 
@@ -141,10 +138,20 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                              {title}
                            </span>
                         </div>
+                        
+                        {/* ✅ UPDATED: Explicitly label the amount */}
                         <div className="db-claim-text">
-                           {hasUsdc && <div>{fmt(it.claimableUsdc, 6)} USDC</div>}
-                           {hasNative && <div>{fmt(it.claimableNative, 18)} ETH</div>}
+                           {hasUsdc && (
+                             <div>
+                               <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.6, marginRight: 6 }}>
+                                 {amountLabel}
+                               </span>
+                               {fmt(it.claimableUsdc, 6)} USDC
+                             </div>
+                           )}
+                           {hasNative && <div>+ {fmt(it.claimableNative, 18)} ETH</div>}
                         </div>
+
                         <div className="db-claim-actions">
                            <button 
                              className={`db-btn ${isRefund ? "secondary" : "primary"}`} 
@@ -173,74 +180,43 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
       {/* 4. CONTENT GRID */}
       <div className="db-grid-area">
-         
-         {/* ACTIVE */}
          {tab === 'active' && (
             <div className="db-grid">
                {data.isPending && activeEntries.length === 0 && <><RaffleCardSkeleton /><RaffleCardSkeleton /></>}
                {!data.isPending && activeEntries.length === 0 && <div className="db-empty">You have no active tickets. Good luck next time!</div>}
                {activeEntries.map((r: any) => (
-                  <RaffleCard 
-                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry}
-                  />
+                  <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry} />
                ))}
             </div>
          )}
 
-         {/* HISTORY */}
          {tab === 'history' && (
             <div className="db-grid">
                {!data.isPending && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
                {pastEntries.map((r: any) => {
-                  // ✅ LOGIC: Determine "Refunded" state
                   const isCanceled = r.status === "CANCELED";
                   const tickets = r.userEntry?.count || 0;
-                  
-                  // If it's canceled AND I have 0 tickets left, it means I already reclaimed.
-                  // (Because subgraph says I joined, but contract says I have 0 tickets)
                   const isRefunded = isCanceled && tickets === 0;
 
                   return (
                     <div key={r.id} className="db-history-card-wrapper">
-                      <RaffleCard 
-                         raffle={r} 
-                         onOpen={onOpenRaffle} 
-                         onOpenSafety={onOpenSafety} 
-                         nowMs={nowS * 1000} 
-                         userEntry={r.userEntry}
-                      />
-                      
-                      {/* ✅ BADGE: Show "Refunded" explicitly */}
-                      {isRefunded && (
-                        <div className="db-history-badge refunded">
-                           ↩ Ticket Refunded
-                        </div>
-                      )}
-                      
-                      {/* Optional: Show "Won" badge if needed */}
-                      {r.status === "COMPLETED" && r.winner?.toLowerCase() === account?.toLowerCase() && (
-                        <div className="db-history-badge won">
-                           🏆 Winner
-                        </div>
-                      )}
+                      <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry} />
+                      {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
+                      {r.status === "COMPLETED" && r.winner?.toLowerCase() === account?.toLowerCase() && <div className="db-history-badge won">🏆 Winner</div>}
                     </div>
                   );
                })}
             </div>
          )}
 
-         {/* CREATED */}
          {tab === 'created' && (
             <div className="db-grid">
                {!data.isPending && data.created?.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
                {data.created?.map((r: any) => (
-                  <RaffleCard 
-                     key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000}
-                  />
+                  <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
                ))}
             </div>
          )}
-
       </div>
     </div>
   );
