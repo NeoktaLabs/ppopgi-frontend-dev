@@ -7,7 +7,6 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 
-// Helper
 function sanitizeInt(raw: string) { return raw.replace(/[^\d]/g, ""); }
 function toInt(raw: string, fallback = 0) {
   const n = Number(sanitizeInt(raw));
@@ -69,10 +68,6 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
   const hasEnoughAllowance = allowance !== null && allowance >= winningPotU;
   const hasEnoughBalance = usdcBal !== null && usdcBal >= winningPotU;
 
-  // We only "need allow" if we aren't ready yet
-  const needsAllow = !!me && !isPending && winningPotU > 0n && !hasEnoughAllowance;
-
-  // Submit is valid if we have allowance AND balance
   const canSubmit = !!me && !isPending && name.trim().length > 0 && durOk && 
                     winningPotU > 0n && ticketPriceU > 0n && 
                     hasEnoughAllowance && hasEnoughBalance;
@@ -107,7 +102,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       });
       await sendAndConfirm(tx);
       setMsg(null);
-      await refreshAllowance(); // Update immediately
+      await refreshAllowance(); 
     } catch (e) { 
       console.error("Approve failed", e);
       setMsg("Approval failed."); 
@@ -126,9 +121,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       });
 
       const receipt = await sendAndConfirm(tx);
-      // Attempt to find new contract address from logs (optional enhancement)
-      const newAddr = ""; 
-      
+      const newAddr = ""; // Placeholder
       setMsg("🎉 Success!");
       onCreated?.(newAddr);
     } catch (e) { 
@@ -141,7 +134,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     if (isOpen && me) { 
       setMsg(null); 
       refreshAllowance();
-      const t = setInterval(refreshAllowance, 5000);
+      const t = setInterval(refreshAllowance, 5000); // Polling
       return () => clearInterval(t);
     } 
   }, [isOpen, me, refreshAllowance]);
@@ -154,7 +147,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       minPurchaseAmount, setMinPurchaseAmount
     },
     validation: { 
-      durOk, hasEnoughBalance, hasEnoughAllowance, needsAllow, canSubmit, durationSecondsN 
+      durOk, hasEnoughBalance, hasEnoughAllowance, canSubmit, durationSecondsN 
     },
     derived: { 
       ticketPriceU, winningPotU, minT, maxT, me, 
@@ -162,7 +155,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     },
     status: { 
       msg, isPending, allowLoading, usdcBal, 
-      // ✅ Renamed for clarity: "isReady" means Step 1 is done
+      // ✅ VITAL: This ensures the UI turns green if allowance exists
       isReady: hasEnoughAllowance, 
       approve, create 
     },
