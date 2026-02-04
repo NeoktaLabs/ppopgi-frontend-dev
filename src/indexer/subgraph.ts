@@ -62,12 +62,12 @@ export type RaffleParticipantItem = {
   lastTotalSold: string | null;
 };
 
-// ✅ UPDATED: Global activity stream (Sales + Creations)
+// ✅ UPDATED: Global activity stream (Sales + Creations + Winners)
 export type GlobalActivityItem = {
-  type: "BUY" | "CREATE";
+  type: "BUY" | "CREATE" | "WIN";
   raffleId: string;
   raffleName: string;
-  subject: string; // Buyer or Creator
+  subject: string; // Buyer, Creator, or Winner
   value: string;   // Ticket Count or Prize Pot
   timestamp: string;
   txHash: string;
@@ -288,14 +288,14 @@ export async function fetchRaffleWithParticipants(
 }
 
 /**
- * ✅ FETCH GLOBAL ACTIVITY (Sales + New Raffles) 
- * Merges two queries to create a unified feed for the Activity Board.
+ * ✅ FETCH GLOBAL ACTIVITY (Sales + Creations + Winners)
+ * Merges three queries to create a unified feed for the Activity Board.
  */
 export async function fetchGlobalActivity(
   opts: { first?: number; signal?: AbortSignal } = {}
 ): Promise<GlobalActivityItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
-  const first = Math.min(Math.max(opts.first ?? 10, 1), 50);
+  const first = Math.min(Math.max(opts.first ?? 15, 1), 50);
 
   const query = `
     query GlobalFeed($first: Int!) {
@@ -326,13 +326,29 @@ export async function fetchGlobalActivity(
         createdAtTimestamp
         creationTx
       }
+
+      # 3. Recent Winners
+      recentWinners: raffles(
+        first: $first
+        orderBy: completedAt
+        orderDirection: desc
+        where: { status: COMPLETED }
+      ) {
+        id
+        name
+        winner
+        winningPot
+        completedAt
+        # Using ID as txHash fallback if unavailable
+        id 
+      }
     }
   `;
 
-  type Resp = { raffleEvents: any[]; raffles: any[] };
+  type Resp = { raffleEvents: any[]; raffles: any[]; recentWinners: any[] };
   const data = await gqlFetch<Resp>(url, query, { first }, opts.signal);
 
-  // Process Sales
+  // 1. Process Sales
   const sales = (data.raffleEvents ?? []).map((e) => ({
     type: "BUY" as const,
     raffleId: normHex(e.raffle?.id) as string,
@@ -343,7 +359,7 @@ export async function fetchGlobalActivity(
     txHash: normHex(e.txHash) as string,
   }));
 
-  // Process Creations
+  // 2. Process Creations
   const creations = (data.raffles ?? []).map((r) => ({
     type: "CREATE" as const,
     raffleId: normHex(r.id) as string,
@@ -354,8 +370,19 @@ export async function fetchGlobalActivity(
     txHash: normHex(r.creationTx) as string,
   }));
 
+  // 3. Process Winners
+  const winners = (data.recentWinners ?? []).map((r) => ({
+    type: "WIN" as const,
+    raffleId: normHex(r.id) as string,
+    raffleName: String(r.name || "Untitled Raffle"),
+    subject: normHex(r.winner) as string,
+    value: String(r.winningPot), // Won amount
+    timestamp: String(r.completedAt),
+    txHash: normHex(r.id) as string,
+  }));
+
   // Merge & Sort Chronologically (Newest first)
-  const combined = [...sales, ...creations].sort((a, b) => 
+  const combined = [...sales, ...creations, ...winners].sort((a, b) => 
     Number(b.timestamp) - Number(a.timestamp)
   );
 
