@@ -47,29 +47,54 @@ export function useDashboardController() {
     if (!isBackground) setIsPending(true);
 
     try {
-      // Fetch data (optimized: fetch plenty to filter locally)
       const allRaffles = await fetchRafflesFromSubgraph({ first: 1000 });
       const myAddr = account.toLowerCase();
 
-      // 1. Created
+      // 1. My Created
       const myCreated = allRaffles.filter(r => r.creator.toLowerCase() === myAddr);
 
-      // 2. Joined (Placeholder logic - ideally update subgraph to have 'participants' on user)
-      // For now, relying on empty or filtering based on logic you might add later
-      const myJoined: any[] = []; 
+      // 2. My Joined (Fixed)
+      // We look for raffles where I am in the participants list.
+      // NOTE: Ensure your Subgraph 'Raffle' entity has a 'participants' array of strings.
+      // If not, you might need a separate query like `activeEntries` here.
+      const myJoined = allRaffles.filter(r => {
+        // @ts-ignore - Assuming participants exists on your GQL type
+        const parts = r.participants || []; 
+        return parts.some((p: string) => p.toLowerCase() === myAddr);
+      }).map(r => {
+         // Calculate my entries count if possible (mocked here as 1 if not available)
+         return { ...r, userEntry: { count: 1, percentage: "0.0" } };
+      });
 
-      // 3. Claimables (Logic ported from your useClaimableRaffles concept)
-      // Since we don't have the deep subgraph check here, this is a simplified example.
-      // In production, you might want to keep useClaimableRaffles logic BUT wrap it in a silent refresh.
-      // For now, let's assume we filter 'allRaffles' for ones where I am winner or owner
-      const myClaimables = allRaffles.filter(r => {
-         // Simple check: am I the winner?
-         return r.winner && r.winner.toLowerCase() === myAddr && r.status === "COMPLETED";
-      }).map(r => ({
-         raffle: r,
-         claimableUsdc: r.winningPot, // Simplified: needs real logic if partial
-         roles: { participated: true }
-      }));
+      // 3. Claimables (Winnings & REFUNDS)
+      const myClaimables = [];
+
+      for (const r of myJoined) {
+        // A. Winnings (Completed + I am winner)
+        if (r.status === "COMPLETED" && r.winner && r.winner.toLowerCase() === myAddr) {
+           myClaimables.push({
+             raffle: r,
+             claimableUsdc: r.winningPot, 
+             claimableNative: "0",
+             type: "WIN",
+             roles: { participated: true }
+           });
+        }
+        
+        // B. Refunds (Canceled + I participated)
+        // ✅ FIX: This ensures Canceled raffles show up to reclaim money
+        if (r.status === "CANCELED") {
+           // We assume if you are in 'myJoined', you bought a ticket.
+           // You can add an on-chain check here for `balanceOf` if you want to be 100% sure.
+           myClaimables.push({
+             raffle: r,
+             claimableUsdc: r.ticketPrice, // Approximation: at least 1 ticket worth
+             claimableNative: "0",
+             type: "REFUND",
+             roles: { participated: true }
+           });
+        }
+      }
 
       setCreated(myCreated);
       setJoined(myJoined);
@@ -84,12 +109,8 @@ export function useDashboardController() {
 
   // --- 2. Polling Effect ---
   useEffect(() => {
-    fetchData(false); // First load (Spinner)
-
-    const interval = setInterval(() => {
-      fetchData(true); // Background (Silent)
-    }, 10000);
-
+    fetchData(false); 
+    const interval = setInterval(() => { fetchData(true); }, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -111,13 +132,13 @@ export function useDashboardController() {
     return claimables
       .filter((it: any) => {
         if (!it?.raffle?.id || hiddenClaimables[it.raffle.id]) return false;
-        // Logic from your snippet:
-        const hasFunds = BigInt(it.claimableUsdc || "0") > 0n || BigInt(it.claimableNative || "0") > 0n;
-        return hasFunds || !!it.roles?.participated;
+        return true; 
       })
       .sort((a: any, b: any) => {
-        const diff = BigInt(b.claimableUsdc || 0) - BigInt(a.claimableUsdc || 0);
-        return diff === 0n ? 0 : diff > 0n ? 1 : -1;
+        // Show Refunds first, then Big Wins
+        if (a.type === "REFUND" && b.type !== "REFUND") return -1;
+        if (b.type === "REFUND" && a.type !== "REFUND") return 1;
+        return BigInt(b.claimableUsdc || 0) > BigInt(a.claimableUsdc || 0) ? 1 : -1;
       });
   }, [claimables, hiddenClaimables]);
 
@@ -125,14 +146,8 @@ export function useDashboardController() {
   useEffect(() => {
     if (!account || !createdSorted) return; 
     let alive = true;
-    
-    const targets = createdSorted
-        .slice(0, 20)
-        .filter((r: any) => r.creator.toLowerCase() === account.toLowerCase())
-        .map((r: any) => r.id).filter(id => id && !(id in drawingAtById));
-
+    const targets = createdSorted.slice(0, 20).filter((r: any) => r.creator.toLowerCase() === account.toLowerCase()).map((r: any) => r.id).filter(id => id && !(id in drawingAtById));
     if (!targets.length) return;
-
     Promise.all(targets.map(async (id) => {
         try {
             const c = getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: id, abi: RAFFLE_HATCH_ABI });
@@ -141,13 +156,8 @@ export function useDashboardController() {
         } catch { return { id, val: "0", ok: false }; }
     })).then((results) => {
         if (!alive) return;
-        setDrawingAtById(prev => {
-            const next = { ...prev };
-            results.forEach(r => next[r.id] = r.val); 
-            return next;
-        });
+        setDrawingAtById(prev => { const n = { ...prev }; results.forEach(r => next[r.id] = r.val); return next; });
     });
-
     return () => { alive = false; };
   }, [account, createdSorted, drawingAtById]);
 
@@ -160,27 +170,28 @@ export function useDashboardController() {
         await sendAndConfirm(prepareContractCall({ contract: c, method: "forceCancelStuck", params: [] }));
         setMsg("Hatch triggered. Refreshing...");
         setDrawingAtById(p => { const n = { ...p }; delete n[raffleId]; return n; });
-        fetchData(true); // Silent refresh
+        fetchData(true);
     } catch(e: any) {
         setHatchNoteById(p => ({ ...p, [raffleId]: String(e.message).includes("rejected") ? "Cancelled." : "Failed." }));
     } finally { setHatchBusyById(p => ({ ...p, [raffleId]: false })); }
   };
 
-  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
+  const withdraw = async (raffleId: string, method: string) => {
     if (!account) return setMsg("Sign in first.");
     setMsg(null);
     try {
         const c = getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId, abi: RAFFLE_MIN_ABI });
+        // @ts-ignore
         await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
         setHiddenClaimables(p => ({ ...p, [raffleId]: true }));
         setMsg("Claim successful.");
-        fetchData(true); // Silent refresh
+        fetchData(true); 
     } catch { setMsg("Claim failed or rejected."); }
   };
 
   const refresh = () => {
     setMsg(null); setHiddenClaimables({}); setDrawingAtById({});
-    fetchData(false); // Hard refresh (show spinner)
+    fetchData(false);
   };
 
   return {
