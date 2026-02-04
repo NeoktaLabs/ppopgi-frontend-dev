@@ -1,6 +1,6 @@
 /* src/components/TopNav.css */
 
-/* 1. Wrapper to position the floating pill */
+/* 1. Wrapper */
 .topnav-wrapper {
   position: sticky;
   top: 20px;
@@ -8,14 +8,14 @@
   display: flex;
   justify-content: center;
   padding: 0 16px;
-  pointer-events: none; /* Let clicks pass through the empty sides */
+  pointer-events: none; 
 }
 
 /* 2. The Glass Pill */
 .topnav-pill {
-  pointer-events: auto; /* Re-enable clicks */
+  pointer-events: auto; 
   width: 100%;
-  max-width: 800px; /* ✅ Prevents it from being too wide */
+  max-width: 850px; /* Slightly wider to fit Cashier button */
   height: 60px;
   
   display: flex;
@@ -23,7 +23,6 @@
   justify-content: space-between;
   padding: 6px 8px 6px 16px;
   
-  /* Glassmorphism */
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -60,6 +59,7 @@
   padding: 8px 16px; border-radius: 99px;
   font-weight: 700; color: #64748b; font-size: 14px;
   cursor: pointer; transition: all 0.2s;
+  white-space: nowrap;
 }
 .nav-link:hover { color: #1e293b; background: rgba(0,0,0,0.03); }
 .nav-link.active { color: #4A0F2B; background: #fff0f5; }
@@ -80,13 +80,18 @@
   display: flex; align-items: center; gap: 8px;
 }
 
-.nav-icon-btn {
-  width: 40px; height: 40px; border-radius: 50%;
-  border: 1px solid rgba(0,0,0,0.05); background: white;
-  cursor: pointer; font-size: 18px; display: grid; place-items: center;
-  transition: all 0.2s;
+/* ✅ Cashier Button Style */
+.cashier-btn {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.5);
 }
-.nav-icon-btn:hover { background: #f8fafc; transform: scale(1.05); }
+.cashier-btn:hover {
+  background: white;
+  border-color: rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
 
 .signin-btn {
   border: 1px solid #e2e8f0;
@@ -115,14 +120,14 @@
 .mobile-burger.open span:last-child { transform: rotate(-45deg) translate(5px, -5px); }
 
 /* --- RESPONSIVE LOGIC --- */
-@media (max-width: 768px) {
+@media (max-width: 900px) { /* Breakpoint slightly higher for wider nav */
   .topnav-desktop-links, 
   .desktop-actions { display: none; }
   .mobile-burger { display: flex; }
-  .topnav-pill { padding-right: 8px; } /* Adjust padding for mobile */
+  .topnav-pill { padding-right: 8px; } 
 }
 
-/* --- MOBILE MENU (Floating Card) --- */
+/* --- MOBILE MENU --- */
 .mobile-menu {
   position: absolute;
   top: 80px; left: 0; right: 0;
