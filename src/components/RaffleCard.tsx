@@ -38,25 +38,21 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
   const { ui, actions } = useRaffleCard(raffle, nowMs);
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
-  
-  // ✅ 1. Ribbon CSS class only (Gold/Silver text removed)
   const cardClass = `rc-card ${ribbon || ""}`;
   const showHatch = hatch && hatch.show;
 
   const hostAddr = (raffle as any).owner || (raffle as any).creator;
 
-  // ✅ 2. Odds Calculation (Percentage)
+  // Odds Label
   const oddsLabel = useMemo(() => {
     if (!ui.isLive) return null;
     const max = Number(raffle.maxTickets);
     const sold = Number(raffle.sold);
     
-    // If capped, odds are 1/Max. If uncapped, odds are 1/(Sold + You).
     const denominator = max > 0 ? max : sold + 1;
     if (denominator === 0) return "0%"; 
 
     const pct = (1 / denominator) * 100;
-
     if (pct >= 100) return "100%";
     if (pct < 0.01) return "<0.01%";
     return pct < 1 ? `${pct.toFixed(2)}%` : `${Math.round(pct)}%`;
@@ -77,7 +73,6 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
         
-        {/* ✅ 3. Shortened Label: "Win: X%" */}
         {oddsLabel && !userEntry && (
            <div className="rc-odds-badge" title="Win chance per ticket">
               🎲 Win: {oddsLabel}
@@ -186,32 +181,29 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         </div>
       )}
 
-      {/* Footer */}
-      <div className="rc-footer">
-        <span>{ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}</span>
+      {/* ✅ NEW FOOTER STRUCTURE */}
+      <div className="rc-footer-new">
         
-        {/* ✅ 4. ID Link: Absolute positioned to bottom-right (Under Barcode) */}
-        <a 
-          href={`${EXPLORER_URL}${raffle.id}`}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()} 
-          style={{ 
-            position: "absolute",
-            bottom: "4px", // Puts it right at the bottom edge of the card (inside footer bg)
-            right: "16px", // Aligns with the right padding
-            fontSize: "9px", 
-            fontWeight: 800, 
-            opacity: 0.5, 
-            textDecoration: "none", 
-            color: "inherit", 
-            letterSpacing: "0.5px",
-            zIndex: 5
-          }}
-          title="View Contract"
-        >
-          #{raffle.id.slice(2, 8).toUpperCase()}
-        </a>
+        {/* Left Side: Time */}
+        <div className="rc-footer-left">
+           {ui.isLive ? `Ends: ${ui.timeLeft}` : ui.displayStatus}
+        </div>
+
+        {/* Right Side: Stacked Barcode & ID */}
+        <div className="rc-footer-right">
+           <div className="rc-barcode-div" />
+           <a 
+             href={`${EXPLORER_URL}${raffle.id}`}
+             target="_blank"
+             rel="noreferrer"
+             onClick={(e) => e.stopPropagation()} 
+             className="rc-id-link"
+             title="View Contract"
+           >
+             #{raffle.id.slice(2, 8).toUpperCase()}
+           </a>
+        </div>
+
       </div>
 
     </div>
