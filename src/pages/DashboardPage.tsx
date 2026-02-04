@@ -23,13 +23,22 @@ type Props = {
 export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   const { data, hatch, actions } = useDashboardController();
   const [tab, setTab] = useState<"active" | "history" | "created">("active");
+  const [copied, setCopied] = useState(false); // ✅ State for copy feedback
   
   // Clock
   const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => { const t = setInterval(() => setNowS(Math.floor(Date.now() / 1000)), 1000); return () => clearInterval(t); }, []);
 
+  // --- ACTIONS ---
+  const handleCopy = () => {
+    if (account) {
+      navigator.clipboard.writeText(account);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   // --- DATA PROCESSING ---
-  // ✅ FIX: Correctly destructured aliases { active: activeEntries, past: pastEntries }
   const { active: activeEntries, past: pastEntries } = useMemo(() => {
     const active: any[] = [];
     const past: any[] = [];
@@ -37,7 +46,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     if (!data.joined) return { active, past };
 
     data.joined.forEach((item: any) => {
-      // Handle if item is { raffle: ..., ticketsPurchased: ... } or just raffle
       const r = item.raffle || item; 
       const userCount = Number(item.ticketsPurchased || 0);
       const sold = Number(r.sold || 1);
@@ -54,7 +62,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
     return { active, past };
   }, [data.joined]);
-
 
   // --- HATCH LOGIC ---
   const getHatchProps = (raffleId: string, creator: string) => {
@@ -83,7 +90,20 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             <div className="db-avatar-circle">👤</div>
             <div>
                <div className="db-hero-label">Player Dashboard</div>
-               <div className="db-hero-addr">{account ? account : "Not Connected"}</div>
+               {/* ✅ UPDATED: Copy to Clipboard Address */}
+               <div 
+                 className="db-hero-addr" 
+                 onClick={handleCopy} 
+                 title="Click to copy address"
+                 style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+               >
+                 {account ? account : "Not Connected"}
+                 {account && (
+                   <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                     {copied ? "✅" : "📋"}
+                   </span>
+                 )}
+               </div>
             </div>
          </div>
          <div className="db-hero-stats">
@@ -118,18 +138,30 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                 const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
                 const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
+                // ✅ LOGIC: Determine if this is a Refund or a Win
+                // The hook now returns type: "WIN" or "REFUND"
+                const isRefund = it.type === "REFUND" || r.status === "CANCELED";
+                const actionMethod = isRefund ? "claimTicketRefund" : "withdrawFunds";
+                const actionLabel = isRefund ? "Claim Refund" : "Claim Prize";
+                
                 return (
                   <div key={r.id} className="db-claim-wrapper">
                      <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
                      <div className="db-claim-box">
                         <div className="db-claim-text">
-                           Available: {fmt(it.claimableUsdc, 6)} USDC {hasNative && `+ ${fmt(it.claimableNative, 18)} ETH`}
+                           {isRefund ? "Refunding: " : "Winnings: "} 
+                           {fmt(it.claimableUsdc, 6)} USDC 
+                           {hasNative && ` + ${fmt(it.claimableNative, 18)} ETH`}
                         </div>
                         <div className="db-claim-actions">
-                           <button className="db-btn" disabled={!hasUsdc || data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
-                              Claim Prize
+                           {/* ✅ FIX: Dynamic method for refund vs win */}
+                           <button 
+                             className="db-btn" 
+                             disabled={!hasUsdc || data.isPending} 
+                             onClick={() => actions.withdraw(r.id, actionMethod)}
+                           >
+                              {actionLabel}
                            </button>
-                           {/* Logic for refunds if needed */}
                         </div>
                      </div>
                   </div>
