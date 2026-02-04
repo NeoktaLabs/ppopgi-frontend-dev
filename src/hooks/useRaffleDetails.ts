@@ -34,27 +34,29 @@ function statusFromSubgraph(v: any): RaffleStatus {
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 
+// ---- Small cache to reduce indexer/RPC spam on modal open/close ----
+type CacheEntry<T> = { ts: number; data: T };
+const HISTORY_TTL_MS = 45_000; // 45s: avoids rate limits, still feels “live”
+const DETAILS_TTL_MS = 10_000; // 10s: avoids hammering RPC on quick reopen
+
+const historyCache = new Map<string, CacheEntry<RaffleHistory | null>>();
+const detailsCache = new Map<string, CacheEntry<RaffleDetails | null>>();
+
 type RaffleHistory = {
-  // ✅ add status from subgraph so modal stays consistent with cards
   status?: string | null;
 
-  // creation metadata
   createdAtTimestamp?: string | null;
   creationTx?: string | null;
 
-  // lifecycle timestamps
   finalizedAt?: string | null;
   completedAt?: string | null;
 
-  // cancellation
   canceledAt?: string | null;
   canceledReason?: string | null;
   soldAtCancel?: string | null;
 
-  // indexing
   lastUpdatedTimestamp?: string | null;
 
-  // discovery (optional)
   registry?: string | null;
   registryIndex?: string | null;
   isRegistered?: boolean | null;
@@ -100,12 +102,7 @@ export type RaffleDetails = {
   history?: RaffleHistory;
 };
 
-async function readFirst(
-  contract: any,
-  label: string,
-  candidates: string[],
-  params: readonly unknown[] = []
-): Promise<any> {
+async function readFirst(contract: any, label: string, candidates: string[], params: readonly unknown[] = []) {
   let lastErr: any = null;
   for (const method of candidates) {
     try {
@@ -125,7 +122,7 @@ async function readFirstOr(
   candidates: string[],
   fallback: any,
   params: readonly unknown[] = []
-): Promise<any> {
+) {
   try {
     return await readFirst(contract, label, candidates, params);
   } catch {
@@ -147,19 +144,14 @@ async function fetchRaffleHistoryFromSubgraph(id: string, signal?: AbortSignal):
     query RaffleById($id: ID!) {
       raffle(id: $id) {
         status
-
         createdAtTimestamp
         creationTx
-
         finalizedAt
         completedAt
-
         canceledAt
         canceledReason
         soldAtCancel
-
         lastUpdatedTimestamp
-
         registry
         registryIndex
         isRegistered
@@ -184,24 +176,30 @@ async function fetchRaffleHistoryFromSubgraph(id: string, signal?: AbortSignal):
 
   return {
     status: r.status ?? null,
-
     createdAtTimestamp: r.createdAtTimestamp ?? null,
     creationTx: r.creationTx ?? null,
-
     finalizedAt: r.finalizedAt ?? null,
     completedAt: r.completedAt ?? null,
-
     canceledAt: r.canceledAt ?? null,
     canceledReason: r.canceledReason ?? null,
     soldAtCancel: r.soldAtCancel ?? null,
-
     lastUpdatedTimestamp: r.lastUpdatedTimestamp ?? null,
-
     registry: r.registry ?? null,
     registryIndex: r.registryIndex ?? null,
     isRegistered: typeof r.isRegistered === "boolean" ? r.isRegistered : null,
     registeredAt: r.registeredAt ?? null,
   };
+}
+
+function getCached<T>(map: Map<string, CacheEntry<T>>, key: string, ttlMs: number): T | null {
+  const hit = map.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > ttlMs) return null;
+  return hit.data;
+}
+
+function setCached<T>(map: Map<string, CacheEntry<T>>, key: string, data: T) {
+  map.set(key, { ts: Date.now(), data });
 }
 
 export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
@@ -233,141 +231,122 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
     let alive = true;
     const ac = new AbortController();
 
+    // 1) Fast-path: serve cached details immediately (smooth UX + fewer RPC calls)
+    const cachedDetails = getCached(detailsCache, normalizedAddress.toLowerCase(), DETAILS_TTL_MS);
+    if (cachedDetails) {
+      setData(cachedDetails);
+      setLoading(false);
+      setNote(null);
+      // We still allow a refresh if cache is slightly old? (kept simple: return early)
+      return () => {
+        alive = false;
+        try {
+          ac.abort();
+        } catch {}
+      };
+    }
+
     (async () => {
       setLoading(true);
       setNote(null);
 
-      const historyP: Promise<RaffleHistory | null> = fetchRaffleHistoryFromSubgraph(normalizedAddress, ac.signal).catch(
-        () => null
-      );
+      const cacheKey = normalizedAddress.toLowerCase();
+
+      // 2) Cache subgraph history too (avoids indexer spam)
+      const cachedHistory = getCached(historyCache, cacheKey, HISTORY_TTL_MS);
+      const historyP: Promise<RaffleHistory | null> = cachedHistory
+        ? Promise.resolve(cachedHistory)
+        : fetchRaffleHistoryFromSubgraph(normalizedAddress, ac.signal)
+            .then((h) => {
+              setCached(historyCache, cacheKey, h);
+              return h;
+            })
+            .catch(() => null);
 
       try {
-        const name = await readFirstOr(contract, "name", ["function name() view returns (string)"], "Unknown raffle");
+        // On-chain reads (parallel, with better candidates so fewer failures)
+        const [
+          name,
+          statusU8,
+          sold,
+          ticketPrice,
+          winningPot,
+          minTickets,
+          maxTickets,
+          deadline,
+          paused,
+          usdcToken,
+          creator,
+          winner,
+          winningTicketIndex,
+          feeRecipient,
+          protocolFeePercent,
+          ticketRevenue,
+          minPurchaseAmount,
+          finalizeRequestId,
+          callbackGasLimit,
+          entropy,
+          entropyProvider,
+          entropyRequestId,
+          selectedProvider,
+          history,
+        ] = await Promise.all([
+          readFirstOr(contract, "name", ["function name() view returns (string)"], "Unknown raffle"),
+          readFirstOr(contract, "status", ["function status() view returns (uint8)"], 255),
 
-        const statusU8 = await readFirstOr(contract, "status", ["function status() view returns (uint8)"], 255);
+          // sold: some contracts expose sold() instead of getSold()
+          readFirstOr(contract, "sold", ["function getSold() view returns (uint256)", "function sold() view returns (uint256)"], 0n),
 
-        const sold = await readFirstOr(contract, "sold", ["function getSold() view returns (uint256)"], 0n);
+          readFirstOr(contract, "ticketPrice", ["function ticketPrice() view returns (uint256)"], 0n),
+          readFirstOr(contract, "winningPot", ["function winningPot() view returns (uint256)"], 0n),
 
-        const ticketPrice = await readFirstOr(
-          contract,
-          "ticketPrice",
-          ["function ticketPrice() view returns (uint256)"],
-          0n
-        );
+          readFirstOr(contract, "minTickets", ["function minTickets() view returns (uint64)"], 0),
+          readFirstOr(contract, "maxTickets", ["function maxTickets() view returns (uint64)"], 0),
+          readFirstOr(contract, "deadline", ["function deadline() view returns (uint64)"], 0),
 
-        const winningPot = await readFirstOr(
-          contract,
-          "winningPot",
-          ["function winningPot() view returns (uint256)"],
-          0n
-        );
+          readFirstOr(contract, "paused", ["function paused() view returns (bool)"], false),
 
-        const minTickets = await readFirstOr(
-          contract,
-          "minTickets",
-          ["function minTickets() view returns (uint64)"],
-          0
-        );
+          // token / roles
+          readFirstOr(contract, "usdcToken", ["function usdcToken() view returns (address)", "function usdc() view returns (address)"], ZERO),
+          readFirstOr(contract, "creator", ["function creator() view returns (address)", "function owner() view returns (address)"], ZERO),
 
-        const maxTickets = await readFirstOr(
-          contract,
-          "maxTickets",
-          ["function maxTickets() view returns (uint64)"],
-          0
-        );
+          // winner
+          readFirstOr(contract, "winner", ["function winner() view returns (address)"], ZERO),
+          readFirstOr(contract, "winningTicketIndex", ["function winningTicketIndex() view returns (uint256)"], 0n),
 
-        const deadline = await readFirstOr(contract, "deadline", ["function deadline() view returns (uint64)"], 0);
+          // fees
+          readFirstOr(contract, "feeRecipient", ["function feeRecipient() view returns (address)"], ZERO),
+          readFirstOr(contract, "protocolFeePercent", ["function protocolFeePercent() view returns (uint256)"], 0n),
 
-        const paused = await readFirstOr(contract, "paused", ["function paused() view returns (bool)"], false);
+          // revenue
+          readFirstOr(contract, "ticketRevenue", ["function ticketRevenue() view returns (uint256)"], 0n),
 
-        const usdcToken = await readFirstOr(contract, "usdcToken", ["function usdcToken() view returns (address)"], ZERO);
+          readFirstOr(contract, "minPurchaseAmount", ["function minPurchaseAmount() view returns (uint32)"], 1),
 
-        const creator = await readFirstOr(contract, "creator", ["function creator() view returns (address)"], ZERO);
+          // request ids vary between versions
+          readFirstOr(
+            contract,
+            "finalizeRequestId",
+            ["function finalizeRequestId() view returns (uint64)", "function entropyRequestId() view returns (uint64)"],
+            0
+          ),
 
-        const winner = await readFirstOr(contract, "winner", ["function winner() view returns (address)"], ZERO);
+          readFirstOr(contract, "callbackGasLimit", ["function callbackGasLimit() view returns (uint32)"], 0),
 
-        const winningTicketIndex = await readFirstOr(
-          contract,
-          "winningTicketIndex",
-          ["function winningTicketIndex() view returns (uint256)"],
-          0n
-        );
+          readFirstOr(contract, "entropy", ["function entropy() view returns (address)"], ZERO),
+          readFirstOr(contract, "entropyProvider", ["function entropyProvider() view returns (address)"], ZERO),
+          readFirstOr(contract, "entropyRequestId", ["function entropyRequestId() view returns (uint64)"], 0),
+          readFirstOr(contract, "selectedProvider", ["function selectedProvider() view returns (address)"], ZERO),
 
-        const feeRecipient = await readFirstOr(
-          contract,
-          "feeRecipient",
-          ["function feeRecipient() view returns (address)"],
-          ZERO
-        );
+          historyP,
+        ]);
 
-        const protocolFeePercent = await readFirstOr(
-          contract,
-          "protocolFeePercent",
-          ["function protocolFeePercent() view returns (uint256)"],
-          0n
-        );
-
-        const ticketRevenue = await readFirstOr(
-          contract,
-          "ticketRevenue",
-          ["function ticketRevenue() view returns (uint256)"],
-          0n
-        );
-
-        const minPurchaseAmount = await readFirstOr(
-          contract,
-          "minPurchaseAmount",
-          ["function minPurchaseAmount() view returns (uint32)"],
-          1
-        );
-
-        const finalizeRequestId = await readFirstOr(
-          contract,
-          "finalizeRequestId",
-          [
-            "function finalizeRequestId() view returns (uint64)",
-            "function entropyRequestId() view returns (uint64)",
-          ],
-          0
-        );
-
-        const callbackGasLimit = await readFirstOr(
-          contract,
-          "callbackGasLimit",
-          ["function callbackGasLimit() view returns (uint32)"],
-          0
-        );
-
-        const entropy = await readFirstOr(contract, "entropy", ["function entropy() view returns (address)"], ZERO);
-
-        const entropyProvider = await readFirstOr(
-          contract,
-          "entropyProvider",
-          ["function entropyProvider() view returns (address)"],
-          ZERO
-        );
-
-        const entropyRequestId = await readFirstOr(
-          contract,
-          "entropyRequestId",
-          ["function entropyRequestId() view returns (uint64)"],
-          0
-        );
-
-        const selectedProvider = await readFirstOr(
-          contract,
-          "selectedProvider",
-          ["function selectedProvider() view returns (address)"],
-          ZERO
-        );
-
-        const history = await historyP;
         if (!alive) return;
 
         const onchainStatus = statusFromUint8(Number(statusU8));
         const subgraphStatus = statusFromSubgraph(history?.status);
 
-        // ✅ Prefer subgraph terminal statuses to prevent “OPEN => Finalizing” on canceled raffles
+        // Prefer subgraph terminal statuses when available
         const finalStatus: RaffleStatus =
           subgraphStatus === "CANCELED" ||
           subgraphStatus === "COMPLETED" ||
@@ -375,7 +354,7 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
             ? subgraphStatus
             : onchainStatus;
 
-        setData({
+        const next: RaffleDetails = {
           address: normalizedAddress,
           name: String(name),
           status: finalStatus,
@@ -410,14 +389,18 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           selectedProvider: String(selectedProvider),
 
           history: history ?? undefined,
-        });
+        };
+
+        setData(next);
+        setCached(detailsCache, cacheKey, next);
 
         if (String(name) === "Unknown raffle") {
           setNote("Some live fields could not be read yet, but the raffle is reachable.");
         }
-      } catch (e: any) {
+      } catch (e) {
         if (!alive) return;
         setData(null);
+        setCached(detailsCache, normalizedAddress.toLowerCase(), null);
         setNote("Could not load this raffle right now. Please refresh (and check console logs).");
       } finally {
         if (!alive) return;
@@ -429,9 +412,7 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
       alive = false;
       try {
         ac.abort();
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
   }, [open, contract, normalizedAddress]);
 
