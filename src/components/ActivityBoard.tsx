@@ -41,7 +41,6 @@ export function ActivityBoard() {
     <div className="ab-board">
        <div className="ab-header">
           <div className="ab-pulse" />
-          {/* ✅ UPDATED TEXT */}
           Live Feed (Last 10)
        </div>
        
@@ -49,11 +48,13 @@ export function ActivityBoard() {
           {items.map((item, i) => {
              const isBuy = item.type === "BUY";
              const isWin = item.type === "WIN";
+             const isCancel = item.type === "CANCEL"; // ✅ Added
 
              let icon = "✨";
              let iconClass = "create";
              if (isBuy) { icon = "🎟️"; iconClass = "buy"; }
              if (isWin) { icon = "🏆"; iconClass = "win"; }
+             if (isCancel) { icon = "⛔"; iconClass = "cancel"; } // ✅ Added
 
              return (
                <div key={`${item.txHash}-${i}`} className="ab-row">
@@ -62,7 +63,6 @@ export function ActivityBoard() {
                   </div>
                   <div className="ab-content">
                      <div className="ab-main-text">
-                        {/* ✅ CLICKABLE ADDRESS LINK */}
                         <a 
                           href={`https://explorer.etherlink.com/address/${item.subject}`}
                           target="_blank"
@@ -75,6 +75,8 @@ export function ActivityBoard() {
                         {isBuy && <> bought <b>{item.value} tix</b> in </>}
                         {item.type === "CREATE" && <> created </>}
                         {isWin && <> <b style={{color:'#166534'}}>won</b> the pot on </>}
+                        {/* ✅ Handle Cancel Text */}
+                        {isCancel && <> <b style={{color:'#991b1b'}}>canceled</b> </>}
 
                         <a href={`/?raffle=${item.raffleId}`} className="ab-link">
                            {item.raffleName}
@@ -84,9 +86,10 @@ export function ActivityBoard() {
                         <span className="ab-time">{timeAgo(item.timestamp)}</span>
                         
                         {!isBuy && (
-                           <span className={`ab-pot-tag ${isWin ? 'win' : ''}`}>
-                              {isWin ? 'Won: ' : 'Pot: '} 
-                              {formatUnits(item.value, 6)}
+                           <span className={`ab-pot-tag ${isWin ? 'win' : isCancel ? 'cancel' : ''}`}>
+                              {/* ✅ Handle Label and Value */}
+                              {isWin ? 'Won: ' : isCancel ? 'Refunded' : 'Pot: '} 
+                              {!isCancel && formatUnits(item.value, 6)}
                            </span>
                         )}
                      </div>
