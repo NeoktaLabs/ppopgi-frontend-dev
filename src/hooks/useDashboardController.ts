@@ -79,9 +79,11 @@ export function useDashboardController() {
   const [joined, setJoined] = useState<JoinedRaffleItem[]>([]);
   const [claimables, setClaimables] = useState<ClaimableItem[]>([]);
   const [isPending, setIsPending] = useState(true);
+  const [isBusy, setIsBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
+  // (optional hatch state kept if you still use it elsewhere)
   const [drawingAtById, setDrawingAtById] = useState<Record<string, string>>({});
   const [hatchNoteById, setHatchNoteById] = useState<Record<string, string>>({});
   const [hatchBusyById, setHatchBusyById] = useState<Record<string, boolean>>({});
@@ -99,8 +101,10 @@ export function useDashboardController() {
         const allRaffles = await fetchRafflesFromSubgraph({ first: 1000 });
         const myAddr = account.toLowerCase();
 
+        // 1) My Created
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
+        // 2) My Joined: use subgraph participant index
         const joinedIds = new Set<string>();
         let skip = 0;
         while (true) {
@@ -113,6 +117,7 @@ export function useDashboardController() {
 
         const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
 
+        // Attach userTicketsOwned (RPC) - only first 80
         const ownedByRaffleId = new Map<string, string>();
         await Promise.all(
           joinedBase.slice(0, 80).map(async (r) => {
@@ -136,85 +141,102 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(r.id.toLowerCase()) ?? "0",
         }));
 
+        // 3) Claimables: union(created + joined)
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
         joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
 
         const newClaimables: ClaimableItem[] = [];
+        const candidates = Array.from(candidateById.values()).slice(0, 80);
 
         await Promise.all(
-          Array.from(candidateById.values())
-            .slice(0, 60)
-            .map(async (r) => {
-              try {
-                const contract = getContract({
-                  client: thirdwebClient,
-                  chain: ETHERLINK_CHAIN,
-                  address: r.id,
-                  abi: RAFFLE_DASH_ABI,
-                });
+          candidates.map(async (r) => {
+            const contract = getContract({
+              client: thirdwebClient,
+              chain: ETHERLINK_CHAIN,
+              address: r.id,
+              abi: RAFFLE_DASH_ABI,
+            });
 
-                const [cfRaw, cnRaw, ownedRaw] = await Promise.all([
-                  readContract({ contract, method: "claimableFunds", params: [account] }),
-                  readContract({ contract, method: "claimableNative", params: [account] }),
-                  readContract({ contract, method: "ticketsOwned", params: [account] }),
-                ]);
+            // IMPORTANT: don't drop claimables if one read reverts
+            let cf = 0n;
+            let cn = 0n;
+            let ticketsOwned = 0n;
 
-                const cf = BigInt(cfRaw ?? 0n);
-                const cn = BigInt(cnRaw ?? 0n);
-                const ticketsOwned = BigInt(ownedRaw ?? 0n);
+            try {
+              const v = await readContract({ contract, method: "claimableFunds", params: [account] });
+              cf = BigInt(v ?? 0n);
+            } catch {}
 
-                const roles = {
-                  created: r.creator?.toLowerCase() === myAddr,
-                  participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
-                };
+            try {
+              const v = await readContract({ contract, method: "claimableNative", params: [account] });
+              cn = BigInt(v ?? 0n);
+            } catch {}
 
-                if (
-                  r.status === "COMPLETED" &&
-                  r.winner?.toLowerCase() === myAddr &&
-                  (cf > 0n || cn > 0n)
-                ) {
-                  newClaimables.push({
-                    raffle: r,
-                    claimableUsdc: cf.toString(),
-                    claimableNative: cn.toString(),
-                    type: "WIN",
-                    roles,
-                    userTicketsOwned: ticketsOwned.toString(),
-                  });
-                  return;
-                }
+            try {
+              const v = await readContract({ contract, method: "ticketsOwned", params: [account] });
+              ticketsOwned = BigInt(v ?? 0n);
+            } catch {}
 
-                // ✅ FIX: player ticket refunds
-                if (r.status === "CANCELED" && ticketsOwned > 0n) {
-                  newClaimables.push({
-                    raffle: r,
-                    claimableUsdc: cf.toString(),
-                    claimableNative: cn.toString(),
-                    type: "REFUND",
-                    roles,
-                    userTicketsOwned: ticketsOwned.toString(),
-                  });
-                  return;
-                }
+            const roles = {
+              created: r.creator?.toLowerCase() === myAddr,
+              participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
+            };
 
-                if (cf > 0n || cn > 0n) {
-                  newClaimables.push({
-                    raffle: r,
-                    claimableUsdc: cf.toString(),
-                    claimableNative: cn.toString(),
-                    type: "OTHER",
-                    roles,
-                    userTicketsOwned: ticketsOwned.toString(),
-                  });
-                }
-              } catch {}
-            })
+            // 1) WINNER claim
+            if (
+              r.status === "COMPLETED" &&
+              r.winner?.toLowerCase() === myAddr &&
+              (cf > 0n || cn > 0n)
+            ) {
+              newClaimables.push({
+                raffle: r,
+                claimableUsdc: cf.toString(),
+                claimableNative: cn.toString(),
+                type: "WIN",
+                roles,
+                userTicketsOwned: ticketsOwned.toString(),
+              });
+              return;
+            }
+
+            // 2) PLAYER REFUND claim (only when they actually have tickets)
+            if (r.status === "CANCELED" && ticketsOwned > 0n) {
+              newClaimables.push({
+                raffle: r,
+                claimableUsdc: cf.toString(),
+                claimableNative: cn.toString(),
+                type: "REFUND",
+                roles,
+                userTicketsOwned: ticketsOwned.toString(),
+              });
+              return;
+            }
+
+            // 3) Creator withdraws / other claimables:
+            // If the creator should be able to withdraw on COMPLETED/CANCELED,
+            // show a claim tile even if claimableFunds() is 0 or reverted (button still useful).
+            const creatorShouldSee =
+              roles.created && (r.status === "COMPLETED" || r.status === "CANCELED");
+
+            if (cf > 0n || cn > 0n || creatorShouldSee) {
+              newClaimables.push({
+                raffle: r,
+                claimableUsdc: cf.toString(),
+                claimableNative: cn.toString(),
+                type: "OTHER",
+                roles,
+                userTicketsOwned: ticketsOwned.toString(),
+              });
+            }
+          })
         );
 
         setCreated(myCreated);
         setJoined(myJoined);
         setClaimables(newClaimables);
+      } catch (e) {
+        console.error("Dashboard fetch error", e);
       } finally {
         if (!isBackground) setIsPending(false);
       }
@@ -239,8 +261,7 @@ export function useDashboardController() {
   );
 
   const claimablesSorted = useMemo(
-    () =>
-      claimables.filter((c) => !hiddenClaimables[c.raffle.id.toLowerCase()]),
+    () => claimables.filter((c) => !hiddenClaimables[c.raffle.id.toLowerCase()]),
     [claimables, hiddenClaimables]
   );
 
@@ -249,10 +270,36 @@ export function useDashboardController() {
     method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
   ) => {
     if (!account) return;
-    const c = getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId, abi: RAFFLE_DASH_ABI });
-    await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
-    setHiddenClaimables((p) => ({ ...p, [raffleId.toLowerCase()]: true }));
-    fetchData(true);
+
+    setMsg(null);
+    setIsBusy(true);
+
+    try {
+      const c = getContract({
+        client: thirdwebClient,
+        chain: ETHERLINK_CHAIN,
+        address: raffleId,
+        abi: RAFFLE_DASH_ABI,
+      });
+
+      await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
+
+      setHiddenClaimables((p) => ({ ...p, [raffleId.toLowerCase()]: true }));
+      setMsg("Claim successful.");
+      fetchData(true);
+    } catch (e: any) {
+      console.error("Withdraw failed:", e);
+      setMsg("Claim failed or rejected.");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const refresh = () => {
+    setMsg(null);
+    setHiddenClaimables({});
+    setDrawingAtById({});
+    fetchData(false);
   };
 
   return {
@@ -262,8 +309,9 @@ export function useDashboardController() {
       claimables: claimablesSorted,
       msg,
       isPending,
+      isBusy,
     },
-    actions: { withdraw },
+    actions: { withdraw, refresh },
     account,
   };
 }
