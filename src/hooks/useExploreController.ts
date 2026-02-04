@@ -1,8 +1,7 @@
 // src/hooks/useExploreController.ts
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { useExploreRaffles } from "./useExploreRaffles";
-import type { RaffleStatus } from "../indexer/subgraph";
+import { fetchRafflesFromSubgraph, type RaffleListItem, type RaffleStatus } from "../indexer/subgraph";
 
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 
@@ -11,19 +10,49 @@ const safeNum = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n
 const isActiveStatus = (s: RaffleStatus) => s === "OPEN" || s === "FUNDING_PENDING";
 
 export function useExploreController() {
-  const { items, note } = useExploreRaffles(500);
   const activeAccount = useActiveAccount();
   const me = activeAccount?.address ? norm(activeAccount.address) : null;
 
+  // --- State ---
+  const [items, setItems] = useState<RaffleListItem[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [note, setNote] = useState<string | null>(null);
+
+  // Filters
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<RaffleStatus | "ALL">("ALL");
-  
-  // ✅ CHANGE: Default sort is now "newest"
   const [sort, setSort] = useState<SortMode>("newest");
-  
   const [openOnly, setOpenOnly] = useState(false);
   const [myRafflesOnly, setMyRafflesOnly] = useState(false);
 
+  // --- 1. Silent Data Fetch ---
+  const fetchData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setIsLoading(true);
+
+    try {
+      const data = await fetchRafflesFromSubgraph({ first: 1000 });
+      setItems(data);
+      setNote(null);
+    } catch (e) {
+      console.error("Explore fetch failed", e);
+      if (!isBackground) setNote("Failed to load raffles.");
+    } finally {
+      if (!isBackground) setIsLoading(false);
+    }
+  }, []);
+
+  // --- 2. Polling Effect ---
+  useEffect(() => {
+    fetchData(false); // First load
+
+    const interval = setInterval(() => {
+      fetchData(true); // Background update
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // --- 3. Filtering Logic (Memoized) ---
   const list = useMemo(() => {
     const all = items ?? [];
     let filtered = status === "ALL" ? all : all.filter((r) => r.status === status);
@@ -40,7 +69,6 @@ export function useExploreController() {
     }
 
     return filtered.sort((a, b) => {
-      // Newest logic: Sort by timestamp, fallback to ID (assuming larger ID = newer)
       if (sort === "newest") {
         const timeDiff = safeNum(b.lastUpdatedTimestamp) - safeNum(a.lastUpdatedTimestamp);
         return timeDiff !== 0 ? timeDiff : String(b.id).localeCompare(String(a.id));
@@ -55,13 +83,13 @@ export function useExploreController() {
   }, [items, q, status, sort, openOnly, myRafflesOnly, me]);
 
   const resetFilters = () => {
-    setQ(""); setStatus("ALL"); setSort("newest"); // ✅ Reset to newest
+    setQ(""); setStatus("ALL"); setSort("newest");
     setOpenOnly(false); setMyRafflesOnly(false);
   };
 
   return {
     state: { items, list, note, q, status, sort, openOnly, myRafflesOnly, me },
-    actions: { setQ, setStatus, setSort, setOpenOnly, setMyRafflesOnly, resetFilters },
-    meta: { totalCount: items?.length || 0, shownCount: list.length, isLoading: !items }
+    actions: { setQ, setStatus, setSort, setOpenOnly, setMyRafflesOnly, resetFilters, refresh: () => fetchData(false) },
+    meta: { totalCount: items?.length || 0, shownCount: list.length, isLoading }
   };
 }
