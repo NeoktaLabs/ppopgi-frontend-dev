@@ -4,7 +4,7 @@ import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
-import { ActivityTicker } from "../components/ActivityTicker"; 
+import { ActivityBoard } from "../components/ActivityBoard"; // ✅ Swapped Component
 import "./HomePage.css";
 
 type Props = {
@@ -44,9 +44,9 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   return (
     <>
-      {/* ✅ WRAPPER: Pushes ticker down so it doesn't touch the TopNav */}
-      <div className="hp-ticker-section">
-        <ActivityTicker />
+      {/* ✅ NEW BOARD SECTION (Replaces Ticker) */}
+      <div className="hp-board-section">
+        <ActivityBoard />
       </div>
 
       <div className="hp-container">
