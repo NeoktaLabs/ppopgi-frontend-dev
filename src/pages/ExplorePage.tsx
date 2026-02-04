@@ -1,17 +1,21 @@
 // src/pages/ExplorePage.tsx
-
 import { RaffleCard } from "../components/RaffleCard";
-import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton"; // ✅ Import
+import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 
-type Props = { 
-  onOpenRaffle: (id: string) => void; 
-  onOpenSafety: (id: string) => void; 
+type Props = {
+  onOpenRaffle: (id: string) => void;
+  onOpenSafety: (id: string) => void;
 };
 
 export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
   const { state, actions, meta } = useExploreController();
+
+  const hasAnyItems = (state.items?.length ?? 0) > 0;
+  const showSkeletons = meta.isLoading && !hasAnyItems;
+
+  const showMyRafflesHint = state.myRafflesOnly && !state.me;
 
   return (
     <div style={{ padding: 0 }}>
@@ -26,12 +30,43 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
               <span className="xp-dot" />
               🔎 Explore raffles
             </div>
-            {state.note && <div style={{ marginTop: 10, paddingLeft: 18, fontSize: 13, fontWeight: 850, opacity: 0.95 }}>{state.note}</div>}
+
+            {state.note && (
+              <div
+                style={{
+                  marginTop: 10,
+                  paddingLeft: 18,
+                  fontSize: 13,
+                  fontWeight: 850,
+                  opacity: 0.95,
+                }}
+              >
+                {state.note}
+              </div>
+            )}
+
+            {showMyRafflesHint && (
+              <div
+                style={{
+                  marginTop: 8,
+                  paddingLeft: 18,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  opacity: 0.8,
+                }}
+              >
+                Sign in to use <b>My Raffles</b>.
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span className="xp-meta-tag">{meta.isLoading ? "Syncing..." : `${meta.totalCount} raffles`}</span>
-            <span className="xp-meta-tag">{meta.isLoading ? "..." : `${meta.shownCount} shown`}</span>
+            <span className="xp-meta-tag">
+              {meta.isLoading && !hasAnyItems ? "Syncing..." : `${meta.totalCount} raffles`}
+            </span>
+            <span className="xp-meta-tag">
+              {meta.isLoading && !hasAnyItems ? "..." : `${meta.shownCount} shown`}
+            </span>
           </div>
         </div>
 
@@ -41,20 +76,32 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
             <div className="xp-panel-top">
               <span>Filters</span>
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="xp-mini-btn" onClick={() => actions.setQ("")} title="Clear search">Clear</button>
-                <button className="xp-mini-btn primary" onClick={actions.resetFilters} title="Reset all">Reset</button>
+                <button
+                  className="xp-mini-btn"
+                  onClick={() => actions.setQ("")}
+                  title="Clear search"
+                >
+                  Clear
+                </button>
+                <button
+                  className="xp-mini-btn primary"
+                  onClick={actions.resetFilters}
+                  title="Reset all"
+                >
+                  Reset
+                </button>
               </div>
             </div>
 
             <div className="xp-toggles">
-              <button 
-                className={`xp-pill-btn ${state.openOnly ? "active" : ""}`} 
+              <button
+                className={`xp-pill-btn ${state.openOnly ? "active" : ""}`}
                 onClick={() => actions.setOpenOnly(!state.openOnly)}
               >
                 Open Only
               </button>
 
-              <button 
+              <button
                 className={`xp-pill-btn ${state.myRafflesOnly ? "active" : ""}`}
                 onClick={() => actions.setMyRafflesOnly(!state.myRafflesOnly)}
                 disabled={!state.me}
@@ -67,20 +114,20 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
             <div className="xp-filter-grid">
               <div>
                 <div className="xp-label">Search</div>
-                <input 
-                  className="xp-input" 
-                  value={state.q} 
-                  onChange={e => actions.setQ(e.target.value)} 
-                  placeholder="Name or 0x address..." 
+                <input
+                  className="xp-input"
+                  value={state.q}
+                  onChange={(e) => actions.setQ(e.target.value)}
+                  placeholder="Name or 0x address..."
                 />
               </div>
 
               <div>
                 <div className="xp-label">Status</div>
-                <select 
-                  className="xp-input" 
-                  value={state.status} 
-                  onChange={e => actions.setStatus(e.target.value as any)} 
+                <select
+                  className="xp-input"
+                  value={state.status}
+                  onChange={(e) => actions.setStatus(e.target.value as any)}
                   style={{ cursor: "pointer" }}
                 >
                   <option value="ALL">All</option>
@@ -94,10 +141,10 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
 
               <div>
                 <div className="xp-label">Sort</div>
-                <select 
-                  className="xp-input" 
-                  value={state.sort} 
-                  onChange={e => actions.setSort(e.target.value as SortMode)}
+                <select
+                  className="xp-input"
+                  value={state.sort}
+                  onChange={(e) => actions.setSort(e.target.value as SortMode)}
                   style={{ cursor: "pointer" }}
                 >
                   <option value="endingSoon">Ending Soon</option>
@@ -111,34 +158,30 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
 
         {/* Results List */}
         <div className="xp-results">
-          {/* ✅ SKELETON LOADING STATE */}
-          {meta.isLoading && (
+          {/* Skeleton only on true cold load */}
+          {showSkeletons && (
             <>
               {Array.from({ length: 6 }).map((_, i) => (
                 <RaffleCardSkeleton key={i} />
               ))}
             </>
           )}
-          
+
           {/* Empty State */}
           {!meta.isLoading && state.list.length === 0 && (
-             <div className="xp-empty">
-               No raffles match your filters.
-               {!state.me && state.myRafflesOnly && " (Sign in to view 'My Raffles')"}
-             </div>
+            <div className="xp-empty">No raffles match your filters.</div>
           )}
 
-          {/* Real Cards */}
-          {!meta.isLoading && state.list.map((r) => (
-            <RaffleCard 
-              key={r.id} 
-              raffle={r} 
-              onOpen={onOpenRaffle} 
-              onOpenSafety={onOpenSafety} 
+          {/* Real Cards (show even if background syncing) */}
+          {state.list.map((r) => (
+            <RaffleCard
+              key={r.id}
+              raffle={r}
+              onOpen={onOpenRaffle}
+              onOpenSafety={onOpenSafety}
             />
           ))}
         </div>
-
       </div>
     </div>
   );
