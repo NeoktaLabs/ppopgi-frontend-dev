@@ -1,4 +1,5 @@
 // src/hooks/useRaffleStore.ts
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { fetchRafflesFromSubgraph, type RaffleListItem } from "../indexer/subgraph";
 
 /**
@@ -8,6 +9,11 @@ import { fetchRafflesFromSubgraph, type RaffleListItem } from "../indexer/subgra
  * - Backs off on 429 / rate limits
  * - Slows down when tab is hidden
  * - Stops polling when unused
+ *
+ * NOTE:
+ * This file exports BOTH:
+ *  1) the store functions (startRaffleStore/refresh/getSnapshot/subscribe)
+ *  2) a React hook: useRaffleStore(consumerKey, pollMs)
  */
 
 type StoreState = {
@@ -54,20 +60,10 @@ function setState(patch: Partial<StoreState>) {
 
 function isHidden() {
   try {
-    return document.hidden;
+    return typeof document !== "undefined" && document.hidden;
   } catch {
     return false;
   }
-}
-
-function computePollMs() {
-  const minRequested =
-    requestedPolls.size > 0 ? Math.min(...requestedPolls.values()) : 20_000;
-
-  const fg = Math.max(10_000, minRequested);
-  const bg = Math.max(60_000, fg);
-
-  return isHidden() ? bg : fg;
 }
 
 function clearTimer() {
@@ -77,13 +73,26 @@ function clearTimer() {
   }
 }
 
+function computePollMs() {
+  const minRequested =
+    requestedPolls.size > 0 ? Math.min(...requestedPolls.values()) : 20_000;
+
+  // Foreground minimum is 10s (protect indexer)
+  const fg = Math.max(10_000, minRequested);
+
+  // Background minimum is 60s
+  const bg = Math.max(60_000, fg);
+
+  return isHidden() ? bg : fg;
+}
+
 function scheduleNext() {
   clearTimer();
   if (subscribers <= 0) return;
 
   const now = Date.now();
   const waitForBackoff = Math.max(0, backoffUntilMs - now);
-  const delay = waitForBackoff || computePollMs();
+  const delay = waitForBackoff > 0 ? waitForBackoff : computePollMs();
 
   timer = window.setTimeout(() => {
     void refresh(true);
@@ -96,10 +105,27 @@ function parseHttpStatus(err: any): number | null {
   return m ? Number(m[1]) : null;
 }
 
-function applyBackoff(err: any) {
-  const status = parseHttpStatus(err);
-  const rateLimited = status === 429 || status === 503;
+function isAbortError(err: any) {
+  const name = String(err?.name ?? "");
+  const msg = String(err?.message ?? err ?? "");
+  return name === "AbortError" || msg.toLowerCase().includes("aborted");
+}
 
+function isRateLimitError(err: any) {
+  const status = parseHttpStatus(err);
+  if (status === 429 || status === 503) return true;
+
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  return msg.includes("too many requests") || msg.includes("rate limit") || msg.includes("429");
+}
+
+function applyBackoff(err: any) {
+  // Don’t backoff on aborts (normal during navigation/unmount)
+  if (isAbortError(err)) return;
+
+  const rateLimited = isRateLimitError(err);
+
+  // steps: grow faster when rate-limited, slower otherwise
   backoffStep = Math.min(backoffStep + 1, rateLimited ? 6 : 3);
 
   const base = rateLimited ? 10_000 : 5_000;
@@ -127,6 +153,7 @@ async function doFetch(isBackground: boolean) {
   inFlight = (async () => {
     if (!isBackground) setState({ isLoading: true });
 
+    // cancel any previous request
     aborter?.abort();
     aborter = new AbortController();
 
@@ -145,9 +172,15 @@ async function doFetch(isBackground: boolean) {
 
       resetBackoff();
     } catch (err) {
-      if (!isBackground) setState({ isLoading: false });
-      applyBackoff(err);
-      console.warn("[useRaffleStore] fetch failed", err);
+      // If aborted, treat as neutral (no error UI/backoff)
+      if (isAbortError(err)) {
+        if (!isBackground) setState({ isLoading: false });
+      } else {
+        if (!isBackground) setState({ isLoading: false });
+        applyBackoff(err);
+        // eslint-disable-next-line no-console
+        console.warn("[useRaffleStore] fetch failed", err);
+      }
     } finally {
       inFlight = null;
       scheduleNext();
@@ -157,10 +190,7 @@ async function doFetch(isBackground: boolean) {
   return inFlight;
 }
 
-export async function refresh(
-  isBackground = false,
-  force = false
-) {
+export async function refresh(isBackground = false, force = false) {
   if (subscribers <= 0) return;
 
   if (!force && Date.now() < backoffUntilMs) {
@@ -182,16 +212,16 @@ export function subscribe(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
-export function startRaffleStore(
-  consumerKey: string,
-  pollMs: number
-) {
+export function startRaffleStore(consumerKey: string, pollMs: number) {
   subscribers += 1;
   requestedPolls.set(consumerKey, pollMs);
 
+  // Attach lifecycle listeners once
   if (subscribers === 1) {
     const onFocus = () => refresh(true, true);
-    const onVis = () => !isHidden() && refresh(true, true);
+    const onVis = () => {
+      if (!isHidden()) refresh(true, true);
+    };
 
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVis);
@@ -201,9 +231,11 @@ export function startRaffleStore(
       document.removeEventListener("visibilitychange", onVis);
     };
 
-    refresh(false, true);
+    // initial fetch
+    void refresh(false, true);
   } else {
-    if (!state.items) refresh(false, true);
+    // if we already have data, don’t force; otherwise, fetch once
+    if (!state.items) void refresh(false, true);
     scheduleNext();
   }
 
@@ -221,4 +253,23 @@ export function startRaffleStore(
       scheduleNext();
     }
   };
+}
+
+/**
+ * ✅ React Hook wrapper around the store.
+ * - starts store on mount
+ * - stops store on unmount
+ * - returns current snapshot
+ */
+export function useRaffleStore(consumerKey: string, pollMs: number) {
+  // subscribe/getSnapshot are stable module functions, safe for useSyncExternalStore
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  // start/stop polling for this consumer
+  useEffect(() => {
+    const stop = startRaffleStore(consumerKey, pollMs);
+    return () => stop();
+  }, [consumerKey, pollMs]);
+
+  return useMemo(() => snap, [snap]);
 }
