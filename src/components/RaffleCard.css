@@ -267,10 +267,6 @@
     border: 1px solid rgba(0,0,0,0.1);
 }
 
-/* src/components/RaffleCard.css */
-
-/* ... (Keep all your existing styles) ... */
-
 /* ✅ NEW: User Stats Badge (Dashboard) */
 .rc-user-badge {
   background: #EAB308; /* Gold to stand out against pink/white */
