@@ -19,8 +19,7 @@ export function ActivityBoard() {
 
   const load = async () => {
     try {
-      // ✅ Fetch 10 items (Compact)
-      const data = await fetchGlobalActivity({ first: 10 });
+      const data = await fetchGlobalActivity({ first: 15 });
       setItems(data);
     } catch (e) {
       console.error(e);
@@ -42,32 +41,48 @@ export function ActivityBoard() {
     <div className="ab-board">
        <div className="ab-header">
           <div className="ab-pulse" />
-          Live Feed (Last 10)
+          Live Feed (Last 15)
        </div>
        
        <div className="ab-list">
           {items.map((item, i) => {
              const isBuy = item.type === "BUY";
+             const isWin = item.type === "WIN"; // ✅ Check for WIN
+
+             // Icon Selection
+             let icon = "✨";
+             let iconClass = "create";
+             if (isBuy) { icon = "🎟️"; iconClass = "buy"; }
+             if (isWin) { icon = "🏆"; iconClass = "win"; }
+
              return (
                <div key={`${item.txHash}-${i}`} className="ab-row">
-                  <div className={`ab-icon ${isBuy ? "buy" : "create"}`}>
-                     {isBuy ? "🎟️" : "✨"}
+                  <div className={`ab-icon ${iconClass}`}>
+                     {icon}
                   </div>
                   <div className="ab-content">
                      <div className="ab-main-text">
                         <span className="ab-user">{short(item.subject)}</span>
-                        {isBuy ? (
-                           <> bought <b>{item.value} tix</b> in </>
-                        ) : (
-                           <> created </>
-                        )}
+                        
+                        {/* Text Logic */}
+                        {isBuy && <> bought <b>{item.value} tix</b> in </>}
+                        {item.type === "CREATE" && <> created </>}
+                        {isWin && <> <b style={{color:'#166534'}}>won</b> the pot on </>}
+
                         <a href={`/?raffle=${item.raffleId}`} className="ab-link">
                            {item.raffleName}
                         </a>
                      </div>
                      <div className="ab-meta">
                         <span className="ab-time">{timeAgo(item.timestamp)}</span>
-                        {!isBuy && <span className="ab-pot-tag">Pot: {formatUnits(item.value, 6)}</span>}
+                        
+                        {/* Show Prize for Creates and Wins */}
+                        {!isBuy && (
+                           <span className={`ab-pot-tag ${isWin ? 'win' : ''}`}>
+                              {isWin ? 'Won: ' : 'Pot: '} 
+                              {formatUnits(item.value, 6)}
+                           </span>
+                        )}
                      </div>
                   </div>
                </div>
