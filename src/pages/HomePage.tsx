@@ -44,19 +44,21 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   return (
     <>
-      <ActivityTicker />
+      {/* ✅ WRAPPER: Pushes ticker down so it doesn't touch the TopNav */}
+      <div className="hp-ticker-section">
+        <ActivityTicker />
+      </div>
 
       <div className="hp-container">
         
         {/* 1. HERO SPOTLIGHT */}
         <div className="hp-hero">
-          {/* ✅ REWORDED HERO */}
           <h1 className="hp-hero-title">Ppopgi (뽑기)</h1>
           <div className="hp-hero-sub">
             Where fun meets fairness. Experience the thrill of fully transparent, on-chain raffles. No tricks, just luck.
           </div>
           
-          {/* ✅ STATS BAR */}
+          {/* STATS BAR */}
           <div className="hp-stats-bar">
              <div className="hp-stat-item">
                 <div className="hp-stat-val">{isLoading ? "..." : stats.totalRaffles}</div>
@@ -64,13 +66,11 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
              </div>
              <div className="hp-stat-sep" />
              <div className="hp-stat-item">
-                {/* Shows Settled Volume ($) */}
                 <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.settledVolume)}</div>
                 <div className="hp-stat-lbl">Prizes Settled</div>
              </div>
              <div className="hp-stat-sep" />
              <div className="hp-stat-item highlight">
-                {/* Shows Active Volume ($) */}
                 <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.activeVolume)}</div>
                 <div className="hp-stat-lbl">Total Active Volume</div>
              </div>
@@ -80,7 +80,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
         {/* 2. THE PODIUM */}
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: 'center', marginBottom: 20 }}>
-             {/* ✅ RENAMED & VISIBLE */}
              <div className="hp-section-title">🏆 Top Active Prizepools</div>
           </div>
 
@@ -117,7 +116,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
         {/* 3. ENDING SOON */}
         <div>
           <div className="hp-section-header">
-             {/* ✅ VISIBLE TITLE */}
              <div className="hp-section-title">⏳ Ending Soon</div>
              <div className="hp-section-line" />
           </div>
