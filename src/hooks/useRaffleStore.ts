@@ -11,11 +11,11 @@ import { fetchRafflesFromSubgraph, type RaffleListItem } from "../indexer/subgra
  * - Stops polling when unused
  *
  * Exports:
- *  1) store functions (startRaffleStore/refresh/getSnapshot/subscribe)
+ *  1) Store functions: startRaffleStore/refresh/getSnapshot/subscribe
  *  2) React hook: useRaffleStore(consumerKey, pollMs)
  */
 
-type StoreState = {
+export type StoreState = {
   items: RaffleListItem[] | null;
   isLoading: boolean;
   note: string | null;
@@ -25,7 +25,9 @@ type StoreState = {
 
 type Listener = () => void;
 
-const state: StoreState = {
+// IMPORTANT: snapshot must be referentially stable.
+// We keep `state` as an immutable object reference and replace it on changes.
+let state: StoreState = {
   items: null,
   isLoading: false,
   note: null,
@@ -42,21 +44,32 @@ let timer: number | null = null;
 let inFlight: Promise<void> | null = null;
 let aborter: AbortController | null = null;
 
+// Backoff control
 let backoffUntilMs = 0;
 let backoffStep = 0;
 
 // Each consumer requests a poll interval; we use the minimum
 const requestedPolls = new Map<string, number>();
 
-// Singleton lifecycle listener cleanup (avoid attaching multiple times)
-let detachLifecycleListeners: (() => void) | null = null;
-
 function emit() {
   listeners.forEach((fn) => fn());
 }
 
+function shallowEqual(a: any, b: any) {
+  if (Object.is(a, b)) return true;
+  if (!a || !b) return false;
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) if (!Object.is(a[k], b[k])) return false;
+  return true;
+}
+
 function setState(patch: Partial<StoreState>) {
-  Object.assign(state, patch);
+  const next: StoreState = { ...state, ...patch };
+  // Avoid emitting if nothing actually changed (prevents extra renders)
+  if (shallowEqual(state, next)) return;
+  state = next; // ✅ replace reference
   emit();
 }
 
@@ -205,8 +218,14 @@ export async function refresh(isBackground = false, force = false) {
   await doFetch(isBackground);
 }
 
+// ✅ CRITICAL: return the SAME reference until state changes
 export function getSnapshot(): StoreState {
-  return { ...state };
+  return state;
+}
+
+// for SSR / fallback (same shape, stable)
+function getServerSnapshot(): StoreState {
+  return state;
 }
 
 export function subscribe(listener: Listener) {
@@ -214,35 +233,27 @@ export function subscribe(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
-function attachLifecycleOnce() {
-  if (detachLifecycleListeners) return;
-
-  const onFocus = () => void refresh(true, true);
-  const onVis = () => {
-    if (!isHidden()) void refresh(true, true);
-  };
-
-  window.addEventListener("focus", onFocus);
-
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", onVis);
-  }
-
-  detachLifecycleListeners = () => {
-    window.removeEventListener("focus", onFocus);
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", onVis);
-    }
-  };
-}
-
 export function startRaffleStore(consumerKey: string, pollMs: number) {
   subscribers += 1;
   requestedPolls.set(consumerKey, pollMs);
 
+  // Attach lifecycle listeners once
   if (subscribers === 1) {
-    attachLifecycleOnce();
-    void refresh(false, true); // initial fetch
+    const onFocus = () => refresh(true, true);
+    const onVis = () => {
+      if (!isHidden()) refresh(true, true);
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+
+    (startRaffleStore as any)._cleanup = () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+
+    // initial fetch
+    void refresh(false, true);
   } else {
     // if we already have data, don’t force; otherwise, fetch once
     if (!state.items) void refresh(false, true);
@@ -258,24 +269,21 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
       aborter?.abort();
       aborter = null;
       inFlight = null;
-
-      detachLifecycleListeners?.();
-      detachLifecycleListeners = null;
+      (startRaffleStore as any)._cleanup?.();
     } else {
-      // ✅ important: recompute pollMs based on remaining consumers
       scheduleNext();
     }
   };
 }
 
 /**
- * ✅ React Hook wrapper around the store.
+ * React Hook wrapper around the store.
  * - starts store on mount
  * - stops store on unmount
  * - returns current snapshot
  */
 export function useRaffleStore(consumerKey: string, pollMs: number) {
-  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
     const stop = startRaffleStore(consumerKey, pollMs);
