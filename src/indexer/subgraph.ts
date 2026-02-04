@@ -62,9 +62,9 @@ export type RaffleParticipantItem = {
   lastTotalSold: string | null;
 };
 
-// ✅ UPDATED: Global activity stream (Sales + Creations + Winners)
+// ✅ UPDATED: Global activity stream (Sales + Creations + Winners + Cancels)
 export type GlobalActivityItem = {
-  type: "BUY" | "CREATE" | "WIN";
+  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
   raffleId: string;
   raffleName: string;
   subject: string; // Buyer, Creator, or Winner
@@ -288,8 +288,7 @@ export async function fetchRaffleWithParticipants(
 }
 
 /**
- * ✅ FETCH GLOBAL ACTIVITY (Sales + Creations + Winners)
- * Merges three queries to create a unified feed for the Activity Board.
+ * ✅ FETCH GLOBAL ACTIVITY (Sales + Creations + Winners + Cancels)
  */
 export async function fetchGlobalActivity(
   opts: { first?: number; signal?: AbortSignal } = {}
@@ -339,13 +338,24 @@ export async function fetchGlobalActivity(
         winner
         winningPot
         completedAt
-        # Using ID as txHash fallback if unavailable
-        id 
+      }
+
+      # 4. Recent Cancels
+      recentCancels: raffles(
+        first: $first
+        orderBy: canceledAt
+        orderDirection: desc
+        where: { status: CANCELED }
+      ) {
+        id
+        name
+        creator
+        canceledAt
       }
     }
   `;
 
-  type Resp = { raffleEvents: any[]; raffles: any[]; recentWinners: any[] };
+  type Resp = { raffleEvents: any[]; raffles: any[]; recentWinners: any[]; recentCancels: any[] };
   const data = await gqlFetch<Resp>(url, query, { first }, opts.signal);
 
   // 1. Process Sales
@@ -354,7 +364,7 @@ export async function fetchGlobalActivity(
     raffleId: normHex(e.raffle?.id) as string,
     raffleName: String(e.raffle?.name ?? "Unknown Raffle"),
     subject: normHex(e.actor) as string,
-    value: String(e.uintValue), // Tickets sold
+    value: String(e.uintValue),
     timestamp: String(e.blockTimestamp),
     txHash: normHex(e.txHash) as string,
   }));
@@ -365,7 +375,7 @@ export async function fetchGlobalActivity(
     raffleId: normHex(r.id) as string,
     raffleName: String(r.name || "Untitled Raffle"),
     subject: normHex(r.creator) as string,
-    value: String(r.winningPot), // Prize Pot
+    value: String(r.winningPot),
     timestamp: String(r.createdAtTimestamp),
     txHash: normHex(r.creationTx) as string,
   }));
@@ -376,13 +386,24 @@ export async function fetchGlobalActivity(
     raffleId: normHex(r.id) as string,
     raffleName: String(r.name || "Untitled Raffle"),
     subject: normHex(r.winner) as string,
-    value: String(r.winningPot), // Won amount
+    value: String(r.winningPot),
     timestamp: String(r.completedAt),
     txHash: normHex(r.id) as string,
   }));
 
+  // 4. Process Cancels
+  const cancels = (data.recentCancels ?? []).map((r) => ({
+    type: "CANCEL" as const,
+    raffleId: normHex(r.id) as string,
+    raffleName: String(r.name || "Untitled Raffle"),
+    subject: normHex(r.creator) as string,
+    value: "0",
+    timestamp: String(r.canceledAt),
+    txHash: normHex(r.id) as string,
+  }));
+
   // Merge & Sort Chronologically (Newest first)
-  const combined = [...sales, ...creations, ...winners].sort((a, b) => 
+  const combined = [...sales, ...creations, ...winners, ...cancels].sort((a, b) => 
     Number(b.timestamp) - Number(a.timestamp)
   );
 
