@@ -1,8 +1,8 @@
 // src/layouts/MainLayout.tsx
-import React, { ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo } from "react"; // ✅ Fixed imports
 import { TopNav } from "../components/TopNav";
-import { Toast } from "../components/Toast"; 
-import { Footer } from "../components/Footer"; // ✅ Import Footer
+// import { Toast } from "../components/Toast"; // ✅ Commented out Toast (requires props)
+import { Footer } from "../components/Footer";
 import "./MainLayout.css";
 
 // Import your backgrounds
@@ -14,7 +14,6 @@ const BACKGROUNDS = [bg1, bg2, bg3];
 
 type Props = {
   children: ReactNode;
-  // Navigation props passed down from App.tsx
   page: "home" | "explore" | "dashboard";
   onNavigate: (page: "home" | "explore" | "dashboard") => void;
   account: string | null;
@@ -48,8 +47,7 @@ export function MainLayout({
       <div className="layout-overlay" />
 
       {/* 2. Global Gates & Modals */}
-      {/* Note: DisclaimerGate is now in App.tsx to cover the whole screen */}
-      <Toast /> 
+      {/* <Toast /> */} {/* ✅ Commented out until it has proper props */}
 
       {/* 3. Navigation */}
       <TopNav 
