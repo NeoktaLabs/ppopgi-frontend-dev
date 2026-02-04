@@ -4,7 +4,7 @@ import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
-import { ActivityBoard } from "../components/ActivityBoard"; // ✅ Swapped Component
+import { ActivityBoard } from "../components/ActivityBoard"; 
 import "./HomePage.css";
 
 type Props = {
@@ -44,7 +44,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   return (
     <>
-      {/* ✅ NEW BOARD SECTION (Replaces Ticker) */}
+      {/* BOARD SECTION */}
       <div className="hp-board-section">
         <ActivityBoard />
       </div>
@@ -79,7 +79,8 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
         {/* 2. THE PODIUM */}
         <div className="hp-podium-section">
-          <div className="hp-section-header" style={{ justifyContent: 'center', marginBottom: 20 }}>
+          {/* ✅ UPDATED: Increased margin bottom to 40px */}
+          <div className="hp-section-header" style={{ justifyContent: 'center', marginBottom: 40 }}>
              <div className="hp-section-title">🏆 Top Active Prizepools</div>
           </div>
 
@@ -100,7 +101,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
             {!isLoading && podium.gold && (
                <div className="pp-gold-wrapper">
-                 <div className="hp-crown">👑</div>
                  <RaffleCard raffle={podium.gold} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="gold" nowMs={nowMs} />
                </div>
             )}
