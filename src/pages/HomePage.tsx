@@ -13,19 +13,19 @@ type Props = {
   onOpenSafety: (id: string) => void;
 };
 
-// Formatting Helper
-const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+// Formatting Helper (Compact USD)
 const fmtUsd = (val: bigint) => {
   try {
     const s = formatUnits(val, 6);
     const n = parseFloat(s);
-    // Compact format: $1.2K, $500K
     return n.toLocaleString("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
   } catch { return "$0"; }
 };
 
+const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
 export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
-  const { items, bigPrizes, endingSoon, stats, isLoading } = useHomeRaffles();
+  const { bigPrizes, endingSoon, stats, isLoading } = useHomeRaffles();
 
   // Podium Logic
   const podium = useMemo(() => {
@@ -50,12 +50,13 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
         
         {/* 1. HERO SPOTLIGHT */}
         <div className="hp-hero">
-          <h1 className="hp-hero-title">Fairness You Can Verify.</h1>
+          {/* ✅ REWORDED HERO */}
+          <h1 className="hp-hero-title">Ppopgi (뽑기)</h1>
           <div className="hp-hero-sub">
-            The fully on-chain raffle protocol. Provably fair, non-custodial, and transparent.
+            Where fun meets fairness. Experience the thrill of fully transparent, on-chain raffles. No tricks, just luck.
           </div>
           
-          {/* ✅ NEW: PLATFORM STATS BAR */}
+          {/* ✅ STATS BAR */}
           <div className="hp-stats-bar">
              <div className="hp-stat-item">
                 <div className="hp-stat-val">{isLoading ? "..." : stats.totalRaffles}</div>
@@ -63,13 +64,15 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
              </div>
              <div className="hp-stat-sep" />
              <div className="hp-stat-item">
-                <div className="hp-stat-val">{isLoading ? "..." : stats.settled}</div>
+                {/* Shows Settled Volume ($) */}
+                <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.settledVolume)}</div>
                 <div className="hp-stat-lbl">Prizes Settled</div>
              </div>
              <div className="hp-stat-sep" />
              <div className="hp-stat-item highlight">
-                <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.volume)}</div>
-                <div className="hp-stat-lbl">Total Volume</div>
+                {/* Shows Active Volume ($) */}
+                <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.activeVolume)}</div>
+                <div className="hp-stat-lbl">Total Active Volume</div>
              </div>
           </div>
         </div>
@@ -77,7 +80,8 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
         {/* 2. THE PODIUM */}
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: 'center', marginBottom: 20 }}>
-             <div className="hp-section-title">🏆 Top Prizepools</div>
+             {/* ✅ RENAMED & VISIBLE */}
+             <div className="hp-section-title">🏆 Top Active Prizepools</div>
           </div>
 
           <div className="hp-podium">
@@ -113,6 +117,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
         {/* 3. ENDING SOON */}
         <div>
           <div className="hp-section-header">
+             {/* ✅ VISIBLE TITLE */}
              <div className="hp-section-title">⏳ Ending Soon</div>
              <div className="hp-section-line" />
           </div>
