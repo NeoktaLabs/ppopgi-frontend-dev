@@ -1,5 +1,5 @@
 // src/components/RaffleDetailsModal.tsx
-import { useState, useEffect, useMemo } from "react"; // ✅ Removed 'React'
+import { useState, useEffect, useMemo } from "react"; 
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
@@ -150,8 +150,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle]);
 
-  // ✅ FIX: Cast to 'any' to avoid TS errors for properties like registeredAt/completedAt
-  // that might be missing on Partial<RaffleListItem>
   const displayData = (state.data || initialRaffle || metadata) as any;
 
   const { participants, isLoading: loadingPart } = useRaffleParticipants(
@@ -294,13 +292,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return steps;
   }, [displayData, events]);
 
-  // Stats
+  // ✅ UPDATED STATS: Honest ROI Calculation
   const stats = useMemo(() => {
     if (!displayData) return null;
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const price = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
     const sold = Number(displayData.sold || "0");
-    const roi = price > 0 ? (pot / price).toFixed(1) : "0";
+    
+    // Net Payout is 90% of pot
+    const netPot = pot * 0.9;
+    const roi = price > 0 ? (netPot / price).toFixed(1) : "0";
+    
     const odds = sold > 0 ? `1 in ${sold + 1}` : "100%";
     return { roi, odds, pot, price };
   }, [displayData, math]);
@@ -327,8 +329,11 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
         {/* HERO */}
         <div className="rdm-hero">
-          <div className="rdm-hero-lbl">Current Prize Pot</div>
+          <div className="rdm-hero-lbl">Total Prize Pool</div>
           <div className="rdm-hero-val">{math.fmtUsdc(displayData?.winningPot || "0")}</div>
+          <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, marginTop: -4, marginBottom: 12 }}>
+            *Winner receives 90% (10% protocol fee)
+          </div>
           <div className="rdm-host">
             <span>Hosted by</span>
             <ExplorerLink
@@ -342,7 +347,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         {stats && (
           <div className="rdm-stats-grid">
             <div className="rdm-stat-box highlight">
-              <div className="rdm-sb-lbl">Payout</div>
+              <div className="rdm-sb-lbl">Net Payout</div>
               <div className="rdm-sb-val rdm-roi-badge">{stats.roi}x</div>
             </div>
             <div className="rdm-stat-box">
