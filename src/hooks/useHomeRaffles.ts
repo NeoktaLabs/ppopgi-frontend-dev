@@ -1,8 +1,14 @@
 // src/hooks/useHomeRaffles.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
-import { fetchRafflesFromSubgraph } from "../indexer/subgraph";
 import { fetchRafflesOnChainFallback } from "../onchain/fallbackRaffles";
+
+import {
+  getSnapshot,
+  subscribe,
+  startRaffleStore,
+  refresh as refreshRaffleStore,
+} from "./useRaffleStore";
 
 type Mode = "indexer" | "live";
 
@@ -11,140 +17,55 @@ function numOr0(v?: string | null) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function isRateLimitError(e: any) {
-  const msg = String(e?.message ?? e ?? "").toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate");
+function isRateLimitNote(note: string) {
+  const s = (note || "").toLowerCase();
+  return s.includes("too many requests") || s.includes("rate") || s.includes("429");
+}
+
+function shouldFallback(note: string | null) {
+  if (!note) return false;
+  const s = note.toLowerCase();
+
+  // We only want to fallback for genuine “indexer is down / unreachable” scenarios.
+  // For rate-limits, better to wait/backoff than hammer on-chain + indexer.
+  if (isRateLimitNote(note)) return false;
+
+  return (
+    s.includes("failed") ||
+    s.includes("unavailable") ||
+    s.includes("could not") ||
+    s.includes("error") ||
+    s.includes("timeout")
+  );
 }
 
 export function useHomeRaffles() {
-  const [items, setItems] = useState<RaffleListItem[] | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Store snapshot (indexer)
+  const [storeSnap, setStoreSnap] = useState(() => getSnapshot());
+
+  // Local override (live fallback)
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
+  const [liveItems, setLiveItems] = useState<RaffleListItem[] | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
 
-  // --- polling / throttling ---
-  const timerRef = useRef<number | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const inFlightRef = useRef(false);
-  const backoffStepRef = useRef(0);
+  // Prevent hammering live fallback
+  const lastLiveAtRef = useRef<number>(0);
+  const LIVE_CACHE_MS = 20_000;
 
-  // light cache to avoid hammering indexer when navigating back/forth
-  const cacheRef = useRef<{ at: number; data: RaffleListItem[]; mode: Mode } | null>(null);
-  const CACHE_MS = 15_000;
-
-  const clearTimer = () => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  const scheduleNext = useCallback((ms: number) => {
-    clearTimer();
-    timerRef.current = window.setTimeout(() => {
-      fetchData(true);
-    }, ms);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchData = useCallback(
-    async (isBackground = false) => {
-      // don’t background-poll when tab hidden
-      if (isBackground && typeof document !== "undefined" && document.hidden) {
-        scheduleNext(60_000);
-        return;
-      }
-      if (inFlightRef.current) return;
-
-      const now = Date.now();
-      if (cacheRef.current && now - cacheRef.current.at < CACHE_MS) {
-        if (!isBackground) setIsLoading(false);
-        setItems(cacheRef.current.data);
-        setMode(cacheRef.current.mode);
-        setNote(null);
-        scheduleNext(isBackground ? 30_000 : 12_000);
-        return;
-      }
-
-      inFlightRef.current = true;
-      if (!isBackground) setIsLoading(true);
-
-      // abort any previous request
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      try {
-        // keep your fast timeout on first load
-        const t = window.setTimeout(() => controller.abort(), 4500);
-
-        // IMPORTANT: keep "first" reasonable; home doesn’t need 1000
-        const data = await fetchRafflesFromSubgraph({
-          first: 200,
-          signal: controller.signal,
-        });
-
-        window.clearTimeout(t);
-
-        setMode("indexer");
-        setNote(null);
-        setItems(data);
-
-        cacheRef.current = { at: Date.now(), data, mode: "indexer" };
-        backoffStepRef.current = 0;
-
-        scheduleNext(isBackground ? 30_000 : 12_000);
-      } catch (err) {
-        // rate-limited → backoff (avoid “too many requests” spiral)
-        if (isRateLimitError(err)) {
-          backoffStepRef.current = Math.min(backoffStepRef.current + 1, 4);
-          const delays = [15_000, 30_000, 60_000, 120_000, 180_000];
-          scheduleNext(delays[backoffStepRef.current]);
-          if (!isBackground) setNote("Too many requests. Retrying shortly…");
-          console.error("Home indexer rate-limited", err);
-          return;
-        }
-
-        // only fallback on foreground (your original behavior)
-        if (!isBackground) {
-          try {
-            setMode("live");
-            setNote("Indexer unavailable. Showing live blockchain data.");
-            const data = await fetchRafflesOnChainFallback(50);
-            setItems(data);
-
-            cacheRef.current = { at: Date.now(), data, mode: "live" };
-            scheduleNext(20_000); // a bit slower in live mode
-          } catch (fallbackErr) {
-            console.error("Fallback failed", fallbackErr);
-            setNote("Could not load raffles. Please refresh.");
-            scheduleNext(30_000);
-          }
-        } else {
-          // background failure: just slow down
-          scheduleNext(45_000);
-        }
-      } finally {
-        inFlightRef.current = false;
-        if (!isBackground) setIsLoading(false);
-      }
-    },
-    [scheduleNext]
-  );
-
+  // Start store + subscribe
   useEffect(() => {
-    fetchData(false);
+    // Home needs fresh-ish but not crazy; store will pick the minimum interval across consumers.
+    const stop = startRaffleStore("home", 20_000);
+    const unsub = subscribe(() => setStoreSnap(getSnapshot()));
+    setStoreSnap(getSnapshot());
 
     const onFocus = () => {
-      cacheRef.current = null;
-      backoffStepRef.current = 0;
-      fetchData(false);
+      void refreshRaffleStore(true, true);
     };
-
     const onVis = () => {
-      if (!document.hidden) {
-        cacheRef.current = null;
-        backoffStepRef.current = 0;
-        fetchData(false);
+      if (document.visibilityState === "visible") {
+        void refreshRaffleStore(true, true);
       }
     };
 
@@ -152,13 +73,70 @@ export function useHomeRaffles() {
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      clearTimer();
-      abortRef.current?.abort();
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
+      unsub();
+      stop();
     };
-  }, [fetchData]);
+  }, []);
 
+  // Decide what to show (indexer vs live)
+  const indexerItems = storeSnap.items ?? null;
+  const isIndexerLoading = !!storeSnap.isLoading;
+  const indexerNote = storeSnap.note ?? null;
+
+  // If we have indexer data, always prefer it and exit live mode
+  useEffect(() => {
+    if (indexerItems && indexerItems.length > 0) {
+      setMode("indexer");
+      setNote(null);
+      setLiveItems(null);
+      setLiveLoading(false);
+    }
+  }, [indexerItems]);
+
+  // Fallback trigger (only when indexer has no data AND looks down, and only occasionally)
+  useEffect(() => {
+    const canTry =
+      !isIndexerLoading &&
+      (!indexerItems || indexerItems.length === 0) &&
+      shouldFallback(indexerNote);
+
+    if (!canTry) {
+      // If it’s rate-limited, show the store note but don’t flip to live
+      setNote(indexerNote);
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastLiveAtRef.current < LIVE_CACHE_MS) {
+      // already fetched live recently
+      setMode("live");
+      setNote("Indexer unavailable. Showing live blockchain data.");
+      return;
+    }
+
+    lastLiveAtRef.current = now;
+    setLiveLoading(true);
+    setMode("live");
+    setNote("Indexer unavailable. Showing live blockchain data.");
+
+    fetchRafflesOnChainFallback(50)
+      .then((data) => setLiveItems(data))
+      .catch((e) => {
+        console.error("Home fallback failed", e);
+        setNote("Could not load raffles. Please refresh.");
+      })
+      .finally(() => setLiveLoading(false));
+  }, [indexerItems, isIndexerLoading, indexerNote]);
+
+  // Final items/loading state exposed to UI
+  const items: RaffleListItem[] | null =
+    mode === "live" ? liveItems : indexerItems;
+
+  const isLoading = mode === "live" ? liveLoading : isIndexerLoading;
+
+  // ----------------- Derived lists -----------------
   const all = useMemo(() => items ?? [], [items]);
 
   const active = useMemo(() => {
@@ -189,9 +167,9 @@ export function useHomeRaffles() {
     return [...settled]
       .sort((a, b) => {
         const aKey =
-          numOr0(a.completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
+          numOr0((a as any).completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
         const bKey =
-          numOr0(b.completedAt) || numOr0(b.finalizedAt) || numOr0(b.lastUpdatedTimestamp);
+          numOr0((b as any).completedAt) || numOr0(b.finalizedAt) || numOr0(b.lastUpdatedTimestamp);
         return bKey - aKey;
       })
       .slice(0, 5);
@@ -210,11 +188,16 @@ export function useHomeRaffles() {
     return { totalRaffles, settledVolume, activeVolume };
   }, [all, active]);
 
-  const refetch = () => {
-    cacheRef.current = null;
-    backoffStepRef.current = 0;
-    fetchData(false);
-  };
+  // Manual refetch:
+  // - Always ask store to refresh (deduped)
+  // - Also clear live so we can snap back to indexer if it recovers
+  const refetch = useCallback(() => {
+    setLiveItems(null);
+    setLiveLoading(false);
+    setMode("indexer");
+    setNote(null);
+    void refreshRaffleStore(false, true);
+  }, []);
 
   return {
     items,
