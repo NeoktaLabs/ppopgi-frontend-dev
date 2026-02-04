@@ -1,5 +1,5 @@
 // src/components/RaffleDetailsModal.tsx
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react"; // ✅ Removed 'React'
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
@@ -46,7 +46,6 @@ const formatDate = (ts: any) => {
   });
 };
 
-// --- Subgraph events (used to fix the "Blockchain Journey") ---
 type RaffleEventRow = {
   type: string;
   blockTimestamp: string;
@@ -68,10 +67,6 @@ function mustEnv(name: string): string {
 
 async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
-
-  // NOTE: adjust "where" if your schema uses "raffle: Bytes" vs nested object.
-  // In your codebase you already query raffleEvents globally, and the mapping sets `e.raffle = raffleId`,
-  // so this filter should work on most schemas:
   const query = `
     query RaffleJourney($id: Bytes!, $first: Int!) {
       raffleEvents(
@@ -94,15 +89,19 @@ async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
     }
   `;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, variables: { id: raffleId.toLowerCase(), first: 200 } }),
-  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, variables: { id: raffleId.toLowerCase(), first: 200 } }),
+    });
 
-  const json = await res.json();
-  if (!res.ok || json?.errors?.length) return [];
-  return (json.data?.raffleEvents ?? []) as RaffleEventRow[];
+    const json = await res.json();
+    if (!res.ok || json?.errors?.length) return [];
+    return (json.data?.raffleEvents ?? []) as RaffleEventRow[];
+  } catch {
+    return [];
+  }
 }
 
 type Props = {
@@ -129,7 +128,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       return;
     }
 
-    // Prefer initialRaffle if it has meaningful fields
     if (initialRaffle?.createdAtTimestamp) setMetadata(initialRaffle);
 
     let active = true;
@@ -152,19 +150,19 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle]);
 
-  const displayData = state.data || initialRaffle || metadata;
+  // ✅ FIX: Cast to 'any' to avoid TS errors for properties like registeredAt/completedAt
+  // that might be missing on Partial<RaffleListItem>
+  const displayData = (state.data || initialRaffle || metadata) as any;
 
   const { participants, isLoading: loadingPart } = useRaffleParticipants(
     raffleId,
     Number(displayData?.sold || 0)
   );
 
-  // --- BUILD TIMELINE (FIXED using RaffleEvent) ---
   const timeline = useMemo(() => {
     if (!displayData) return [];
 
     const steps: any[] = [];
-
     const findFirst = (t: string) => (events ?? []).find((e) => e.type === t) || null;
 
     const deployed = findFirst("LOTTERY_DEPLOYED");
@@ -174,15 +172,15 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const winner = findFirst("WINNER_PICKED");
     const canceled = findFirst("LOTTERY_CANCELED");
 
-    // 1) Initialized (prefer deploy event tx if present)
+    // 1) Initialized
     steps.push({
       label: "Initialized",
       date: displayData.createdAtTimestamp || deployed?.blockTimestamp || null,
-      tx: (displayData as any).creationTx || deployed?.txHash || null,
+      tx: displayData.creationTx || deployed?.txHash || null,
       status: "done",
     });
 
-    // 2) Registered (show actual tx)
+    // 2) Registered
     if (registered) {
       steps.push({
         label: "Registered",
@@ -191,7 +189,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         status: "done",
       });
     } else if (displayData.registeredAt) {
-      // fallback if events missing
       steps.push({
         label: "Registered",
         date: displayData.registeredAt,
@@ -209,7 +206,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     const status = displayData.status;
 
-    // 3) Sales Open (best signal = FUNDING_CONFIRMED)
+    // 3) Sales Open
     if (funding) {
       steps.push({
         label: "Ticket Sales Open",
@@ -230,7 +227,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       });
     }
 
-    // 4) Randomness / Draw
+    // 4) Randomness
     if (finalized) {
       steps.push({
         label: "Randomness Requested",
@@ -254,7 +251,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       });
     }
 
-    // 5) Settlement (winner or cancel)
+    // 5) Settlement
     if (winner) {
       steps.push({
         label: "Winner Selected",
@@ -271,7 +268,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         status: "done",
       });
     } else if (status === "COMPLETED") {
-      // fallback if events missing
       steps.push({
         label: "Winner Selected",
         date: displayData.completedAt || null,
@@ -336,8 +332,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div className="rdm-host">
             <span>Hosted by</span>
             <ExplorerLink
-              addr={String((displayData as any)?.creator || "")}
-              label={math.short(String((displayData as any)?.creator || ""))}
+              addr={String(displayData?.creator || "")}
+              label={math.short(String(displayData?.creator || ""))}
             />
           </div>
         </div>
