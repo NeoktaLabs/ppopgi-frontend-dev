@@ -1,5 +1,5 @@
 // src/hooks/useHomeRaffles.ts
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { fetchRafflesFromSubgraph } from "../indexer/subgraph";
 import { fetchRafflesOnChainFallback } from "../onchain/fallbackRaffles";
@@ -11,46 +11,152 @@ function numOr0(v?: string | null) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function isRateLimitError(e: any) {
+  const msg = String(e?.message ?? e ?? "").toLowerCase();
+  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate");
+}
+
 export function useHomeRaffles() {
   const [items, setItems] = useState<RaffleListItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (isBackground = false) => {
-    if (!isBackground) setIsLoading(true);
-    
-    const controller = new AbortController();
+  // --- polling / throttling ---
+  const timerRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const inFlightRef = useRef(false);
+  const backoffStepRef = useRef(0);
 
-    try {
-      const t = window.setTimeout(() => controller.abort(), 4500);
-      const data = await fetchRafflesFromSubgraph({ signal: controller.signal });
-      window.clearTimeout(t);
+  // light cache to avoid hammering indexer when navigating back/forth
+  const cacheRef = useRef<{ at: number; data: RaffleListItem[]; mode: Mode } | null>(null);
+  const CACHE_MS = 15_000;
 
-      setMode("indexer");
-      setNote(null);
-      setItems(data);
-    } catch (err) {
-      if (!isBackground) {
-        try {
-          setMode("live");
-          setNote("Indexer unavailable. Showing live blockchain data.");
-          const data = await fetchRafflesOnChainFallback(50);
-          setItems(data);
-        } catch (fallbackErr) {
-          console.error("Fallback failed", fallbackErr);
-          if (!isBackground) setNote("Could not load raffles. Please refresh.");
-        }
-      }
-    } finally {
-      if (!isBackground) setIsLoading(false);
+  const clearTimer = () => {
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
-  }, []);
+  };
+
+  const scheduleNext = useCallback((ms: number) => {
+    clearTimer();
+    timerRef.current = window.setTimeout(() => {
+      fetchData(true);
+    }, ms);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchData = useCallback(
+    async (isBackground = false) => {
+      // don’t background-poll when tab hidden
+      if (isBackground && typeof document !== "undefined" && document.hidden) {
+        scheduleNext(60_000);
+        return;
+      }
+      if (inFlightRef.current) return;
+
+      const now = Date.now();
+      if (cacheRef.current && now - cacheRef.current.at < CACHE_MS) {
+        if (!isBackground) setIsLoading(false);
+        setItems(cacheRef.current.data);
+        setMode(cacheRef.current.mode);
+        setNote(null);
+        scheduleNext(isBackground ? 30_000 : 12_000);
+        return;
+      }
+
+      inFlightRef.current = true;
+      if (!isBackground) setIsLoading(true);
+
+      // abort any previous request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        // keep your fast timeout on first load
+        const t = window.setTimeout(() => controller.abort(), 4500);
+
+        // IMPORTANT: keep "first" reasonable; home doesn’t need 1000
+        const data = await fetchRafflesFromSubgraph({
+          first: 200,
+          signal: controller.signal,
+        });
+
+        window.clearTimeout(t);
+
+        setMode("indexer");
+        setNote(null);
+        setItems(data);
+
+        cacheRef.current = { at: Date.now(), data, mode: "indexer" };
+        backoffStepRef.current = 0;
+
+        scheduleNext(isBackground ? 30_000 : 12_000);
+      } catch (err) {
+        // rate-limited → backoff (avoid “too many requests” spiral)
+        if (isRateLimitError(err)) {
+          backoffStepRef.current = Math.min(backoffStepRef.current + 1, 4);
+          const delays = [15_000, 30_000, 60_000, 120_000, 180_000];
+          scheduleNext(delays[backoffStepRef.current]);
+          if (!isBackground) setNote("Too many requests. Retrying shortly…");
+          console.error("Home indexer rate-limited", err);
+          return;
+        }
+
+        // only fallback on foreground (your original behavior)
+        if (!isBackground) {
+          try {
+            setMode("live");
+            setNote("Indexer unavailable. Showing live blockchain data.");
+            const data = await fetchRafflesOnChainFallback(50);
+            setItems(data);
+
+            cacheRef.current = { at: Date.now(), data, mode: "live" };
+            scheduleNext(20_000); // a bit slower in live mode
+          } catch (fallbackErr) {
+            console.error("Fallback failed", fallbackErr);
+            setNote("Could not load raffles. Please refresh.");
+            scheduleNext(30_000);
+          }
+        } else {
+          // background failure: just slow down
+          scheduleNext(45_000);
+        }
+      } finally {
+        inFlightRef.current = false;
+        if (!isBackground) setIsLoading(false);
+      }
+    },
+    [scheduleNext]
+  );
 
   useEffect(() => {
-    fetchData(false); 
-    const interval = setInterval(() => { fetchData(true); }, 10000);
-    return () => clearInterval(interval);
+    fetchData(false);
+
+    const onFocus = () => {
+      cacheRef.current = null;
+      backoffStepRef.current = 0;
+      fetchData(false);
+    };
+
+    const onVis = () => {
+      if (!document.hidden) {
+        cacheRef.current = null;
+        backoffStepRef.current = 0;
+        fetchData(false);
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      clearTimer();
+      abortRef.current?.abort();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [fetchData]);
 
   const all = useMemo(() => items ?? [], [items]);
@@ -82,37 +188,43 @@ export function useHomeRaffles() {
     const settled = all.filter((r) => r.status === "COMPLETED");
     return [...settled]
       .sort((a, b) => {
-        const aKey = numOr0(a.completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
-        const bKey = numOr0(b.completedAt) || numOr0(b.finalizedAt) || numOr0(b.lastUpdatedTimestamp);
+        const aKey =
+          numOr0(a.completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
+        const bKey =
+          numOr0(b.completedAt) || numOr0(b.finalizedAt) || numOr0(b.lastUpdatedTimestamp);
         return bKey - aKey;
       })
       .slice(0, 5);
   }, [all, mode]);
 
-  // ✅ NEW STATS LOGIC
   const stats = useMemo(() => {
     const totalRaffles = all.length;
-    
-    // 1. Settled Volume (Sum of pot for completed raffles)
+
     const settledVolume = all.reduce((acc, r) => {
-        if (r.status === "COMPLETED") {
-            return acc + BigInt(r.winningPot || "0");
-        }
-        return acc;
+      if (r.status === "COMPLETED") return acc + BigInt(r.winningPot || "0");
+      return acc;
     }, 0n);
 
-    // 2. Active Volume (TVL - Sum of pot for Open raffles)
-    const activeVolume = active.reduce((acc, r) => {
-        return acc + BigInt(r.winningPot || "0");
-    }, 0n);
+    const activeVolume = active.reduce((acc, r) => acc + BigInt(r.winningPot || "0"), 0n);
 
     return { totalRaffles, settledVolume, activeVolume };
   }, [all, active]);
 
-  return { 
-    items, bigPrizes, endingSoon, recentlyFinalized, 
-    stats, // Exported stats
-    mode, note, isLoading, 
-    refetch: () => fetchData(false) 
+  const refetch = () => {
+    cacheRef.current = null;
+    backoffStepRef.current = 0;
+    fetchData(false);
+  };
+
+  return {
+    items,
+    bigPrizes,
+    endingSoon,
+    recentlyFinalized,
+    stats,
+    mode,
+    note,
+    isLoading,
+    refetch,
   };
 }
