@@ -1,7 +1,8 @@
 // src/components/RaffleDetailsModal.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
-import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph"; // ✅ Import the new fetcher
+import { useRaffleParticipants } from "../hooks/useRaffleParticipants"; // ✅ Import Hook
+import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph"; 
 import "./RaffleDetailsModal.css";
 
 // Helper for clickable addresses
@@ -32,36 +33,39 @@ type Props = {
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
   
-  // ✅ NEW: Local state to hold the fetched metadata (dates)
+  // ✅ Tabs: "receipt" or "holders"
+  const [tab, setTab] = useState<"receipt" | "holders">("receipt");
+  
+  // ✅ Metadata (Self-healing date)
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
 
-  // ✅ NEW: Fetch timestamps from Subgraph on mount
   useEffect(() => {
     if (!raffleId || !open) {
-      setMetadata(null); // Reset on close
+      setMetadata(null);
+      setTab("receipt"); // Reset tab on close
       return;
     }
-    
-    // If we already have the date passed in, don't fetch
     if (initialRaffle?.createdAtTimestamp) {
       setMetadata(initialRaffle);
       return;
     }
-
     let active = true;
     fetchRaffleMetadata(raffleId).then((data) => {
       if (active && data) setMetadata(data);
     });
-
     return () => { active = false; };
   }, [raffleId, open, initialRaffle]);
 
-
-  // MERGE DATA:
-  // 1. Live Contract Data (state.data) -> High priority for status/pot
-  // 2. Metadata (Indexer) -> High priority for Dates
+  // Combine data sources
   const displayData = state.data || initialRaffle || metadata;
   
+  // ✅ Fetch Participants using the new hook
+  // We pass displayData.sold so we can calculate % ownership
+  const { participants, isLoading: loadingPart } = useRaffleParticipants(
+    raffleId, 
+    Number(displayData?.sold || 0)
+  );
+
   const createdTs = metadata?.createdAtTimestamp || initialRaffle?.createdAtTimestamp || state.data?.createdAtTimestamp;
   const deadlineTs = state.data?.deadline || metadata?.deadline || initialRaffle?.deadline;
 
@@ -157,31 +161,48 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
            )}
         </div>
 
-        {/* TECHNICAL RECEIPT */}
-        {displayData && (
+        {/* ✅ TABS */}
+        <div className="rdm-tab-group">
+           <button className={`rdm-tab-btn ${tab === 'receipt' ? 'active' : ''}`} onClick={() => setTab('receipt')}>Technical Receipt</button>
+           <button className={`rdm-tab-btn ${tab === 'holders' ? 'active' : ''}`} onClick={() => setTab('holders')}>Top Holders</button>
+        </div>
+
+        {/* TAB 1: RECEIPT */}
+        {tab === 'receipt' && displayData && (
            <div className="rdm-receipt">
               <div className="rdm-receipt-title">TECHNICAL SPECS</div>
-              
               <div className="rdm-info-row"><span>Status</span><span className="rdm-info-val">{state.displayStatus}</span></div>
-              
-              {/* ✅ USING THE FETCHED TIMESTAMP */}
               <div className="rdm-info-row"><span>Created</span><span className="rdm-info-val">{formatDate(createdTs)}</span></div>
               <div className="rdm-info-row"><span>Draw Deadline</span><span className="rdm-info-val">{formatDate(deadlineTs)}</span></div>
-              
               <div className="rdm-info-row"><span>Tickets Sold</span><span className="rdm-info-val">{displayData.sold} / {displayData.maxTickets === "0" ? "∞" : displayData.maxTickets}</span></div>
-              
-              <div className="rdm-info-row" style={{ marginTop: 12 }}>
-                 <span>Randomness</span>
-                 <span className="rdm-info-val">
-                    <ExplorerLink addr={displayData.entropyProvider}>{math.short(displayData.entropyProvider)}</ExplorerLink>
-                 </span>
+              <div className="rdm-info-row" style={{ marginTop: 12 }}><span>Randomness</span><span className="rdm-info-val"><ExplorerLink addr={displayData.entropyProvider}>{math.short(displayData.entropyProvider)}</ExplorerLink></span></div>
+              <div className="rdm-info-row"><span>Contract</span><span className="rdm-info-val"><ExplorerLink addr={raffleId || ""}>{math.short(raffleId || "")}</ExplorerLink></span></div>
+           </div>
+        )}
+
+        {/* TAB 2: HOLDERS */}
+        {tab === 'holders' && (
+           <div className="rdm-leaderboard-section">
+              <div className="rdm-lb-header">
+                 <span>Address</span>
+                 <span>Holdings</span>
               </div>
-              
-              <div className="rdm-info-row">
-                 <span>Contract</span>
-                 <span className="rdm-info-val">
-                    <ExplorerLink addr={raffleId || ""}>{math.short(raffleId || "")}</ExplorerLink>
-                 </span>
+              <div className="rdm-lb-list">
+                 {loadingPart && <div className="rdm-lb-empty">Loading holders...</div>}
+                 
+                 {!loadingPart && participants.length === 0 && <div className="rdm-lb-empty">No tickets sold yet.</div>}
+
+                 {!loadingPart && participants.map((p, i) => (
+                    <div key={i} className="rdm-lb-row">
+                       <span className="rdm-lb-addr">
+                          <ExplorerLink addr={p.buyer}>{p.buyer.slice(0,10)}...</ExplorerLink>
+                       </span>
+                       <div className="rdm-lb-stats">
+                          <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>
+                          <span className="rdm-lb-pct">({p.percentage}%)</span>
+                       </div>
+                    </div>
+                 ))}
               </div>
            </div>
         )}
