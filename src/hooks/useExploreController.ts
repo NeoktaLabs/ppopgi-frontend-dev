@@ -1,14 +1,9 @@
 // src/hooks/useExploreController.ts
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import type { RaffleListItem, RaffleStatus } from "../indexer/subgraph";
 
-import {
-  getSnapshot,
-  subscribe,
-  startRaffleStore,
-  refresh as refreshRaffleStore,
-} from "./useRaffleStore";
+import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 
@@ -23,8 +18,11 @@ export function useExploreController() {
   const activeAccount = useActiveAccount();
   const me = activeAccount?.address ? norm(activeAccount.address) : null;
 
-  // --- Shared store snapshot ---
-  const [storeSnap, setStoreSnap] = useState(() => getSnapshot());
+  // ✅ Shared store subscription (single global poller)
+  const store = useRaffleStore("explore", 20_000);
+  const items: RaffleListItem[] | null = useMemo(() => store.items ?? null, [store.items]);
+  const isLoading = !!store.isLoading;
+  const note = store.note ?? null;
 
   // Filters
   const [q, setQ] = useState("");
@@ -32,44 +30,6 @@ export function useExploreController() {
   const [sort, setSort] = useState<SortMode>("newest");
   const [openOnly, setOpenOnly] = useState(false);
   const [myRafflesOnly, setMyRafflesOnly] = useState(false);
-
-  // Start store + subscribe
-  useEffect(() => {
-    // Explore wants a fairly fresh list, but it should still be shared globally.
-    // If another page requests 15s and this requests 30s, the store should pick the minimum.
-    const stop = startRaffleStore("explore", 20_000);
-    const unsub = subscribe(() => setStoreSnap(getSnapshot()));
-    setStoreSnap(getSnapshot());
-
-    const onFocus = () => {
-      // When user comes back, ask store to refresh (store will dedupe)
-      void refreshRaffleStore(true, true);
-    };
-
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        void refreshRaffleStore(true, true);
-      }
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-      unsub();
-      stop();
-    };
-  }, []);
-
-  const items: RaffleListItem[] | null = useMemo(
-    () => storeSnap.items ?? null,
-    [storeSnap.items]
-  );
-
-  const isLoading = !!storeSnap.isLoading;
-  const note = storeSnap.note ?? null;
 
   // --- Filtering Logic (Memoized) ---
   const list = useMemo(() => {
@@ -114,7 +74,7 @@ export function useExploreController() {
   };
 
   const refresh = useCallback(() => {
-    // force the store to refetch
+    // ✅ force the store to refetch (store dedupes across the whole app)
     void refreshRaffleStore(false, true);
   }, []);
 
