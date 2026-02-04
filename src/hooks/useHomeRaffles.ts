@@ -17,15 +17,12 @@ export function useHomeRaffles() {
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
 
-  // Core Fetch Logic
   const fetchData = useCallback(async (isBackground = false) => {
-    // Only show spinner on first load
     if (!isBackground) setIsLoading(true);
     
     const controller = new AbortController();
 
     try {
-      // 1) Try Subgraph (Fast)
       const t = window.setTimeout(() => controller.abort(), 4500);
       const data = await fetchRafflesFromSubgraph({ signal: controller.signal });
       window.clearTimeout(t);
@@ -34,7 +31,6 @@ export function useHomeRaffles() {
       setNote(null);
       setItems(data);
     } catch (err) {
-      // 2) Fallback: On-Chain (Only on first load, not background)
       if (!isBackground) {
         try {
           setMode("live");
@@ -51,17 +47,11 @@ export function useHomeRaffles() {
     }
   }, []);
 
-  // Initial Load + Polling
   useEffect(() => {
-    fetchData(false); // First load
-    const interval = setInterval(() => {
-      fetchData(true); // Silent polling
-    }, 10000);
-
+    fetchData(false); 
+    const interval = setInterval(() => { fetchData(true); }, 10000);
     return () => clearInterval(interval);
   }, [fetchData]);
-
-  // --- Derived Data Filters ---
 
   const all = useMemo(() => items ?? [], [items]);
 
@@ -99,32 +89,30 @@ export function useHomeRaffles() {
       .slice(0, 5);
   }, [all, mode]);
 
-  // ✅ NEW: Platform Stats Calculation
+  // ✅ NEW STATS LOGIC
   const stats = useMemo(() => {
     const totalRaffles = all.length;
-    const settled = all.filter(r => r.status === "COMPLETED" || r.status === "CLAIMED").length;
-    const activeCount = active.length;
     
-    // Calculate Volume (Sum of winningPots for non-canceled raffles)
-    const volume = all.reduce((acc, r) => {
-        if (r.status !== "CANCELED") {
+    // 1. Settled Volume (Sum of pot for completed raffles)
+    const settledVolume = all.reduce((acc, r) => {
+        if (r.status === "COMPLETED" || r.status === "CLAIMED") {
             return acc + BigInt(r.winningPot || "0");
         }
         return acc;
     }, 0n);
 
-    return { totalRaffles, settled, activeCount, volume };
+    // 2. Active Volume (TVL - Sum of pot for Open raffles)
+    const activeVolume = active.reduce((acc, r) => {
+        return acc + BigInt(r.winningPot || "0");
+    }, 0n);
+
+    return { totalRaffles, settledVolume, activeVolume };
   }, [all, active]);
 
   return { 
-    items, 
-    bigPrizes, 
-    endingSoon, 
-    recentlyFinalized, 
-    stats, // ✅ Exported for HomePage
-    mode, 
-    note, 
-    isLoading, 
+    items, bigPrizes, endingSoon, recentlyFinalized, 
+    stats, // Exported stats
+    mode, note, isLoading, 
     refetch: () => fetchData(false) 
   };
 }
