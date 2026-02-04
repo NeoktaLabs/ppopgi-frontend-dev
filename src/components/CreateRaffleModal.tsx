@@ -16,7 +16,7 @@ type Props = {
 export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const { fireConfetti } = useConfetti();
 
-  // ✅ New State for the Success View
+  // State for Success View
   const [step, setStep] = useState<"form" | "success">("form");
   const [createdAddr, setCreatedAddr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -26,7 +26,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     fireConfetti();
     if (addr) {
       setCreatedAddr(addr);
-      setStep("success"); // Switch view instead of closing
+      setStep("success"); 
     }
     if (onCreated) onCreated(addr);
   };
@@ -36,7 +36,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
   // Generate Share Links
   const shareLink = createdAddr ? `${window.location.origin}/?raffle=${createdAddr}` : "";
-  const tweetText = `I just launched a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
+  const tweetText = `I just created a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(shareLink)}`;
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(tweetText)}`;
 
@@ -64,7 +64,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     lastUpdatedTimestamp: String(Math.floor(Date.now() / 1000)),
   }), [form.name, derived, validation.durationSecondsN]);
 
-  // Reset on close
   const handleClose = () => {
     setStep("form");
     setCreatedAddr(null);
@@ -81,7 +80,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>{step === "success" ? "Your raffle has been deployed to the blockchain." : "Launch your provably fair raffle in seconds."}</span>
+            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
           </div>
           <button className="crm-close-btn" onClick={handleClose}>✕</button>
         </div>
@@ -92,7 +91,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
             <div className="crm-success-icon">✓</div>
             <div className="crm-success-title">Raffle Created!</div>
             <div className="crm-success-sub">
-              Your contract is deployed and verified. Share the link below to start selling tickets.
+              Your contract is live. Share the link below to start selling tickets.
             </div>
 
             <div className="crm-share-box">
@@ -119,7 +118,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
             </button>
           </div>
         ) : (
-          /* --- VIEW 2: FORM (EXISTING) --- */
+          /* --- VIEW 2: FORM --- */
           <div className="crm-body">
             {/* LEFT: Configuration */}
             <div className="crm-form-col">
@@ -196,24 +195,28 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
               <div className="crm-actions">
                 <div className="crm-steps">
+                  
+                  {/* STEP 1: PREPARE WALLET (Approve) */}
                   <button 
                     className={`crm-step-btn ${status.approvedOnce ? "done" : "active"}`}
                     onClick={status.approve}
                     disabled={!validation.needsAllow || status.approvedOnce}
                   >
                     <span className="crm-step-icon">{status.approvedOnce ? "✓" : "1"}</span>
-                    <span>{status.approvedOnce ? "USDC Approved" : "Approve USDC"}</span>
+                    {/* ✅ FRIENDLY LABEL */}
+                    <span>{status.approvedOnce ? "Wallet Ready" : "Prepare Wallet"}</span>
                   </button>
 
                   <div className="crm-step-line" />
 
+                  {/* STEP 2: CREATE RAFFLE */}
                   <button 
                     className={`crm-step-btn ${status.approvedOnce ? "active primary" : ""}`}
                     onClick={status.create}
                     disabled={!validation.canSubmit || status.isPending}
                   >
                     <span className="crm-step-icon">{status.isPending ? "⏳" : "2"}</span>
-                    <span>{status.isPending ? "Creating..." : "Launch Raffle"}</span>
+                    <span>{status.isPending ? "Creating..." : "Create Raffle"}</span>
                   </button>
                 </div>
                 
