@@ -53,21 +53,29 @@ export function useDashboardController() {
       // 1. My Created
       const myCreated = allRaffles.filter(r => r.creator.toLowerCase() === myAddr);
 
-      // 2. My Joined
-      // NOTE: Ensure your Subgraph 'Raffle' entity has a 'participants' array of strings.
+      // 2. My Joined (Robust Check)
       const myJoined = allRaffles.filter(r => {
         // @ts-ignore
-        const parts = r.participants || []; 
-        return parts.some((p: string) => p.toLowerCase() === myAddr);
+        const parts = (r.participants || []).map((p: string) => p.toLowerCase());
+        return parts.includes(myAddr);
       }).map(r => {
+         // Mock entry stats
          return { ...r, userEntry: { count: 1, percentage: "0.0" } };
       });
 
-      // 3. Claimables
+      // 3. Claimables (Wins & Refunds)
+      // ✅ FIX: Combine Created + Joined to ensure we catch refunds even if I am the creator
+      const uniqueCandidates = new Map();
+      myCreated.forEach(r => uniqueCandidates.set(r.id, r));
+      myJoined.forEach(r => uniqueCandidates.set(r.id, r));
+
       const myClaimables = [];
 
-      for (const r of myJoined) {
-        // A. Winnings
+      for (const r of Array.from(uniqueCandidates.values()) as any[]) {
+        const amIParticipant = myJoined.some(j => j.id === r.id);
+        const amICreator = r.creator.toLowerCase() === myAddr;
+
+        // A. Winnings (Must be winner)
         if (r.status === "COMPLETED" && r.winner && r.winner.toLowerCase() === myAddr) {
            myClaimables.push({
              raffle: r,
@@ -78,14 +86,15 @@ export function useDashboardController() {
            });
         }
         
-        // B. Refunds (Canceled + Participated)
-        if (r.status === "CANCELED") {
+        // B. Refunds (Canceled + (Participant OR Creator))
+        // We include Creator here because they often buy tickets to test
+        if (r.status === "CANCELED" && (amIParticipant || amICreator)) {
            myClaimables.push({
              raffle: r,
              claimableUsdc: r.ticketPrice, // Approximation
              claimableNative: "0",
              type: "REFUND",
-             roles: { participated: true }
+             roles: { participated: amIParticipant }
            });
         }
       }
@@ -129,13 +138,14 @@ export function useDashboardController() {
         return true; 
       })
       .sort((a: any, b: any) => {
+        // Refunds first
         if (a.type === "REFUND" && b.type !== "REFUND") return -1;
         if (b.type === "REFUND" && a.type !== "REFUND") return 1;
         return BigInt(b.claimableUsdc || 0) > BigInt(a.claimableUsdc || 0) ? 1 : -1;
       });
   }, [claimables, hiddenClaimables]);
 
-  // --- Hatch Polling (FIXED) ---
+  // --- Hatch Polling ---
   useEffect(() => {
     if (!account || !createdSorted) return; 
     let alive = true;
@@ -149,7 +159,6 @@ export function useDashboardController() {
         } catch { return { id, val: "0", ok: false }; }
     })).then((results) => {
         if (!alive) return;
-        // ✅ FIX: Changed 'next' to 'n'
         setDrawingAtById(prev => { 
             const n = { ...prev }; 
             results.forEach(r => n[r.id] = r.val); 
