@@ -35,12 +35,12 @@
 .hp-hero-sub {
   font-size: 20px;
   font-weight: 600;
-  opacity: 0.8; /* Increased opacity for readability */
+  opacity: 0.8; 
   margin-top: 24px;
   max-width: 600px;
   margin-left: auto;
   margin-right: auto;
-  color: #4A0F2B; /* Darker color */
+  color: #4A0F2B; 
 }
 
 /* --- STATS BAR --- */
@@ -82,13 +82,8 @@
   -webkit-text-fill-color: transparent;
 }
 
-.hp-stat-sep {
-  width: 1px;
-  height: 30px;
-  background: #e2e8f0;
-}
+.hp-stat-sep { width: 1px; height: 30px; background: #e2e8f0; }
 
-/* Mobile Stats */
 @media (max-width: 600px) {
   .hp-hero-title { font-size: 42px; }
   .hp-stats-bar { flex-direction: column; gap: 16px; padding: 24px; width: 90%; }
@@ -112,7 +107,6 @@
   perspective: 1000px; 
 }
 
-/* Wrappers */
 .pp-gold-wrapper {
   z-index: 10;
   transform: scale(1.15) translateY(-20px);
@@ -159,35 +153,36 @@
 }
 
 
-/* --- 3. SECTIONS & TITLES (FIXED VISIBILITY) --- */
+/* --- 3. SECTIONS & TITLES (FIXED) --- */
 .hp-section-header {
   display: flex; align-items: center; gap: 16px;
   padding: 0 32px;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
   margin-top: 60px;
 }
 
-/* ✅ UPDATED: High Contrast Title with Shadow */
+/* ✅ UPDATED: Clean Pill Badge (No jagged white text-shadow) */
 .hp-section-title {
-  font-size: 28px; 
+  font-size: 20px; 
   font-weight: 1000; 
-  letter-spacing: -1px;
-  color: #2e0818; /* Very dark pink/black */
+  letter-spacing: -0.5px;
+  color: #4A0F2B;
   display: flex; align-items: center; gap: 10px;
   
-  /* White outline shadow to pop against any background */
-  text-shadow: 
-    0 2px 0 #fff, 
-    2px 0 0 #fff, 
-    -2px 0 0 #fff, 
-    0 -2px 0 #fff,
-    0 4px 10px rgba(0,0,0,0.1);
+  /* The "Badge" Look */
+  background: #ffffff;
+  padding: 12px 24px;
+  border-radius: 99px;
+  box-shadow: 0 4px 12px -2px rgba(0,0,0,0.08); /* Soft shadow */
+  border: 1px solid rgba(0,0,0,0.05);
 }
 
+/* Updated Line to match badge center */
 .hp-section-line {
-  flex: 1; height: 3px; 
-  background: linear-gradient(90deg, #cbd5e1, transparent); /* Slightly darker line */
+  flex: 1; height: 2px; 
+  background: #e2e8f0; 
   border-radius: 99px;
+  margin-top: 2px;
 }
 
 /* Strip */
