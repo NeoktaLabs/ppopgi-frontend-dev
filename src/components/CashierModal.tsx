@@ -1,4 +1,5 @@
-import React from "react";
+// src/components/CashierModal.tsx
+import React, { useState } from "react";
 import { useCashierData } from "../hooks/useCashierData";
 import "./CashierModal.css";
 
@@ -8,8 +9,16 @@ type Props = {
 };
 
 export function CashierModal({ open, onClose }: Props) {
-  // 1. Hook handles logic + formatting
   const { state, actions, display } = useCashierData(open);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    if (state.me) {
+      navigator.clipboard.writeText(state.me);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   if (!open) return null;
 
@@ -19,81 +28,87 @@ export function CashierModal({ open, onClose }: Props) {
         
         {/* Header */}
         <div className="cm-header">
-          <div>
-            <h3 className="cm-title">Cashier</h3>
-            <div className="cm-subtitle">View your balances on Etherlink</div>
-          </div>
-          
-          <div className="cm-actions">
-             <span className="cm-badge" title={state.me || ""}>
-               {display.shortAddr}
-             </span>
-             <button 
-               className="cm-btn primary" 
-               onClick={actions.refresh} 
-               disabled={state.loading}
-             >
-               {state.loading ? "Syncing..." : "Refresh"}
-             </button>
-             <button className="cm-btn secondary" onClick={onClose}>
-               Close
-             </button>
-          </div>
+          <h3 className="cm-title">My Wallet</h3>
+          <button className="cm-close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* Body */}
         <div className="cm-body">
+          
+          {/* Address Pill (Click to Copy) */}
+          <div className="cm-address-row">
+             <div className="cm-avatar-circle" style={{ background: copied ? "#dcfce7" : "#f1f5f9", color: copied ? "#166534" : "#64748b" }}>
+               {copied ? "✓" : "👤"}
+             </div>
+             <div className="cm-address-info">
+                <div className="cm-label">Connected Account</div>
+                <div className="cm-addr-val" onClick={handleCopy} title="Click to Copy">
+                   {display.shortAddr}
+                   <span className="cm-copy-icon">{copied ? "Copied" : "Copy"}</span>
+                </div>
+             </div>
+             <button className="cm-refresh-btn" onClick={actions.refresh} disabled={state.loading}>
+               {state.loading ? "..." : "🔄"}
+             </button>
+          </div>
+
           {state.note && (
-             <div style={{ padding: 12, borderRadius: 12, background: "#fff0f0", color: "#d32f2f", fontSize: 13, fontWeight: 800 }}>
-               {state.note}
+             <div className="cm-alert">
+               ⚠️ {state.note}
              </div>
           )}
 
-          {/* Balances */}
-          <div>
-             <div style={{ fontWeight: 1000, fontSize: 14, textTransform: 'uppercase', opacity: 0.8 }}>Your Wallet</div>
+          {/* Balance Cards */}
+          <div className="cm-balance-section">
+             <div className="cm-section-label">Assets on Etherlink</div>
+             
              <div className="cm-balance-grid">
-                {/* XTZ Card */}
-                <div className="cm-balance-card">
-                   <div className="cm-coin-label">XTZ (Native)</div>
-                   <div className="cm-amount">{display.xtz}</div>
-                   <div className="cm-hint">Used for gas fees</div>
+                {/* USDC Card (Primary) */}
+                <div className="cm-asset-card primary">
+                   <div className="cm-asset-icon">💲</div>
+                   <div>
+                      <div className="cm-asset-amount">{display.usdc}</div>
+                      <div className="cm-asset-name">USDC</div>
+                   </div>
+                   <div className="cm-asset-tag">Raffle Funds</div>
                 </div>
 
-                {/* USDC Card */}
-                <div className="cm-balance-card">
-                   <div className="cm-coin-label">USDC</div>
-                   <div className="cm-amount">{display.usdc}</div>
-                   <div className="cm-hint">Used for tickets & prizes</div>
+                {/* XTZ Card (Secondary) */}
+                <div className="cm-asset-card secondary">
+                   <div className="cm-asset-icon">⛽</div>
+                   <div>
+                      <div className="cm-asset-amount">{display.xtz}</div>
+                      <div className="cm-asset-name">Tezos (XTZ)</div>
+                   </div>
+                   <div className="cm-asset-tag">Network Fees</div>
                 </div>
              </div>
           </div>
 
-          {/* Getting Started Guide */}
-          <div className="cm-steps">
-             <div style={{ fontWeight: 1000, fontSize: 14 }}>Quick Start Guide</div>
+          {/* Simplified "How To" */}
+          <div className="cm-guide-section">
+             <div className="cm-section-label">Need Funds?</div>
              
-             <div className="cm-step-row">
-                <div className="cm-step-num">1</div>
-                <div>
-                   <div style={{ fontWeight: 950 }}>Get XTZ</div>
-                   <div style={{ fontSize: 13, opacity: 0.8 }}>You need a small amount of Tezos (XTZ) to pay for gas fees.</div>
+             <div className="cm-guide-row">
+                <div className="cm-guide-icon">🌉</div>
+                <div className="cm-guide-text">
+                   <strong>Bridge Assets</strong>
+                   <span>Move ETH or XTZ to Etherlink Mainnet using the official bridge.</span>
                 </div>
+                <a 
+                  href="https://bridge.etherlink.com/" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="cm-guide-btn"
+                >
+                  Go
+                </a>
              </div>
 
-             <div className="cm-step-row">
-                <div className="cm-step-num">2</div>
-                <div>
-                   <div style={{ fontWeight: 950 }}>Bridge Funds</div>
-                   <div style={{ fontSize: 13, opacity: 0.8 }}>Move assets from Tezos L1 or Ethereum to Etherlink using the official bridge.</div>
-                </div>
-             </div>
-
-             <div className="cm-step-row">
-                <div className="cm-step-num">3</div>
-                <div>
-                   <div style={{ fontWeight: 950 }}>Get USDC</div>
-                   <div style={{ fontSize: 13, opacity: 0.8 }}>Swap for USDC on a DEX to start creating or joining raffles.</div>
+             <div className="cm-guide-row">
+                <div className="cm-guide-icon">💱</div>
+                <div className="cm-guide-text">
+                   <strong>Swap for USDC</strong>
+                   <span>Use a DEX to swap XTZ for USDC to buy tickets.</span>
                 </div>
              </div>
           </div>
