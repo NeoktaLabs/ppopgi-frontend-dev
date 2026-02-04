@@ -17,7 +17,7 @@ type HatchUI = {
   note?: string | null;
 };
 
-// ✅ NEW: Stats type
+// Export stats type for Dashboard
 export type UserEntryStats = {
   count: number;
   percentage: string;
@@ -30,7 +30,6 @@ type Props = {
   ribbon?: "gold" | "silver" | "bronze";
   nowMs?: number;
   hatch?: HatchUI | null;
-  // ✅ NEW: Optional prop for dashboard view
   userEntry?: UserEntryStats; 
 };
 
@@ -45,18 +44,14 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
   const hostAddr = (raffle as any).owner || (raffle as any).creator;
 
-  // Calculate Win Chance (Odds for 1 Ticket)
+  // ✅ 1. Shortened Odds (1 in X)
   const odds = useMemo(() => {
     if (!ui.isLive) return null;
     const max = Number(raffle.maxTickets);
     const sold = Number(raffle.sold);
     
-    // Fixed capacity
-    if (max > 0) return { pct: (100 / max).toFixed(2), label: `1 in ${max}` };
-    
-    // Unlimited (dynamic odds)
-    const pool = sold + 1; 
-    return { pct: (100 / pool).toFixed(2), label: `1 in ~${pool}` };
+    if (max > 0) return `1 in ${max}`;
+    return `1 in ~${sold + 1}`;
   }, [raffle.maxTickets, raffle.sold, ui.isLive]);
 
   return (
@@ -70,36 +65,34 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       <div className="rc-notch right" />
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
       
-      {/* Ribbon (if provided) */}
       {ribbon && <div className={`rc-ribbon ${ribbon}`}>{ribbon}</div>}
 
       {/* Header */}
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
         
-        {/* Win Chance Badge (Only show if NOT showing user stats to avoid clutter) */}
         {odds && !userEntry && (
-           <div className="rc-odds-badge" title={`Win chance: ${odds.pct}% per ticket`}>
-              🎲 {odds.pct}% Chance
+           <div className="rc-odds-badge" title="Win Chance">
+              🎲 {odds}
            </div>
         )}
 
         <div className="rc-actions">
+          {/* ✅ 2. New Shield Style (Blue/Verified Look) */}
           <button 
-            className="rc-btn-icon" 
+            className="rc-shield-btn" 
             onClick={(e) => { e.stopPropagation(); onOpenSafety?.(raffle.id); }} 
-            title="Safety Info"
+            title="Verified Contract"
             disabled={!onOpenSafety}
           >
-            🛡️
+            🛡
           </button>
-          <button className="rc-btn-icon" onClick={actions.handleShare} title="Share Link">
+          <button className="rc-btn-icon" onClick={actions.handleShare} title="Share">
              🔗
           </button>
         </div>
       </div>
 
-      {/* ✅ NEW: User Stats Badge (Replaces Odds Badge location visually) */}
       {userEntry && (
         <div className="rc-user-badge">
           🎟️ <strong>{userEntry.count}</strong> Owned ({userEntry.percentage}%)
@@ -107,7 +100,8 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       )}
 
       <div className="rc-host">
-        <span>Hosted by</span>
+        {/* ✅ 3. Renamed to 'Created by' */}
+        <span>Created by</span>
         {hostAddr ? (
            <a 
              href={`${EXPLORER_URL}${hostAddr}`}
@@ -129,7 +123,6 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         <div className="rc-prize-val">{ui.formattedPot}</div>
       </div>
 
-      {/* Quick Buy Button */}
       <div className="rc-quick-buy-wrapper">
          <div className="rc-perforation" />
          {ui.isLive && (
@@ -141,7 +134,8 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
       <div className="rc-grid">
         <div className="rc-stat">
-          <div className="rc-stat-lbl">Price</div>
+          {/* ✅ 4. Renamed to 'Ticket Price' */}
+          <div className="rc-stat-lbl">Ticket Price</div>
           <div className="rc-stat-val">{ui.formattedPrice} USDC</div>
         </div>
         <div className="rc-stat">
@@ -196,14 +190,8 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()} 
-          style={{ 
-            opacity: 0.6, 
-            textDecoration: "none", 
-            color: "inherit", 
-            borderBottom: "1px dotted currentColor",
-            cursor: "pointer"
-          }}
-          title="View Contract on Explorer"
+          style={{ opacity: 0.6, textDecoration: "none", color: "inherit", borderBottom: "1px dotted currentColor", cursor: "pointer" }}
+          title="View Contract"
         >
           #{raffle.id.slice(2, 8).toUpperCase()}
         </a>
