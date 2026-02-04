@@ -29,11 +29,8 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   useEffect(() => { const t = setInterval(() => setNowS(Math.floor(Date.now() / 1000)), 1000); return () => clearInterval(t); }, []);
 
   // --- DATA PROCESSING ---
-  // We assume data.joined contains the raffles the user entered.
-  // We need to calculate user stats if they are attached, or fallback.
-  // Ideally, useDashboardController returns { raffle, userCount } in data.joined
-  
-  const { activeEntries, pastEntries } = useMemo(() => {
+  // ✅ FIX: Correctly destructured aliases { active: activeEntries, past: pastEntries }
+  const { active: activeEntries, past: pastEntries } = useMemo(() => {
     const active: any[] = [];
     const past: any[] = [];
     
@@ -42,11 +39,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     data.joined.forEach((item: any) => {
       // Handle if item is { raffle: ..., ticketsPurchased: ... } or just raffle
       const r = item.raffle || item; 
-      const userCount = Number(item.ticketsPurchased || 0); // From subgraph aggregation
+      const userCount = Number(item.ticketsPurchased || 0);
       const sold = Number(r.sold || 1);
       const percentage = userCount > 0 ? ((userCount / sold) * 100).toFixed(1) : "0.0";
       
-      // Attach stats for the card
       const enriched = { ...r, userEntry: { count: userCount, percentage } };
 
       if (r.status === "OPEN" || r.status === "FUNDING_PENDING" || r.status === "DRAWING") {
@@ -60,7 +56,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   }, [data.joined]);
 
 
-  // --- HATCH LOGIC (For creators) ---
+  // --- HATCH LOGIC ---
   const getHatchProps = (raffleId: string, creator: string) => {
     if (!account || creator?.toLowerCase() !== account.toLowerCase()) return null;
     const drawAt = Number(hatch.timestamps[raffleId] || "0");
@@ -133,7 +129,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                            <button className="db-btn" disabled={!hasUsdc || data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
                               Claim Prize
                            </button>
-                           {/* Add logic for refund button if needed */}
+                           {/* Logic for refunds if needed */}
                         </div>
                      </div>
                   </div>
@@ -167,7 +163,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                      onOpen={onOpenRaffle} 
                      onOpenSafety={onOpenSafety}
                      nowMs={nowS * 1000}
-                     userEntry={r.userEntry} // ✅ Pass stats
+                     userEntry={r.userEntry}
                   />
                ))}
             </div>
@@ -184,7 +180,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                      onOpen={onOpenRaffle} 
                      onOpenSafety={onOpenSafety}
                      nowMs={nowS * 1000}
-                     userEntry={r.userEntry} // ✅ Pass stats
+                     userEntry={r.userEntry}
                   />
                ))}
             </div>
