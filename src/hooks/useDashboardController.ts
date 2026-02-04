@@ -1,5 +1,5 @@
 // src/hooks/useDashboardController.ts
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
@@ -52,6 +52,15 @@ type ClaimableItem = {
   userTicketsOwned?: string;
 };
 
+function isRateLimitError(e: unknown) {
+  const msg = String((e as any)?.message ?? e ?? "");
+  return (
+    msg.includes("429") ||
+    msg.toLowerCase().includes("too many requests") ||
+    msg.toLowerCase().includes("rate limit")
+  );
+}
+
 export function useDashboardController() {
   const accountObj = useActiveAccount();
   const account = accountObj?.address ?? null;
@@ -64,6 +73,31 @@ export function useDashboardController() {
   const [msg, setMsg] = useState<string | null>(null);
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
+  // -----------------------
+  // Anti-spam / caching refs
+  // -----------------------
+  const inFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const pollMsRef = useRef<number>(15000); // base interval
+  const backoffMsRef = useRef<number>(0); // extra delay after 429
+  const timerRef = useRef<number | null>(null);
+
+  const lastRafflesRef = useRef<{ ts: number; data: RaffleListItem[] } | null>(null);
+  const lastJoinedIdsRef = useRef<{ ts: number; ids: Set<string> } | null>(null);
+
+  const isVisible = () => typeof document !== "undefined" && document.visibilityState === "visible";
+
+  const scheduleNext = useCallback(() => {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+
+    const delay = Math.max(pollMsRef.current, pollMsRef.current + backoffMsRef.current);
+    timerRef.current = window.setTimeout(() => {
+      // background refresh
+      fetchData(true);
+    }, delay);
+  }, []); // fetchData declared below but safe: we only call scheduleNext inside effects/handlers after init
+
   const fetchData = useCallback(
     async (isBackground = false) => {
       if (!account) {
@@ -71,32 +105,89 @@ export function useDashboardController() {
         return;
       }
 
+      // Don’t hammer the indexer if tab is hidden
+      if (isBackground && !isVisible()) {
+        scheduleNext();
+        return;
+      }
+
+      // Dedupe concurrent fetches
+      if (inFlightRef.current) return;
+
+      inFlightRef.current = true;
+
       if (!isBackground) setIsPending(true);
 
+      // Cancel any prior request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
-        const allRaffles = await fetchRafflesFromSubgraph({ first: 1000 });
         const myAddr = account.toLowerCase();
+        const now = Date.now();
+
+        // -----------------------
+        // 1) Pull raffles from subgraph (cache ~20s)
+        // -----------------------
+        let allRaffles: RaffleListItem[] = [];
+        const cachedRaffles = lastRafflesRef.current;
+
+        if (cachedRaffles && now - cachedRaffles.ts < 20_000) {
+          allRaffles = cachedRaffles.data;
+        } else {
+          allRaffles = await fetchRafflesFromSubgraph({
+            first: 1000,
+            signal: controller.signal,
+          });
+          lastRafflesRef.current = { ts: now, data: allRaffles };
+        }
 
         // 1) My Created
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // 2) My Joined (from subgraph)
-        const joinedIds = new Set<string>();
-        let skip = 0;
-        while (true) {
-          const page = await fetchMyJoinedRaffleIds(account, { first: 1000, skip });
-          page.forEach((id) => joinedIds.add(id));
-          if (page.length < 1000) break;
-          skip += 1000;
-          if (skip > 10_000) break;
+        // -----------------------
+        // 2) Joined raffle IDs (cache ~60s)
+        // -----------------------
+        let joinedIds: Set<string>;
+        const cachedJoined = lastJoinedIdsRef.current;
+
+        if (cachedJoined && now - cachedJoined.ts < 60_000) {
+          joinedIds = cachedJoined.ids;
+        } else {
+          joinedIds = new Set<string>();
+          let skip = 0;
+
+          // IMPORTANT: keep this bounded (avoid huge pagination load)
+          // You can raise maxPages if needed, but this protects your indexer.
+          const pageSize = 1000;
+          const maxPages = 3; // up to 3000 joined entries
+
+          for (let pageN = 0; pageN < maxPages; pageN++) {
+            const page = await fetchMyJoinedRaffleIds(account, {
+              first: pageSize,
+              skip,
+              signal: controller.signal,
+            });
+            page.forEach((id) => joinedIds.add(id.toLowerCase()));
+            if (page.length < pageSize) break;
+            skip += pageSize;
+          }
+
+          lastJoinedIdsRef.current = { ts: now, ids: joinedIds };
         }
 
+        // Build joined list from raffles we already fetched
         const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
 
-        // 2b) Attach ticketsOwned (RPC) for joined raffles (cap RPC)
+        // -----------------------
+        // 2b) ticketsOwned (RPC) for joined raffles (cap)
+        // -----------------------
         const ownedByRaffleId = new Map<string, string>();
+        const joinedToCheck = joinedBase.slice(0, 80);
+
         await Promise.all(
-          joinedBase.slice(0, 80).map(async (r) => {
+          joinedToCheck.map(async (r) => {
             try {
               const contract = getContract({
                 client: thirdwebClient,
@@ -121,13 +212,17 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(r.id.toLowerCase()) ?? "0",
         }));
 
+        // -----------------------
         // 3) Claimables: union(created + joined)
+        // -----------------------
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
         joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
 
+        const candidates = Array.from(candidateById.values());
+
         const newClaimables: ClaimableItem[] = [];
-        const toCheck = Array.from(candidateById.values()).slice(0, 60);
+        const toCheck = candidates.slice(0, 60);
 
         await Promise.all(
           toCheck.map(async (r) => {
@@ -154,7 +249,7 @@ export function useDashboardController() {
                 participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
               };
 
-              // WIN label (winner + something claimable)
+              // WIN (winner + something claimable)
               if (
                 r.status === "COMPLETED" &&
                 r.winner?.toLowerCase() === myAddr &&
@@ -171,8 +266,8 @@ export function useDashboardController() {
                 return;
               }
 
-              // REFUND label (canceled + user has tickets + something claimable)
-              // NOTE: we intentionally require cf/cn > 0 to avoid "ghost" tiles after claim.
+              // REFUND (canceled + user has tickets + something claimable)
+              // Keep cf/cn gate to avoid “already claimed” ghost tiles.
               if (r.status === "CANCELED" && ticketsOwned > 0n && (cf > 0n || cn > 0n)) {
                 newClaimables.push({
                   raffle: r,
@@ -186,7 +281,6 @@ export function useDashboardController() {
               }
 
               // OTHER (only when contract reports something claimable)
-              // ✅ Fix: remove "Available (check on-chain)" ghost claimables after you've already claimed
               if (cf > 0n || cn > 0n) {
                 newClaimables.push({
                   raffle: r,
@@ -203,22 +297,57 @@ export function useDashboardController() {
           })
         );
 
+        // Success: reset backoff
+        backoffMsRef.current = 0;
+
         setCreated(myCreated);
         setJoined(myJoined);
         setClaimables(newClaimables);
       } catch (e) {
         console.error("Dashboard fetch error", e);
+
+        // Backoff if indexer rate-limited
+        if (isRateLimitError(e)) {
+          // Exponential-ish backoff: 15s -> 30s -> 60s -> 120s (cap)
+          const current = backoffMsRef.current || 0;
+          const next = current === 0 ? 15000 : Math.min(current * 2, 120000);
+          backoffMsRef.current = next;
+          if (!isBackground) setMsg("Indexer rate-limited. Retrying shortly…");
+        } else {
+          if (!isBackground) setMsg("Failed to load dashboard data.");
+        }
       } finally {
+        inFlightRef.current = false;
         if (!isBackground) setIsPending(false);
+        scheduleNext();
       }
     },
-    [account]
+    [account, scheduleNext]
   );
 
+  // Initial fetch + smart refresh triggers (focus/visibility)
   useEffect(() => {
+    // clear any timers
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+
     fetchData(false);
-    const interval = setInterval(() => fetchData(true), 10000);
-    return () => clearInterval(interval);
+
+    const onFocus = () => fetchData(true);
+    const onVis = () => {
+      if (document.visibilityState === "visible") fetchData(true);
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      abortRef.current?.abort();
+      inFlightRef.current = false;
+    };
   }, [fetchData]);
 
   const createdSorted = useMemo(
@@ -261,6 +390,11 @@ export function useDashboardController() {
 
       setHiddenClaimables((p) => ({ ...p, [raffleId.toLowerCase()]: true }));
       setMsg("Claim successful.");
+
+      // force refresh and also reset rate-limit backoff
+      backoffMsRef.current = 0;
+      lastRafflesRef.current = null;
+      lastJoinedIdsRef.current = null;
       fetchData(true);
     } catch (e) {
       console.error("Withdraw failed", e);
@@ -271,6 +405,9 @@ export function useDashboardController() {
   const refresh = () => {
     setMsg(null);
     setHiddenClaimables({});
+    backoffMsRef.current = 0;
+    lastRafflesRef.current = null;
+    lastJoinedIdsRef.current = null;
     fetchData(false);
   };
 
@@ -281,6 +418,9 @@ export function useDashboardController() {
       claimables: claimablesSorted,
       msg,
       isPending,
+      // optional: expose current polling/backoff for UI/debug
+      pollMs: pollMsRef.current,
+      backoffMs: backoffMsRef.current,
     },
     actions: { withdraw, refresh },
     account,
