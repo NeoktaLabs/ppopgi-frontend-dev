@@ -1,11 +1,10 @@
 // src/hooks/useRaffleInteraction.ts
 import { useState, useEffect, useMemo } from "react";
-import { formatUnits, parseUnits } from "ethers";
+import { formatUnits } from "ethers";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { ADDRESSES } from "../config/contracts";
 import { useRaffleDetails } from "./useRaffleDetails";
 import { useConfetti } from "./useConfetti"; // ✅ 1. Import Confetti
 
