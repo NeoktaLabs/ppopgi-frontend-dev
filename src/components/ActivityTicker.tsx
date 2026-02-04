@@ -14,10 +14,10 @@ export function ActivityTicker() {
   const [items, setItems] = useState<GlobalActivityItem[]>([]);
 
   useEffect(() => {
-    // Fetch immediately
+    // 1. Initial Fetch
     fetchGlobalActivity().then(setItems);
 
-    // Poll every 15s
+    // 2. Poll every 15s to keep it fresh
     const timer = setInterval(() => {
       fetchGlobalActivity().then(setItems);
     }, 15000);
@@ -27,28 +27,39 @@ export function ActivityTicker() {
 
   if (items.length === 0) return null;
 
-  // Duplicate items to create seamless loop
+  // Duplicate items to create a seamless infinite loop
   const displayItems = [...items, ...items];
 
   return (
     <div className="at-container">
       <div className="at-track">
-        {displayItems.map((item, i) => (
-          <div key={`${item.txHash}-${i}`} className="at-item">
-            <a 
-              href={`https://explorer.etherlink.com/tx/${item.txHash}`} 
-              target="_blank" 
-              rel="noreferrer"
-              className="at-link"
-            >
-              <span className="at-dot" />
-              <span className="at-buyer">{item.buyer.slice(0,6)}...</span>
-              <span className="at-action">bought a ticket in</span>
-              <span className="at-raffle">{item.raffleName || "Raffle #" + item.raffleId.slice(0,4)}</span>
-              <span style={{ opacity: 0.5 }}>({timeAgo(item.timestamp)})</span>
-            </a>
-          </div>
-        ))}
+        {displayItems.map((item, i) => {
+          const count = Number(item.count);
+          return (
+            <div key={`${item.txHash}-${i}`} className="at-item">
+              <a 
+                href={`https://explorer.etherlink.com/tx/${item.txHash}`} 
+                target="_blank" 
+                rel="noreferrer"
+                className="at-link"
+              >
+                <span className="at-dot" />
+                <span className="at-buyer">{item.buyer.slice(0,6)}...</span>
+                
+                {/* Dynamic Text based on count */}
+                <span className="at-action">
+                  bought {count > 1 ? <span style={{color:'#fff'}}>{count} tickets</span> : "a ticket"} in
+                </span>
+                
+                <span className="at-raffle">
+                  {item.raffleName || `Raffle ${item.raffleId.slice(0,4)}...`}
+                </span>
+                
+                <span style={{ opacity: 0.5 }}>({timeAgo(item.timestamp)})</span>
+              </a>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
