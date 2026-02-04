@@ -29,6 +29,15 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   const [tab, setTab] = useState<"active" | "history" | "created">("active");
   const [copied, setCopied] = useState(false);
 
+  // ✅ Local “tx pending” so buttons don’t lock based on store/isPending
+  const [txBusyByKey, setTxBusyByKey] = useState<Record<string, boolean>>({});
+  const setBusy = (raffleId: string, method: WithdrawMethod, v: boolean) => {
+    const key = `${raffleId.toLowerCase()}:${method}`;
+    setTxBusyByKey((p) => ({ ...p, [key]: v }));
+  };
+  const isBusy = (raffleId: string, method: WithdrawMethod) =>
+    !!txBusyByKey[`${raffleId.toLowerCase()}:${method}`];
+
   // Clock
   const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => {
@@ -54,14 +63,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       const tickets = Number(r.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
       const percentage = tickets > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
-
       const enriched = { ...r, userEntry: { count: tickets, percentage } };
 
-      if (["OPEN", "FUNDING_PENDING", "DRAWING"].includes(r.status)) {
-        active.push(enriched);
-      } else {
-        past.push(enriched);
-      }
+      if (["OPEN", "FUNDING_PENDING", "DRAWING"].includes(r.status)) active.push(enriched);
+      else past.push(enriched);
     });
 
     return { active, past };
@@ -72,13 +77,27 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
 
-  // Decide which primary withdraw method to use when there is only one button.
-  // If both USDC & Native exist, we show two buttons.
-  const getPrimaryMethod = (isRefund: boolean, hasUsdc: boolean, hasNative: boolean): WithdrawMethod | null => {
+  const getPrimaryMethod = (
+    isRefund: boolean,
+    hasUsdc: boolean,
+    hasNative: boolean
+  ): WithdrawMethod | null => {
     if (isRefund) return "claimTicketRefund";
     if (hasUsdc) return "withdrawFunds";
     if (hasNative) return "withdrawNative";
     return null;
+  };
+
+  const handleWithdraw = async (raffleId: string, method: WithdrawMethod) => {
+    if (!raffleId) return;
+    if (isBusy(raffleId, method)) return;
+
+    setBusy(raffleId, method, true);
+    try {
+      await actions.withdraw(raffleId, method);
+    } finally {
+      setBusy(raffleId, method, false);
+    }
   };
 
   return (
@@ -144,7 +163,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
               const title = isRefund ? "Refund Available" : "Claim Available";
               const primaryLabel = isRefund
-                ? "Reclaim Tickets"
+                ? "Reclaim Refund"
                 : hasUsdc
                   ? "Claim USDC"
                   : hasNative
@@ -191,39 +210,47 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                           <div className="db-win-label">Available:</div>
                           <div className="db-win-val">
                             {hasUsdc && <span>{fmt(it.claimableUsdc, 6)} USDC</span>}
-                            {hasNative && <span>{hasUsdc ? " + " : ""}{fmt(it.claimableNative, 18)} Native</span>}
+                            {hasNative && (
+                              <span>
+                                {hasUsdc ? " + " : ""}
+                                {fmt(it.claimableNative, 18)} Native
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
                     </div>
 
                     <div className="db-claim-actions">
-                      {/* Dual-asset claim */}
                       {showDual ? (
                         <>
                           <button
                             className="db-btn primary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                            disabled={isBusy(r.id, "withdrawFunds")}
+                            onClick={() => handleWithdraw(r.id, "withdrawFunds")}
                           >
-                            {data.isPending ? "Processing..." : "Claim USDC"}
+                            {isBusy(r.id, "withdrawFunds") ? "Processing..." : "Claim USDC"}
                           </button>
 
                           <button
                             className="db-btn secondary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
+                            disabled={isBusy(r.id, "withdrawNative")}
+                            onClick={() => handleWithdraw(r.id, "withdrawNative")}
                           >
-                            {data.isPending ? "Processing..." : "Claim Native"}
+                            {isBusy(r.id, "withdrawNative") ? "Processing..." : "Claim Native"}
                           </button>
                         </>
                       ) : (
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                          disabled={data.isPending || !primaryMethod}
-                          onClick={() => primaryMethod && actions.withdraw(r.id, primaryMethod)}
+                          disabled={!primaryMethod || isBusy(r.id, primaryMethod)}
+                          onClick={() => primaryMethod && handleWithdraw(r.id, primaryMethod)}
                         >
-                          {data.isPending ? "Processing..." : primaryLabel}
+                          {!primaryMethod
+                            ? "Nothing to Claim"
+                            : isBusy(r.id, primaryMethod)
+                              ? "Processing..."
+                              : primaryLabel}
                         </button>
                       )}
                     </div>
@@ -238,22 +265,13 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       {/* TABS */}
       <div className="db-tabs-container">
         <div className="db-tabs">
-          <button
-            className={`db-tab ${tab === "active" ? "active" : ""}`}
-            onClick={() => setTab("active")}
-          >
+          <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             Active Entries
           </button>
-          <button
-            className={`db-tab ${tab === "history" ? "active" : ""}`}
-            onClick={() => setTab("history")}
-          >
+          <button className={`db-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>
             History
           </button>
-          <button
-            className={`db-tab ${tab === "created" ? "active" : ""}`}
-            onClick={() => setTab("created")}
-          >
+          <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
             Created
           </button>
         </div>
@@ -303,10 +321,9 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                     userEntry={r.userEntry}
                   />
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
-                  {r.status === "COMPLETED" &&
-                    r.winner?.toLowerCase() === account?.toLowerCase() && (
-                      <div className="db-history-badge won">🏆 Winner</div>
-                    )}
+                  {r.status === "COMPLETED" && r.winner?.toLowerCase() === account?.toLowerCase() && (
+                    <div className="db-history-badge won">🏆 Winner</div>
+                  )}
                 </div>
               );
             })}
