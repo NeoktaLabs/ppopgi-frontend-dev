@@ -79,7 +79,7 @@ export function useHomeRaffles() {
 
   const recentlyFinalized = useMemo(() => {
     if (mode === "live") return [];
-    const settled = all.filter((r) => r.status === "COMPLETED");
+    const settled = all.filter((r) => r.status === "COMPLETED";
     return [...settled]
       .sort((a, b) => {
         const aKey = numOr0(a.completedAt) || numOr0(a.finalizedAt) || numOr0(a.lastUpdatedTimestamp);
