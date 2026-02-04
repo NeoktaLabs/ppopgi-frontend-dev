@@ -1,11 +1,14 @@
 // src/hooks/useExploreController.ts
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
+import type { RaffleListItem, RaffleStatus } from "../indexer/subgraph";
+
 import {
-  fetchRafflesFromSubgraph,
-  type RaffleListItem,
-  type RaffleStatus,
-} from "../indexer/subgraph";
+  getSnapshot,
+  subscribe,
+  startRaffleStore,
+  refresh as refreshRaffleStore,
+} from "./useRaffleStore";
 
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 
@@ -16,20 +19,12 @@ const safeNum = (v: any) => {
 };
 const isActiveStatus = (s: RaffleStatus) => s === "OPEN" || s === "FUNDING_PENDING";
 
-// --- small helpers ---
-function isRateLimitError(e: any) {
-  const msg = String(e?.message ?? e ?? "").toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate");
-}
-
 export function useExploreController() {
   const activeAccount = useActiveAccount();
   const me = activeAccount?.address ? norm(activeAccount.address) : null;
 
-  // --- State ---
-  const [items, setItems] = useState<RaffleListItem[] | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [note, setNote] = useState<string | null>(null);
+  // --- Shared store snapshot ---
+  const [storeSnap, setStoreSnap] = useState(() => getSnapshot());
 
   // Filters
   const [q, setQ] = useState("");
@@ -38,111 +33,22 @@ export function useExploreController() {
   const [openOnly, setOpenOnly] = useState(false);
   const [myRafflesOnly, setMyRafflesOnly] = useState(false);
 
-  // --- Polling / throttling controls ---
-  const timerRef = useRef<number | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const inFlightRef = useRef(false);
-  const backoffStepRef = useRef(0);
-
-  // simple cache (reduces subgraph calls when user navigates around)
-  const cacheRef = useRef<{ at: number; data: RaffleListItem[] } | null>(null);
-  const CACHE_MS = 20_000;
-
-  const clearTimer = () => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  const scheduleNext = useCallback((ms: number) => {
-    clearTimer();
-    timerRef.current = window.setTimeout(() => {
-      // background tick
-      fetchData(true);
-    }, ms);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchData = useCallback(
-    async (isBackground = false) => {
-      // Don’t poll when tab is hidden (mobile Safari backgrounded, etc.)
-      if (isBackground && typeof document !== "undefined" && document.hidden) {
-        scheduleNext(60_000);
-        return;
-      }
-
-      // in-flight dedupe
-      if (inFlightRef.current) return;
-
-      // cache hit (avoid hitting indexer too often)
-      const now = Date.now();
-      if (cacheRef.current && now - cacheRef.current.at < CACHE_MS) {
-        if (!isBackground) setIsLoading(false);
-        setItems(cacheRef.current.data);
-        setNote(null);
-        scheduleNext(isBackground ? 30_000 : 12_000);
-        return;
-      }
-
-      // start request
-      inFlightRef.current = true;
-      if (!isBackground) setIsLoading(true);
-
-      // abort previous request if any
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      try {
-        // (optional) smaller first to reduce load; keep 1000 if you need full list
-        const data = await fetchRafflesFromSubgraph({ first: 1000, signal: controller.signal });
-
-        cacheRef.current = { at: Date.now(), data };
-        backoffStepRef.current = 0;
-
-        setItems(data);
-        setNote(null);
-
-        // active page: frequent-ish; background: slower
-        scheduleNext(isBackground ? 30_000 : 12_000);
-      } catch (e) {
-        // ignore abort errors
-        const msg = String(e?.name ?? "") === "AbortError" ? "" : String(e?.message ?? e ?? "");
-        if (!isBackground && msg) setNote("Failed to load raffles.");
-
-        // backoff aggressively on rate-limit
-        if (isRateLimitError(e)) {
-          backoffStepRef.current = Math.min(backoffStepRef.current + 1, 4);
-          const delays = [15_000, 30_000, 60_000, 120_000, 180_000];
-          scheduleNext(delays[backoffStepRef.current]);
-          if (!isBackground) setNote("Too many requests. Retrying shortly…");
-        } else {
-          scheduleNext(isBackground ? 45_000 : 20_000);
-        }
-
-        console.error("Explore fetch failed", e);
-      } finally {
-        inFlightRef.current = false;
-        if (!isBackground) setIsLoading(false);
-      }
-    },
-    [scheduleNext]
-  );
-
-  // --- Lifecycle ---
+  // Start store + subscribe
   useEffect(() => {
-    fetchData(false);
+    // Explore wants a fairly fresh list, but it should still be shared globally.
+    // If another page requests 15s and this requests 30s, the store should pick the minimum.
+    const stop = startRaffleStore("explore", 20_000);
+    const unsub = subscribe(() => setStoreSnap(getSnapshot()));
+    setStoreSnap(getSnapshot());
 
     const onFocus = () => {
-      // force refresh when user comes back
-      cacheRef.current = null;
-      fetchData(false);
+      // When user comes back, ask store to refresh (store will dedupe)
+      void refreshRaffleStore(true, true);
     };
 
     const onVis = () => {
-      if (!document.hidden) {
-        cacheRef.current = null;
-        fetchData(false);
+      if (document.visibilityState === "visible") {
+        void refreshRaffleStore(true, true);
       }
     };
 
@@ -150,12 +56,20 @@ export function useExploreController() {
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      clearTimer();
-      abortRef.current?.abort();
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
+      unsub();
+      stop();
     };
-  }, [fetchData]);
+  }, []);
+
+  const items: RaffleListItem[] | null = useMemo(
+    () => storeSnap.items ?? null,
+    [storeSnap.items]
+  );
+
+  const isLoading = !!storeSnap.isLoading;
+  const note = storeSnap.note ?? null;
 
   // --- Filtering Logic (Memoized) ---
   const list = useMemo(() => {
@@ -183,8 +97,8 @@ export function useExploreController() {
       }
       if (sort === "endingSoon") return safeNum(a.deadline) - safeNum(b.deadline);
       if (sort === "bigPrize") {
-        const A = BigInt(a.winningPot || "0"),
-          B = BigInt(b.winningPot || "0");
+        const A = BigInt(a.winningPot || "0");
+        const B = BigInt(b.winningPot || "0");
         return A === B ? 0 : A > B ? -1 : 1;
       }
       return 0;
@@ -199,11 +113,10 @@ export function useExploreController() {
     setMyRafflesOnly(false);
   };
 
-  const refresh = () => {
-    cacheRef.current = null;
-    backoffStepRef.current = 0;
-    fetchData(false);
-  };
+  const refresh = useCallback(() => {
+    // force the store to refetch
+    void refreshRaffleStore(false, true);
+  }, []);
 
   return {
     state: { items, list, note, q, status, sort, openOnly, myRafflesOnly, me },
