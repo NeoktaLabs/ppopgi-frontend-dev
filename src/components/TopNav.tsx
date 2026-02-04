@@ -1,5 +1,5 @@
 // src/components/TopNav.tsx
-import React, { useState, useEffect, memo } from "react";
+import { useState, useEffect, memo } from "react";
 import "./TopNav.css";
 
 type Page = "home" | "explore" | "dashboard";

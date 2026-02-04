@@ -1,5 +1,5 @@
 // src/components/SafetyProofModal.tsx
-import React from "react";
+
 import type { RaffleDetails } from "../hooks/useRaffleDetails";
 import { useSafetyBreakdown } from "../hooks/useSafetyBreakdown";
 import "./SafetyProofModal.css";

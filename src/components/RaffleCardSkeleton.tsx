@@ -1,5 +1,5 @@
 // src/components/RaffleCardSkeleton.tsx
-import React from "react";
+
 import "./RaffleCardSkeleton.css";
 
 export function RaffleCardSkeleton() {

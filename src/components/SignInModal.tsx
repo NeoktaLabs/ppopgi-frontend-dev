@@ -1,5 +1,5 @@
 // src/components/SignInModal.tsx
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { useSession } from "../state/useSession";
 import {
   ConnectEmbed,

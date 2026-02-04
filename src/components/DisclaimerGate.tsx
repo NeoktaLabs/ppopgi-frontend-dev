@@ -1,5 +1,5 @@
 // src/components/DisclaimerGate.tsx
-import React from "react";
+
 import "./DisclaimerGate.css";
 
 type Props = {
