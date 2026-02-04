@@ -84,15 +84,50 @@ export function CashierModal({ open, onClose }: Props) {
              </div>
           </div>
 
-          {/* Simplified "How To" */}
+          {/* "Need Funds" Section */}
           <div className="cm-guide-section">
              <div className="cm-section-label">Need Funds?</div>
              
+             {/* 1. Transak (Credit Card) - ✅ NEW */}
+             <div className="cm-guide-row">
+                <div className="cm-guide-icon">💳</div>
+                <div className="cm-guide-text">
+                   <strong>Buy with Card</strong>
+                   <span>Purchase XTZ via Transak. <b>Select "Etherlink" network.</b></span>
+                </div>
+                <a 
+                  href="https://transak.com/buy" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="cm-guide-btn"
+                >
+                  Go
+                </a>
+             </div>
+
+             {/* 2. Swap - ✅ Updated Link */}
+             <div className="cm-guide-row">
+                <div className="cm-guide-icon">💱</div>
+                <div className="cm-guide-text">
+                   <strong>Swap for USDC</strong>
+                   <span>Use Oku Trade to swap XTZ for USDC.</span>
+                </div>
+                <a 
+                  href="https://oku.trade/swap?inputChain=etherlink&inToken=0x0000000000000000000000000000000000000000&outToken=0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9&inAmount=" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="cm-guide-btn"
+                >
+                  Go
+                </a>
+             </div>
+
+             {/* 3. Bridge */}
              <div className="cm-guide-row">
                 <div className="cm-guide-icon">🌉</div>
                 <div className="cm-guide-text">
                    <strong>Bridge Assets</strong>
-                   <span>Move ETH or XTZ to Etherlink Mainnet using the official bridge.</span>
+                   <span>Move ETH or XTZ to Etherlink Mainnet.</span>
                 </div>
                 <a 
                   href="https://bridge.etherlink.com/" 
@@ -102,14 +137,6 @@ export function CashierModal({ open, onClose }: Props) {
                 >
                   Go
                 </a>
-             </div>
-
-             <div className="cm-guide-row">
-                <div className="cm-guide-icon">💱</div>
-                <div className="cm-guide-text">
-                   <strong>Swap for USDC</strong>
-                   <span>Use a DEX to swap XTZ for USDC to buy tickets.</span>
-                </div>
              </div>
           </div>
 
