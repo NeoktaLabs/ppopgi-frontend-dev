@@ -1,5 +1,5 @@
 // src/hooks/useCashierData.ts
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { formatUnits } from "ethers";
 import { useActiveAccount } from "thirdweb/react";
 import { getContract, readContract } from "thirdweb";
@@ -9,17 +9,24 @@ import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 
 const USDC_ADDRESS = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
 
-// ✅ Helper: Format BigInt to string with Max 4 Decimals
+// Minimal ERC20 ABI (only what we use)
+const ERC20_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+// Helper: Format BigInt to string with max 4 decimals
 function fmtMax4(raw: bigint, decimals: number) {
   try {
     const full = formatUnits(raw, decimals);
-    // Split integer and fraction
     const [int, frac] = full.split(".");
     if (!frac) return int;
-    // Slice fraction to max 4 chars
     const limitedFrac = frac.slice(0, 4);
-    // Remove trailing zeros if you want clean look, or keep them. 
-    // This approach keeps up to 4 digits: "10.123456" -> "10.1234"
     return limitedFrac ? `${int}.${limitedFrac}` : int;
   } catch {
     return "0";
@@ -35,18 +42,27 @@ export function useCashierData(isOpen: boolean) {
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
+  // guards against stale async responses (open/close, account switching)
+  const reqIdRef = useRef(0);
+
   const usdcContract = useMemo(() => {
     return getContract({
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: USDC_ADDRESS,
+      abi: ERC20_ABI,
     });
   }, []);
 
   const refresh = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
+
     setNote(null);
+
     if (!me) {
-      setXtz(null); setUsdc(null);
+      setXtz(null);
+      setUsdc(null);
+      setLoading(false);
       setNote("Sign in to see your balances.");
       return;
     }
@@ -54,32 +70,51 @@ export function useCashierData(isOpen: boolean) {
     setLoading(true);
     try {
       const [native, token] = await Promise.all([
-        getWalletBalance({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: me }),
-        readContract({ contract: usdcContract, method: "function balanceOf(address) view returns (uint256)", params: [me] })
+        getWalletBalance({
+          client: thirdwebClient,
+          chain: ETHERLINK_CHAIN,
+          address: me,
+        }),
+        readContract({
+          contract: usdcContract,
+          method: "balanceOf",
+          params: [me],
+        }),
       ]);
 
+      // ignore stale responses
+      if (reqId !== reqIdRef.current) return;
+
       setXtz(BigInt((native as any).value ?? 0n));
-      setUsdc(BigInt(token as any));
+      setUsdc(BigInt(token ?? 0n));
     } catch {
-      setXtz(null); setUsdc(null);
+      if (reqId !== reqIdRef.current) return;
+      setXtz(null);
+      setUsdc(null);
       setNote("Could not load balances. Try refreshing.");
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) setLoading(false);
     }
   }, [me, usdcContract]);
 
   useEffect(() => {
-    if (isOpen) refresh();
+    if (!isOpen) return;
+
+    refresh();
+
+    // invalidate any in-flight request when modal closes/unmounts
+    return () => {
+      reqIdRef.current++;
+    };
   }, [isOpen, refresh]);
 
   return {
     state: { me, xtz, usdc, loading, note },
     actions: { refresh },
-    // Pre-calculated display strings
     display: {
       xtz: xtz === null ? "—" : fmtMax4(xtz, 18),
       usdc: usdc === null ? "—" : fmtMax4(usdc, 6),
-      shortAddr: me ? `${me.slice(0, 6)}…${me.slice(-4)}` : "Not signed in"
-    }
+      shortAddr: me ? `${me.slice(0, 6)}…${me.slice(-4)}` : "Not signed in",
+    },
   };
 }
