@@ -380,7 +380,7 @@ export async function fetchGlobalActivity(opts: { first?: number; signal?: Abort
     const raw = (json.data?.raffleEvents ?? []) as any[];
 
     return raw
-      .filter((e) => e?.raffle?.id && e?.actor && e?.uintValue && e?.txHash && e?.blockTimestamp)
+      .filter((e) => e?.raffle?.id && e?.actor && e?.uintValue != null && e?.txHash && e?.blockTimestamp != null)
       .map((e) => ({
         raffleId: String(e.raffle.id).toLowerCase(),
         raffleName: String(e.raffle.name ?? ""),
