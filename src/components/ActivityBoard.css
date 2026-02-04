@@ -1,0 +1,71 @@
+/* src/components/ActivityBoard.css */
+
+.ab-board {
+  max-width: 1400px; /* Matches HomePage container */
+  margin: 0 auto 40px auto;
+  background: white;
+  border-radius: 20px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+  overflow: hidden;
+}
+
+.ab-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;
+  display: flex; align-items: center; gap: 8px;
+  background: #f8fafc;
+}
+
+.ab-pulse {
+  width: 8px; height: 8px; background: #22c55e; border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: ab-pulse-anim 2s infinite;
+}
+@keyframes ab-pulse-anim {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.ab-list {
+  display: grid;
+  /* Responsive Grid: 1 col on mobile, 2 on tablet, 3 on desktop? 
+     Or just a vertical list. Let's do a vertical list with max-height for scrolling 
+     OR a nice grid. Let's do a Flex Wrap row for a "Board" feel. */
+  display: flex;
+  flex-wrap: wrap;
+  padding: 12px;
+}
+
+.ab-row {
+  flex: 1 1 300px; /* Min width 300px, grow to fill */
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  transition: background 0.2s;
+  border: 1px solid transparent;
+}
+.ab-row:hover { background: #f8fafc; border-color: #e2e8f0; }
+
+.ab-icon {
+  width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 18px;
+}
+.ab-icon.buy { background: #eff6ff; border: 1px solid #dbeafe; }
+.ab-icon.create { background: #fdf4ff; border: 1px solid #fce7f3; }
+
+.ab-content { flex: 1; min-width: 0; }
+
+.ab-main-text { font-size: 13px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab-user { font-weight: 700; color: #0f172a; font-family: monospace; }
+.ab-link { font-weight: 700; color: #2563eb; text-decoration: none; }
+.ab-link:hover { text-decoration: underline; }
+
+.ab-sub-text { font-size: 11px; color: #94a3b8; margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+
+.ab-pot-tag {
+  background: #fdf4ff; color: #d946ef; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;
+}
+
+.ab-loading { text-align: center; padding: 20px; color: #94a3b8; font-size: 13px; }
