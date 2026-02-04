@@ -17,7 +17,7 @@ export function useHomeRaffles() {
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
 
-  // ✅ FIX: Removed [items] dependency to prevent infinite loop
+  // Core Fetch Logic
   const fetchData = useCallback(async (isBackground = false) => {
     // Only show spinner on first load
     if (!isBackground) setIsLoading(true);
@@ -43,24 +43,19 @@ export function useHomeRaffles() {
           setItems(data);
         } catch (fallbackErr) {
           console.error("Fallback failed", fallbackErr);
-          // Don't clear items if we fail in background, keep old data
           if (!isBackground) setNote("Could not load raffles. Please refresh.");
         }
       }
     } finally {
-      // ✅ FIX: Only turn off loading if this wasn't a background refresh
       if (!isBackground) setIsLoading(false);
     }
-  }, []); // ✅ Dependency array must be empty!
+  }, []);
 
   // Initial Load + Polling
   useEffect(() => {
-    // 1. Initial Load
-    fetchData(false);
-
-    // 2. Silent Polling (every 10 seconds)
+    fetchData(false); // First load
     const interval = setInterval(() => {
-      fetchData(true);
+      fetchData(true); // Silent polling
     }, 10000);
 
     return () => clearInterval(interval);
@@ -104,11 +99,29 @@ export function useHomeRaffles() {
       .slice(0, 5);
   }, [all, mode]);
 
+  // ✅ NEW: Platform Stats Calculation
+  const stats = useMemo(() => {
+    const totalRaffles = all.length;
+    const settled = all.filter(r => r.status === "COMPLETED" || r.status === "CLAIMED").length;
+    const activeCount = active.length;
+    
+    // Calculate Volume (Sum of winningPots for non-canceled raffles)
+    const volume = all.reduce((acc, r) => {
+        if (r.status !== "CANCELED") {
+            return acc + BigInt(r.winningPot || "0");
+        }
+        return acc;
+    }, 0n);
+
+    return { totalRaffles, settled, activeCount, volume };
+  }, [all, active]);
+
   return { 
     items, 
     bigPrizes, 
     endingSoon, 
     recentlyFinalized, 
+    stats, // ✅ Exported for HomePage
     mode, 
     note, 
     isLoading, 
