@@ -7,7 +7,14 @@ import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 
 // Helpers
-const fmt = (v: string, dec = 18) => { try { return formatUnits(BigInt(v || "0"), dec); } catch { return "0"; } };
+const fmt = (v: string, dec = 18) => { 
+  try { 
+    const val = formatUnits(BigInt(v || "0"), dec);
+    // Show 2 decimals max, strip trailing zeros
+    return parseFloat(val).toLocaleString("en-US", { maximumFractionDigits: 2 }); 
+  } catch { return "0"; } 
+};
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmtTime = (s: number) => {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
@@ -23,7 +30,7 @@ type Props = {
 export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   const { data, hatch, actions } = useDashboardController();
   const [tab, setTab] = useState<"active" | "history" | "created">("active");
-  const [copied, setCopied] = useState(false); // ✅ State for copy feedback
+  const [copied, setCopied] = useState(false);
   
   // Clock
   const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
@@ -46,8 +53,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     if (!data.joined) return { active, past };
 
     data.joined.forEach((item: any) => {
-      const r = item.raffle || item; 
-      const userCount = Number(item.ticketsPurchased || 0);
+      // Handle if item is { raffle: ..., userTicketsOwned: ... }
+      const r = item; 
+      // The hook returns `userTicketsOwned` as a string
+      const userCount = Number(item.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
       const percentage = userCount > 0 ? ((userCount / sold) * 100).toFixed(1) : "0.0";
       
@@ -62,6 +71,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
     return { active, past };
   }, [data.joined]);
+
 
   // --- HATCH LOGIC ---
   const getHatchProps = (raffleId: string, creator: string) => {
@@ -78,6 +88,8 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       label: ready ? "Hatch Ready" : `Hatch in ${fmtTime(secLeft)}`,
       disabled: !ready || hatch.busy[raffleId] || data.isPending,
       onClick: () => hatch.trigger(raffleId),
+      busy: hatch.busy[raffleId],
+      note: hatch.notes[raffleId]
     };
   };
 
@@ -90,16 +102,14 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             <div className="db-avatar-circle">👤</div>
             <div>
                <div className="db-hero-label">Player Dashboard</div>
-               {/* ✅ UPDATED: Copy to Clipboard Address */}
                <div 
                  className="db-hero-addr" 
                  onClick={handleCopy} 
-                 title="Click to copy address"
-                 style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                 title="Click to copy"
                >
                  {account ? account : "Not Connected"}
                  {account && (
-                   <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                   <span className="db-copy-icon">
                      {copied ? "✅" : "📋"}
                    </span>
                  )}
@@ -138,29 +148,38 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                 const hasUsdc = BigInt(it.claimableUsdc || 0) > 0n;
                 const hasNative = BigInt(it.claimableNative || 0) > 0n;
                 
-                // ✅ LOGIC: Determine if this is a Refund or a Win
-                // The hook now returns type: "WIN" or "REFUND"
-                const isRefund = it.type === "REFUND" || r.status === "CANCELED";
-                const actionMethod = isRefund ? "claimTicketRefund" : "withdrawFunds";
-                const actionLabel = isRefund ? "Claim Refund" : "Claim Prize";
+                // ✅ Logic: Distinguish Refund vs Win
+                const isRefund = it.type === "REFUND";
+                const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
+                const label = isRefund ? "Claim Refund" : "Claim Prize";
+                const title = isRefund ? "Ticket Refund" : "Winner!";
                 
                 return (
                   <div key={r.id} className="db-claim-wrapper">
-                     <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+                     <RaffleCard 
+                       raffle={r} 
+                       onOpen={onOpenRaffle} 
+                       onOpenSafety={onOpenSafety} 
+                       nowMs={nowS * 1000}
+                       // Hide status chip on card to reduce noise, or keep it
+                     />
                      <div className="db-claim-box">
+                        <div className="db-claim-header">
+                           <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>
+                             {title}
+                           </span>
+                        </div>
                         <div className="db-claim-text">
-                           {isRefund ? "Refunding: " : "Winnings: "} 
-                           {fmt(it.claimableUsdc, 6)} USDC 
-                           {hasNative && ` + ${fmt(it.claimableNative, 18)} ETH`}
+                           {hasUsdc && <div>{fmt(it.claimableUsdc, 6)} USDC</div>}
+                           {hasNative && <div>{fmt(it.claimableNative, 18)} ETH</div>}
                         </div>
                         <div className="db-claim-actions">
-                           {/* ✅ FIX: Dynamic method for refund vs win */}
                            <button 
-                             className="db-btn" 
-                             disabled={!hasUsdc || data.isPending} 
-                             onClick={() => actions.withdraw(r.id, actionMethod)}
+                             className={`db-btn ${isRefund ? "secondary" : "primary"}`} 
+                             disabled={data.isPending} 
+                             onClick={() => actions.withdraw(r.id, method)}
                            >
-                              {actionLabel}
+                              {data.isPending ? "Processing..." : label}
                            </button>
                         </div>
                      </div>
@@ -177,7 +196,9 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
          <button className={`db-tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>History</button>
          <button className={`db-tab ${tab === 'created' ? 'active' : ''}`} onClick={() => setTab('created')}>Created</button>
          <div style={{flex:1}} />
-         <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending}>🔄</button>
+         <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending} title="Refresh Data">
+            🔄
+         </button>
       </div>
 
       {/* 4. CONTENT GRID */}
