@@ -46,9 +46,8 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     const active: any[] = [];
     const past: any[] = [];
 
-    if (!data.joined) return { active, past };
-
-    data.joined.forEach((r: any) => {
+    const joined = data.joined ?? [];
+    joined.forEach((r: any) => {
       const tickets = Number(r.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
       const percentage = tickets > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
@@ -67,9 +66,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
   const msgIsSuccess = useMemo(() => {
     if (!data.msg) return false;
-    // Matches your hook strings like "Claim successful." and future "success" variants
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
+
+  const claimables = data.claimables ?? [];
 
   return (
     <div className="db-container">
@@ -95,16 +95,16 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             <div className="db-stat-num">{pastEntries.length}</div>
             <div className="db-stat-lbl">History</div>
           </div>
-          {data.claimables.length > 0 && (
+          {claimables.length > 0 && (
             <div className="db-stat highlight">
-              <div className="db-stat-num">{data.claimables.length}</div>
+              <div className="db-stat-num">{claimables.length}</div>
               <div className="db-stat-lbl">To Claim</div>
             </div>
           )}
         </div>
       </div>
 
-      {/* STATUS BANNER (Success/Error Feedback) */}
+      {/* STATUS BANNER */}
       {data.msg && (
         <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>
           {data.msg}
@@ -112,7 +112,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       )}
 
       {/* CLAIMABLES */}
-      {data.claimables.length > 0 && (
+      {claimables.length > 0 && (
         <div className="db-section claim-section">
           <div className="db-section-header">
             <div className="db-section-title">💰 Winnings & Refunds</div>
@@ -120,19 +120,24 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
           </div>
 
           <div className="db-grid">
-            {data.claimables.map((it: any) => {
+            {claimables.map((it: any) => {
               const r = it.raffle;
 
               const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
               const hasNative = BigInt(it.claimableNative || "0") > 0n;
 
-              // Force "refund" UX if raffle canceled (even if hook type isn't REFUND)
-              const isRefund = it.type === "REFUND" || r.status === "CANCELED";
+              // ✅ IMPORTANT FIX:
+              // Don't force refund mode just because raffle is canceled.
+              // Refund is for participants (ticket refund), not creators.
+              const isRefund =
+                it.type === "REFUND" ||
+                (r.status === "CANCELED" && it.roles?.participated);
+
               const ticketCount = Number(it.userTicketsOwned || 0);
 
               const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
-              const label = isRefund ? "Reclaim Funds" : "Claim Prize";
-              const title = isRefund ? "Refund Available" : "Winner!";
+              const label = isRefund ? "Reclaim Funds" : "Withdraw / Claim";
+              const title = isRefund ? "Refund Available" : "Claim Available";
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
@@ -168,10 +173,13 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                         </div>
                       ) : (
                         <div className="db-win-layout">
-                          <div className="db-win-label">Prize Amount:</div>
+                          <div className="db-win-label">Amount:</div>
                           <div className="db-win-val">
                             {hasUsdc && <span>{fmt(it.claimableUsdc, 6)} USDC</span>}
                             {hasNative && <span> + {fmt(it.claimableNative, 18)} ETH</span>}
+                            {!hasUsdc && !hasNative && (
+                              <span style={{ opacity: 0.7 }}>Available (check on-chain)</span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -180,10 +188,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                     <div className="db-claim-actions">
                       <button
                         className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                        disabled={data.isPending}
+                        disabled={data.isPending || data.isBusy}
                         onClick={() => actions.withdraw(r.id, method)}
                       >
-                        {data.isPending ? "Processing..." : label}
+                        {data.isBusy ? "Processing..." : label}
                       </button>
                     </div>
                   </div>
@@ -214,6 +222,11 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             onClick={() => setTab("created")}
           >
             Created
+          </button>
+
+          <div style={{ flex: 1 }} />
+          <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending || data.isBusy}>
+            🔄
           </button>
         </div>
       </div>
@@ -250,7 +263,6 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
               <div className="db-empty">No past participation found.</div>
             )}
             {pastEntries.map((r: any) => {
-              // If Canceled + 0 tickets, it means they reclaimed them (based on your current UI logic)
               const isRefunded = r.status === "CANCELED" && r.userEntry?.count === 0;
 
               return (
@@ -275,10 +287,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
 
         {tab === "created" && (
           <div className="db-grid">
-            {!data.isPending && data.created.length === 0 && (
+            {!data.isPending && (data.created ?? []).length === 0 && (
               <div className="db-empty">You haven't hosted any raffles yet.</div>
             )}
-            {data.created.map((r: any) => (
+            {(data.created ?? []).map((r: any) => (
               <RaffleCard
                 key={r.id}
                 raffle={r}
