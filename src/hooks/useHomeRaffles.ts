@@ -13,20 +13,19 @@ function numOr0(v?: string | null) {
 
 export function useHomeRaffles() {
   const [items, setItems] = useState<RaffleListItem[] | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // ✅ Added explicit loading state
+  const [isLoading, setIsLoading] = useState(true);
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
 
-  // Core Fetch Logic
+  // ✅ FIX: Removed [items] dependency to prevent infinite loop
   const fetchData = useCallback(async (isBackground = false) => {
     // Only show spinner on first load
     if (!isBackground) setIsLoading(true);
     
     const controller = new AbortController();
 
-    // 1) Try Subgraph (Fast)
     try {
-      // Short timeout for indexer
+      // 1) Try Subgraph (Fast)
       const t = window.setTimeout(() => controller.abort(), 4500);
       const data = await fetchRafflesFromSubgraph({ signal: controller.signal });
       window.clearTimeout(t);
@@ -35,28 +34,24 @@ export function useHomeRaffles() {
       setNote(null);
       setItems(data);
     } catch (err) {
-      // 2) Fallback: On-Chain (Slow)
-      // Only attempt fallback on the FIRST load.
-      // We don't want to spam RPCs in the background every 5s.
+      // 2) Fallback: On-Chain (Only on first load, not background)
       if (!isBackground) {
         try {
           setMode("live");
           setNote("Indexer unavailable. Showing live blockchain data.");
-          const data = await fetchRafflesOnChainFallback(50); // Limit to 50 for speed
+          const data = await fetchRafflesOnChainFallback(50);
           setItems(data);
         } catch (fallbackErr) {
           console.error("Fallback failed", fallbackErr);
-          if (!items) setItems([]); // Only clear if we have nothing
-          setNote("Could not load raffles. Please refresh.");
+          // Don't clear items if we fail in background, keep old data
+          if (!isBackground) setNote("Could not load raffles. Please refresh.");
         }
-      } else {
-        // If background refresh fails, just do nothing (keep old data)
-        console.warn("Background refresh failed, keeping stale data");
       }
     } finally {
+      // ✅ FIX: Only turn off loading if this wasn't a background refresh
       if (!isBackground) setIsLoading(false);
     }
-  }, [items]);
+  }, []); // ✅ Dependency array must be empty!
 
   // Initial Load + Polling
   useEffect(() => {
@@ -71,7 +66,7 @@ export function useHomeRaffles() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // --- Derived Data Filters (Memoized for performance) ---
+  // --- Derived Data Filters ---
 
   const all = useMemo(() => items ?? [], [items]);
 
@@ -79,7 +74,6 @@ export function useHomeRaffles() {
     return all.filter((r) => r.status === "OPEN" || r.status === "FUNDING_PENDING");
   }, [all]);
 
-  // Big prizes: top 3 active by winningPot (descending)
   const bigPrizes = useMemo(() => {
     return [...active]
       .sort((a, b) => {
@@ -91,7 +85,6 @@ export function useHomeRaffles() {
       .slice(0, 3);
   }, [active]);
 
-  // Ending soon: top 5 OPEN by deadline ascending
   const endingSoon = useMemo(() => {
     return [...active]
       .filter((r) => r.status === "OPEN")
@@ -99,7 +92,6 @@ export function useHomeRaffles() {
       .slice(0, 5);
   }, [active]);
 
-  // Recently finalized
   const recentlyFinalized = useMemo(() => {
     if (mode === "live") return [];
     const settled = all.filter((r) => r.status === "COMPLETED");
@@ -119,7 +111,7 @@ export function useHomeRaffles() {
     recentlyFinalized, 
     mode, 
     note, 
-    isLoading, // ✅ Now properly exported
-    refetch: () => fetchData(false) // Manual refresh triggers spinner
+    isLoading, 
+    refetch: () => fetchData(false) 
   };
 }
