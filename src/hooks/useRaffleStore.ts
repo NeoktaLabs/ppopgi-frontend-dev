@@ -10,10 +10,9 @@ import { fetchRafflesFromSubgraph, type RaffleListItem } from "../indexer/subgra
  * - Slows down when tab is hidden
  * - Stops polling when unused
  *
- * NOTE:
- * This file exports BOTH:
- *  1) the store functions (startRaffleStore/refresh/getSnapshot/subscribe)
- *  2) a React hook: useRaffleStore(consumerKey, pollMs)
+ * Exports:
+ *  1) store functions (startRaffleStore/refresh/getSnapshot/subscribe)
+ *  2) React hook: useRaffleStore(consumerKey, pollMs)
  */
 
 type StoreState = {
@@ -48,6 +47,9 @@ let backoffStep = 0;
 
 // Each consumer requests a poll interval; we use the minimum
 const requestedPolls = new Map<string, number>();
+
+// Singleton lifecycle listener cleanup (avoid attaching multiple times)
+let detachLifecycleListeners: (() => void) | null = null;
 
 function emit() {
   listeners.forEach((fn) => fn());
@@ -212,27 +214,35 @@ export function subscribe(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
+function attachLifecycleOnce() {
+  if (detachLifecycleListeners) return;
+
+  const onFocus = () => void refresh(true, true);
+  const onVis = () => {
+    if (!isHidden()) void refresh(true, true);
+  };
+
+  window.addEventListener("focus", onFocus);
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVis);
+  }
+
+  detachLifecycleListeners = () => {
+    window.removeEventListener("focus", onFocus);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVis);
+    }
+  };
+}
+
 export function startRaffleStore(consumerKey: string, pollMs: number) {
   subscribers += 1;
   requestedPolls.set(consumerKey, pollMs);
 
-  // Attach lifecycle listeners once
   if (subscribers === 1) {
-    const onFocus = () => refresh(true, true);
-    const onVis = () => {
-      if (!isHidden()) refresh(true, true);
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-
-    (startRaffleStore as any)._cleanup = () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-
-    // initial fetch
-    void refresh(false, true);
+    attachLifecycleOnce();
+    void refresh(false, true); // initial fetch
   } else {
     // if we already have data, don’t force; otherwise, fetch once
     if (!state.items) void refresh(false, true);
@@ -248,8 +258,11 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
       aborter?.abort();
       aborter = null;
       inFlight = null;
-      (startRaffleStore as any)._cleanup?.();
+
+      detachLifecycleListeners?.();
+      detachLifecycleListeners = null;
     } else {
+      // ✅ important: recompute pollMs based on remaining consumers
       scheduleNext();
     }
   };
@@ -262,10 +275,8 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
  * - returns current snapshot
  */
 export function useRaffleStore(consumerKey: string, pollMs: number) {
-  // subscribe/getSnapshot are stable module functions, safe for useSyncExternalStore
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  // start/stop polling for this consumer
   useEffect(() => {
     const stop = startRaffleStore(consumerKey, pollMs);
     return () => stop();
