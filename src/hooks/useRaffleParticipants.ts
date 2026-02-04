@@ -21,14 +21,14 @@ export function useRaffleParticipants(raffleId: string | null, totalSold: number
     const load = async () => {
       setIsLoading(true);
       try {
-        // 1. Fetch from your new Subgraph function
+        // Fetch using the updated function in subgraph.ts
         const raw = await fetchRaffleParticipants(raffleId);
         
         if (!active) return;
 
-        // 2. Format and Calculate Percentage
+        // Calculate Percentages
         const formatted: ParticipantUI[] = raw.map((p) => {
-          const count = Number(p.ticketsPurchased);
+          const count = Number(p.ticketsPurchased); // Convert string to number
           const pct = totalSold > 0 ? ((count / totalSold) * 100).toFixed(1) : "0.0";
           
           return {
