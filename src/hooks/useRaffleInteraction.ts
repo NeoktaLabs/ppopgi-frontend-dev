@@ -7,6 +7,7 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 import { useRaffleDetails } from "./useRaffleDetails";
+import { useConfetti } from "./useConfetti"; // ✅ 1. Import Confetti
 
 // --- Helpers moved out of UI ---
 function short(a: string) { return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—"; }
@@ -20,7 +21,10 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const account = useActiveAccount();
   const { mutateAsync: sendAndConfirm, isPending } = useSendAndConfirmTransaction();
   
-  // 2. Local State
+  // ✅ 2. Init Confetti
+  const { fireConfetti } = useConfetti();
+  
+  // 3. Local State
   const [nowMs, setNowMs] = useState(Date.now());
   const [tickets, setTickets] = useState("1");
   const [buyMsg, setBuyMsg] = useState<string | null>(null);
@@ -29,7 +33,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const [allowLoading, setAllowLoading] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  // 3. Derived Logic
+  // 4. Derived Logic
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t); }, []);
   
   const deadlineMs = Number(data?.deadline || "0") * 1000;
@@ -101,7 +105,13 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     if (!account?.address || !raffleContract) return;
     try {
       const tx = prepareContractCall({ contract: raffleContract, method: "function buyTickets(uint256)", params: [BigInt(ticketCount)] });
+      
+      // Wait for confirmation
       await sendAndConfirm(tx);
+      
+      // ✅ 3. Fire Confetti on Success!
+      fireConfetti();
+      
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance();
     } catch (e: any) {
