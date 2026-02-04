@@ -1,3 +1,4 @@
+// src/pages/DashboardPage.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
@@ -14,8 +15,6 @@ const fmt = (v: string, dec = 18) => {
     return "0";
   }
 };
-
-const pad = (n: number) => String(n).padStart(2, "0");
 
 type Props = {
   account: string | null;
@@ -47,6 +46,8 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     const active: any[] = [];
     const past: any[] = [];
 
+    if (!data.joined) return { active, past };
+
     data.joined.forEach((r: any) => {
       const tickets = Number(r.userTicketsOwned || 0);
       const sold = Number(r.sold || 1);
@@ -64,6 +65,12 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     return { active, past };
   }, [data.joined]);
 
+  const msgIsSuccess = useMemo(() => {
+    if (!data.msg) return false;
+    // Matches your hook strings like "Claim successful." and future "success" variants
+    return /success|successful|claimed/i.test(data.msg);
+  }, [data.msg]);
+
   return (
     <div className="db-container">
       {/* HERO */}
@@ -72,7 +79,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
           <div className="db-avatar-circle">👤</div>
           <div>
             <div className="db-hero-label">Player Dashboard</div>
-            <div className="db-hero-addr" onClick={handleCopy}>
+            <div className="db-hero-addr" onClick={handleCopy} title="Click to Copy">
               {account || "Not Connected"}
               {account && <span className="db-copy-icon">{copied ? "✅" : "📋"}</span>}
             </div>
@@ -97,6 +104,13 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
         </div>
       </div>
 
+      {/* STATUS BANNER (Success/Error Feedback) */}
+      {data.msg && (
+        <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>
+          {data.msg}
+        </div>
+      )}
+
       {/* CLAIMABLES */}
       {data.claimables.length > 0 && (
         <div className="db-section claim-section">
@@ -112,15 +126,11 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
               const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
               const hasNative = BigInt(it.claimableNative || "0") > 0n;
 
-              // ✅ FIXED: role-aware refund detection
-              const isRefund = it.type === "REFUND";
+              // Force "refund" UX if raffle canceled (even if hook type isn't REFUND)
+              const isRefund = it.type === "REFUND" || r.status === "CANCELED";
               const ticketCount = Number(it.userTicketsOwned || 0);
 
-              const method =
-                isRefund && it.roles?.participated
-                  ? "claimTicketRefund"
-                  : "withdrawFunds";
-
+              const method = isRefund ? "claimTicketRefund" : "withdrawFunds";
               const label = isRefund ? "Reclaim Funds" : "Claim Prize";
               const title = isRefund ? "Refund Available" : "Winner!";
 
@@ -145,9 +155,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                         <div className="db-refund-layout">
                           {hasUsdc ? (
                             <>
-                              <div className="db-refund-val">
-                                {fmt(it.claimableUsdc, 6)} USDC
-                              </div>
+                              <div className="db-refund-val">{fmt(it.claimableUsdc, 6)} USDC</div>
                               <div className="db-refund-sub">
                                 Refund for <b>{ticketCount}</b> ticket{ticketCount !== 1 ? "s" : ""}
                               </div>
@@ -187,20 +195,27 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
       )}
 
       {/* TABS */}
-      <div className="db-tabs">
-        <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
-          Active Entries
-        </button>
-        <button className={`db-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>
-          History
-        </button>
-        <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
-          Created
-        </button>
-        <div style={{ flex: 1 }} />
-        <button className="db-refresh-btn" onClick={actions.refresh} disabled={data.isPending}>
-          🔄
-        </button>
+      <div className="db-tabs-container">
+        <div className="db-tabs">
+          <button
+            className={`db-tab ${tab === "active" ? "active" : ""}`}
+            onClick={() => setTab("active")}
+          >
+            Active Entries
+          </button>
+          <button
+            className={`db-tab ${tab === "history" ? "active" : ""}`}
+            onClick={() => setTab("history")}
+          >
+            History
+          </button>
+          <button
+            className={`db-tab ${tab === "created" ? "active" : ""}`}
+            onClick={() => setTab("created")}
+          >
+            Created
+          </button>
+        </div>
       </div>
 
       {/* CONTENT */}
@@ -235,7 +250,9 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
               <div className="db-empty">No past participation found.</div>
             )}
             {pastEntries.map((r: any) => {
+              // If Canceled + 0 tickets, it means they reclaimed them (based on your current UI logic)
               const isRefunded = r.status === "CANCELED" && r.userEntry?.count === 0;
+
               return (
                 <div key={r.id} className="db-history-card-wrapper">
                   <RaffleCard
