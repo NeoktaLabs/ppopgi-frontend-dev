@@ -49,7 +49,7 @@ export type RaffleListItem = {
   lastUpdatedTimestamp: string;
 };
 
-// ✅ NEW: participant aggregation type (matches schema.graphql)
+// ✅ participants aggregation type (matches schema.graphql)
 export type RaffleParticipantItem = {
   id: string;
   buyer: string;
@@ -60,6 +60,16 @@ export type RaffleParticipantItem = {
   lastSeenTimestamp: string;
   lastRangeIndex: string | null;
   lastTotalSold: string | null;
+};
+
+// ✅ NEW: global “latest ticket sales” stream (uses RaffleEvent)
+export type GlobalActivityItem = {
+  raffleId: string;
+  raffleName: string;
+  buyer: string;
+  count: string; // BigInt as string
+  timestamp: string;
+  txHash: string;
 };
 
 function mustEnv(name: string): string {
@@ -149,10 +159,11 @@ export async function fetchRafflesFromSubgraph(
 }
 
 /**
- * ✅ NEW: FETCH PARTICIPANTS for a raffle (leaderboard)
+ * ✅ FETCH PARTICIPANTS for a raffle (leaderboard)
  *
- * This uses the RaffleParticipant entity you added to the schema + mappings.
- * Note: buyer is Bytes on-chain, but GraphQL returns it as a hex string.
+ * Requires you to add this derived field in schema.graphql:
+ *   participants: [RaffleParticipant!]! @derivedFrom(field: "raffle")
+ * on type Raffle
  */
 export async function fetchRaffleParticipants(
   raffleId: string,
@@ -247,12 +258,20 @@ export async function fetchRaffleWithParticipants(
         sold
         ticketPrice
         ticketRevenue
-        participants(first: $firstParticipants, orderBy: ticketsPurchased, orderDirection: desc) {
+        participants(
+          first: $firstParticipants
+          orderBy: ticketsPurchased
+          orderDirection: desc
+        ) {
           id
           buyer
           ticketsPurchased
+          firstSeenBlock
           firstSeenTimestamp
+          lastSeenBlock
           lastSeenTimestamp
+          lastRangeIndex
+          lastTotalSold
         }
       }
     }
@@ -291,17 +310,86 @@ export async function fetchRaffleWithParticipants(
         id: String(p.id).toLowerCase(),
         buyer: String(p.buyer).toLowerCase(),
         ticketsPurchased: String(p.ticketsPurchased),
-        firstSeenBlock: "0",
-        firstSeenTimestamp: String(p.firstSeenTimestamp ?? "0"),
-        lastSeenBlock: "0",
-        lastSeenTimestamp: String(p.lastSeenTimestamp ?? "0"),
-        lastRangeIndex: null,
-        lastTotalSold: null,
+        firstSeenBlock: String(p.firstSeenBlock),
+        firstSeenTimestamp: String(p.firstSeenTimestamp),
+        lastSeenBlock: String(p.lastSeenBlock),
+        lastSeenTimestamp: String(p.lastSeenTimestamp),
+        lastRangeIndex: p.lastRangeIndex != null ? String(p.lastRangeIndex) : null,
+        lastTotalSold: p.lastTotalSold != null ? String(p.lastTotalSold) : null,
       })),
     };
   } catch (e) {
     console.error("fetchRaffleWithParticipants failed:", e);
     return { raffle: null, participants: [] };
+  }
+}
+
+/**
+ * ✅ NEW: Fetch latest global ticket sales across all raffles
+ *
+ * Uses RaffleEvent where type = TICKETS_PURCHASED.
+ * Your mapping already sets:
+ *  - actor = buyer
+ *  - uintValue = count
+ *  - blockTimestamp = timestamp
+ *  - txHash
+ *  - raffle { id name }
+ */
+export async function fetchGlobalActivity(opts: { first?: number; signal?: AbortSignal } = {}): Promise<GlobalActivityItem[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const first = Math.min(Math.max(opts.first ?? 15, 1), 1000);
+
+  const query = `
+    query GlobalActivity($first: Int!) {
+      raffleEvents(
+        first: $first
+        orderBy: blockTimestamp
+        orderDirection: desc
+        where: { type: TICKETS_PURCHASED }
+      ) {
+        raffle { id name }
+        actor
+        uintValue
+        blockTimestamp
+        txHash
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, variables: { first } }),
+      signal: opts.signal,
+    });
+
+    if (!res.ok) {
+      console.error("Subgraph global activity fetch failed", res.status);
+      return [];
+    }
+
+    const json = await res.json();
+    if (json?.errors?.length) {
+      console.error("Subgraph global activity GQL error", json.errors);
+      return [];
+    }
+
+    const raw = (json.data?.raffleEvents ?? []) as any[];
+
+    return raw
+      .filter((e) => e?.raffle?.id && e?.actor && e?.uintValue && e?.txHash && e?.blockTimestamp)
+      .map((e) => ({
+        raffleId: String(e.raffle.id).toLowerCase(),
+        raffleName: String(e.raffle.name ?? ""),
+        buyer: String(e.actor).toLowerCase(),
+        count: String(e.uintValue),
+        timestamp: String(e.blockTimestamp),
+        txHash: String(e.txHash).toLowerCase(),
+      }));
+  } catch (e) {
+    console.error("Activity fetch failed", e);
+    return [];
   }
 }
 
@@ -332,7 +420,13 @@ export async function fetchRaffleMetadata(
 
     if (!res.ok) return null;
     const json = await res.json();
-    return json.data?.raffle || null;
+    if (json?.errors?.length) return null;
+
+    const r = json.data?.raffle || null;
+    if (!r) return null;
+
+    // normalize any id-like fields if you later add them here
+    return r;
   } catch (e) {
     console.error("Metadata fetch failed:", e);
     return null;
@@ -341,7 +435,7 @@ export async function fetchRaffleMetadata(
 
 /**
  * ❌ OLD (Ticket entity) — remove if your subgraph does not have `Ticket`.
- * If you keep this, it will throw GQL errors unless Ticket exists in schema.
+ * If you keep Ticket-based functions, they WILL GQL error unless Ticket exists in schema.
  */
 // export type TicketItem = { owner: string };
 // export async function fetchRaffleTickets(raffleId: string): Promise<TicketItem[]> { ... }
