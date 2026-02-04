@@ -112,7 +112,7 @@
 
 @keyframes rc-pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
-/* Odds Badge */
+/* Odds Badge (Shortened) */
 .rc-odds-badge {
   padding: 6px 10px;
   border-radius: 6px;
@@ -124,10 +124,11 @@
   color: #4A0F2B;
   letter-spacing: 0.5px;
   margin-left: 8px;
-  margin-right: auto; /* Pushes actions to the right */
+  margin-right: auto; 
 }
 
 .rc-actions { display: flex; gap: 8px; }
+
 .rc-btn-icon {
   width: 32px; height: 32px;
   border-radius: 8px;
@@ -138,6 +139,18 @@
 }
 .rc-btn-icon:hover { background: rgba(255,255,255,0.8); }
 .rc-btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ✅ NEW: Safety Shield Button (Professional Look) */
+.rc-shield-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,0.7); 
+  color: #0284c7; /* Trust Blue */
+  display: grid; place-items: center; cursor: pointer;
+  border: 1px solid rgba(2, 132, 199, 0.15);
+  font-size: 16px; 
+  transition: all 0.2s;
+}
+.rc-shield-btn:hover { background: #e0f2fe; transform: scale(1.1); }
 
 /* --- Host Line --- */
 .rc-host { 
@@ -162,9 +175,25 @@
 .rc-token-icon {
   width: 24px; height: 24px; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
+
+/* ✅ NEW: Bigger Prize with Breathing Animation */
 .rc-prize-val { 
-  font-size: 34px; font-weight: 1000; line-height: 1; 
-  font-family: "Courier New", Courier, monospace; letter-spacing: -1.5px;
+  font-size: 42px; /* Bigger */
+  font-weight: 1000; line-height: 1; 
+  font-family: "Courier New", Courier, monospace; letter-spacing: -2px;
+  
+  /* Gradient Text */
+  background: linear-gradient(135deg, #4A0F2B 0%, #BE185D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  
+  /* Breathing Animation */
+  animation: prize-breath 3s ease-in-out infinite;
+}
+
+@keyframes prize-breath {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 2px 0px rgba(0,0,0,0.05)); }
+  50% { transform: scale(1.03); filter: drop-shadow(0 4px 4px rgba(190, 24, 93, 0.1)); }
 }
 
 /* --- Quick Buy Button --- */
@@ -267,24 +296,14 @@
     border: 1px solid rgba(0,0,0,0.1);
 }
 
-/* ✅ NEW: User Stats Badge (Dashboard) */
+/* User Stats Badge (Dashboard) */
 .rc-user-badge {
-  background: #EAB308; /* Gold to stand out against pink/white */
-  color: white;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 4px 12px;
-  border-radius: 99px;
-  
-  /* Centering logic */
-  margin: -4px auto 8px auto; 
-  display: table;
-  
+  background: #EAB308; color: white;
+  font-size: 11px; font-weight: 800;
+  padding: 4px 12px; border-radius: 99px;
+  margin: -4px auto 8px auto; display: table;
   box-shadow: 0 4px 10px rgba(234, 179, 8, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  z-index: 5;
-  position: relative;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  z-index: 5; position: relative;
   border: 1px solid rgba(255,255,255,0.2);
 }
-
