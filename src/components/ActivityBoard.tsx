@@ -4,10 +4,8 @@ import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
 import "./ActivityBoard.css";
 
-// Helper: Short Address
 const short = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)}` : "—";
 
-// Helper: Time Ago
 const timeAgo = (ts: string) => {
   const diff = Math.floor(Date.now() / 1000) - Number(ts);
   if (diff < 60) return `${diff}s ago`;
@@ -21,8 +19,8 @@ export function ActivityBoard() {
 
   const load = async () => {
     try {
-      // Fetch top 10 activities
-      const data = await fetchGlobalActivity({ first: 10 });
+      // ✅ Fetch 15 items as requested
+      const data = await fetchGlobalActivity({ first: 15 });
       setItems(data);
     } catch (e) {
       console.error(e);
@@ -33,32 +31,28 @@ export function ActivityBoard() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000); // Refresh every 15s
+    const t = setInterval(load, 15000); 
     return () => clearInterval(t);
   }, []);
 
-  if (loading && items.length === 0) return <div className="ab-loading">Loading live activity...</div>;
+  if (loading && items.length === 0) return <div className="ab-board"><div className="ab-loading">Loading live activity...</div></div>;
   if (items.length === 0) return null;
 
   return (
     <div className="ab-board">
        <div className="ab-header">
           <div className="ab-pulse" />
-          Live Activity
+          Live Activity (Last 15)
        </div>
        
        <div className="ab-list">
           {items.map((item, i) => {
              const isBuy = item.type === "BUY";
-             
              return (
                <div key={`${item.txHash}-${i}`} className="ab-row">
-                  {/* Icon */}
                   <div className={`ab-icon ${isBuy ? "buy" : "create"}`}>
                      {isBuy ? "🎟️" : "✨"}
                   </div>
-
-                  {/* Content */}
                   <div className="ab-content">
                      <div className="ab-main-text">
                         <span className="ab-user">{short(item.subject)}</span>
@@ -73,8 +67,7 @@ export function ActivityBoard() {
                      </div>
                      <div className="ab-sub-text">
                         {timeAgo(item.timestamp)}
-                        {/* Show Prize Pot for Creations */}
-                        {!isBuy && <span className="ab-pot-tag">Prize: {formatUnits(item.value, 6)} USDC</span>}
+                        {!isBuy && <span className="ab-pot-tag">Pot: {formatUnits(item.value, 6)} USDC</span>}
                      </div>
                   </div>
                </div>
