@@ -4,7 +4,7 @@ import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
-import { ActivityTicker } from "../components/ActivityTicker"; // ✅ Import the Ticker
+import { ActivityTicker } from "../components/ActivityTicker"; 
 import "./HomePage.css";
 
 type Props = {
@@ -13,50 +13,37 @@ type Props = {
   onOpenSafety: (id: string) => void;
 };
 
-// Formatting Helpers
+// Formatting Helper
 const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-const fmtSum = (val: bigint) => {
+const fmtUsd = (val: bigint) => {
   try {
     const s = formatUnits(val, 6);
     const n = parseFloat(s);
-    return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    // Compact format: $1.2K, $500K
+    return n.toLocaleString("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
   } catch { return "$0"; }
 };
 
 export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
-  const { items, bigPrizes, endingSoon, isLoading } = useHomeRaffles();
+  const { items, bigPrizes, endingSoon, stats, isLoading } = useHomeRaffles();
 
-  // 1. Podium Logic
+  // Podium Logic
   const podium = useMemo(() => {
     if (!bigPrizes || bigPrizes.length === 0) return { gold: null, silver: null, bronze: null };
-    // Sort descending by pot
     const sorted = [...bigPrizes].sort((a, b) => {
         try { return BigInt(a.winningPot || "0") < BigInt(b.winningPot || "0") ? 1 : -1; } catch { return 0; }
     });
     return { gold: sorted[0], silver: sorted[1], bronze: sorted[2] };
   }, [bigPrizes]);
 
-  // 2. Ending Soon
+  // Ending Soon Logic
   const endingSoonSorted = useMemo(() => {
     if (!endingSoon) return [];
     return [...endingSoon].sort((a, b) => num(a.deadline) - num(b.deadline));
   }, [endingSoon]);
 
-  // 3. Global Stats
-  const totalPrizeVolume = useMemo(() => {
-    if (isLoading || !items) return null;
-    const sum = items.reduce((acc, r) => {
-      if (r.status === "OPEN" || r.status === "FUNDING_PENDING") {
-        return acc + BigInt(r.winningPot || "0");
-      }
-      return acc;
-    }, 0n);
-    return fmtSum(sum);
-  }, [items, isLoading]);
-
   return (
     <>
-      {/* ✅ 0. LIVE ACTIVITY TICKER (Full width at top) */}
       <ActivityTicker />
 
       <div className="hp-container">
@@ -68,15 +55,26 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             The fully on-chain raffle protocol. Provably fair, non-custodial, and transparent.
           </div>
           
-          {!isLoading && totalPrizeVolume && (
-             <div className="hp-stat-pill">
-                <div className="hp-stat-label">Active Prizes</div>
-                <div className="hp-stat-val">{totalPrizeVolume}</div>
+          {/* ✅ NEW: PLATFORM STATS BAR */}
+          <div className="hp-stats-bar">
+             <div className="hp-stat-item">
+                <div className="hp-stat-val">{isLoading ? "..." : stats.totalRaffles}</div>
+                <div className="hp-stat-lbl">Raffles Created</div>
              </div>
-          )}
+             <div className="hp-stat-sep" />
+             <div className="hp-stat-item">
+                <div className="hp-stat-val">{isLoading ? "..." : stats.settled}</div>
+                <div className="hp-stat-lbl">Prizes Settled</div>
+             </div>
+             <div className="hp-stat-sep" />
+             <div className="hp-stat-item highlight">
+                <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.volume)}</div>
+                <div className="hp-stat-lbl">Total Volume</div>
+             </div>
+          </div>
         </div>
 
-        {/* 2. THE PODIUM (Floating over the hero) */}
+        {/* 2. THE PODIUM */}
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: 'center', marginBottom: 20 }}>
              <div className="hp-section-title">🏆 Top Prizepools</div>
@@ -97,7 +95,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                </div>
             )}
 
-            {/* GOLD gets the Crown */}
             {!isLoading && podium.gold && (
                <div className="pp-gold-wrapper">
                  <div className="hp-crown">👑</div>
@@ -113,7 +110,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
           </div>
         </div>
 
-        {/* 3. ENDING SOON (Horizontal Strip) */}
+        {/* 3. ENDING SOON */}
         <div>
           <div className="hp-section-header">
              <div className="hp-section-title">⏳ Ending Soon</div>
