@@ -53,24 +53,21 @@ export function useDashboardController() {
       // 1. My Created
       const myCreated = allRaffles.filter(r => r.creator.toLowerCase() === myAddr);
 
-      // 2. My Joined (Fixed)
-      // We look for raffles where I am in the participants list.
+      // 2. My Joined
       // NOTE: Ensure your Subgraph 'Raffle' entity has a 'participants' array of strings.
-      // If not, you might need a separate query like `activeEntries` here.
       const myJoined = allRaffles.filter(r => {
-        // @ts-ignore - Assuming participants exists on your GQL type
+        // @ts-ignore
         const parts = r.participants || []; 
         return parts.some((p: string) => p.toLowerCase() === myAddr);
       }).map(r => {
-         // Calculate my entries count if possible (mocked here as 1 if not available)
          return { ...r, userEntry: { count: 1, percentage: "0.0" } };
       });
 
-      // 3. Claimables (Winnings & REFUNDS)
+      // 3. Claimables
       const myClaimables = [];
 
       for (const r of myJoined) {
-        // A. Winnings (Completed + I am winner)
+        // A. Winnings
         if (r.status === "COMPLETED" && r.winner && r.winner.toLowerCase() === myAddr) {
            myClaimables.push({
              raffle: r,
@@ -81,14 +78,11 @@ export function useDashboardController() {
            });
         }
         
-        // B. Refunds (Canceled + I participated)
-        // ✅ FIX: This ensures Canceled raffles show up to reclaim money
+        // B. Refunds (Canceled + Participated)
         if (r.status === "CANCELED") {
-           // We assume if you are in 'myJoined', you bought a ticket.
-           // You can add an on-chain check here for `balanceOf` if you want to be 100% sure.
            myClaimables.push({
              raffle: r,
-             claimableUsdc: r.ticketPrice, // Approximation: at least 1 ticket worth
+             claimableUsdc: r.ticketPrice, // Approximation
              claimableNative: "0",
              type: "REFUND",
              roles: { participated: true }
@@ -135,14 +129,13 @@ export function useDashboardController() {
         return true; 
       })
       .sort((a: any, b: any) => {
-        // Show Refunds first, then Big Wins
         if (a.type === "REFUND" && b.type !== "REFUND") return -1;
         if (b.type === "REFUND" && a.type !== "REFUND") return 1;
         return BigInt(b.claimableUsdc || 0) > BigInt(a.claimableUsdc || 0) ? 1 : -1;
       });
   }, [claimables, hiddenClaimables]);
 
-  // --- Hatch Polling (Keep existing) ---
+  // --- Hatch Polling (FIXED) ---
   useEffect(() => {
     if (!account || !createdSorted) return; 
     let alive = true;
@@ -156,7 +149,12 @@ export function useDashboardController() {
         } catch { return { id, val: "0", ok: false }; }
     })).then((results) => {
         if (!alive) return;
-        setDrawingAtById(prev => { const n = { ...prev }; results.forEach(r => next[r.id] = r.val); return next; });
+        // ✅ FIX: Changed 'next' to 'n'
+        setDrawingAtById(prev => { 
+            const n = { ...prev }; 
+            results.forEach(r => n[r.id] = r.val); 
+            return n; 
+        });
     });
     return () => { alive = false; };
   }, [account, createdSorted, drawingAtById]);
