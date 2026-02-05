@@ -241,6 +241,43 @@ export async function fetchRafflesByIds(
 }
 
 /**
+ * ✅ Fetch raffles by creator (backfill "Created" tab + creator refunds)
+ * Paged; you can tune max pages on the caller side.
+ */
+export async function fetchRafflesByCreator(
+  creator: string,
+  opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
+): Promise<RaffleListItem[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const first = Math.min(Math.max(opts.first ?? 200, 1), 1000);
+  const skip = Math.max(opts.skip ?? 0, 0);
+
+  const query = `
+    query RafflesByCreator($creator: Bytes!, $first: Int!, $skip: Int!) {
+      raffles(
+        first: $first
+        skip: $skip
+        where: { creator: $creator }
+        orderBy: createdAtTimestamp
+        orderDirection: desc
+      ) {
+        ${RAFFLE_FIELDS}
+      }
+    }
+  `;
+
+  type Resp = { raffles: RaffleListItem[] };
+  const data = await gqlFetch<Resp>(
+    url,
+    query,
+    { creator: creator.toLowerCase(), first, skip },
+    opts.signal
+  );
+
+  return (data.raffles ?? []).map((r) => normalizeRaffle(r));
+}
+
+/**
  * ✅ FETCH PARTICIPANTS for a raffle (leaderboard)
  */
 export async function fetchRaffleParticipants(
