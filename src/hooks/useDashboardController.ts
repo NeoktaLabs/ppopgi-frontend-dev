@@ -129,18 +129,36 @@ export function useDashboardController() {
 
   const joinedFetchInFlightRef = useRef(false);
   const joinedBackoffMsRef = useRef(0);
-  const lastJoinedIdsRef = useRef<{ ts: number; ids: Set<string> } | null>(null);
+
+  // ✅ cache must be keyed by account
+  const lastJoinedIdsRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
 
   const runIdRef = useRef(0);
+
+  // ✅ reset per-account caches immediately when wallet changes
+  useEffect(() => {
+    lastJoinedIdsRef.current = null;
+    joinedBackoffMsRef.current = 0;
+    joinedFetchInFlightRef.current = false;
+    setHiddenClaimables({});
+  }, [account]);
 
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
     if (!account) return new Set<string>();
 
+    const acct = account.toLowerCase();
     const now = Date.now();
     const cached = lastJoinedIdsRef.current;
-    if (cached && now - cached.ts < 60_000) return cached.ids;
 
-    if (joinedFetchInFlightRef.current) return cached?.ids ?? new Set<string>();
+    // ✅ only reuse cache if it belongs to THIS account
+    if (cached && cached.account === acct && now - cached.ts < 60_000) return cached.ids;
+
+    if (joinedFetchInFlightRef.current) {
+      // if we have a cache for this account, return it; otherwise return empty
+      if (cached && cached.account === acct) return cached.ids;
+      return new Set<string>();
+    }
+
     joinedFetchInFlightRef.current = true;
 
     try {
@@ -150,23 +168,29 @@ export function useDashboardController() {
       try {
         let skip = 0;
         const pageSize = 1000;
-        const maxPages = 3;
+        const maxPages = 5;
+
         for (let pageN = 0; pageN < maxPages; pageN++) {
           const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
           page.forEach((id) => ids.add(normId(id)));
           if (page.length < pageSize) break;
           skip += pageSize;
         }
-      } catch {}
+      } catch (e) {
+        console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
+      }
 
       // Fallback: events (robust)
       try {
-        const ev = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, maxPages: 5 });
+        const ev = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, maxPages: 8 });
         ev.forEach((id) => ids.add(normId(id)));
-      } catch {}
+      } catch (e) {
+        console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
+      }
 
-      lastJoinedIdsRef.current = { ts: now, ids };
+      lastJoinedIdsRef.current = { ts: now, account: acct, ids };
       joinedBackoffMsRef.current = 0;
+
       return ids;
     } catch (e) {
       if (isRateLimitError(e)) {
@@ -174,7 +198,9 @@ export function useDashboardController() {
         joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
         setMsg("Indexer rate-limited. Retrying shortly…");
       }
-      return cached?.ids ?? new Set<string>();
+      const cached2 = lastJoinedIdsRef.current;
+      if (cached2 && cached2.account === acct) return cached2.ids;
+      return new Set<string>();
     } finally {
       joinedFetchInFlightRef.current = false;
     }
@@ -193,6 +219,7 @@ export function useDashboardController() {
       }
 
       if (isBackground && !isVisible()) return;
+
       if (!store.items) {
         setLocalPending(!isBackground);
         return;
@@ -203,10 +230,10 @@ export function useDashboardController() {
       try {
         const myAddr = account.toLowerCase();
 
-        // 1) created
+        // created (may be empty for “joined-only” wallets)
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // 2) joined ids
+        // joined ids (participant + events)
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
@@ -214,14 +241,17 @@ export function useDashboardController() {
         console.log("[dash] sample joinedIds", Array.from(joinedIds).slice(0, 5));
         console.log("[dash] store.items count", (store.items ?? []).length);
 
-        // 3) joined raffles (prefer fetch-by-ids)
         const joinedIdArr = Array.from(joinedIds);
-        let joinedBase: RaffleListItem[] = [];
 
-        try {
-          if (joinedIdArr.length > 0) joinedBase = await fetchRafflesByIds(joinedIdArr);
-        } catch {
-          joinedBase = [];
+        // joined raffles: prefer fetch-by-ids so joined items show even if not in store list
+        let joinedBase: RaffleListItem[] = [];
+        if (joinedIdArr.length > 0) {
+          try {
+            joinedBase = await fetchRafflesByIds(joinedIdArr);
+          } catch (e) {
+            console.warn("[dash] fetchRafflesByIds failed", e);
+            joinedBase = [];
+          }
         }
 
         if (joinedBase.length === 0 && joinedIdArr.length > 0) {
@@ -232,7 +262,7 @@ export function useDashboardController() {
         console.log("[dash] joinedBase count", joinedBase.length);
         console.log("[dash] sample joinedBase ids", joinedBase.slice(0, 5).map((r) => r.id));
 
-        // 3b) ticketsOwned (joined display)
+        // ticketsOwned (for display)
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
@@ -244,7 +274,6 @@ export function useDashboardController() {
               address: r.id,
               abi: RAFFLE_DASH_ABI,
             });
-
             const owned = await readContract({ contract, method: "ticketsOwned", params: [account] });
             ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
           } catch {
@@ -259,12 +288,11 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
         }));
 
-        // ✅ CRITICAL FIX:
-        // Commit joined/created immediately so UI can render even if claim scan gets canceled.
+        // ✅ commit immediately (so UI shows joined even if claim scan gets canceled)
         setCreated(myCreated);
         setJoined(myJoined);
 
-        // 4) claimables scan (can be slow; safe to cancel)
+        // claimables: only scan candidates that exist
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -323,9 +351,7 @@ export function useDashboardController() {
               !isParticipantRefundEligible &&
               !isCreatorCancelClaimEligible &&
               !isOtherEligible
-            ) {
-              return;
-            }
+            ) return;
 
             if (isWinnerEligible) {
               newClaimables.push({
@@ -374,12 +400,11 @@ export function useDashboardController() {
               });
             }
           } catch {
-            // ignore per-raffle
+            // ignore
           }
         });
 
         if (runId !== runIdRef.current) return;
-
         setClaimables(newClaimables);
       } catch (e) {
         console.error("Dashboard recompute error", e);
@@ -453,6 +478,7 @@ export function useDashboardController() {
       setHiddenClaimables((p) => ({ ...p, [normId(raffleId)]: true }));
       setMsg("Claim successful.");
 
+      // clear joined cache so refund/join changes reflect immediately
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
 
