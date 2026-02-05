@@ -4,7 +4,11 @@ import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { fetchMyJoinedRaffleIds, type RaffleListItem } from "../indexer/subgraph";
+import {
+  fetchMyJoinedRaffleIds,
+  fetchRafflesByIds, // ✅ NEW: backfill joined raffles by ids
+  type RaffleListItem,
+} from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
 // Minimal ABI for dashboard logic
@@ -204,8 +208,23 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles
-        const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
+        // 3) joined raffles (✅ FIXED: don’t rely on store.items containing them)
+        const joinedIdArr = Array.from(joinedIds);
+        const joinedFromSubgraph = joinedIdArr.length
+          ? await fetchRafflesByIds(joinedIdArr)
+          : [];
+
+        if (runId !== runIdRef.current) return;
+
+        // Merge: store may have fresher fields; prefer store version when available.
+        const joinedById = new Map<string, RaffleListItem>();
+        joinedFromSubgraph.forEach((r) => joinedById.set(r.id.toLowerCase(), r));
+        allRaffles.forEach((r) => {
+          const id = r.id.toLowerCase();
+          if (joinedById.has(id)) joinedById.set(id, r);
+        });
+
+        const joinedBase = Array.from(joinedById.values());
 
         // 3b) ticketsOwned RPC for joined list display
         const ownedByRaffleId = new Map<string, string>();
@@ -296,7 +315,6 @@ export function useDashboardController() {
             const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
             // Creator canceled pot refund is immediate claimableFunds[creator]
-            // (This is exactly your case.)
             const isCreatorCancelClaimEligible =
               r.status === "CANCELED" && roles.created && (cf > 0n || cn > 0n);
 
