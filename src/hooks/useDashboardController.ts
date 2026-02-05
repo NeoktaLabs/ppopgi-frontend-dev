@@ -62,6 +62,20 @@ function isVisible() {
   }
 }
 
+// ✅ safer BigInt conversion
+function toBigInt(v: any): bigint {
+  try {
+    if (typeof v === "bigint") return v;
+    if (typeof v === "number") return BigInt(v);
+    if (typeof v === "string") return BigInt(v || "0");
+    // common patterns
+    if (v?.toString) return BigInt(v.toString());
+    return 0n;
+  } catch {
+    return 0n;
+  }
+}
+
 export function useDashboardController() {
   const accountObj = useActiveAccount();
   const account = accountObj?.address ?? null;
@@ -160,7 +174,7 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles
+        // 3) joined raffles from store
         const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
 
         // 3b) ticketsOwned RPC (cap)
@@ -183,7 +197,7 @@ export function useDashboardController() {
                 params: [account],
               });
 
-              ownedByRaffleId.set(r.id.toLowerCase(), BigInt(owned ?? 0n).toString());
+              ownedByRaffleId.set(r.id.toLowerCase(), toBigInt(owned).toString());
             } catch {
               ownedByRaffleId.set(r.id.toLowerCase(), "0");
             }
@@ -221,20 +235,31 @@ export function useDashboardController() {
                 readContract({ contract, method: "ticketsOwned", params: [account] }),
               ]);
 
-              const cf = BigInt(cfRaw ?? 0n);
-              const cn = BigInt(cnRaw ?? 0n);
-              const ticketsOwned = BigInt(ownedRaw ?? 0n);
-
-              // IMPORTANT: only show claimables if contract reports something claimable
-              if (cf === 0n && cn === 0n) return;
+              const cf = toBigInt(cfRaw);
+              const cn = toBigInt(cnRaw);
+              const ticketsOwned = toBigInt(ownedRaw);
 
               const roles = {
                 created: r.creator?.toLowerCase() === myAddr,
                 participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
               };
 
-              // winner claim
-              if (r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr) {
+              // ✅ IMPORTANT CHANGE:
+              // Allow REFUND items even if cf/cn are 0 (refund might be ticket reclaim)
+              const isRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
+
+              // Winner claim (only if something claimable)
+              const isWinnerEligible =
+                r.status === "COMPLETED" &&
+                r.winner?.toLowerCase() === myAddr &&
+                (cf > 0n || cn > 0n);
+
+              // Creator/other (only if something claimable)
+              const isOtherEligible = cf > 0n || cn > 0n;
+
+              if (!isRefundEligible && !isWinnerEligible && !isOtherEligible) return;
+
+              if (isWinnerEligible) {
                 newClaimables.push({
                   raffle: r,
                   claimableUsdc: cf.toString(),
@@ -246,12 +271,11 @@ export function useDashboardController() {
                 return;
               }
 
-              // refund claim
-              if (r.status === "CANCELED" && ticketsOwned > 0n) {
+              if (isRefundEligible) {
                 newClaimables.push({
                   raffle: r,
-                  claimableUsdc: cf.toString(),
-                  claimableNative: cn.toString(),
+                  claimableUsdc: cf.toString(), // can be 0
+                  claimableNative: cn.toString(), // can be 0
                   type: "REFUND",
                   roles,
                   userTicketsOwned: ticketsOwned.toString(),
@@ -259,7 +283,7 @@ export function useDashboardController() {
                 return;
               }
 
-              // creator / other withdraw (fees etc.)
+              // other withdraw
               newClaimables.push({
                 raffle: r,
                 claimableUsdc: cf.toString(),
@@ -322,12 +346,18 @@ export function useDashboardController() {
   }, [recompute]);
 
   const createdSorted = useMemo(
-    () => [...created].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
+    () =>
+      [...created].sort(
+        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
+      ),
     [created]
   );
 
   const joinedSorted = useMemo(
-    () => [...joined].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
+    () =>
+      [...joined].sort(
+        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
+      ),
     [joined]
   );
 
@@ -356,11 +386,9 @@ export function useDashboardController() {
       setHiddenClaimables((p) => ({ ...p, [raffleId.toLowerCase()]: true }));
       setMsg("Claim successful.");
 
-      // bust joined cache (in case claim changes ticketsOwned / joined state)
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
 
-      // force refresh store + recompute quickly
       await refreshRaffleStore(true, true);
       await recompute(true);
     } catch (e) {
@@ -385,7 +413,6 @@ export function useDashboardController() {
       joined: joinedSorted,
       claimables: claimablesSorted,
       msg,
-      // include store loading + local work
       isPending: localPending || store.isLoading,
       storeNote: store.note,
       storeLastUpdatedMs: store.lastUpdatedMs,
