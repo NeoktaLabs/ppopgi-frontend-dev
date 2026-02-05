@@ -39,9 +39,7 @@ const RAFFLE_DASH_ABI = [
   },
 ] as const;
 
-type JoinedRaffleItem = RaffleListItem & {
-  userTicketsOwned: string;
-};
+type JoinedRaffleItem = RaffleListItem & { userTicketsOwned: string };
 
 type ClaimableItem = {
   raffle: RaffleListItem;
@@ -90,7 +88,6 @@ async function mapPool<T, R>(
 ): Promise<R[]> {
   const out: R[] = new Array(items.length) as any;
   let i = 0;
-
   const workers = new Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
     while (true) {
       const idx = i++;
@@ -98,7 +95,6 @@ async function mapPool<T, R>(
       out[idx] = await fn(items[idx], idx);
     }
   });
-
   await Promise.all(workers);
   return out;
 }
@@ -133,7 +129,6 @@ export function useDashboardController() {
 
   const runIdRef = useRef(0);
 
-  // Reset caches on account change
   useEffect(() => {
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
@@ -156,7 +151,6 @@ export function useDashboardController() {
     try {
       const ids = new Set<string>();
 
-      // Primary: raffleParticipants aggregation
       try {
         let skip = 0;
         const pageSize = 1000;
@@ -171,7 +165,6 @@ export function useDashboardController() {
         console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
       }
 
-      // Fallback: raffleEvents (TICKETS_PURCHASED)
       try {
         const ev = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, maxPages: 8 });
         ev.forEach((id) => ids.add(normId(id)));
@@ -218,31 +211,38 @@ export function useDashboardController() {
       try {
         const myAddr = account.toLowerCase();
 
-        // 1) created
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // 2) joined ids
+        // ✅ joinedIds first (still needs indexer)
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles: fetch by ids
         const joinedIdArr = Array.from(joinedIds);
-        let joinedBase: RaffleListItem[] = [];
 
+        // ✅ INSTANT JOINED RENDER:
+        // Use store filter immediately (no network)
+        const joinedBaseFromStore =
+          joinedIdArr.length === 0
+            ? []
+            : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+
+        // Set joined immediately with ticketsOwned = "0" (will enrich later)
+        setCreated(myCreated);
+        setJoined(joinedBaseFromStore.map((r) => ({ ...r, userTicketsOwned: "0" })));
+
+        // ✅ Then fetch full data by ids in background (more reliable)
+        let joinedBase: RaffleListItem[] = joinedBaseFromStore;
         if (joinedIdArr.length > 0) {
           try {
-            joinedBase = await fetchRafflesByIds(joinedIdArr);
+            const fetched = await fetchRafflesByIds(joinedIdArr);
+            if (runId !== runIdRef.current) return;
+            if (fetched.length > 0) joinedBase = fetched;
           } catch {
-            joinedBase = [];
+            // keep store version
           }
         }
 
-        if (joinedBase.length === 0 && joinedIdArr.length > 0) {
-          const s = new Set(joinedIdArr.map(normId));
-          joinedBase = allRaffles.filter((r) => s.has(normId(r.id)));
-        }
-
-        // 3b) ticketsOwned RPC for joined list display
+        // ✅ Enrich ticketsOwned AFTER we already rendered something
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
@@ -254,7 +254,6 @@ export function useDashboardController() {
               address: r.id,
               abi: RAFFLE_DASH_ABI,
             });
-
             const owned = await readContract({ contract, method: "ticketsOwned", params: [account] });
             ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
           } catch {
@@ -264,20 +263,14 @@ export function useDashboardController() {
 
         if (runId !== runIdRef.current) return;
 
-        const myJoined: JoinedRaffleItem[] = joinedBase.map((r) => ({
-          ...r,
-          userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
-        }));
+        setJoined(
+          joinedBase.map((r) => ({
+            ...r,
+            userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
+          }))
+        );
 
-        // Commit joined/created asap
-        setCreated(myCreated);
-        setJoined(myJoined);
-
-        // 4) claimables scan:
-        // ✅ Only show claim tiles when an actual action exists:
-        // - WIN: winner + completed + cf/cn > 0
-        // - REFUND: canceled + ticketsOwned > 0 (phase 1) OR later withdrawFunds when cf>0
-        // - OTHER: cf/cn > 0 (creator cancel pot refund will satisfy cf>0)
+        // --- Claimables (unchanged from your “works” version: only show real claimables) ---
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -301,7 +294,6 @@ export function useDashboardController() {
             abi: RAFFLE_DASH_ABI,
           });
 
-          // Read separately so one revert doesn’t drop the whole tile
           let cf = 0n;
           let cn = 0n;
           let ticketsOwned = 0n;
@@ -326,10 +318,8 @@ export function useDashboardController() {
             r.winner?.toLowerCase() === myAddr &&
             (cf > 0n || cn > 0n);
 
-          // participant refund phase 1: allocate
           const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
-          // anything withdrawable
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
           if (isWinnerEligible) {
@@ -356,7 +346,6 @@ export function useDashboardController() {
             return;
           }
 
-          // ✅ ONLY show OTHER when there is actually money to withdraw
           if (isAnythingClaimable) {
             newClaimables.push({
               raffle: r,
@@ -381,14 +370,12 @@ export function useDashboardController() {
     [account, allRaffles, getJoinedIds, store.items]
   );
 
-  // ✅ Immediate load: force refresh store & recompute right away
   useEffect(() => {
     if (!account) {
       setLocalPending(false);
       return;
     }
 
-    // Kick refresh (force) and then recompute once
     void (async () => {
       await refreshRaffleStore(false, true);
       await recompute(false);
@@ -396,7 +383,6 @@ export function useDashboardController() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account]);
 
-  // Recompute when store updates (normal path)
   useEffect(() => {
     if (!account) return;
     void recompute(false);
