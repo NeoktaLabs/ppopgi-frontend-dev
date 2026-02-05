@@ -1,424 +1,335 @@
-// src/hooks/useDashboardController.ts
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
-import { getContract, prepareContractCall, readContract } from "thirdweb";
-import { thirdwebClient } from "../thirdweb/client";
-import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { fetchMyJoinedRaffleIds, type RaffleListItem } from "../indexer/subgraph";
-import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
+// src/pages/DashboardPage.tsx
+import React, { useState, useEffect, useMemo } from "react";
+import { formatUnits } from "ethers";
+import { RaffleCard } from "../components/RaffleCard";
+import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
+import { useDashboardController } from "../hooks/useDashboardController";
+import "./DashboardPage.css";
 
-// Minimal ABI for dashboard logic
-const RAFFLE_DASH_ABI = [
-  { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
-  { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
-
-  {
-    type: "function",
-    name: "ticketsOwned",
-    stateMutability: "view",
-    inputs: [{ type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "claimableFunds",
-    stateMutability: "view",
-    inputs: [{ type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "claimableNative",
-    stateMutability: "view",
-    inputs: [{ type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-] as const;
-
-type JoinedRaffleItem = RaffleListItem & {
-  userTicketsOwned: string; // bigint string
+// Helpers
+const fmt = (v: string, dec = 18) => {
+  try {
+    const val = formatUnits(BigInt(v || "0"), dec);
+    return parseFloat(val).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  } catch {
+    return "0";
+  }
 };
 
-type ClaimableItem = {
-  raffle: RaffleListItem;
-  claimableUsdc: string; // bigint string
-  claimableNative: string; // bigint string
-  type: "WIN" | "REFUND" | "OTHER";
-  roles: { participated?: boolean; created?: boolean };
-  userTicketsOwned?: string;
+type Props = {
+  account: string | null;
+  onOpenRaffle: (id: string) => void;
+  onOpenSafety: (id: string) => void;
 };
 
-function isRateLimitError(e: unknown) {
-  const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate");
-}
+type WithdrawMethod = "withdrawFunds" | "withdrawNative" | "claimTicketRefund";
 
-function isVisible() {
-  try {
-    return document.visibilityState === "visible";
-  } catch {
-    return true;
-  }
-}
+export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
+  const { data, actions } = useDashboardController();
+  const [tab, setTab] = useState<"active" | "history" | "created">("active");
+  const [copied, setCopied] = useState(false);
 
-// ✅ safer BigInt conversion
-function toBigInt(v: any): bigint {
-  try {
-    if (typeof v === "bigint") return v;
-    if (typeof v === "number") return BigInt(v);
-    if (typeof v === "string") return BigInt(v || "0");
-    // common patterns
-    if (v?.toString) return BigInt(v.toString());
-    return 0n;
-  } catch {
-    return 0n;
-  }
-}
-
-export function useDashboardController() {
-  const accountObj = useActiveAccount();
-  const account = accountObj?.address ?? null;
-  const { mutateAsync: sendAndConfirm } = useSendAndConfirmTransaction();
-
-  // ✅ single shared indexer poller
-  const store = useRaffleStore("dashboard", 15_000);
-  const allRaffles = useMemo(() => store.items ?? [], [store.items]);
-
-  const [created, setCreated] = useState<RaffleListItem[]>([]);
-  const [joined, setJoined] = useState<JoinedRaffleItem[]>([]);
-  const [claimables, setClaimables] = useState<ClaimableItem[]>([]);
-  const [localPending, setLocalPending] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
-
-  // joinedIds cache/backoff (subgraph)
-  const joinedFetchInFlightRef = useRef(false);
-  const joinedBackoffMsRef = useRef(0);
-  const lastJoinedIdsRef = useRef<{ ts: number; ids: Set<string> } | null>(null);
-
-  // ignore stale async responses (account switches etc.)
-  const runIdRef = useRef(0);
-
-  const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
-    if (!account) return new Set<string>();
-
-    const now = Date.now();
-    const cached = lastJoinedIdsRef.current;
-    if (cached && now - cached.ts < 60_000) return cached.ids;
-
-    if (joinedFetchInFlightRef.current) return cached?.ids ?? new Set<string>();
-    joinedFetchInFlightRef.current = true;
-
-    try {
-      const ids = new Set<string>();
-      let skip = 0;
-
-      const pageSize = 1000;
-      const maxPages = 3; // up to 3k joined records
-
-      for (let pageN = 0; pageN < maxPages; pageN++) {
-        const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
-        page.forEach((id) => ids.add(id.toLowerCase()));
-        if (page.length < pageSize) break;
-        skip += pageSize;
-      }
-
-      lastJoinedIdsRef.current = { ts: now, ids };
-      joinedBackoffMsRef.current = 0;
-      return ids;
-    } catch (e) {
-      if (isRateLimitError(e)) {
-        const cur = joinedBackoffMsRef.current || 0;
-        joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
-        setMsg("Indexer rate-limited. Retrying shortly…");
-      } else {
-        console.error("fetchMyJoinedRaffleIds failed", e);
-      }
-      return cached?.ids ?? new Set<string>();
-    } finally {
-      joinedFetchInFlightRef.current = false;
-    }
-  }, [account]);
-
-  const recompute = useCallback(
-    async (isBackground = false) => {
-      const runId = ++runIdRef.current;
-
-      if (!account) {
-        setCreated([]);
-        setJoined([]);
-        setClaimables([]);
-        setLocalPending(false);
-        return;
-      }
-
-      // don’t do heavy work in background if hidden
-      if (isBackground && !isVisible()) return;
-
-      // if store not ready, don’t recompute yet
-      if (!store.items) {
-        setLocalPending(!isBackground);
-        return;
-      }
-
-      if (!isBackground) setLocalPending(true);
-
-      try {
-        const myAddr = account.toLowerCase();
-
-        // 1) created
-        const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
-
-        // 2) joined ids
-        const joinedIds = await getJoinedIds();
-        if (runId !== runIdRef.current) return;
-
-        // 3) joined raffles from store
-        const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
-
-        // 3b) ticketsOwned RPC (cap)
-        const ownedByRaffleId = new Map<string, string>();
-        const joinedToCheck = joinedBase.slice(0, 80);
-
-        await Promise.all(
-          joinedToCheck.map(async (r) => {
-            try {
-              const contract = getContract({
-                client: thirdwebClient,
-                chain: ETHERLINK_CHAIN,
-                address: r.id,
-                abi: RAFFLE_DASH_ABI,
-              });
-
-              const owned = await readContract({
-                contract,
-                method: "ticketsOwned",
-                params: [account],
-              });
-
-              ownedByRaffleId.set(r.id.toLowerCase(), toBigInt(owned).toString());
-            } catch {
-              ownedByRaffleId.set(r.id.toLowerCase(), "0");
-            }
-          })
-        );
-
-        if (runId !== runIdRef.current) return;
-
-        const myJoined: JoinedRaffleItem[] = joinedBase.map((r) => ({
-          ...r,
-          userTicketsOwned: ownedByRaffleId.get(r.id.toLowerCase()) ?? "0",
-        }));
-
-        // 4) claimables = union(created + joined)
-        const candidateById = new Map<string, RaffleListItem>();
-        myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
-        joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
-
-        const candidates = Array.from(candidateById.values()).slice(0, 60);
-
-        const newClaimables: ClaimableItem[] = [];
-        await Promise.all(
-          candidates.map(async (r) => {
-            try {
-              const contract = getContract({
-                client: thirdwebClient,
-                chain: ETHERLINK_CHAIN,
-                address: r.id,
-                abi: RAFFLE_DASH_ABI,
-              });
-
-              const [cfRaw, cnRaw, ownedRaw] = await Promise.all([
-                readContract({ contract, method: "claimableFunds", params: [account] }),
-                readContract({ contract, method: "claimableNative", params: [account] }),
-                readContract({ contract, method: "ticketsOwned", params: [account] }),
-              ]);
-
-              const cf = toBigInt(cfRaw);
-              const cn = toBigInt(cnRaw);
-              const ticketsOwned = toBigInt(ownedRaw);
-
-              const roles = {
-                created: r.creator?.toLowerCase() === myAddr,
-                participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
-              };
-
-              // ✅ IMPORTANT CHANGE:
-              // Allow REFUND items even if cf/cn are 0 (refund might be ticket reclaim)
-              const isRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
-
-              // Winner claim (only if something claimable)
-              const isWinnerEligible =
-                r.status === "COMPLETED" &&
-                r.winner?.toLowerCase() === myAddr &&
-                (cf > 0n || cn > 0n);
-
-              // Creator/other (only if something claimable)
-              const isOtherEligible = cf > 0n || cn > 0n;
-
-              if (!isRefundEligible && !isWinnerEligible && !isOtherEligible) return;
-
-              if (isWinnerEligible) {
-                newClaimables.push({
-                  raffle: r,
-                  claimableUsdc: cf.toString(),
-                  claimableNative: cn.toString(),
-                  type: "WIN",
-                  roles,
-                  userTicketsOwned: ticketsOwned.toString(),
-                });
-                return;
-              }
-
-              if (isRefundEligible) {
-                newClaimables.push({
-                  raffle: r,
-                  claimableUsdc: cf.toString(), // can be 0
-                  claimableNative: cn.toString(), // can be 0
-                  type: "REFUND",
-                  roles,
-                  userTicketsOwned: ticketsOwned.toString(),
-                });
-                return;
-              }
-
-              // other withdraw
-              newClaimables.push({
-                raffle: r,
-                claimableUsdc: cf.toString(),
-                claimableNative: cn.toString(),
-                type: "OTHER",
-                roles,
-                userTicketsOwned: ticketsOwned.toString(),
-              });
-            } catch {
-              // ignore per-raffle
-            }
-          })
-        );
-
-        if (runId !== runIdRef.current) return;
-
-        setCreated(myCreated);
-        setJoined(myJoined);
-        setClaimables(newClaimables);
-      } catch (e) {
-        console.error("Dashboard recompute error", e);
-        if (!isBackground) setMsg("Failed to load dashboard data.");
-      } finally {
-        if (!isBackground) setLocalPending(false);
-      }
-    },
-    [account, allRaffles, getJoinedIds, store.items]
-  );
-
-  // recompute when store updates or account changes
+  // Clock
+  const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => {
-    if (!account) {
-      setLocalPending(false);
-      return;
-    }
-    void recompute(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account, store.lastUpdatedMs]);
+    const t = setInterval(() => setNowS(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
 
-  // focus/visibility refresh -> force store refresh + background recompute
-  useEffect(() => {
-    const onFocus = () => {
-      void refreshRaffleStore(true, true);
-      void recompute(true);
-    };
-
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        void refreshRaffleStore(true, true);
-        void recompute(true);
-      }
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [recompute]);
-
-  const createdSorted = useMemo(
-    () =>
-      [...created].sort(
-        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
-      ),
-    [created]
-  );
-
-  const joinedSorted = useMemo(
-    () =>
-      [...joined].sort(
-        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
-      ),
-    [joined]
-  );
-
-  const claimablesSorted = useMemo(
-    () => claimables.filter((c) => !hiddenClaimables[c.raffle.id.toLowerCase()]),
-    [claimables, hiddenClaimables]
-  );
-
-  const withdraw = async (
-    raffleId: string,
-    method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
-  ) => {
+  const handleCopy = () => {
     if (!account) return;
-    setMsg(null);
-
-    try {
-      const c = getContract({
-        client: thirdwebClient,
-        chain: ETHERLINK_CHAIN,
-        address: raffleId,
-        abi: RAFFLE_DASH_ABI,
-      });
-
-      await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
-
-      setHiddenClaimables((p) => ({ ...p, [raffleId.toLowerCase()]: true }));
-      setMsg("Claim successful.");
-
-      lastJoinedIdsRef.current = null;
-      joinedBackoffMsRef.current = 0;
-
-      await refreshRaffleStore(true, true);
-      await recompute(true);
-    } catch (e) {
-      console.error("Withdraw failed", e);
-      setMsg("Claim failed or rejected.");
-    }
+    navigator.clipboard.writeText(account);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const refresh = async () => {
-    setMsg(null);
-    setHiddenClaimables({});
-    lastJoinedIdsRef.current = null;
-    joinedBackoffMsRef.current = 0;
+  // --- JOINED RAFFLES PROCESSING ---
+  const { active: activeEntries, past: pastEntries } = useMemo(() => {
+    const active: any[] = [];
+    const past: any[] = [];
 
-    await refreshRaffleStore(false, true);
-    await recompute(false);
+    if (!data.joined) return { active, past };
+
+    data.joined.forEach((r: any) => {
+      const tickets = Number(r.userTicketsOwned || 0);
+      const sold = Number(r.sold || 1);
+      const percentage = tickets > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
+
+      const enriched = { ...r, userEntry: { count: tickets, percentage } };
+
+      if (["OPEN", "FUNDING_PENDING", "DRAWING"].includes(r.status)) {
+        active.push(enriched);
+      } else {
+        past.push(enriched);
+      }
+    });
+
+    return { active, past };
+  }, [data.joined]);
+
+  const msgIsSuccess = useMemo(() => {
+    if (!data.msg) return false;
+    return /success|successful|claimed/i.test(data.msg);
+  }, [data.msg]);
+
+  // Decide which primary withdraw method to use when there is only one button.
+  // If both USDC & Native exist, we show two buttons.
+  const getPrimaryMethod = (isRefund: boolean, hasUsdc: boolean, hasNative: boolean): WithdrawMethod | null => {
+    if (isRefund) return "claimTicketRefund";
+    if (hasUsdc) return "withdrawFunds";
+    if (hasNative) return "withdrawNative";
+    return null;
   };
 
-  return {
-    data: {
-      created: createdSorted,
-      joined: joinedSorted,
-      claimables: claimablesSorted,
-      msg,
-      isPending: localPending || store.isLoading,
-      storeNote: store.note,
-      storeLastUpdatedMs: store.lastUpdatedMs,
-      joinedBackoffMs: joinedBackoffMsRef.current,
-    },
-    actions: { withdraw, refresh },
-    account,
-  };
+  return (
+    <div className="db-container">
+      {/* HERO */}
+      <div className="db-hero">
+        <div className="db-hero-content">
+          <div className="db-avatar-circle">👤</div>
+          <div>
+            <div className="db-hero-label">Player Dashboard</div>
+            <div className="db-hero-addr" onClick={handleCopy} title="Click to Copy">
+              {account || "Not Connected"}
+              {account && <span className="db-copy-icon">{copied ? "✅" : "📋"}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="db-hero-stats">
+          <div className="db-stat">
+            <div className="db-stat-num">{activeEntries.length}</div>
+            <div className="db-stat-lbl">Active Entries</div>
+          </div>
+          <div className="db-stat">
+            <div className="db-stat-num">{pastEntries.length}</div>
+            <div className="db-stat-lbl">History</div>
+          </div>
+          {data.claimables.length > 0 && (
+            <div className="db-stat highlight">
+              <div className="db-stat-num">{data.claimables.length}</div>
+              <div className="db-stat-lbl">To Claim</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* STATUS BANNER */}
+      {data.msg && (
+        <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>
+          {data.msg}
+        </div>
+      )}
+
+      {/* CLAIMABLES */}
+      {data.claimables.length > 0 && (
+        <div className="db-section claim-section">
+          <div className="db-section-header">
+            <div className="db-section-title">💰 Winnings & Refunds</div>
+            <span className="db-pill pulse">Action Required</span>
+          </div>
+
+          <div className="db-grid">
+            {data.claimables.map((it: any) => {
+              const r = it.raffle;
+
+              const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
+              const hasNative = BigInt(it.claimableNative || "0") > 0n;
+
+              // Treat canceled raffles as refund UX (even if hook type differs)
+              const isRefund = it.type === "REFUND" || r.status === "CANCELED";
+              const ticketCount = Number(it.userTicketsOwned || 0);
+
+              const primaryMethod = getPrimaryMethod(isRefund, hasUsdc, hasNative);
+
+              const title = isRefund ? "Refund Available" : "Claim Available";
+              const primaryLabel = isRefund
+                ? "Reclaim Tickets"
+                : hasUsdc
+                  ? "Claim USDC"
+                  : hasNative
+                    ? "Claim Native"
+                    : "Nothing to Claim";
+
+              // If not refund + both assets available, show dual buttons
+              const showDual = !isRefund && hasUsdc && hasNative;
+
+              return (
+                <div key={r.id} className="db-claim-wrapper">
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowS * 1000}
+                  />
+
+                  <div className="db-claim-box">
+                    <div className="db-claim-header">
+                      <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>
+                        {title}
+                      </span>
+                    </div>
+
+                    <div className="db-claim-text">
+                      {isRefund ? (
+                        <div className="db-refund-layout">
+                          {hasUsdc ? (
+                            <>
+                              <div className="db-refund-val">{fmt(it.claimableUsdc, 6)} USDC</div>
+                              <div className="db-refund-sub">
+                                Refund for <b>{ticketCount}</b> ticket{ticketCount !== 1 ? "s" : ""}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="db-refund-val">
+                              Reclaim {ticketCount || "your"} ticket{ticketCount !== 1 ? "s" : ""}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="db-win-layout">
+                          <div className="db-win-label">Available:</div>
+                          <div className="db-win-val">
+                            {hasUsdc && <span>{fmt(it.claimableUsdc, 6)} USDC</span>}
+                            {hasNative && <span>{hasUsdc ? " + " : ""}{fmt(it.claimableNative, 18)} Native</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="db-claim-actions">
+                      {/* Dual-asset claim */}
+                      {showDual ? (
+                        <>
+                          <button
+                            className="db-btn primary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                          >
+                            {data.isPending ? "Processing..." : "Claim USDC"}
+                          </button>
+
+                          <button
+                            className="db-btn secondary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
+                          >
+                            {data.isPending ? "Processing..." : "Claim Native"}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className={`db-btn ${isRefund ? "secondary" : "primary"}`}
+                          disabled={data.isPending || !primaryMethod}
+                          onClick={() => primaryMethod && actions.withdraw(r.id, primaryMethod)}
+                        >
+                          {data.isPending ? "Processing..." : primaryLabel}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TABS */}
+      <div className="db-tabs-container">
+        <div className="db-tabs">
+          <button
+            className={`db-tab ${tab === "active" ? "active" : ""}`}
+            onClick={() => setTab("active")}
+          >
+            Active Entries
+          </button>
+          <button
+            className={`db-tab ${tab === "history" ? "active" : ""}`}
+            onClick={() => setTab("history")}
+          >
+            History
+          </button>
+          <button
+            className={`db-tab ${tab === "created" ? "active" : ""}`}
+            onClick={() => setTab("created")}
+          >
+            Created
+          </button>
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div className="db-grid-area">
+        {tab === "active" && (
+          <div className="db-grid">
+            {data.isPending && activeEntries.length === 0 && (
+              <>
+                <RaffleCardSkeleton />
+                <RaffleCardSkeleton />
+              </>
+            )}
+            {!data.isPending && activeEntries.length === 0 && (
+              <div className="db-empty">You have no active tickets.</div>
+            )}
+            {activeEntries.map((r: any) => (
+              <RaffleCard
+                key={r.id}
+                raffle={r}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
+                nowMs={nowS * 1000}
+                userEntry={r.userEntry}
+              />
+            ))}
+          </div>
+        )}
+
+        {tab === "history" && (
+          <div className="db-grid">
+            {!data.isPending && pastEntries.length === 0 && (
+              <div className="db-empty">No past participation found.</div>
+            )}
+            {pastEntries.map((r: any) => {
+              const isRefunded = r.status === "CANCELED" && r.userEntry?.count === 0;
+
+              return (
+                <div key={r.id} className="db-history-card-wrapper">
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowS * 1000}
+                    userEntry={r.userEntry}
+                  />
+                  {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
+                  {r.status === "COMPLETED" &&
+                    r.winner?.toLowerCase() === account?.toLowerCase() && (
+                      <div className="db-history-badge won">🏆 Winner</div>
+                    )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "created" && (
+          <div className="db-grid">
+            {!data.isPending && data.created.length === 0 && (
+              <div className="db-empty">You haven't hosted any raffles yet.</div>
+            )}
+            {data.created.map((r: any) => (
+              <RaffleCard
+                key={r.id}
+                raffle={r}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
+                nowMs={nowS * 1000}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
