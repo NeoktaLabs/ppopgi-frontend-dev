@@ -184,7 +184,7 @@ export async function fetchRafflesFromSubgraph(
   opts: FetchRafflesOptions = {}
 ): Promise<RaffleListItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
-  const first = Math.min(Math.max(opts.first ?? 200, 1), 1000); // ✅ slightly safer default than 500
+  const first = Math.min(Math.max(opts.first ?? 200, 1), 1000);
   const skip = Math.max(opts.skip ?? 0, 0);
 
   const query = `
@@ -207,15 +207,48 @@ export async function fetchRafflesFromSubgraph(
 }
 
 /**
+ * ✅ Fetch raffles by ID (for dashboards: joined raffles might not be in the latest "top N" list)
+ * Uses id_in; chunked for safety.
+ */
+export async function fetchRafflesByIds(
+  ids: string[],
+  opts: { signal?: AbortSignal } = {}
+): Promise<RaffleListItem[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const clean = Array.from(new Set(ids.map((x) => x.toLowerCase()))).filter(Boolean);
+  if (clean.length === 0) return [];
+
+  const chunkSize = 200;
+  const out: RaffleListItem[] = [];
+
+  for (let i = 0; i < clean.length; i += chunkSize) {
+    const chunk = clean.slice(i, i + chunkSize);
+
+    const query = `
+      query RafflesByIds($ids: [Bytes!]!) {
+        raffles(where: { id_in: $ids }) {
+          ${RAFFLE_FIELDS}
+        }
+      }
+    `;
+
+    type Resp = { raffles: RaffleListItem[] };
+    const data = await gqlFetch<Resp>(url, query, { ids: chunk }, opts.signal);
+    out.push(...(data.raffles ?? []).map((r) => normalizeRaffle(r)));
+  }
+
+  return out;
+}
+
+/**
  * ✅ FETCH PARTICIPANTS for a raffle (leaderboard)
- * NOTE: default first reduced to 50 to avoid hammering indexer.
  */
 export async function fetchRaffleParticipants(
   raffleId: string,
   opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
 ): Promise<RaffleParticipantItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
-  const first = Math.min(Math.max(opts.first ?? 50, 1), 1000); // ✅ was 1000
+  const first = Math.min(Math.max(opts.first ?? 50, 1), 1000);
   const skip = Math.max(opts.skip ?? 0, 0);
 
   const query = `
@@ -260,7 +293,7 @@ export async function fetchRaffleWithParticipants(
   opts: { firstParticipants?: number; participantsSkip?: number; signal?: AbortSignal } = {}
 ): Promise<{ raffle: RaffleListItem | null; participants: RaffleParticipantItem[] }> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
-  const firstParticipants = Math.min(Math.max(opts.firstParticipants ?? 50, 1), 1000); // ✅ was 200
+  const firstParticipants = Math.min(Math.max(opts.firstParticipants ?? 50, 1), 1000);
   const participantsSkip = Math.max(opts.participantsSkip ?? 0, 0);
 
   const query = `
@@ -307,7 +340,6 @@ export async function fetchRaffleWithParticipants(
 
 /**
  * ✅ FETCH GLOBAL ACTIVITY (Sales + Creations + Winners + Cancels)
- * NOTE: opts.signal is now respected.
  */
 export async function fetchGlobalActivity(
   opts: { first?: number; signal?: AbortSignal } = {}
@@ -317,7 +349,6 @@ export async function fetchGlobalActivity(
 
   const query = `
     query GlobalFeed($first: Int!) {
-      # 1. Ticket Sales
       raffleEvents(
         first: $first
         orderBy: blockTimestamp
@@ -331,7 +362,6 @@ export async function fetchGlobalActivity(
         txHash
       }
       
-      # 2. New Raffles
       raffles(
         first: $first
         orderBy: createdAtTimestamp
@@ -345,7 +375,6 @@ export async function fetchGlobalActivity(
         creationTx
       }
 
-      # 3. Recent Winners
       recentWinners: raffles(
         first: $first
         orderBy: completedAt
@@ -359,7 +388,6 @@ export async function fetchGlobalActivity(
         completedAt
       }
 
-      # 4. Recent Cancels
       recentCancels: raffles(
         first: $first
         orderBy: canceledAt
@@ -381,9 +409,8 @@ export async function fetchGlobalActivity(
     recentCancels: any[];
   };
 
-  const data = await gqlFetch<Resp>(url, query, { first }, opts.signal); // ✅ signal passed
+  const data = await gqlFetch<Resp>(url, query, { first }, opts.signal);
 
-  // 1) Sales
   const sales = (data.raffleEvents ?? []).map((e) => ({
     type: "BUY" as const,
     raffleId: normHex(e.raffle?.id) as string,
@@ -394,7 +421,6 @@ export async function fetchGlobalActivity(
     txHash: normHex(e.txHash) as string,
   }));
 
-  // 2) Creations
   const creations = (data.raffles ?? []).map((r) => ({
     type: "CREATE" as const,
     raffleId: normHex(r.id) as string,
@@ -402,10 +428,9 @@ export async function fetchGlobalActivity(
     subject: normHex(r.creator) as string,
     value: String(r.winningPot ?? "0"),
     timestamp: String(r.createdAtTimestamp ?? "0"),
-    txHash: normHex(r.creationTx) as string, // real tx
+    txHash: normHex(r.creationTx) as string,
   }));
 
-  // 3) Winners (⚠️ you may not have a tx hash in schema; keep a stable key anyway)
   const winners = (data.recentWinners ?? []).map((r) => ({
     type: "WIN" as const,
     raffleId: normHex(r.id) as string,
@@ -413,10 +438,9 @@ export async function fetchGlobalActivity(
     subject: normHex(r.winner) as string,
     value: String(r.winningPot ?? "0"),
     timestamp: String(r.completedAt ?? "0"),
-    txHash: `win:${normHex(r.id)}:${String(r.completedAt ?? "0")}`, // ✅ stable unique id instead of pretending it's a txHash
+    txHash: `win:${normHex(r.id)}:${String(r.completedAt ?? "0")}`,
   }));
 
-  // 4) Cancels (same idea)
   const cancels = (data.recentCancels ?? []).map((r) => ({
     type: "CANCEL" as const,
     raffleId: normHex(r.id) as string,
@@ -424,10 +448,9 @@ export async function fetchGlobalActivity(
     subject: normHex(r.creator) as string,
     value: "0",
     timestamp: String(r.canceledAt ?? "0"),
-    txHash: `cancel:${normHex(r.id)}:${String(r.canceledAt ?? "0")}`, // ✅ stable unique id
+    txHash: `cancel:${normHex(r.id)}:${String(r.canceledAt ?? "0")}`,
   }));
 
-  // Merge & sort newest-first, then trim
   const combined = [...sales, ...creations, ...winners, ...cancels].sort(
     (a, b) => Number(b.timestamp) - Number(a.timestamp)
   );
