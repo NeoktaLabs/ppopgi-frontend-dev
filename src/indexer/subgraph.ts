@@ -604,4 +604,47 @@ export async function fetchMyJoinedRaffleIds(
     console.error("fetchMyJoinedRaffleIds failed:", e);
     return [];
   }
+
+export async function fetchMyJoinedRaffleIdsFromEvents(
+  buyer: string,
+  opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
+): Promise<string[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const first = Math.min(Math.max(opts.first ?? 1000, 1), 1000);
+  const skip = Math.max(opts.skip ?? 0, 0);
+
+  const query = `
+    query MyJoinedFromEvents($buyer: Bytes!, $first: Int!, $skip: Int!) {
+      raffleEvents(
+        first: $first
+        skip: $skip
+        orderBy: blockTimestamp
+        orderDirection: desc
+        where: { type: TICKETS_PURCHASED, actor: $buyer }
+      ) {
+        raffle { id }
+      }
+    }
+  `;
+
+  try {
+    type Resp = { raffleEvents: any[] };
+    const data = await gqlFetch<Resp>(
+      url,
+      query,
+      { buyer: buyer.toLowerCase(), first, skip },
+      opts.signal
+    );
+
+    const rows = (data.raffleEvents ?? []) as any[];
+
+    return rows
+      .map((x) => normHex(x?.raffle?.id) ?? "")
+      .filter(Boolean) as string[];
+  } catch (e) {
+    console.error("fetchMyJoinedRaffleIdsFromEvents failed:", e);
+    return [];
+  }
+}
+
 }
