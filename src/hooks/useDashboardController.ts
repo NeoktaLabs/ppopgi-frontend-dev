@@ -6,6 +6,7 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import {
   fetchMyJoinedRaffleIds,
+  fetchMyJoinedRaffleIdsFromEvents, // ✅ requires you to add this export in subgraph.ts
   fetchRafflesByIds,
   type RaffleListItem,
 } from "../indexer/subgraph";
@@ -147,16 +148,30 @@ export function useDashboardController() {
 
     try {
       const ids = new Set<string>();
-      let skip = 0;
 
-      const pageSize = 1000;
-      const maxPages = 3;
+      // 1) Primary source: aggregated participants
+      try {
+        let skip = 0;
+        const pageSize = 1000;
+        const maxPages = 3;
 
-      for (let pageN = 0; pageN < maxPages; pageN++) {
-        const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
+        for (let pageN = 0; pageN < maxPages; pageN++) {
+          const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
+          page.forEach((id) => ids.add(normId(id)));
+          if (page.length < pageSize) break;
+          skip += pageSize;
+        }
+      } catch (e) {
+        console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
+      }
+
+      // 2) Fallback: derive joined from ticket purchase events
+      // This fixes the exact issue you saw: joinedIds.size === 0 when participant aggregation isn't written.
+      try {
+        const page = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, skip: 0 });
         page.forEach((id) => ids.add(normId(id)));
-        if (page.length < pageSize) break;
-        skip += pageSize;
+      } catch (e) {
+        console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
       }
 
       lastJoinedIdsRef.current = { ts: now, ids };
@@ -168,7 +183,7 @@ export function useDashboardController() {
         joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
         setMsg("Indexer rate-limited. Retrying shortly…");
       } else {
-        console.error("fetchMyJoinedRaffleIds failed", e);
+        console.error("[dash] getJoinedIds failed", e);
       }
       return cached?.ids ?? new Set<string>();
     } finally {
@@ -207,7 +222,7 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // ✅ DEBUG
+        // ✅ DEBUG (leave for now; remove once fixed)
         console.log("[dash] joinedIds.size", joinedIds.size);
         console.log("[dash] sample joinedIds", Array.from(joinedIds).slice(0, 5));
         console.log("[dash] store.items count", (store.items ?? []).length);
@@ -216,6 +231,7 @@ export function useDashboardController() {
         const joinedIdArr = Array.from(joinedIds);
         let joinedBase: RaffleListItem[] = [];
 
+        // Prefer fetch-by-ids (complete)
         try {
           if (joinedIdArr.length > 0) {
             joinedBase = (await fetchRafflesByIds(joinedIdArr)) ?? [];
@@ -225,11 +241,13 @@ export function useDashboardController() {
           joinedBase = [];
         }
 
+        // Fallback: store list filter (yesterday behavior)
         if (joinedBase.length === 0 && joinedIdArr.length > 0) {
           const joinedIdSet = new Set(joinedIdArr.map(normId));
           joinedBase = allRaffles.filter((r) => joinedIdSet.has(normId(r.id)));
         }
 
+        // Merge freshness: prefer store version if present
         if (joinedBase.length > 0) {
           const byId = new Map<string, RaffleListItem>();
           joinedBase.forEach((r) => byId.set(normId(r.id), r));
@@ -244,7 +262,7 @@ export function useDashboardController() {
         console.log("[dash] joinedBase count", joinedBase.length);
         console.log("[dash] sample joinedBase ids", joinedBase.slice(0, 5).map((r) => r.id));
 
-        // 3b) ticketsOwned for joined display
+        // 3b) ticketsOwned RPC for joined display
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
