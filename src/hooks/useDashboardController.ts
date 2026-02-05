@@ -12,10 +12,12 @@ import {
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
+// Minimal ABI for dashboard logic
 const RAFFLE_DASH_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
+
   {
     type: "function",
     name: "ticketsOwned",
@@ -40,13 +42,13 @@ const RAFFLE_DASH_ABI = [
 ] as const;
 
 type JoinedRaffleItem = RaffleListItem & {
-  userTicketsOwned: string;
+  userTicketsOwned: string; // bigint string
 };
 
 type ClaimableItem = {
   raffle: RaffleListItem;
-  claimableUsdc: string;
-  claimableNative: string;
+  claimableUsdc: string; // bigint string
+  claimableNative: string; // bigint string
   type: "WIN" | "REFUND" | "OTHER";
   roles: { participated?: boolean; created?: boolean };
   userTicketsOwned?: string;
@@ -129,13 +131,18 @@ export function useDashboardController() {
 
   const joinedFetchInFlightRef = useRef(false);
   const joinedBackoffMsRef = useRef(0);
-
-  // ✅ cache must be keyed by account
   const lastJoinedIdsRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
 
   const runIdRef = useRef(0);
 
-  // ✅ reset per-account caches immediately when wallet changes
+  // ✅ IMPORTANT: force subgraph refresh immediately on dashboard mount / wallet change
+  useEffect(() => {
+    if (!account) return;
+    void refreshRaffleStore(false, true);
+    // don’t await here; recompute effect below will run again on store update
+  }, [account]);
+
+  // Reset some local caches when account changes
   useEffect(() => {
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
@@ -150,26 +157,19 @@ export function useDashboardController() {
     const now = Date.now();
     const cached = lastJoinedIdsRef.current;
 
-    // ✅ only reuse cache if it belongs to THIS account
     if (cached && cached.account === acct && now - cached.ts < 60_000) return cached.ids;
-
-    if (joinedFetchInFlightRef.current) {
-      // if we have a cache for this account, return it; otherwise return empty
-      if (cached && cached.account === acct) return cached.ids;
-      return new Set<string>();
-    }
+    if (joinedFetchInFlightRef.current) return cached?.account === acct ? cached.ids : new Set<string>();
 
     joinedFetchInFlightRef.current = true;
 
     try {
       const ids = new Set<string>();
 
-      // Primary: participant aggregation
+      // Primary: raffleParticipants aggregation
       try {
         let skip = 0;
         const pageSize = 1000;
         const maxPages = 5;
-
         for (let pageN = 0; pageN < maxPages; pageN++) {
           const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
           page.forEach((id) => ids.add(normId(id)));
@@ -180,7 +180,7 @@ export function useDashboardController() {
         console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
       }
 
-      // Fallback: events (robust)
+      // Fallback: raffleEvents (TICKETS_PURCHASED)
       try {
         const ev = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, maxPages: 8 });
         ev.forEach((id) => ids.add(normId(id)));
@@ -190,7 +190,6 @@ export function useDashboardController() {
 
       lastJoinedIdsRef.current = { ts: now, account: acct, ids };
       joinedBackoffMsRef.current = 0;
-
       return ids;
     } catch (e) {
       if (isRateLimitError(e)) {
@@ -198,9 +197,7 @@ export function useDashboardController() {
         joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
         setMsg("Indexer rate-limited. Retrying shortly…");
       }
-      const cached2 = lastJoinedIdsRef.current;
-      if (cached2 && cached2.account === acct) return cached2.ids;
-      return new Set<string>();
+      return cached?.account === acct ? cached.ids : new Set<string>();
     } finally {
       joinedFetchInFlightRef.current = false;
     }
@@ -220,8 +217,9 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
+      // Wait for store
       if (!store.items) {
-        setLocalPending(!isBackground);
+        setLocalPending(true);
         return;
       }
 
@@ -230,39 +228,36 @@ export function useDashboardController() {
       try {
         const myAddr = account.toLowerCase();
 
-        // created (may be empty for “joined-only” wallets)
+        // 1) created
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // joined ids (participant + events)
+        // 2) joined ids
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        console.log("[dash] joinedIds.size", joinedIds.size);
-        console.log("[dash] sample joinedIds", Array.from(joinedIds).slice(0, 5));
-        console.log("[dash] store.items count", (store.items ?? []).length);
-
+        // 3) joined raffles: fetch by ids (more reliable than filtering the store)
         const joinedIdArr = Array.from(joinedIds);
-
-        // joined raffles: prefer fetch-by-ids so joined items show even if not in store list
         let joinedBase: RaffleListItem[] = [];
+
         if (joinedIdArr.length > 0) {
           try {
             joinedBase = await fetchRafflesByIds(joinedIdArr);
-          } catch (e) {
-            console.warn("[dash] fetchRafflesByIds failed", e);
+          } catch {
             joinedBase = [];
           }
         }
 
+        // fallback to store filter
         if (joinedBase.length === 0 && joinedIdArr.length > 0) {
           const s = new Set(joinedIdArr.map(normId));
           joinedBase = allRaffles.filter((r) => s.has(normId(r.id)));
         }
 
+        console.log("[dash] joinedIds.size", joinedIds.size);
+        console.log("[dash] store.items count", (store.items ?? []).length);
         console.log("[dash] joinedBase count", joinedBase.length);
-        console.log("[dash] sample joinedBase ids", joinedBase.slice(0, 5).map((r) => r.id));
 
-        // ticketsOwned (for display)
+        // 3b) ticketsOwned RPC for joined list display
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
@@ -288,11 +283,15 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
         }));
 
-        // ✅ commit immediately (so UI shows joined even if claim scan gets canceled)
+        // ✅ Commit immediately so UI renders without waiting for claim scan
         setCreated(myCreated);
         setJoined(myJoined);
 
-        // claimables: only scan candidates that exist
+        /**
+         * 4) claimables scan
+         * Key fix: creator SHOULD see claim tiles for their canceled/completed raffles,
+         * even if claimableFunds read fails or returns 0 (RPC hiccup).
+         */
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -311,96 +310,87 @@ export function useDashboardController() {
         const newClaimables: ClaimableItem[] = [];
 
         await mapPool(candidates, 10, async (r) => {
+          const contract = getContract({
+            client: thirdwebClient,
+            chain: ETHERLINK_CHAIN,
+            address: r.id,
+            abi: RAFFLE_DASH_ABI,
+          });
+
+          // ✅ read separately so one revert doesn’t drop the tile
+          let cf = 0n;
+          let cn = 0n;
+          let ticketsOwned = 0n;
+
           try {
-            const contract = getContract({
-              client: thirdwebClient,
-              chain: ETHERLINK_CHAIN,
-              address: r.id,
-              abi: RAFFLE_DASH_ABI,
+            const v = await readContract({ contract, method: "claimableFunds", params: [account] });
+            cf = toBigInt(v);
+          } catch {}
+
+          try {
+            const v = await readContract({ contract, method: "claimableNative", params: [account] });
+            cn = toBigInt(v);
+          } catch {}
+
+          try {
+            const v = await readContract({ contract, method: "ticketsOwned", params: [account] });
+            ticketsOwned = toBigInt(v);
+          } catch {}
+
+          const roles = {
+            created: r.creator?.toLowerCase() === myAddr,
+            participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
+          };
+
+          // Winner claim
+          const isWinnerEligible =
+            r.status === "COMPLETED" &&
+            r.winner?.toLowerCase() === myAddr &&
+            (cf > 0n || cn > 0n);
+
+          // Participant refund (two-phase)
+          const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
+
+          // ✅ Creator “should see” (this is the missing piece for your canceled raffle)
+          const creatorShouldSee =
+            roles.created && (r.status === "CANCELED" || r.status === "COMPLETED");
+
+          const isAnythingClaimable = cf > 0n || cn > 0n;
+
+          if (isWinnerEligible) {
+            newClaimables.push({
+              raffle: r,
+              claimableUsdc: cf.toString(),
+              claimableNative: cn.toString(),
+              type: "WIN",
+              roles,
+              userTicketsOwned: ticketsOwned.toString(),
             });
+            return;
+          }
 
-            const [cfRaw, cnRaw, ownedRaw] = await Promise.all([
-              readContract({ contract, method: "claimableFunds", params: [account] }),
-              readContract({ contract, method: "claimableNative", params: [account] }),
-              readContract({ contract, method: "ticketsOwned", params: [account] }),
-            ]);
+          if (isParticipantRefundEligible) {
+            newClaimables.push({
+              raffle: r,
+              claimableUsdc: cf.toString(),
+              claimableNative: cn.toString(),
+              type: "REFUND",
+              roles,
+              userTicketsOwned: ticketsOwned.toString(),
+            });
+            return;
+          }
 
-            const cf = toBigInt(cfRaw);
-            const cn = toBigInt(cnRaw);
-            const ticketsOwned = toBigInt(ownedRaw);
-
-            const roles = {
-              created: r.creator?.toLowerCase() === myAddr,
-              participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
-            };
-
-            const isWinnerEligible =
-              r.status === "COMPLETED" &&
-              r.winner?.toLowerCase() === myAddr &&
-              (cf > 0n || cn > 0n);
-
-            const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
-
-            const isCreatorCancelClaimEligible =
-              r.status === "CANCELED" && roles.created && (cf > 0n || cn > 0n);
-
-            const isOtherEligible = cf > 0n || cn > 0n;
-
-            if (
-              !isWinnerEligible &&
-              !isParticipantRefundEligible &&
-              !isCreatorCancelClaimEligible &&
-              !isOtherEligible
-            ) return;
-
-            if (isWinnerEligible) {
-              newClaimables.push({
-                raffle: r,
-                claimableUsdc: cf.toString(),
-                claimableNative: cn.toString(),
-                type: "WIN",
-                roles,
-                userTicketsOwned: ticketsOwned.toString(),
-              });
-              return;
-            }
-
-            if (isParticipantRefundEligible) {
-              newClaimables.push({
-                raffle: r,
-                claimableUsdc: cf.toString(),
-                claimableNative: cn.toString(),
-                type: "REFUND",
-                roles,
-                userTicketsOwned: ticketsOwned.toString(),
-              });
-              return;
-            }
-
-            if (isCreatorCancelClaimEligible) {
-              newClaimables.push({
-                raffle: r,
-                claimableUsdc: cf.toString(),
-                claimableNative: cn.toString(),
-                type: "OTHER",
-                roles,
-                userTicketsOwned: ticketsOwned.toString(),
-              });
-              return;
-            }
-
-            if (isOtherEligible) {
-              newClaimables.push({
-                raffle: r,
-                claimableUsdc: cf.toString(),
-                claimableNative: cn.toString(),
-                type: "OTHER",
-                roles,
-                userTicketsOwned: ticketsOwned.toString(),
-              });
-            }
-          } catch {
-            // ignore
+          // ✅ Show OTHER if any amount is claimable OR creatorShouldSee
+          if (isAnythingClaimable || creatorShouldSee) {
+            newClaimables.push({
+              raffle: r,
+              claimableUsdc: cf.toString(),
+              claimableNative: cn.toString(),
+              type: "OTHER",
+              roles,
+              userTicketsOwned: ticketsOwned.toString(),
+            });
           }
         });
 
@@ -461,7 +451,10 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
+  const withdraw = async (
+    raffleId: string,
+    method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
+  ) => {
     if (!account) return;
     setMsg(null);
 
@@ -478,7 +471,6 @@ export function useDashboardController() {
       setHiddenClaimables((p) => ({ ...p, [normId(raffleId)]: true }));
       setMsg("Claim successful.");
 
-      // clear joined cache so refund/join changes reflect immediately
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
 
