@@ -62,7 +62,7 @@ function isVisible() {
   }
 }
 
-// ✅ safer BigInt conversion
+// safer BigInt conversion
 function toBigInt(v: any): bigint {
   try {
     if (typeof v === "bigint") return v;
@@ -80,7 +80,6 @@ export function useDashboardController() {
   const account = accountObj?.address ?? null;
   const { mutateAsync: sendAndConfirm } = useSendAndConfirmTransaction();
 
-  // ✅ single shared indexer poller
   const store = useRaffleStore("dashboard", 15_000);
   const allRaffles = useMemo(() => store.items ?? [], [store.items]);
 
@@ -91,12 +90,10 @@ export function useDashboardController() {
   const [msg, setMsg] = useState<string | null>(null);
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
-  // joinedIds cache/backoff (subgraph)
   const joinedFetchInFlightRef = useRef(false);
   const joinedBackoffMsRef = useRef(0);
   const lastJoinedIdsRef = useRef<{ ts: number; ids: Set<string> } | null>(null);
 
-  // ignore stale async responses (account switches etc.)
   const runIdRef = useRef(0);
 
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
@@ -114,7 +111,7 @@ export function useDashboardController() {
       let skip = 0;
 
       const pageSize = 1000;
-      const maxPages = 3; // up to 3k joined records
+      const maxPages = 3;
 
       for (let pageN = 0; pageN < maxPages; pageN++) {
         const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
@@ -152,10 +149,8 @@ export function useDashboardController() {
         return;
       }
 
-      // don’t do heavy work in background if hidden
       if (isBackground && !isVisible()) return;
 
-      // if store not ready, don’t recompute yet
       if (!store.items) {
         setLocalPending(!isBackground);
         return;
@@ -173,10 +168,10 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles from store
+        // 3) joined raffles
         const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
 
-        // 3b) ticketsOwned RPC (cap)
+        // 3b) ticketsOwned RPC
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 80);
 
@@ -210,7 +205,7 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(r.id.toLowerCase()) ?? "0",
         }));
 
-        // 4) claimables = union(created + joined
+        // 4) claimables = union(created + joined)
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
         joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
@@ -243,20 +238,25 @@ export function useDashboardController() {
                 participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
               };
 
-              // ✅ Participant ticket refund eligibility (can exist even if claimableFunds is 0 until claimTicketRefund is called)
-              const isRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
-
-              // ✅ Winner claim eligibility (requires actual claimable balances)
+              // --- Eligibility ---
               const isWinnerEligible =
                 r.status === "COMPLETED" &&
                 r.winner?.toLowerCase() === myAddr &&
                 (cf > 0n || cn > 0n);
 
-              // ✅ Creator/other eligibility (requires actual claimable balances)
-              // This includes the creator pot refund on cancel (your contract credits claimableFunds[creator] on cancel)
+              // Refund step #1: user holds tickets in a canceled raffle (even if cf=0)
+              const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
+
+              // Creator canceled pot refund: contract allocates claimableFunds[creator] immediately
+              const isCreatorCancelClaimEligible =
+                r.status === "CANCELED" && roles.created && (cf > 0n || cn > 0n);
+
+              // Generic “other” claimable (fees/creator/winner already allocated etc.)
               const isOtherEligible = cf > 0n || cn > 0n;
 
-              if (!isRefundEligible && !isWinnerEligible && !isOtherEligible) return;
+              if (!isWinnerEligible && !isParticipantRefundEligible && !isCreatorCancelClaimEligible && !isOtherEligible) {
+                return;
+              }
 
               if (isWinnerEligible) {
                 newClaimables.push({
@@ -270,11 +270,12 @@ export function useDashboardController() {
                 return;
               }
 
-              if (isRefundEligible) {
+              // ✅ Participant refund: show REFUND (even if cf=0, because claimTicketRefund allocates)
+              if (isParticipantRefundEligible) {
                 newClaimables.push({
                   raffle: r,
-                  claimableUsdc: cf.toString(), // can be 0
-                  claimableNative: cn.toString(), // can be 0
+                  claimableUsdc: cf.toString(),
+                  claimableNative: cn.toString(),
                   type: "REFUND",
                   roles,
                   userTicketsOwned: ticketsOwned.toString(),
@@ -282,15 +283,30 @@ export function useDashboardController() {
                 return;
               }
 
-              // other withdraw (creator refund / protocol / etc.)
-              newClaimables.push({
-                raffle: r,
-                claimableUsdc: cf.toString(),
-                claimableNative: cn.toString(),
-                type: "OTHER",
-                roles,
-                userTicketsOwned: ticketsOwned.toString(),
-              });
+              // ✅ Creator canceled pot refund should NOT be REFUND in UI (it’s withdrawFunds)
+              if (isCreatorCancelClaimEligible) {
+                newClaimables.push({
+                  raffle: r,
+                  claimableUsdc: cf.toString(),
+                  claimableNative: cn.toString(),
+                  type: "OTHER",
+                  roles,
+                  userTicketsOwned: ticketsOwned.toString(),
+                });
+                return;
+              }
+
+              // other withdraw
+              if (isOtherEligible) {
+                newClaimables.push({
+                  raffle: r,
+                  claimableUsdc: cf.toString(),
+                  claimableNative: cn.toString(),
+                  type: "OTHER",
+                  roles,
+                  userTicketsOwned: ticketsOwned.toString(),
+                });
+              }
             } catch {
               // ignore per-raffle
             }
@@ -312,7 +328,6 @@ export function useDashboardController() {
     [account, allRaffles, getJoinedIds, store.items]
   );
 
-  // recompute when store updates or account changes
   useEffect(() => {
     if (!account) {
       setLocalPending(false);
@@ -322,7 +337,6 @@ export function useDashboardController() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, store.lastUpdatedMs]);
 
-  // focus/visibility refresh -> force store refresh + background recompute
   useEffect(() => {
     const onFocus = () => {
       void refreshRaffleStore(true, true);
