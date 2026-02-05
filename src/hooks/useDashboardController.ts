@@ -5,7 +5,12 @@ import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { fetchMyJoinedRaffleIds, fetchRafflesByIds, type RaffleListItem } from "../indexer/subgraph";
+import {
+  fetchMyJoinedRaffleIds,
+  fetchRafflesByIds,
+  fetchRafflesByCreator,
+  type RaffleListItem,
+} from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
 // Minimal ABI for dashboard logic
@@ -162,32 +167,55 @@ export function useDashboardController() {
       try {
         const myAddr = account.toLowerCase();
 
-        // 1) created
-        const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
+        // 1) created (store + backfill by creator)
+        const createdFromStore = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
+        const createdSeen = new Set(createdFromStore.map((r) => r.id.toLowerCase()));
+        const createdMerged: RaffleListItem[] = [...createdFromStore];
+
+        // Pull additional created raffles from subgraph (paged)
+        let skipCreated = 0;
+        const createdPageSize = 200;
+        const maxCreatedPages = 5; // up to 1000 created raffles
+
+        for (let i = 0; i < maxCreatedPages; i++) {
+          const page = await fetchRafflesByCreator(account, {
+            first: createdPageSize,
+            skip: skipCreated,
+          });
+
+          if (runId !== runIdRef.current) return;
+
+          for (const r of page) {
+            const id = r.id.toLowerCase();
+            if (!createdSeen.has(id)) {
+              createdSeen.add(id);
+              createdMerged.push(r);
+            }
+          }
+
+          if (page.length < createdPageSize) break;
+          skipCreated += createdPageSize;
+        }
+
+        const myCreated = createdMerged;
 
         // 2) joined ids
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles (include missing ones not in store.items)
+        // 3) joined raffles (store + backfill by id)
         const allById = new Map(allRaffles.map((r) => [r.id.toLowerCase(), r]));
         const joinedFromStore = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
-
         const missingJoinedIds = Array.from(joinedIds).filter((id) => !allById.has(id));
-        const joinedFetched = missingJoinedIds.length
-          ? await fetchRafflesByIds(missingJoinedIds)
-          : [];
-
+        const joinedFetched = missingJoinedIds.length ? await fetchRafflesByIds(missingJoinedIds) : [];
         const joinedBase = [...joinedFromStore, ...joinedFetched];
 
         if (runId !== runIdRef.current) return;
 
-        // 3b) ticketsOwned RPC (check ALL joined raffles so refunds/history are correct)
+        // 3b) ticketsOwned RPC (check ALL joined raffles so refunds/history never disappear)
         const ownedByRaffleId = new Map<string, string>();
-        const joinedToCheck = joinedBase;
-
         await Promise.all(
-          joinedToCheck.map(async (r) => {
+          joinedBase.map(async (r) => {
             try {
               const contract = getContract({
                 client: thirdwebClient,
@@ -221,7 +249,7 @@ export function useDashboardController() {
         myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
         joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
 
-        // increase slice so older joined/canceled raffles don’t get cut off
+        // bigger window so older creator refunds aren’t cut off
         const candidates = Array.from(candidateById.values()).slice(0, 200);
 
         const newClaimables: ClaimableItem[] = [];
@@ -250,6 +278,7 @@ export function useDashboardController() {
                 participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
               };
 
+              // --- Eligibility ---
               const isWinnerEligible =
                 r.status === "COMPLETED" &&
                 r.winner?.toLowerCase() === myAddr &&
