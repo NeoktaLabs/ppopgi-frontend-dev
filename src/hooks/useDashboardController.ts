@@ -12,12 +12,10 @@ import {
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
-// Minimal ABI for dashboard logic
 const RAFFLE_DASH_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
-
   {
     type: "function",
     name: "ticketsOwned",
@@ -42,13 +40,13 @@ const RAFFLE_DASH_ABI = [
 ] as const;
 
 type JoinedRaffleItem = RaffleListItem & {
-  userTicketsOwned: string; // bigint string
+  userTicketsOwned: string;
 };
 
 type ClaimableItem = {
   raffle: RaffleListItem;
-  claimableUsdc: string; // bigint string
-  claimableNative: string; // bigint string
+  claimableUsdc: string;
+  claimableNative: string;
   type: "WIN" | "REFUND" | "OTHER";
   roles: { participated?: boolean; created?: boolean };
   userTicketsOwned?: string;
@@ -135,14 +133,7 @@ export function useDashboardController() {
 
   const runIdRef = useRef(0);
 
-  // ✅ IMPORTANT: force subgraph refresh immediately on dashboard mount / wallet change
-  useEffect(() => {
-    if (!account) return;
-    void refreshRaffleStore(false, true);
-    // don’t await here; recompute effect below will run again on store update
-  }, [account]);
-
-  // Reset some local caches when account changes
+  // Reset caches on account change
   useEffect(() => {
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
@@ -217,7 +208,6 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
-      // Wait for store
       if (!store.items) {
         setLocalPending(true);
         return;
@@ -235,7 +225,7 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles: fetch by ids (more reliable than filtering the store)
+        // 3) joined raffles: fetch by ids
         const joinedIdArr = Array.from(joinedIds);
         let joinedBase: RaffleListItem[] = [];
 
@@ -247,15 +237,10 @@ export function useDashboardController() {
           }
         }
 
-        // fallback to store filter
         if (joinedBase.length === 0 && joinedIdArr.length > 0) {
           const s = new Set(joinedIdArr.map(normId));
           joinedBase = allRaffles.filter((r) => s.has(normId(r.id)));
         }
-
-        console.log("[dash] joinedIds.size", joinedIds.size);
-        console.log("[dash] store.items count", (store.items ?? []).length);
-        console.log("[dash] joinedBase count", joinedBase.length);
 
         // 3b) ticketsOwned RPC for joined list display
         const ownedByRaffleId = new Map<string, string>();
@@ -269,6 +254,7 @@ export function useDashboardController() {
               address: r.id,
               abi: RAFFLE_DASH_ABI,
             });
+
             const owned = await readContract({ contract, method: "ticketsOwned", params: [account] });
             ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
           } catch {
@@ -283,15 +269,15 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
         }));
 
-        // ✅ Commit immediately so UI renders without waiting for claim scan
+        // Commit joined/created asap
         setCreated(myCreated);
         setJoined(myJoined);
 
-        /**
-         * 4) claimables scan
-         * Key fix: creator SHOULD see claim tiles for their canceled/completed raffles,
-         * even if claimableFunds read fails or returns 0 (RPC hiccup).
-         */
+        // 4) claimables scan:
+        // ✅ Only show claim tiles when an actual action exists:
+        // - WIN: winner + completed + cf/cn > 0
+        // - REFUND: canceled + ticketsOwned > 0 (phase 1) OR later withdrawFunds when cf>0
+        // - OTHER: cf/cn > 0 (creator cancel pot refund will satisfy cf>0)
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -305,8 +291,6 @@ export function useDashboardController() {
         });
 
         const candidates = uniqueCandidates.slice(0, 400);
-        console.log("[dash] claim candidates count", candidates.length);
-
         const newClaimables: ClaimableItem[] = [];
 
         await mapPool(candidates, 10, async (r) => {
@@ -317,24 +301,19 @@ export function useDashboardController() {
             abi: RAFFLE_DASH_ABI,
           });
 
-          // ✅ read separately so one revert doesn’t drop the tile
+          // Read separately so one revert doesn’t drop the whole tile
           let cf = 0n;
           let cn = 0n;
           let ticketsOwned = 0n;
 
           try {
-            const v = await readContract({ contract, method: "claimableFunds", params: [account] });
-            cf = toBigInt(v);
+            cf = toBigInt(await readContract({ contract, method: "claimableFunds", params: [account] }));
           } catch {}
-
           try {
-            const v = await readContract({ contract, method: "claimableNative", params: [account] });
-            cn = toBigInt(v);
+            cn = toBigInt(await readContract({ contract, method: "claimableNative", params: [account] }));
           } catch {}
-
           try {
-            const v = await readContract({ contract, method: "ticketsOwned", params: [account] });
-            ticketsOwned = toBigInt(v);
+            ticketsOwned = toBigInt(await readContract({ contract, method: "ticketsOwned", params: [account] }));
           } catch {}
 
           const roles = {
@@ -342,19 +321,15 @@ export function useDashboardController() {
             participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
           };
 
-          // Winner claim
           const isWinnerEligible =
             r.status === "COMPLETED" &&
             r.winner?.toLowerCase() === myAddr &&
             (cf > 0n || cn > 0n);
 
-          // Participant refund (two-phase)
+          // participant refund phase 1: allocate
           const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
-          // ✅ Creator “should see” (this is the missing piece for your canceled raffle)
-          const creatorShouldSee =
-            roles.created && (r.status === "CANCELED" || r.status === "COMPLETED");
-
+          // anything withdrawable
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
           if (isWinnerEligible) {
@@ -381,8 +356,8 @@ export function useDashboardController() {
             return;
           }
 
-          // ✅ Show OTHER if any amount is claimable OR creatorShouldSee
-          if (isAnythingClaimable || creatorShouldSee) {
+          // ✅ ONLY show OTHER when there is actually money to withdraw
+          if (isAnythingClaimable) {
             newClaimables.push({
               raffle: r,
               claimableUsdc: cf.toString(),
@@ -406,11 +381,24 @@ export function useDashboardController() {
     [account, allRaffles, getJoinedIds, store.items]
   );
 
+  // ✅ Immediate load: force refresh store & recompute right away
   useEffect(() => {
     if (!account) {
       setLocalPending(false);
       return;
     }
+
+    // Kick refresh (force) and then recompute once
+    void (async () => {
+      await refreshRaffleStore(false, true);
+      await recompute(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
+
+  // Recompute when store updates (normal path)
+  useEffect(() => {
+    if (!account) return;
     void recompute(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, store.lastUpdatedMs]);
@@ -437,12 +425,14 @@ export function useDashboardController() {
   }, [recompute]);
 
   const createdSorted = useMemo(
-    () => [...created].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
+    () =>
+      [...created].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
     [created]
   );
 
   const joinedSorted = useMemo(
-    () => [...joined].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
+    () =>
+      [...joined].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
     [joined]
   );
 
