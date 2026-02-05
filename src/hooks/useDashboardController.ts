@@ -68,7 +68,6 @@ function toBigInt(v: any): bigint {
     if (typeof v === "bigint") return v;
     if (typeof v === "number") return BigInt(v);
     if (typeof v === "string") return BigInt(v || "0");
-    // common patterns
     if (v?.toString) return BigInt(v.toString());
     return 0n;
   } catch {
@@ -211,7 +210,7 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(r.id.toLowerCase()) ?? "0",
         }));
 
-        // 4) claimables = union(created + joined)
+        // 4) claimables = union(created + joined
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
         joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
@@ -244,17 +243,17 @@ export function useDashboardController() {
                 participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
               };
 
-              // ✅ IMPORTANT CHANGE:
-              // Allow REFUND items even if cf/cn are 0 (refund might be ticket reclaim)
+              // ✅ Participant ticket refund eligibility (can exist even if claimableFunds is 0 until claimTicketRefund is called)
               const isRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
-              // Winner claim (only if something claimable)
+              // ✅ Winner claim eligibility (requires actual claimable balances)
               const isWinnerEligible =
                 r.status === "COMPLETED" &&
                 r.winner?.toLowerCase() === myAddr &&
                 (cf > 0n || cn > 0n);
 
-              // Creator/other (only if something claimable)
+              // ✅ Creator/other eligibility (requires actual claimable balances)
+              // This includes the creator pot refund on cancel (your contract credits claimableFunds[creator] on cancel)
               const isOtherEligible = cf > 0n || cn > 0n;
 
               if (!isRefundEligible && !isWinnerEligible && !isOtherEligible) return;
@@ -283,7 +282,7 @@ export function useDashboardController() {
                 return;
               }
 
-              // other withdraw
+              // other withdraw (creator refund / protocol / etc.)
               newClaimables.push({
                 raffle: r,
                 claimableUsdc: cf.toString(),
@@ -366,10 +365,7 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  const withdraw = async (
-    raffleId: string,
-    method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
-  ) => {
+  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
     if (!account) return;
     setMsg(null);
 
