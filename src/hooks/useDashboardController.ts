@@ -6,18 +6,16 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import {
   fetchMyJoinedRaffleIds,
-  fetchMyJoinedRaffleIdsFromEvents, // ✅ requires you to add this export in subgraph.ts
+  fetchMyJoinedRaffleIdsFromEvents,
   fetchRafflesByIds,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
-// Minimal ABI for dashboard logic
 const RAFFLE_DASH_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
-
   {
     type: "function",
     name: "ticketsOwned",
@@ -42,13 +40,13 @@ const RAFFLE_DASH_ABI = [
 ] as const;
 
 type JoinedRaffleItem = RaffleListItem & {
-  userTicketsOwned: string; // bigint string
+  userTicketsOwned: string;
 };
 
 type ClaimableItem = {
   raffle: RaffleListItem;
-  claimableUsdc: string; // bigint string
-  claimableNative: string; // bigint string
+  claimableUsdc: string;
+  claimableNative: string;
   type: "WIN" | "REFUND" | "OTHER";
   roles: { participated?: boolean; created?: boolean };
   userTicketsOwned?: string;
@@ -79,7 +77,6 @@ function toBigInt(v: any): bigint {
   }
 }
 
-// normalize ids for comparison: lower + ensure 0x prefix
 function normId(v: string): string {
   const s = (v || "").toLowerCase();
   if (!s) return s;
@@ -149,30 +146,24 @@ export function useDashboardController() {
     try {
       const ids = new Set<string>();
 
-      // 1) Primary source: aggregated participants
+      // Primary: participant aggregation
       try {
         let skip = 0;
         const pageSize = 1000;
         const maxPages = 3;
-
         for (let pageN = 0; pageN < maxPages; pageN++) {
           const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
           page.forEach((id) => ids.add(normId(id)));
           if (page.length < pageSize) break;
           skip += pageSize;
         }
-      } catch (e) {
-        console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
-      }
+      } catch {}
 
-      // 2) Fallback: derive joined from ticket purchase events
-      // This fixes the exact issue you saw: joinedIds.size === 0 when participant aggregation isn't written.
+      // Fallback: events (robust)
       try {
-        const page = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, skip: 0 });
-        page.forEach((id) => ids.add(normId(id)));
-      } catch (e) {
-        console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
-      }
+        const ev = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, maxPages: 5 });
+        ev.forEach((id) => ids.add(normId(id)));
+      } catch {}
 
       lastJoinedIdsRef.current = { ts: now, ids };
       joinedBackoffMsRef.current = 0;
@@ -182,8 +173,6 @@ export function useDashboardController() {
         const cur = joinedBackoffMsRef.current || 0;
         joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
         setMsg("Indexer rate-limited. Retrying shortly…");
-      } else {
-        console.error("[dash] getJoinedIds failed", e);
       }
       return cached?.ids ?? new Set<string>();
     } finally {
@@ -204,7 +193,6 @@ export function useDashboardController() {
       }
 
       if (isBackground && !isVisible()) return;
-
       if (!store.items) {
         setLocalPending(!isBackground);
         return;
@@ -222,47 +210,29 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // ✅ DEBUG (leave for now; remove once fixed)
         console.log("[dash] joinedIds.size", joinedIds.size);
         console.log("[dash] sample joinedIds", Array.from(joinedIds).slice(0, 5));
         console.log("[dash] store.items count", (store.items ?? []).length);
 
-        // 3) joined raffles (robust)
+        // 3) joined raffles (prefer fetch-by-ids)
         const joinedIdArr = Array.from(joinedIds);
         let joinedBase: RaffleListItem[] = [];
 
-        // Prefer fetch-by-ids (complete)
         try {
-          if (joinedIdArr.length > 0) {
-            joinedBase = (await fetchRafflesByIds(joinedIdArr)) ?? [];
-          }
-        } catch (e) {
-          console.warn("[dash] fetchRafflesByIds failed; falling back to store filter", e);
+          if (joinedIdArr.length > 0) joinedBase = await fetchRafflesByIds(joinedIdArr);
+        } catch {
           joinedBase = [];
         }
 
-        // Fallback: store list filter (yesterday behavior)
         if (joinedBase.length === 0 && joinedIdArr.length > 0) {
-          const joinedIdSet = new Set(joinedIdArr.map(normId));
-          joinedBase = allRaffles.filter((r) => joinedIdSet.has(normId(r.id)));
+          const s = new Set(joinedIdArr.map(normId));
+          joinedBase = allRaffles.filter((r) => s.has(normId(r.id)));
         }
 
-        // Merge freshness: prefer store version if present
-        if (joinedBase.length > 0) {
-          const byId = new Map<string, RaffleListItem>();
-          joinedBase.forEach((r) => byId.set(normId(r.id), r));
-          allRaffles.forEach((r) => {
-            const id = normId(r.id);
-            if (byId.has(id)) byId.set(id, r);
-          });
-          joinedBase = Array.from(byId.values());
-        }
-
-        // ✅ DEBUG
         console.log("[dash] joinedBase count", joinedBase.length);
         console.log("[dash] sample joinedBase ids", joinedBase.slice(0, 5).map((r) => r.id));
 
-        // 3b) ticketsOwned RPC for joined display
+        // 3b) ticketsOwned (joined display)
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
@@ -275,12 +245,7 @@ export function useDashboardController() {
               abi: RAFFLE_DASH_ABI,
             });
 
-            const owned = await readContract({
-              contract,
-              method: "ticketsOwned",
-              params: [account],
-            });
-
+            const owned = await readContract({ contract, method: "ticketsOwned", params: [account] });
             ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
           } catch {
             ownedByRaffleId.set(normId(r.id), "0");
@@ -294,13 +259,17 @@ export function useDashboardController() {
           userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
         }));
 
-        // 4) claimables scan
+        // ✅ CRITICAL FIX:
+        // Commit joined/created immediately so UI can render even if claim scan gets canceled.
+        setCreated(myCreated);
+        setJoined(myJoined);
+
+        // 4) claimables scan (can be slow; safe to cancel)
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
 
         const uniqueCandidates = Array.from(candidateById.values());
-
         uniqueCandidates.sort((a, b) => {
           const sa = scoreForClaimScan(a);
           const sb = scoreForClaimScan(b);
@@ -308,11 +277,7 @@ export function useDashboardController() {
           return Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0");
         });
 
-        const hi = uniqueCandidates.filter((r) => r.status === "CANCELED" || r.status === "COMPLETED");
-        const lo = uniqueCandidates.filter((r) => r.status !== "CANCELED" && r.status !== "COMPLETED");
-        const candidates = [...hi, ...lo].slice(0, 400);
-
-        // ✅ DEBUG
+        const candidates = uniqueCandidates.slice(0, 400);
         console.log("[dash] claim candidates count", candidates.length);
 
         const newClaimables: ClaimableItem[] = [];
@@ -415,8 +380,6 @@ export function useDashboardController() {
 
         if (runId !== runIdRef.current) return;
 
-        setCreated(myCreated);
-        setJoined(myJoined);
         setClaimables(newClaimables);
       } catch (e) {
         console.error("Dashboard recompute error", e);
@@ -459,18 +422,12 @@ export function useDashboardController() {
   }, [recompute]);
 
   const createdSorted = useMemo(
-    () =>
-      [...created].sort(
-        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
-      ),
+    () => [...created].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
     [created]
   );
 
   const joinedSorted = useMemo(
-    () =>
-      [...joined].sort(
-        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
-      ),
+    () => [...joined].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
     [joined]
   );
 
@@ -479,10 +436,7 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  const withdraw = async (
-    raffleId: string,
-    method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
-  ) => {
+  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
     if (!account) return;
     setMsg(null);
 
