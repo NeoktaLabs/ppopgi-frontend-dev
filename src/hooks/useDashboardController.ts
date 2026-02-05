@@ -1,10 +1,11 @@
 // src/hooks/useDashboardController.ts
+
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { fetchMyJoinedRaffleIds, type RaffleListItem } from "../indexer/subgraph";
+import { fetchMyJoinedRaffleIds, fetchRafflesByIds, type RaffleListItem } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
 // Minimal ABI for dashboard logic
@@ -168,12 +169,22 @@ export function useDashboardController() {
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles
-        const joinedBase = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
+        // 3) joined raffles (include missing ones not in store.items)
+        const allById = new Map(allRaffles.map((r) => [r.id.toLowerCase(), r]));
+        const joinedFromStore = allRaffles.filter((r) => joinedIds.has(r.id.toLowerCase()));
 
-        // 3b) ticketsOwned RPC
+        const missingJoinedIds = Array.from(joinedIds).filter((id) => !allById.has(id));
+        const joinedFetched = missingJoinedIds.length
+          ? await fetchRafflesByIds(missingJoinedIds)
+          : [];
+
+        const joinedBase = [...joinedFromStore, ...joinedFetched];
+
+        if (runId !== runIdRef.current) return;
+
+        // 3b) ticketsOwned RPC (check ALL joined raffles so refunds/history are correct)
         const ownedByRaffleId = new Map<string, string>();
-        const joinedToCheck = joinedBase.slice(0, 80);
+        const joinedToCheck = joinedBase;
 
         await Promise.all(
           joinedToCheck.map(async (r) => {
@@ -210,7 +221,8 @@ export function useDashboardController() {
         myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
         joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
 
-        const candidates = Array.from(candidateById.values()).slice(0, 60);
+        // increase slice so older joined/canceled raffles don’t get cut off
+        const candidates = Array.from(candidateById.values()).slice(0, 200);
 
         const newClaimables: ClaimableItem[] = [];
         await Promise.all(
@@ -238,23 +250,24 @@ export function useDashboardController() {
                 participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
               };
 
-              // --- Eligibility ---
               const isWinnerEligible =
                 r.status === "COMPLETED" &&
                 r.winner?.toLowerCase() === myAddr &&
                 (cf > 0n || cn > 0n);
 
-              // Refund step #1: user holds tickets in a canceled raffle (even if cf=0)
               const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
-              // Creator canceled pot refund: contract allocates claimableFunds[creator] immediately
               const isCreatorCancelClaimEligible =
                 r.status === "CANCELED" && roles.created && (cf > 0n || cn > 0n);
 
-              // Generic “other” claimable (fees/creator/winner already allocated etc.)
               const isOtherEligible = cf > 0n || cn > 0n;
 
-              if (!isWinnerEligible && !isParticipantRefundEligible && !isCreatorCancelClaimEligible && !isOtherEligible) {
+              if (
+                !isWinnerEligible &&
+                !isParticipantRefundEligible &&
+                !isCreatorCancelClaimEligible &&
+                !isOtherEligible
+              ) {
                 return;
               }
 
@@ -270,7 +283,6 @@ export function useDashboardController() {
                 return;
               }
 
-              // ✅ Participant refund: show REFUND (even if cf=0, because claimTicketRefund allocates)
               if (isParticipantRefundEligible) {
                 newClaimables.push({
                   raffle: r,
@@ -283,7 +295,6 @@ export function useDashboardController() {
                 return;
               }
 
-              // ✅ Creator canceled pot refund should NOT be REFUND in UI (it’s withdrawFunds)
               if (isCreatorCancelClaimEligible) {
                 newClaimables.push({
                   raffle: r,
@@ -296,7 +307,6 @@ export function useDashboardController() {
                 return;
               }
 
-              // other withdraw
               if (isOtherEligible) {
                 newClaimables.push({
                   raffle: r,
@@ -379,7 +389,10 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
+  const withdraw = async (
+    raffleId: string,
+    method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
+  ) => {
     if (!account) return;
     setMsg(null);
 
