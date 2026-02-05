@@ -242,7 +242,6 @@ export async function fetchRafflesByIds(
 
 /**
  * ✅ Fetch raffles by creator (backfill "Created" tab + creator refunds)
- * Paged; you can tune max pages on the caller side.
  */
 export async function fetchRafflesByCreator(
   creator: string,
@@ -546,12 +545,7 @@ export async function fetchRaffleMetadata(
 
   try {
     type Resp = { raffle: any | null };
-    const data = await gqlFetch<Resp>(
-      url,
-      query,
-      { id: raffleId.toLowerCase() },
-      opts.signal
-    );
+    const data = await gqlFetch<Resp>(url, query, { id: raffleId.toLowerCase() }, opts.signal);
 
     const r = data.raffle ?? null;
     if (!r) return null;
@@ -588,12 +582,7 @@ export async function fetchMyJoinedRaffleIds(
 
   try {
     type Resp = { raffleParticipants: any[] };
-    const data = await gqlFetch<Resp>(
-      url,
-      query,
-      { buyer: buyer.toLowerCase(), first, skip },
-      opts.signal
-    );
+    const data = await gqlFetch<Resp>(url, query, { buyer: buyer.toLowerCase(), first, skip }, opts.signal);
 
     const rows = (data.raffleParticipants ?? []) as any[];
 
@@ -604,7 +593,13 @@ export async function fetchMyJoinedRaffleIds(
     console.error("fetchMyJoinedRaffleIds failed:", e);
     return [];
   }
+}
 
+/**
+ * ✅ Fallback “joined raffles” source:
+ * derives joined raffle IDs from ticket purchase events,
+ * even if RaffleParticipant aggregation is broken.
+ */
 export async function fetchMyJoinedRaffleIdsFromEvents(
   buyer: string,
   opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
@@ -629,12 +624,7 @@ export async function fetchMyJoinedRaffleIdsFromEvents(
 
   try {
     type Resp = { raffleEvents: any[] };
-    const data = await gqlFetch<Resp>(
-      url,
-      query,
-      { buyer: buyer.toLowerCase(), first, skip },
-      opts.signal
-    );
+    const data = await gqlFetch<Resp>(url, query, { buyer: buyer.toLowerCase(), first, skip }, opts.signal);
 
     const rows = (data.raffleEvents ?? []) as any[];
 
@@ -645,6 +635,4 @@ export async function fetchMyJoinedRaffleIdsFromEvents(
     console.error("fetchMyJoinedRaffleIdsFromEvents failed:", e);
     return [];
   }
-}
-
 }
