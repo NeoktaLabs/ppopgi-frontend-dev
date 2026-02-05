@@ -6,7 +6,8 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import {
   fetchMyJoinedRaffleIds,
-  fetchRafflesByIds, // ✅ used for robust joined backfill
+  fetchMyJoinedRaffleIdsFromEvents, // ✅ fallback for "joined" via raffleEvents
+  fetchRafflesByIds,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -80,6 +81,16 @@ function toBigInt(v: any): bigint {
 }
 
 /**
+ * Ensure ids are comparable: lower-case + 0x prefix.
+ * (Some subgraphs / libs always return Bytes with 0x; others can be inconsistent.)
+ */
+function normId(v: string): string {
+  const s = (v || "").toLowerCase();
+  if (!s) return s;
+  return s.startsWith("0x") ? s : `0x${s}`;
+}
+
+/**
  * Simple concurrency pool to avoid hammering RPC.
  */
 async function mapPool<T, R>(
@@ -148,16 +159,29 @@ export function useDashboardController() {
 
     try {
       const ids = new Set<string>();
-      let skip = 0;
 
-      const pageSize = 1000;
-      const maxPages = 3;
+      // Primary: aggregated participant table
+      try {
+        let skip = 0;
+        const pageSize = 1000;
+        const maxPages = 3;
 
-      for (let pageN = 0; pageN < maxPages; pageN++) {
-        const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
-        page.forEach((id) => ids.add(id.toLowerCase()));
-        if (page.length < pageSize) break;
-        skip += pageSize;
+        for (let pageN = 0; pageN < maxPages; pageN++) {
+          const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
+          page.forEach((id) => ids.add(normId(id)));
+          if (page.length < pageSize) break;
+          skip += pageSize;
+        }
+      } catch (e) {
+        console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
+      }
+
+      // Fallback: raw purchase events (more reliable than aggregates)
+      try {
+        const page = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, skip: 0 });
+        page.forEach((id) => ids.add(normId(id)));
+      } catch (e) {
+        console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
       }
 
       lastJoinedIdsRef.current = { ts: now, ids };
@@ -169,7 +193,7 @@ export function useDashboardController() {
         joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
         setMsg("Indexer rate-limited. Retrying shortly…");
       } else {
-        console.error("fetchMyJoinedRaffleIds failed", e);
+        console.error("[dash] getJoinedIds failed", e);
       }
       return cached?.ids ?? new Set<string>();
     } finally {
@@ -201,42 +225,52 @@ export function useDashboardController() {
       try {
         const myAddr = account.toLowerCase();
 
-        // 1) created (from store list)
+        // 1) created (store list)
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // 2) joined ids (from subgraph participant index)
+        // 2) joined ids
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
-        // 3) joined raffles (✅ robust)
-        // Prefer fetch-by-ids (complete). If it fails/empty, fall back to store filter (yesterday behavior).
-        const joinedIdArr = Array.from(joinedIds).map((x) => x.toLowerCase());
+        // ✅ DEBUG
+        console.log("[dash] joinedIds.size", joinedIds.size);
+        console.log("[dash] sample joinedIds", Array.from(joinedIds).slice(0, 5));
+        console.log("[dash] store.items count", (store.items ?? []).length);
+
+        // 3) joined raffles (robust)
+        const joinedIdArr = Array.from(joinedIds);
         let joinedBase: RaffleListItem[] = [];
 
+        // Prefer fetch-by-ids (complete)
         try {
           if (joinedIdArr.length > 0) {
             joinedBase = (await fetchRafflesByIds(joinedIdArr)) ?? [];
           }
         } catch (e) {
-          console.warn("[dashboard] fetchRafflesByIds failed; falling back to store items", e);
+          console.warn("[dash] fetchRafflesByIds failed; will fall back to store filter", e);
           joinedBase = [];
         }
 
+        // Fallback: yesterday behavior (store list filter)
         if (joinedBase.length === 0 && joinedIdArr.length > 0) {
-          const joinedIdSet = new Set(joinedIdArr);
-          joinedBase = allRaffles.filter((r) => joinedIdSet.has(r.id.toLowerCase()));
+          const joinedIdSet = new Set(joinedIdArr.map(normId));
+          joinedBase = allRaffles.filter((r) => joinedIdSet.has(normId(r.id)));
         }
 
-        // Merge freshness: if a raffle exists in both sources, prefer store version.
+        // Merge freshness: prefer store version for ids that exist in both
         if (joinedBase.length > 0) {
           const byId = new Map<string, RaffleListItem>();
-          joinedBase.forEach((r) => byId.set(r.id.toLowerCase(), r));
+          joinedBase.forEach((r) => byId.set(normId(r.id), r));
           allRaffles.forEach((r) => {
-            const id = r.id.toLowerCase();
+            const id = normId(r.id);
             if (byId.has(id)) byId.set(id, r);
           });
           joinedBase = Array.from(byId.values());
         }
+
+        // ✅ DEBUG
+        console.log("[dash] joinedBase count", joinedBase.length);
+        console.log("[dash] sample joinedBase ids", joinedBase.slice(0, 5).map((r) => r.id));
 
         // 3b) ticketsOwned RPC for joined list display
         const ownedByRaffleId = new Map<string, string>();
@@ -257,9 +291,9 @@ export function useDashboardController() {
               params: [account],
             });
 
-            ownedByRaffleId.set(r.id.toLowerCase(), toBigInt(owned).toString());
+            ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
           } catch {
-            ownedByRaffleId.set(r.id.toLowerCase(), "0");
+            ownedByRaffleId.set(normId(r.id), "0");
           }
         });
 
@@ -267,15 +301,15 @@ export function useDashboardController() {
 
         const myJoined: JoinedRaffleItem[] = joinedBase.map((r) => ({
           ...r,
-          userTicketsOwned: ownedByRaffleId.get(r.id.toLowerCase()) ?? "0",
+          userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
         }));
 
         /**
          * 4) claimables scan
          */
         const candidateById = new Map<string, RaffleListItem>();
-        myCreated.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
-        joinedBase.forEach((r) => candidateById.set(r.id.toLowerCase(), r));
+        myCreated.forEach((r) => candidateById.set(normId(r.id), r));
+        joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
 
         const uniqueCandidates = Array.from(candidateById.values());
 
@@ -286,10 +320,13 @@ export function useDashboardController() {
           return Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0");
         });
 
-        // Slightly safer cap for correctness around canceled/completed
+        // Keep canceled/completed first; cap overall
         const hi = uniqueCandidates.filter((r) => r.status === "CANCELED" || r.status === "COMPLETED");
         const lo = uniqueCandidates.filter((r) => r.status !== "CANCELED" && r.status !== "COMPLETED");
         const candidates = [...hi, ...lo].slice(0, 400);
+
+        // ✅ DEBUG
+        console.log("[dash] claim candidates count", candidates.length);
 
         const newClaimables: ClaimableItem[] = [];
 
@@ -314,7 +351,7 @@ export function useDashboardController() {
 
             const roles = {
               created: r.creator?.toLowerCase() === myAddr,
-              participated: ticketsOwned > 0n || joinedIds.has(r.id.toLowerCase()),
+              participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
             };
 
             const isWinnerEligible =
@@ -322,8 +359,10 @@ export function useDashboardController() {
               r.winner?.toLowerCase() === myAddr &&
               (cf > 0n || cn > 0n);
 
+            // refund step #1: canceled + tickets still owned
             const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
+            // creator cancel pot refund is immediate claimableFunds[creator]
             const isCreatorCancelClaimEligible =
               r.status === "CANCELED" && roles.created && (cf > 0n || cn > 0n);
 
@@ -451,7 +490,7 @@ export function useDashboardController() {
   );
 
   const claimablesSorted = useMemo(
-    () => claimables.filter((c) => !hiddenClaimables[c.raffle.id.toLowerCase()]),
+    () => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]),
     [claimables, hiddenClaimables]
   );
 
@@ -472,7 +511,7 @@ export function useDashboardController() {
 
       await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
 
-      setHiddenClaimables((p) => ({ ...p, [raffleId.toLowerCase()]: true }));
+      setHiddenClaimables((p) => ({ ...p, [normId(raffleId)]: true }));
       setMsg("Claim successful.");
 
       lastJoinedIdsRef.current = null;
