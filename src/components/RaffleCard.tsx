@@ -1,4 +1,3 @@
-// src/components/RaffleCard.tsx
 import React, { useMemo } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { useRaffleCard } from "../hooks/useRaffleCard";
@@ -67,8 +66,9 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
 
+        {/* ✅ Centered Win Rate */}
         {oddsLabel && !userEntry && (
-          <div className="rc-odds-badge" title="Win chance per ticket">
+          <div className="rc-odds-badge rc-odds-center" title="Win chance per ticket">
             🎲 Win: {oddsLabel}
           </div>
         )}
@@ -85,7 +85,16 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
           >
             🛡
           </button>
-          <button className="rc-btn-icon" onClick={actions.handleShare} title="Share">
+
+          <button
+            className="rc-btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              // keep same handler, just prevent card click
+              actions.handleShare(e as any);
+            }}
+            title="Share"
+          >
             🔗
           </button>
         </div>
@@ -130,14 +139,18 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       </div>
 
       {/* ✅ only this line, centered */}
-      <div className="rc-prize-note">
-        *See details for prize distribution
-      </div>
+      <div className="rc-prize-note">*See details for prize distribution</div>
 
       <div className="rc-quick-buy-wrapper">
         <div className="rc-perforation" />
         {ui.isLive && (
-          <button className="rc-quick-buy-btn" onClick={() => onOpen(raffle.id)}>
+          <button
+            className="rc-quick-buy-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(raffle.id);
+            }}
+          >
             ⚡ Buy Ticket
           </button>
         )}
