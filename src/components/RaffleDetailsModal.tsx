@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useActiveAccount } from "thirdweb/react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
@@ -118,11 +119,19 @@ function fmtNum(n: number) {
   return safe.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+// ✅ UI clamp: never allow < 1
+function clampTicketsUi(v: any) {
+  const n = Math.floor(Number(String(v ?? "").trim()));
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, n);
+}
+
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
+  const account = useActiveAccount();
+
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
-
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
   useEffect(() => {
@@ -259,36 +268,36 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const isSettled = status === "COMPLETED";
     const isCanceled = status === "CANCELED";
 
-    const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0")); // gross prize
+    const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const sold = Number(displayData.sold || 0);
     const ticketPrice = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
     const grossSales = ticketPrice * sold;
 
-    // Prize split (90/10)
     const winnerNet = pot * 0.9;
     const platformPrizeFee = pot * 0.1;
     const prizeTotal = winnerNet + platformPrizeFee;
 
-    // Sales split (90/10)
     const creatorNet = grossSales * 0.9;
     const platformSalesFee = grossSales * 0.1;
     const salesTotal = creatorNet + platformSalesFee;
 
-    return {
-      isSettled,
-      isCanceled,
-      winnerNet,
-      platformPrizeFee,
-      prizeTotal,
-      creatorNet,
-      platformSalesFee,
-      salesTotal,
-    };
+    return { isSettled, isCanceled, winnerNet, platformPrizeFee, prizeTotal, creatorNet, platformSalesFee, salesTotal };
   }, [displayData, math]);
+
+  // ✅ creator block (use actual connected account)
+  const creatorAddr = String(displayData?.creator || "").toLowerCase();
+  const meAddr = String(account?.address || "").toLowerCase();
+  const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
+
+  // ✅ enforce "1" as UI default (your hook already sets to minBuy; we override UI to 1)
+  useEffect(() => {
+    if (!open || !raffleId) return;
+    if (clampTicketsUi(state.tickets) !== 1) actions.setTickets("1");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, raffleId]);
 
   if (!open) return null;
 
-  // ✅ FIX: Use same source as "Initialized" in the Blockchain Journey
   const createdOnTs = timeline?.[0]?.date ?? null;
 
   return (
@@ -320,10 +329,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div className="rdm-hero-meta">
             <div className="rdm-host">
               <span>Created by</span>
-              <ExplorerLink
-                addr={String(displayData?.creator || "")}
-                label={math.short(String(displayData?.creator || ""))}
-              />
+              <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
             </div>
             <div className="rdm-createdon">
               <span>Created on</span>
@@ -424,38 +430,52 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
               {state.displayStatus === "Open" ? "Raffle is finalizing..." : "Raffle Closed"}
             </div>
+          ) : isCreator ? (
+            <div className="rdm-buy-disabled">
+              {displayData?.name ? <b>{displayData.name}</b> : "This raffle"} can’t be entered by its creator.
+            </div>
           ) : (
             <>
               <div className="rdm-balance-row">
                 <span>Bal: {math.fmtUsdc(state.usdcBal?.toString() || "0")} USDC</span>
                 <span>Max: {math.maxBuy} Tickets</span>
               </div>
+
               <div className="rdm-stepper">
-                <button className="rdm-step-btn" onClick={() => actions.setTickets(String(math.ticketCount - 1))}>
+                <button
+                  className="rdm-step-btn"
+                  onClick={() => actions.setTickets(String(Math.max(1, clampTicketsUi(math.ticketCount - 1))))}
+                  disabled={clampTicketsUi(math.ticketCount) <= 1}
+                >
                   −
                 </button>
+
                 <div className="rdm-input-wrapper">
                   <input
                     className="rdm-amount"
+                    inputMode="numeric"
                     value={state.tickets}
-                    onChange={(e) => actions.setTickets(e.target.value)}
+                    onChange={(e) => actions.setTickets(String(clampTicketsUi(e.target.value)))}
                     placeholder="1"
                   />
                   <div className="rdm-cost-preview">Total: {math.fmtUsdc(math.totalCostU.toString())} USDC</div>
                 </div>
-                <button className="rdm-step-btn" onClick={() => actions.setTickets(String(math.ticketCount + 1))}>
+
+                <button className="rdm-step-btn" onClick={() => actions.setTickets(String(clampTicketsUi(math.ticketCount + 1)))}>
                   +
                 </button>
               </div>
+
               {!flags.hasEnoughAllowance ? (
                 <button className="rdm-cta approve" onClick={actions.approve} disabled={state.isPending}>
                   {state.isPending ? "Approving..." : "1. Approve USDC"}
                 </button>
               ) : (
                 <button className="rdm-cta buy" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
-                  {state.isPending ? "Confirming..." : `Buy ${state.tickets} Ticket${math.ticketCount !== 1 ? "s" : ""}`}
+                  {state.isPending ? "Confirming..." : `Buy ${clampTicketsUi(state.tickets)} Ticket${clampTicketsUi(state.tickets) !== 1 ? "s" : ""}`}
                 </button>
               )}
+
               {state.buyMsg && (
                 <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "#D32F2F", fontWeight: 700 }}>
                   {state.buyMsg}
@@ -479,7 +499,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         <div className="rdm-scroll-content">
           {tab === "receipt" && (
             <div className="rdm-receipt">
-              {/* ✅ More spacing below the title */}
               <div className="rdm-receipt-title" style={{ marginBottom: 16 }}>
                 BLOCKCHAIN JOURNEY
               </div>
@@ -519,9 +538,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                         <ExplorerLink addr={p.buyer} />
                       </span>
                       <div className="rdm-lb-stats">
-                        <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>
-                        {/* ✅ Space between icon and percentage */}
-                        {" "}
+                        <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>{" "}
                         <span className="rdm-lb-pct">({p.percentage}%)</span>
                       </div>
                     </div>
