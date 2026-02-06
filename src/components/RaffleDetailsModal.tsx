@@ -249,17 +249,16 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return { roi, oddsPct, price };
   }, [displayData, math]);
 
-  // ✅ UPDATED: Two subtitles + totals for each distribution
   const distribution = useMemo(() => {
     if (!displayData) return null;
 
     const status = String(displayData.status || "");
     const isSettled = status === "COMPLETED";
+    const isCanceled = status === "CANCELED";
 
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0")); // gross prize
     const sold = Number(displayData.sold || 0);
     const ticketPrice = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
-
     const grossSales = ticketPrice * sold;
 
     // Prize split (90/10)
@@ -274,13 +273,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     return {
       isSettled,
-
-      pot,
+      isCanceled,
       winnerNet,
       platformPrizeFee,
       prizeTotal,
-
-      grossSales,
       creatorNet,
       platformSalesFee,
       salesTotal,
@@ -354,70 +350,68 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
-        {/* ✅ Prize Distribution */}
+        {/* ✅ Distributions / Canceled message */}
         {distribution && (
-          <div className="rdm-dist">
-            <div className="rdm-dist-title">Prize distribution</div>
-
-            <div className={`rdm-dist-note ${distribution.isSettled ? "ok" : "warn"}`}>
-              {distribution.isSettled
-                ? "Settlement is complete — amounts below are final."
-                : "Only valid once the raffle is settled (COMPLETED). Values shown are live projections."}
-            </div>
-
-            {/* Subtitle 1 */}
-            <div className="rdm-dist-subtitle">Prize distribution</div>
-            <div className="rdm-dist-grid">
-              <div className="rdm-dist-row">
-                <span className="rdm-dist-k">Gross prize pool</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.pot)} USDC</span>
+          <>
+            {distribution.isCanceled ? (
+              <div className="rdm-dist rdm-dist-canceled">
+                <div className="rdm-dist-title">Prize & sales distribution</div>
+                <div className="rdm-dist-note warn">
+                  This raffle was canceled. If you purchased tickets, you can reclaim your ticket cost from your dashboard.
+                </div>
               </div>
+            ) : (
+              <div className="rdm-dist">
+                <div className="rdm-dist-title">Prize & sales distribution</div>
 
-              <div className="rdm-dist-row">
-                <span className="rdm-dist-k">Winner (net)</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.winnerNet)} USDC</span>
+                <div className={`rdm-dist-note ${distribution.isSettled ? "ok" : "warn"}`}>
+                  {distribution.isSettled
+                    ? "Settlement is complete — amounts below are final."
+                    : "Only valid once the raffle is settled (COMPLETED). Values shown are live projections."}
+                </div>
+
+                {/* Title-like subtitle */}
+                <div className="rdm-dist-subtitle">Prize distribution</div>
+                <div className="rdm-dist-grid">
+                  <div className="rdm-dist-row">
+                    <span className="rdm-dist-k">Winner (net)</span>
+                    <span className="rdm-dist-v">{fmtNum(distribution.winnerNet)} USDC</span>
+                  </div>
+
+                  <div className="rdm-dist-row">
+                    <span className="rdm-dist-k">Platform fee (prize)</span>
+                    <span className="rdm-dist-v">{fmtNum(distribution.platformPrizeFee)} USDC</span>
+                  </div>
+
+                  <div className="rdm-dist-row rdm-dist-total">
+                    <span className="rdm-dist-k">Total</span>
+                    <span className="rdm-dist-v">{fmtNum(distribution.prizeTotal)} USDC</span>
+                  </div>
+                </div>
+
+                <div className="rdm-dist-divider" />
+
+                {/* Title-like subtitle */}
+                <div className="rdm-dist-subtitle">Ticket sales distribution</div>
+                <div className="rdm-dist-grid">
+                  <div className="rdm-dist-row">
+                    <span className="rdm-dist-k">Creator (net)</span>
+                    <span className="rdm-dist-v">{fmtNum(distribution.creatorNet)} USDC</span>
+                  </div>
+
+                  <div className="rdm-dist-row">
+                    <span className="rdm-dist-k">Platform fee (sales)</span>
+                    <span className="rdm-dist-v">{fmtNum(distribution.platformSalesFee)} USDC</span>
+                  </div>
+
+                  <div className="rdm-dist-row rdm-dist-total">
+                    <span className="rdm-dist-k">Total</span>
+                    <span className="rdm-dist-v">{fmtNum(distribution.salesTotal)} USDC</span>
+                  </div>
+                </div>
               </div>
-
-              <div className="rdm-dist-row">
-                <span className="rdm-dist-k">Platform fee (prize)</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.platformPrizeFee)} USDC</span>
-              </div>
-
-              {/* Total */}
-              <div className="rdm-dist-row rdm-dist-total">
-                <span className="rdm-dist-k">Total</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.prizeTotal)} USDC</span>
-              </div>
-            </div>
-
-            <div className="rdm-dist-divider" />
-
-            {/* Subtitle 2 */}
-            <div className="rdm-dist-subtitle">Ticket sales distribution</div>
-            <div className="rdm-dist-grid">
-              <div className="rdm-dist-row">
-                <span className="rdm-dist-k">Ticket sales (gross)</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.grossSales)} USDC</span>
-              </div>
-
-              {/* creator first */}
-              <div className="rdm-dist-row">
-                <span className="rdm-dist-k">Creator (net)</span>
-                <span className="rdm-dist-v creator-net">{fmtNum(distribution.creatorNet)} USDC</span>
-              </div>
-
-              <div className="rdm-dist-row">
-                <span className="rdm-dist-k">Platform fee (sales)</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.platformSalesFee)} USDC</span>
-              </div>
-
-              {/* Total */}
-              <div className="rdm-dist-row rdm-dist-total">
-                <span className="rdm-dist-k">Total</span>
-                <span className="rdm-dist-v">{fmtNum(distribution.salesTotal)} USDC</span>
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
 
         <div className="rdm-tear" />
@@ -445,9 +439,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     onChange={(e) => actions.setTickets(e.target.value)}
                     placeholder="1"
                   />
-                  <div className="rdm-cost-preview">
-                    Total: {math.fmtUsdc(math.totalCostU.toString())} USDC
-                  </div>
+                  <div className="rdm-cost-preview">Total: {math.fmtUsdc(math.totalCostU.toString())} USDC</div>
                 </div>
                 <button className="rdm-step-btn" onClick={() => actions.setTickets(String(math.ticketCount + 1))}>
                   +
@@ -524,7 +516,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                       </span>
                       <div className="rdm-lb-stats">
                         <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>
-                        {/* ✅ space added via CSS gap/margin */}
                         <span className="rdm-lb-pct">({p.percentage}%)</span>
                       </div>
                     </div>
