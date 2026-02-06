@@ -33,15 +33,14 @@ type Props = {
 
 const short = (addr: string) => (addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown");
 
-export function RaffleCard({
-  raffle,
-  onOpen,
-  onOpenSafety,
-  ribbon,
-  nowMs = Date.now(),
-  hatch,
-  userEntry,
-}: Props) {
+// Helper: parse "1,234.56" safely
+function toNumber(s: any): number {
+  const raw = String(s ?? "").replace(/,/g, "").trim();
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch, userEntry }: Props) {
   const { ui, actions } = useRaffleCard(raffle, nowMs);
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
@@ -64,6 +63,13 @@ export function RaffleCard({
     if (pct < 0.01) return "<0.01%";
     return pct < 1 ? `${pct.toFixed(2)}%` : `${Math.round(pct)}%`;
   }, [raffle.maxTickets, raffle.sold, ui.isLive]);
+
+  // ✅ Net prize (winner receives 90%). We keep it purely UI-level for now.
+  const netPrizeStr = useMemo(() => {
+    const gross = toNumber(ui.formattedPot);
+    const net = gross * 0.9;
+    return net.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }, [ui.formattedPot]);
 
   return (
     <div className={cardClass} onClick={() => onOpen(raffle.id)} role="button" tabIndex={0}>
@@ -126,18 +132,24 @@ export function RaffleCard({
         {raffle.name}
       </div>
 
-      {/* ✅ Prize Section: Gross + asterisk + hint */}
-      <div className="rc-prize-lbl">
-        Current Prize Pool <span className="rc-asterisk">*</span>
-      </div>
+      {/* Prize Section */}
+      <div className="rc-prize-lbl">Current Prize Pool</div>
 
+      {/* ✅ Ensure USDC is visible (unit is not inside gradient) */}
       <div className="rc-prize-row">
         <div className="rc-prize-val">
-          {ui.formattedPot} <span className="rc-usdc-suffix">USDC</span>
+          <span className="rc-prize-num">{ui.formattedPot}</span>
+          <span className="rc-prize-unit">USDC</span>
         </div>
       </div>
 
-      <div className="rc-prize-hint">* View raffle details for exact prize distribution</div>
+      {/* ✅ Small transparency line */}
+      <div style={{ fontSize: 10, color: "#94a3b8", textAlign: "right", marginTop: 2, fontWeight: 700, opacity: 0.9 }}>
+        Net to winner: <b>{netPrizeStr} USDC</b> <span style={{ opacity: 0.8 }}>*</span>
+      </div>
+      <div style={{ fontSize: 10, color: "#94a3b8", textAlign: "right", marginTop: 2, fontWeight: 700, opacity: 0.8 }}>
+        *See details for exact distribution
+      </div>
 
       <div className="rc-quick-buy-wrapper">
         <div className="rc-perforation" />
@@ -211,15 +223,7 @@ export function RaffleCard({
             {hatch.busy ? "CONFIRMING..." : hatch.ready ? "HATCH (CANCEL)" : "LOCKED"}
           </button>
           {hatch.note && (
-            <div
-              style={{
-                fontSize: 10,
-                marginTop: 4,
-                textAlign: "center",
-                fontWeight: 800,
-                textTransform: "uppercase",
-              }}
-            >
+            <div style={{ fontSize: 10, marginTop: 4, textAlign: "center", fontWeight: 800, textTransform: "uppercase" }}>
               {hatch.note}
             </div>
           )}
