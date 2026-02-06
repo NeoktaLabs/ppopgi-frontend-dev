@@ -1,5 +1,3 @@
-// src/components/SafetyProofModal.tsx
-import { useMemo, useState } from "react";
 import type { RaffleDetails } from "../hooks/useRaffleDetails";
 import { useSafetyBreakdown } from "../hooks/useSafetyBreakdown";
 import "./SafetyProofModal.css";
@@ -10,20 +8,18 @@ type Props = {
   raffle: RaffleDetails;
 };
 
-const ENTROPY_EXPLORER_URL = "https://entropy-explorer.pyth.network/?chain=etherlink-mainnet";
-
 // Helper: Clickable Link
 const ExplorerLink = ({ addr, label }: { addr?: string; label: string }) => {
-  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span className="sp-mono">—</span>;
-  const a = String(addr).toLowerCase();
+  if (!addr || addr === "0x0000000000000000000000000000000000000000") {
+    return <span className="sp-mono">—</span>;
+  }
   return (
     <a
-      href={`https://explorer.etherlink.com/address/${a}`}
+      href={`https://explorer.etherlink.com/address/${addr}`}
       target="_blank"
       rel="noreferrer"
       className="sp-link"
-      title={a}
-      onClick={(e) => e.stopPropagation()}
+      title={addr}
     >
       {label} ↗
     </a>
@@ -32,33 +28,28 @@ const ExplorerLink = ({ addr, label }: { addr?: string; label: string }) => {
 
 const short = (s?: string) => (s ? `${s.slice(0, 6)}...${s.slice(-4)}` : "—");
 
+const copy = (v?: string) => {
+  if (!v) return;
+  navigator.clipboard.writeText(v);
+};
+
 export function SafetyProofModal({ open, onClose, raffle }: Props) {
-  const breakdown = useSafetyBreakdown(raffle);
-  const [copied, setCopied] = useState(false);
-
-  const raffleAddr = useMemo(() => String(raffle.address || "").toLowerCase(), [raffle.address]);
-
-  const copyAddr = async () => {
-    try {
-      if (!raffleAddr) return;
-      await navigator.clipboard.writeText(raffleAddr);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {}
-  };
+  useSafetyBreakdown(raffle); // kept for consistency / future use
 
   if (!open) return null;
 
   return (
     <div className="sp-overlay" onMouseDown={onClose}>
       <div className="sp-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
+        {/* HEADER */}
         <div className="sp-header">
           <div className="sp-header-left">
             <div className="sp-shield-icon">🛡️</div>
             <div>
-              <h3 className="sp-title">Randomness Proof</h3>
-              <div className="sp-subtitle">Verifiable • Unpredictable • On-Chain</div>
+              <h3 className="sp-title">Verified & Fair Randomness</h3>
+              <div className="sp-subtitle">
+                Immutable • Non-custodial • Publicly verifiable
+              </div>
             </div>
           </div>
           <button className="sp-close-btn" onClick={onClose}>
@@ -67,67 +58,54 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
         </div>
 
         <div className="sp-body">
-          {/* Key facts */}
+          {/* KEY FACTS */}
           <div className="sp-section-grid">
             <div className="sp-data-box">
-              <div className="sp-lbl">Contract Status</div>
-              <div className={`sp-status-pill ${String(raffle.status || "").toLowerCase()}`}>
-                {String(raffle.status || "").replaceAll("_", " ")}
-              </div>
+              <div className="sp-lbl">Contract status</div>
+              <span className={`sp-status-pill ${raffle.status.toLowerCase()}`}>
+                {raffle.status.replace("_", " ")}
+              </span>
             </div>
 
             <div className="sp-data-box">
-              <div className="sp-lbl">Raffle Address</div>
-              <div className="sp-inline">
-                <ExplorerLink addr={raffleAddr} label={short(raffleAddr)} />
-                <button className="sp-copy-btn" onClick={copyAddr} title="Copy address">
-                  {copied ? "✅" : "📋"}
-                </button>
-              </div>
-              <div className="sp-tech-note">Use this address as the “Sender” when checking Entropy Explorer.</div>
+              <div className="sp-lbl">Raffle address</div>
+              <ExplorerLink
+                addr={raffle.address}
+                label={short(raffle.address)}
+              />
             </div>
 
             <div className="sp-data-box">
-              <div className="sp-lbl">Entropy Provider</div>
-              <ExplorerLink addr={raffle.entropyProvider} label={short(raffle.entropyProvider)} />
+              <div className="sp-lbl">Asset token</div>
+              <ExplorerLink addr={raffle.usdcToken} label="USDC (ERC-20)" />
             </div>
 
             <div className="sp-data-box">
-              <div className="sp-lbl">Entropy Explorer</div>
-              <a className="sp-link" href={ENTROPY_EXPLORER_URL} target="_blank" rel="noreferrer">
-                Open Entropy Explorer ↗
-              </a>
+              <div className="sp-lbl">Creator</div>
+              <ExplorerLink
+                addr={raffle.creator}
+                label={short(raffle.creator)}
+              />
             </div>
           </div>
 
-          {/* Explain panel */}
-          <div className="sp-panel sp-explain-panel">
-            <div className="sp-panel-header">What this means</div>
-            <p className="sp-p">
-              This raffle uses <strong>Pyth Entropy</strong> to generate randomness. The random value is produced by an
-              external entropy network and is accompanied by cryptographic proof. That means:
-            </p>
-            <ul className="sp-bullets">
-              <li>No one can predict the winner before the randomness is fulfilled.</li>
-              <li>No one (including the creator) can choose or manipulate the outcome.</li>
-              <li>The draw can be verified publicly on-chain.</li>
-            </ul>
-          </div>
-
-          {/* Flow panel */}
+          {/* HOW RANDOMNESS WORKS */}
           <div className="sp-panel sp-flow-panel">
             <div className="sp-panel-header">
-              How to verify yourself <span className="sp-flow-pill">2 min</span>
+              <span>🎲 How the winner is chosen</span>
+              <span className="sp-flow-pill active">Unmanipulable</span>
             </div>
 
             <div className="sp-flow">
               <div className="sp-step">
                 <div className="sp-step-num">1</div>
                 <div>
-                  <div className="sp-step-title">Open the Entropy Explorer</div>
+                  <div className="sp-step-title">
+                    Raffle requests randomness
+                  </div>
                   <div className="sp-step-text">
-                    Click <a className="sp-link" href={ENTROPY_EXPLORER_URL} target="_blank" rel="noreferrer">Entropy Explorer ↗</a>{" "}
-                    (Etherlink mainnet).
+                    Once ticket sales end, the raffle smart contract sends a
+                    randomness request to the entropy network.
                   </div>
                 </div>
               </div>
@@ -135,13 +113,12 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-step">
                 <div className="sp-step-num">2</div>
                 <div>
-                  <div className="sp-step-title">Find the request sent by this raffle</div>
+                  <div className="sp-step-title">
+                    Entropy network generates randomness
+                  </div>
                   <div className="sp-step-text">
-                    In the requests list / search, look for the request where the <strong>Sender</strong> equals this
-                    raffle address:
-                    <div className="sp-mini-note">
-                      <span className="sp-mono">{raffleAddr || "—"}</span>
-                    </div>
+                    The entropy provider produces randomness off-chain and
+                    publishes it back on-chain with cryptographic proof.
                   </div>
                 </div>
               </div>
@@ -149,38 +126,78 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-step">
                 <div className="sp-step-num">3</div>
                 <div>
-                  <div className="sp-step-title">Open the request details</div>
+                  <div className="sp-step-title">
+                    Winner is selected automatically
+                  </div>
                   <div className="sp-step-text">
-                    You’ll see the request and, once fulfilled, the randomness proof/fulfillment info. That request is
-                    what your raffle used to pick a winner.
+                    The raffle contract uses the returned randomness to select a
+                    winner. No one — not the creator, not Ppopgi — can interfere.
                   </div>
                 </div>
               </div>
             </div>
+
+            <div className="sp-mini-note">
+              This entire process is on-chain and publicly auditable.
+            </div>
           </div>
 
-          {/* Tech panel */}
+          {/* VERIFY YOURSELF */}
           <div className="sp-panel sp-tech-panel">
-            <div className="sp-panel-header">Technical details (optional)</div>
+            <div className="sp-panel-header">
+              <span>🔎 Verify the randomness yourself</span>
+            </div>
+
             <div className="sp-tech-grid">
               <div className="sp-tech-row">
-                <div className="sp-k">Entropy provider</div>
+                <div className="sp-k">Entropy explorer</div>
                 <div className="sp-v">
-                  <ExplorerLink addr={raffle.entropyProvider} label={String(raffle.entropyProvider ? raffle.entropyProvider : "—")} />
+                  <a
+                    href="https://entropy-explorer.pyth.network/?chain=etherlink-mainnet"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="sp-link"
+                  >
+                    entropy-explorer.pyth.network ↗
+                  </a>
                 </div>
               </div>
 
               <div className="sp-tech-row">
-                <div className="sp-k">Raffle (sender)</div>
+                <div className="sp-k">Sender address</div>
                 <div className="sp-v">
-                  <ExplorerLink addr={raffleAddr} label={raffleAddr || "—"} />
+                  <div className="sp-inline">
+                    <span className="sp-mono">{raffle.address}</span>
+                    <button
+                      className="sp-copy-btn"
+                      onClick={() => copy(raffle.address)}
+                      title="Copy sender address"
+                    >
+                      📋
+                    </button>
+                  </div>
+                  <div className="sp-tech-note">
+                    In the entropy explorer, look for a request where the{" "}
+                    <strong>sender</strong> equals this raffle address.
+                  </div>
+                </div>
+              </div>
+
+              <div className="sp-tech-row">
+                <div className="sp-k">Entropy provider</div>
+                <div className="sp-v">
+                  <ExplorerLink
+                    addr={raffle.entropyProvider}
+                    label={short(raffle.entropyProvider)}
+                  />
                 </div>
               </div>
             </div>
 
             <div className="sp-footnote">
-              Note: We don’t display a request id here because it isn’t indexed in the subgraph. The Entropy Explorer
-              lookup by <em>Sender</em> is the most reliable way for anyone to verify the request.
+              Anyone can independently confirm that the randomness used to select
+              the winner originated from the entropy network and was not
+              manipulated.
             </div>
           </div>
         </div>
