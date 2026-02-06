@@ -131,11 +131,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       </div>
 
       {/* STATUS BANNER */}
-      {data.msg && (
-        <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>
-          {data.msg}
-        </div>
-      )}
+      {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
       {/* CLAIMABLES SECTION */}
       <div className="db-section claim-section">
@@ -153,14 +149,27 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <div className="db-grid">
             {data.claimables.map((it: any) => {
               const r = it.raffle;
+
+              const acct = (account || "").toLowerCase();
+              const winner = (r.winner || "").toLowerCase();
+              const iAmWinner = !!acct && acct === winner;
+
               const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
               const hasNative = BigInt(it.claimableNative || "0") > 0n;
+
               const isRefund = it.type === "REFUND";
               const ticketCount = Number(it.userTicketsOwned || 0);
 
               const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative, ticketCount });
 
-              const title = isRefund ? "Refund Available" : "Claim Available";
+              // ✅ New: contextual title + message
+              const claimTitle = isRefund ? "Refund Available" : iAmWinner ? "Winner Prize" : "Claim Available";
+
+              const claimMessage = (() => {
+                if (isRefund) return "Raffle canceled — reclaim your ticket price.";
+                if (iAmWinner) return "You won the raffle! Reclaim your prize!";
+                return "Reclaim available.";
+              })();
 
               const primaryLabel = (() => {
                 if (!primaryMethod) return "Nothing to Claim";
@@ -174,21 +183,19 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowS * 1000}
-                  />
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
 
                   <div className="db-claim-box">
                     <div className="db-claim-header">
-                      <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>
-                        {title}
-                      </span>
+                      <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>{claimTitle}</span>
                     </div>
 
                     <div className="db-claim-text">
+                      {/* ✅ New: top message */}
+                      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10, color: "#334155" }}>
+                        {claimMessage}
+                      </div>
+
                       {isRefund ? (
                         <div className="db-refund-layout">
                           <div className="db-refund-val">
@@ -283,9 +290,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 <RaffleCardSkeleton />
               </>
             )}
-            {!data.isPending && activeEntries.length === 0 && (
-              <div className="db-empty">You have no on-going raffles.</div>
-            )}
+            {!data.isPending && activeEntries.length === 0 && <div className="db-empty">You have no on-going raffles.</div>}
             {activeEntries.map((r: any) => (
               <RaffleCard
                 key={r.id}
@@ -301,9 +306,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "history" && (
           <div className="db-grid">
-            {!data.isPending && pastEntries.length === 0 && (
-              <div className="db-empty">No past participation found.</div>
-            )}
+            {!data.isPending && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
 
             {pastEntries.map((r: any) => {
               const acct = account?.toLowerCase() || "";
@@ -314,10 +317,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const canceled = r.status === "CANCELED";
               const iWon = completed && acct && winner === acct;
 
-              // Existing logic
               const isRefunded = canceled && Number(r.userEntry?.count || 0) === 0;
-
-              // ✅ NEW: Lost badge
               const iLost = completed && participated && !iWon;
 
               return (
@@ -341,17 +341,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "created" && (
           <div className="db-grid">
-            {!data.isPending && data.created.length === 0 && (
-              <div className="db-empty">You haven't hosted any raffles yet.</div>
-            )}
+            {!data.isPending && data.created.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
             {data.created.map((r: any) => (
-              <RaffleCard
-                key={r.id}
-                raffle={r}
-                onOpen={onOpenRaffle}
-                onOpenSafety={onOpenSafety}
-                nowMs={nowS * 1000}
-              />
+              <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
             ))}
           </div>
         )}
