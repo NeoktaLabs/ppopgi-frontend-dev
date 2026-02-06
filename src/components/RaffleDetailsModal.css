@@ -291,3 +291,21 @@
   margin-left: 8px;
   opacity: 0.85;
 }
+
+/* creator blocked note */
+.rdm-buy-disabled {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 14px 12px;
+  border-radius: 14px;
+  text-align: center;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+/* nicer disabled step button */
+.rdm-step-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
