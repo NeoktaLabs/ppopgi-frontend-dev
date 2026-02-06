@@ -1,3 +1,4 @@
+// src/components/RaffleCard.tsx
 import React, { useMemo } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { useRaffleCard } from "../hooks/useRaffleCard";
@@ -32,29 +33,37 @@ type Props = {
 
 const short = (addr: string) => (addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown");
 
+function clampPct(p: number) {
+  if (!isFinite(p) || p <= 0) return "0%";
+  if (p < 0.01) return "<0.01%";
+  if (p >= 100) return "100%";
+  return p < 1 ? `${p.toFixed(2)}%` : `${p.toFixed(1)}%`;
+}
+
 export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch, userEntry }: Props) {
   const { ui, actions } = useRaffleCard(raffle, nowMs);
 
   const statusClass = ui.displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
-  const showHatch = hatch && hatch.show;
-
   const hostAddr = (raffle as any).owner || (raffle as any).creator;
 
-  // Odds Label
-  const oddsLabel = useMemo(() => {
-    if (!ui.isLive) return null;
-    const max = Number(raffle.maxTickets);
-    const sold = Number(raffle.sold);
+  /**
+   * ✅ Win rate always shown on the card header (top middle)
+   * - Uses maxTickets if defined (better "per ticket chance" framing)
+   * - Otherwise uses sold+1 (classic odds while pool grows)
+   * - Does NOT hide when userEntry exists (Dashboard)
+   * - Does NOT depend on ui.isLive (so you still see it in other states)
+   */
+  const winRateLabel = useMemo(() => {
+    const max = Number((raffle as any).maxTickets ?? 0);
+    const sold = Number((raffle as any).sold ?? 0);
 
-    const denominator = max > 0 ? max : sold + 1;
-    if (denominator === 0) return "0%";
+    const denom = max > 0 ? max : sold + 1;
+    if (!isFinite(denom) || denom <= 0) return "0%";
 
-    const pct = (1 / denominator) * 100;
-    if (pct >= 100) return "100%";
-    if (pct < 0.01) return "<0.01%";
-    return pct < 1 ? `${pct.toFixed(2)}%` : `${Math.round(pct)}%`;
-  }, [raffle.maxTickets, raffle.sold, ui.isLive]);
+    const pct = (1 / denom) * 100;
+    return clampPct(pct);
+  }, [raffle.maxTickets, raffle.sold]);
 
   return (
     <div className={cardClass} onClick={() => onOpen(raffle.id)} role="button" tabIndex={0}>
@@ -66,12 +75,10 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{ui.displayStatus}</div>
 
-        {/* ✅ Centered Win Rate */}
-        {oddsLabel && !userEntry && (
-          <div className="rc-odds-badge rc-odds-center" title="Win chance per ticket">
-            🎲 Win: {oddsLabel}
-          </div>
-        )}
+        {/* ✅ TOP MIDDLE */}
+        <div className="rc-winrate-badge" title="Win chance per ticket">
+          🎲 Win: {winRateLabel}
+        </div>
 
         <div className="rc-actions">
           <button
@@ -85,13 +92,11 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
           >
             🛡
           </button>
-
           <button
             className="rc-btn-icon"
             onClick={(e) => {
               e.stopPropagation();
-              // keep same handler, just prevent card click
-              actions.handleShare(e as any);
+              actions.handleShare();
             }}
             title="Share"
           >
@@ -211,11 +216,7 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
             <span>⚠️ Emergency Hatch</span>
             <span>{hatch.label}</span>
           </div>
-          <button
-            className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`}
-            disabled={hatch.disabled || hatch.busy}
-            onClick={hatch.onClick}
-          >
+          <button className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`} disabled={hatch.disabled || hatch.busy} onClick={hatch.onClick}>
             {hatch.busy ? "CONFIRMING..." : hatch.ready ? "HATCH (CANCEL)" : "LOCKED"}
           </button>
           {hatch.note && (
