@@ -3,9 +3,8 @@ import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
-import { ActivityBoard } from "../components/ActivityBoard"; 
+import { ActivityBoard } from "../components/ActivityBoard";
 import "./HomePage.css";
-
 
 type Props = {
   nowMs: number;
@@ -35,32 +34,34 @@ const num = (v: any) => {
 };
 
 export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
-  
   useEffect(() => {
-  document.title = "Ppopgi 뽑기 — Home";
-}, []);
-  
-  const { bigPrizes, endingSoon, stats, isLoading } = useHomeRaffles();
+    document.title = "Ppopgi 뽑기 — Home";
+  }, []);
+
+  // Keep it compatible even if your hook doesn't yet return recentlySettled.
+  const home: any = useHomeRaffles();
+  const { bigPrizes, endingSoon, stats, isLoading } = home;
+
+  // If your hook already has it, this will pick it up.
+  // If not, it will simply render an empty section (no crash).
+  const recentlySettled = (home.recentlySettled || home.settledRecently || home.recentSettled || []) as any[];
 
   // Podium Logic
   const podium = useMemo(() => {
-    if (!bigPrizes || bigPrizes.length === 0)
-      return { gold: null, silver: null, bronze: null };
+    if (!bigPrizes || bigPrizes.length === 0) return { gold: null, silver: null, bronze: null };
 
     const sorted = [...bigPrizes].sort((a, b) => {
       try {
-        return BigInt(a.winningPot || "0") < BigInt(b.winningPot || "0")
-          ? 1
-          : -1;
+        return BigInt(a.winningPot || "0") < BigInt(b.winningPot || "0") ? 1 : -1;
       } catch {
         return 0;
       }
     });
 
     return {
-      gold: sorted[0],
-      silver: sorted[1],
-      bronze: sorted[2],
+      gold: sorted[0] || null,
+      silver: sorted[1] || null,
+      bronze: sorted[2] || null,
     };
   }, [bigPrizes]);
 
@@ -69,6 +70,19 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     if (!endingSoon) return [];
     return [...endingSoon].sort((a, b) => num(a.deadline) - num(b.deadline));
   }, [endingSoon]);
+
+  // Recently Settled Logic (most recent first, left-most)
+  const recentlySettledSorted = useMemo(() => {
+    if (!recentlySettled || recentlySettled.length === 0) return [];
+
+    const getSettledTs = (r: any) =>
+      num(r.completedAtTimestamp || r.completedAt || r.settledAtTimestamp || r.settledAt || r.updatedAtTimestamp);
+
+    return [...recentlySettled]
+      .filter((r) => String(r.status || "").toUpperCase() === "COMPLETED")
+      .sort((a, b) => getSettledTs(b) - getSettledTs(a))
+      .slice(0, 5);
+  }, [recentlySettled]);
 
   return (
     <>
@@ -82,34 +96,27 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
         <div className="hp-hero">
           <h1 className="hp-hero-title">Welcome to Ppopgi (뽑기)</h1>
           <div className="hp-hero-sub">
-            Where fun meets fairness. Experience the thrill of fully transparent,
-            on-chain raffles. No tricks — just luck.
+            Where fun meets fairness. Experience the thrill of fully transparent, on-chain raffles. No tricks — just luck.
           </div>
 
           {/* STATS BAR */}
           <div className="hp-stats-bar">
             <div className="hp-stat-item">
-              <div className="hp-stat-val">
-                {isLoading ? "..." : stats.totalRaffles}
-              </div>
+              <div className="hp-stat-val">{isLoading ? "..." : stats.totalRaffles}</div>
               <div className="hp-stat-lbl">Raffles Created</div>
             </div>
 
             <div className="hp-stat-sep" />
 
             <div className="hp-stat-item">
-              <div className="hp-stat-val">
-                {isLoading ? "..." : fmtUsd(stats.settledVolume)}
-              </div>
+              <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.settledVolume)}</div>
               <div className="hp-stat-lbl">Prizes Settled</div>
             </div>
 
             <div className="hp-stat-sep" />
 
             <div className="hp-stat-item highlight">
-              <div className="hp-stat-val">
-                {isLoading ? "..." : fmtUsd(stats.activeVolume)}
-              </div>
+              <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.activeVolume)}</div>
               <div className="hp-stat-lbl">Total Active Volume</div>
             </div>
           </div>
@@ -117,10 +124,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
         {/* 2. PODIUM */}
         <div className="hp-podium-section">
-          <div
-            className="hp-section-header"
-            style={{ justifyContent: "center", marginBottom: 40 }}
-          >
+          <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 40 }}>
             <div className="hp-section-title">🏆 Top Active Prizepools</div>
           </div>
 
@@ -141,38 +145,24 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
             {!isLoading && podium.silver && (
               <div className="pp-silver-wrapper">
-                <RaffleCard
-                  raffle={podium.silver}
-                  onOpen={onOpenRaffle}
-                  onOpenSafety={onOpenSafety}
-                  ribbon="silver"
-                  nowMs={nowMs}
-                />
+                <RaffleCard raffle={podium.silver} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="silver" nowMs={nowMs} />
               </div>
             )}
 
             {!isLoading && podium.gold && (
               <div className="pp-gold-wrapper">
-                <RaffleCard
-                  raffle={podium.gold}
-                  onOpen={onOpenRaffle}
-                  onOpenSafety={onOpenSafety}
-                  ribbon="gold"
-                  nowMs={nowMs}
-                />
+                <RaffleCard raffle={podium.gold} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="gold" nowMs={nowMs} />
               </div>
             )}
 
             {!isLoading && podium.bronze && (
               <div className="pp-bronze-wrapper">
-                <RaffleCard
-                  raffle={podium.bronze}
-                  onOpen={onOpenRaffle}
-                  onOpenSafety={onOpenSafety}
-                  ribbon="bronze"
-                  nowMs={nowMs}
-                />
+                <RaffleCard raffle={podium.bronze} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="bronze" nowMs={nowMs} />
               </div>
+            )}
+
+            {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
+              <div className="hp-empty-msg">No active raffles to display.</div>
             )}
           </div>
         </div>
@@ -195,17 +185,38 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             {!isLoading &&
               endingSoonSorted.map((r) => (
                 <div key={r.id} className="hp-strip-item">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowMs}
-                  />
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
                 </div>
               ))}
 
-            {!isLoading && endingSoonSorted.length === 0 && (
-              <div className="hp-empty-msg">No raffles ending soon.</div>
+            {!isLoading && endingSoonSorted.length === 0 && <div className="hp-empty-msg">No raffles ending soon.</div>}
+          </div>
+        </div>
+
+        {/* 4. RECENTLY SETTLED */}
+        <div>
+          <div className="hp-section-header">
+            <div className="hp-section-title">✅ Recently Settled</div>
+            <div className="hp-section-line" />
+          </div>
+
+          <div className="hp-strip">
+            {isLoading &&
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="hp-strip-item">
+                  <RaffleCardSkeleton />
+                </div>
+              ))}
+
+            {!isLoading &&
+              recentlySettledSorted.map((r) => (
+                <div key={r.id} className="hp-strip-item">
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                </div>
+              ))}
+
+            {!isLoading && recentlySettledSorted.length === 0 && (
+              <div className="hp-empty-msg">No recently settled raffles yet.</div>
             )}
           </div>
         </div>
