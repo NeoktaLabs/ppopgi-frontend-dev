@@ -1,5 +1,5 @@
 // src/pages/HomePage.tsx
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";
@@ -34,12 +34,43 @@ const num = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+function scrollStrip(el: HTMLDivElement | null, dir: "left" | "right") {
+  if (!el) return;
+  const amount = Math.max(280, Math.floor(el.clientWidth * 0.85));
+  el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+}
+
+function computeEdges(el: HTMLDivElement | null) {
+  if (!el) return { atLeft: true, atRight: true };
+  const left = el.scrollLeft;
+  const maxLeft = el.scrollWidth - el.clientWidth;
+  const eps = 2; // small tolerance for fractional pixels
+  return {
+    atLeft: left <= eps,
+    atRight: left >= maxLeft - eps,
+  };
+}
+
 export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
 
   const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading } = useHomeRaffles();
+
+  const endingRef = useRef<HTMLDivElement | null>(null);
+  const settledRef = useRef<HTMLDivElement | null>(null);
+
+  const [endingEdges, setEndingEdges] = useState({ atLeft: true, atRight: false });
+  const [settledEdges, setSettledEdges] = useState({ atLeft: true, atRight: false });
+
+  const updateEndingEdges = useCallback(() => {
+    setEndingEdges(computeEdges(endingRef.current));
+  }, []);
+
+  const updateSettledEdges = useCallback(() => {
+    setSettledEdges(computeEdges(settledRef.current));
+  }, []);
 
   // Podium Logic
   const podium = useMemo(() => {
@@ -70,6 +101,25 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
   const recentlySettledSorted = useMemo(() => {
     return (recentlyFinalized ?? []).slice(0, 5);
   }, [recentlyFinalized]);
+
+  // Initialize / refresh arrow visibility when lists load or resize
+  useEffect(() => {
+    const tick = () => {
+      updateEndingEdges();
+      updateSettledEdges();
+    };
+
+    // Run after paint to ensure scrollWidth is correct
+    const t = window.setTimeout(tick, 0);
+
+    const onResize = () => tick();
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isLoading, endingSoonSorted.length, recentlySettledSorted.length, updateEndingEdges, updateSettledEdges]);
 
   return (
     <>
@@ -161,22 +211,42 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             <div className="hp-section-line" />
           </div>
 
-          <div className="hp-strip">
-            {isLoading &&
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="hp-strip-item">
-                  <RaffleCardSkeleton />
-                </div>
-              ))}
+          <div className="hp-strip-wrap">
+            {!endingEdges.atLeft && (
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")} aria-label="Scroll left">
+                ‹
+              </button>
+            )}
+            {!endingEdges.atRight && (
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")} aria-label="Scroll right">
+                ›
+              </button>
+            )}
 
-            {!isLoading &&
-              endingSoonSorted.map((r) => (
-                <div key={r.id} className="hp-strip-item">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                </div>
-              ))}
+            <div
+              className="hp-strip"
+              ref={endingRef}
+              onScroll={updateEndingEdges}
+            >
+              {isLoading &&
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="hp-strip-item">
+                    <RaffleCardSkeleton />
+                  </div>
+                ))}
 
-            {!isLoading && endingSoonSorted.length === 0 && <div className="hp-empty-msg">No raffles ending soon.</div>}
+              {!isLoading &&
+                endingSoonSorted.map((r) => (
+                  <div key={r.id} className="hp-strip-item">
+                    <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                  </div>
+                ))}
+
+              {!isLoading && endingSoonSorted.length === 0 && <div className="hp-empty-msg">No raffles ending soon.</div>}
+            </div>
+
+            {!endingEdges.atLeft && <div className="hp-strip-fade left" />}
+            {!endingEdges.atRight && <div className="hp-strip-fade right" />}
           </div>
         </div>
 
@@ -187,24 +257,44 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             <div className="hp-section-line" />
           </div>
 
-          <div className="hp-strip">
-            {isLoading &&
-              Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="hp-strip-item">
-                  <RaffleCardSkeleton />
-                </div>
-              ))}
-
-            {!isLoading &&
-              recentlySettledSorted.map((r) => (
-                <div key={r.id} className="hp-strip-item">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                </div>
-              ))}
-
-            {!isLoading && recentlySettledSorted.length === 0 && (
-              <div className="hp-empty-msg">No recently settled raffles yet.</div>
+          <div className="hp-strip-wrap">
+            {!settledEdges.atLeft && (
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")} aria-label="Scroll left">
+                ‹
+              </button>
             )}
+            {!settledEdges.atRight && (
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")} aria-label="Scroll right">
+                ›
+              </button>
+            )}
+
+            <div
+              className="hp-strip"
+              ref={settledRef}
+              onScroll={updateSettledEdges}
+            >
+              {isLoading &&
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="hp-strip-item">
+                    <RaffleCardSkeleton />
+                  </div>
+                ))}
+
+              {!isLoading &&
+                recentlySettledSorted.map((r) => (
+                  <div key={r.id} className="hp-strip-item">
+                    <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                  </div>
+                ))}
+
+              {!isLoading && recentlySettledSorted.length === 0 && (
+                <div className="hp-empty-msg">No recently settled raffles yet.</div>
+              )}
+            </div>
+
+            {!settledEdges.atLeft && <div className="hp-strip-fade left" />}
+            {!settledEdges.atRight && <div className="hp-strip-fade right" />}
           </div>
         </div>
       </div>
