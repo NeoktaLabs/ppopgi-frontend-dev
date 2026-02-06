@@ -1,4 +1,3 @@
-// src/components/RaffleDetailsModal.tsx
 import { useState, useEffect, useMemo } from "react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
@@ -36,6 +35,7 @@ const formatDate = (ts: any) => {
   return new Date(Number(ts) * 1000).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -106,15 +106,25 @@ type Props = {
   initialRaffle?: RaffleListItem | null;
 };
 
+function clampPct(p: number) {
+  if (!isFinite(p) || p <= 0) return "0%";
+  if (p < 0.01) return "<0.01%";
+  if (p >= 100) return "100%";
+  return p < 1 ? `${p.toFixed(2)}%` : `${p.toFixed(1)}%`;
+}
+
+function fmtNum(n: number) {
+  const safe = isFinite(n) ? n : 0;
+  return safe.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
 
-  // events for timeline
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
-  // Self-healing metadata fetch
   useEffect(() => {
     if (!raffleId || !open) {
       setMetadata(null);
@@ -127,14 +137,12 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     let active = true;
 
-    // metadata
     if (!initialRaffle?.createdAtTimestamp) {
       fetchRaffleMetadata(raffleId).then((data) => {
         if (active && data) setMetadata(data);
       });
     }
 
-    // events (for blockchain journey)
     fetchRaffleEvents(raffleId).then((rows) => {
       if (!active) return;
       setEvents(rows);
@@ -147,10 +155,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
   const displayData = (state.data || initialRaffle || metadata) as any;
 
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(
-    raffleId,
-    Number(displayData?.sold || 0)
-  );
+  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, Number(displayData?.sold || 0));
 
   const timeline = useMemo(() => {
     if (!displayData) return [];
@@ -165,7 +170,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const winner = findFirst("WINNER_PICKED");
     const canceled = findFirst("LOTTERY_CANCELED");
 
-    // 1) Initialized
     steps.push({
       label: "Initialized",
       date: displayData.createdAtTimestamp || deployed?.blockTimestamp || null,
@@ -173,68 +177,27 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       status: "done",
     });
 
-    // 2) Registered
     if (registered) {
-      steps.push({
-        label: "Registered",
-        date: registered.blockTimestamp,
-        tx: registered.txHash,
-        status: "done",
-      });
+      steps.push({ label: "Registered", date: registered.blockTimestamp, tx: registered.txHash, status: "done" });
     } else if (displayData.registeredAt) {
-      steps.push({
-        label: "Registered",
-        date: displayData.registeredAt,
-        tx: null,
-        status: "done",
-      });
+      steps.push({ label: "Registered", date: displayData.registeredAt, tx: null, status: "done" });
     } else {
-      steps.push({
-        label: "Registered",
-        date: null,
-        tx: null,
-        status: "future",
-      });
+      steps.push({ label: "Registered", date: null, tx: null, status: "future" });
     }
 
     const status = displayData.status;
 
-    // 3) Sales Open
     if (funding) {
-      steps.push({
-        label: "Ticket Sales Open",
-        date: funding.blockTimestamp,
-        tx: funding.txHash,
-        status: "done",
-      });
+      steps.push({ label: "Ticket Sales Open", date: funding.blockTimestamp, tx: funding.txHash, status: "done" });
     } else {
-      const s =
-        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
-          ? "active"
-          : "future";
-      steps.push({
-        label: "Ticket Sales Open",
-        date: null,
-        tx: null,
-        status: s,
-      });
+      const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
+      steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
-    // 4) Randomness
     if (finalized) {
-      steps.push({
-        label: "Randomness Requested",
-        date: finalized.blockTimestamp,
-        tx: finalized.txHash,
-        status: "done",
-      });
+      steps.push({ label: "Randomness Requested", date: finalized.blockTimestamp, tx: finalized.txHash, status: "done" });
     } else if (status === "DRAWING") {
-      steps.push({
-        label: "Randomness Requested",
-        date: null,
-        tx: null,
-        status: "active",
-      });
+      steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
     } else {
       steps.push({
         label: "Draw Deadline",
@@ -244,7 +207,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       });
     }
 
-    // 5) Settlement
     if (winner) {
       steps.push({
         label: "Winner Selected",
@@ -254,12 +216,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         winner: displayData.winner || winner.actor || null,
       });
     } else if (canceled) {
-      steps.push({
-        label: "Canceled",
-        date: canceled.blockTimestamp,
-        tx: canceled.txHash,
-        status: "done",
-      });
+      steps.push({ label: "Canceled", date: canceled.blockTimestamp, tx: canceled.txHash, status: "done" });
     } else if (status === "COMPLETED") {
       steps.push({
         label: "Winner Selected",
@@ -269,67 +226,70 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         winner: displayData.winner || null,
       });
     } else if (status === "CANCELED") {
-      steps.push({
-        label: "Canceled",
-        date: displayData.canceledAt || null,
-        tx: null,
-        status: "done",
-      });
+      steps.push({ label: "Canceled", date: displayData.canceledAt || null, tx: null, status: "done" });
     } else {
-      steps.push({
-        label: "Settlement",
-        date: null,
-        tx: null,
-        status: "future",
-      });
+      steps.push({ label: "Settlement", date: null, tx: null, status: "future" });
     }
 
     return steps;
   }, [displayData, events]);
 
-  // Prize distribution (simple + live based on current pot & sold)
-  const distribution = useMemo(() => {
-    const potU = BigInt(displayData?.winningPot || "0");
-    const priceU = BigInt(displayData?.ticketPrice || "0");
-    const sold = BigInt(displayData?.sold || "0");
-
-    const grossPrizeU = potU; // already a USDC amount in smallest units
-    const winnerNetU = (grossPrizeU * 90n) / 100n;
-    const platformPrizeFeeU = grossPrizeU - winnerNetU;
-
-    const grossSalesU = priceU * sold;
-    const platformSalesFeeU = (grossSalesU * 10n) / 100n; // assuming 10% platform fee on sales
-    const creatorNetU = grossSalesU - platformSalesFeeU;
-
-    const status = String(displayData?.status || "");
-    const isClosedOrSettled = status === "COMPLETED" || status === "CANCELED" || status === "DRAWING";
-
-    return {
-      isClosedOrSettled,
-      grossPrizeU,
-      winnerNetU,
-      platformPrizeFeeU,
-      grossSalesU,
-      platformSalesFeeU,
-      creatorNetU,
-    };
-  }, [displayData, math]);
-
-  // ✅ UPDATED STATS: Honest ROI Calculation + include USDC in display
   const stats = useMemo(() => {
     if (!displayData) return null;
+
+    const sold = Number(displayData.sold || "0");
+    const oddsPct = sold >= 0 ? clampPct(100 / (sold + 1)) : "0%";
+
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const price = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
-    const sold = Number(displayData.sold || "0");
 
     const netPot = pot * 0.9;
     const roi = price > 0 ? (netPot / price).toFixed(1) : "0";
 
-    const odds = sold > 0 ? `1 in ${sold + 1}` : "100%";
-    return { roi, odds, pot, price };
+    return { roi, oddsPct, price };
+  }, [displayData, math]);
+
+  // ✅ UPDATED: Two subtitles + totals for each distribution
+  const distribution = useMemo(() => {
+    if (!displayData) return null;
+
+    const status = String(displayData.status || "");
+    const isSettled = status === "COMPLETED";
+
+    const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0")); // gross prize
+    const sold = Number(displayData.sold || 0);
+    const ticketPrice = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
+
+    const grossSales = ticketPrice * sold;
+
+    // Prize split (90/10)
+    const winnerNet = pot * 0.9;
+    const platformPrizeFee = pot * 0.1;
+    const prizeTotal = winnerNet + platformPrizeFee;
+
+    // Sales split (90/10)
+    const creatorNet = grossSales * 0.9;
+    const platformSalesFee = grossSales * 0.1;
+    const salesTotal = creatorNet + platformSalesFee;
+
+    return {
+      isSettled,
+
+      pot,
+      winnerNet,
+      platformPrizeFee,
+      prizeTotal,
+
+      grossSales,
+      creatorNet,
+      platformSalesFee,
+      salesTotal,
+    };
   }, [displayData, math]);
 
   if (!open) return null;
+
+  const createdOnTs = displayData?.createdAtTimestamp || displayData?.createdAt || null;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -353,19 +313,22 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         <div className="rdm-hero">
           <div className="rdm-hero-lbl">Total Prize Pool</div>
 
-          {/* ✅ Ensure USDC is visible (unit is not inside gradient) */}
           <div className="rdm-hero-val">
-            <span className="rdm-hero-num">{math.fmtUsdc(displayData?.winningPot || "0")}</span>
-            <span className="rdm-hero-unit">USDC</span>
+            {math.fmtUsdc(displayData?.winningPot || "0")} <span className="rdm-hero-unit">USDC</span>
           </div>
 
-          <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, marginTop: -4, marginBottom: 12 }}>
-            *Winner receives 90% (10% protocol fee)
-          </div>
-
-          <div className="rdm-host">
-            <span>Hosted by</span>
-            <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
+          <div className="rdm-hero-meta">
+            <div className="rdm-host">
+              <span>Created by</span>
+              <ExplorerLink
+                addr={String(displayData?.creator || "")}
+                label={math.short(String(displayData?.creator || ""))}
+              />
+            </div>
+            <div className="rdm-createdon">
+              <span>Created on</span>
+              <span className="rdm-createdon-val">{formatDate(createdOnTs)}</span>
+            </div>
           </div>
         </div>
 
@@ -376,63 +339,88 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               <div className="rdm-sb-lbl">Net Payout</div>
               <div className="rdm-sb-val rdm-roi-badge">{stats.roi}x</div>
             </div>
+
             <div className="rdm-stat-box">
               <div className="rdm-sb-lbl">Win Odds</div>
-              <div className="rdm-sb-val">{stats.odds}</div>
+              <div className="rdm-sb-val">{stats.oddsPct}</div>
             </div>
+
             <div className="rdm-stat-box">
-              <div className="rdm-sb-lbl">Price</div>
-              <div className="rdm-sb-val">{stats.price} USDC</div>
+              <div className="rdm-sb-lbl">Ticket price</div>
+              <div className="rdm-sb-val">
+                {stats.price} <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 800 }}>USDC</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Prize Distribution */}
+        {distribution && (
+          <div className="rdm-dist">
+            <div className="rdm-dist-title">Prize distribution</div>
+
+            <div className={`rdm-dist-note ${distribution.isSettled ? "ok" : "warn"}`}>
+              {distribution.isSettled
+                ? "Settlement is complete — amounts below are final."
+                : "Only valid once the raffle is settled (COMPLETED). Values shown are live projections."}
+            </div>
+
+            {/* Subtitle 1 */}
+            <div className="rdm-dist-subtitle">Prize distribution</div>
+            <div className="rdm-dist-grid">
+              <div className="rdm-dist-row">
+                <span className="rdm-dist-k">Gross prize pool</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.pot)} USDC</span>
+              </div>
+
+              <div className="rdm-dist-row">
+                <span className="rdm-dist-k">Winner (net)</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.winnerNet)} USDC</span>
+              </div>
+
+              <div className="rdm-dist-row">
+                <span className="rdm-dist-k">Platform fee (prize)</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.platformPrizeFee)} USDC</span>
+              </div>
+
+              {/* Total */}
+              <div className="rdm-dist-row rdm-dist-total">
+                <span className="rdm-dist-k">Total</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.prizeTotal)} USDC</span>
+              </div>
+            </div>
+
+            <div className="rdm-dist-divider" />
+
+            {/* Subtitle 2 */}
+            <div className="rdm-dist-subtitle">Ticket sales distribution</div>
+            <div className="rdm-dist-grid">
+              <div className="rdm-dist-row">
+                <span className="rdm-dist-k">Ticket sales (gross)</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.grossSales)} USDC</span>
+              </div>
+
+              {/* creator first */}
+              <div className="rdm-dist-row">
+                <span className="rdm-dist-k">Creator (net)</span>
+                <span className="rdm-dist-v creator-net">{fmtNum(distribution.creatorNet)} USDC</span>
+              </div>
+
+              <div className="rdm-dist-row">
+                <span className="rdm-dist-k">Platform fee (sales)</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.platformSalesFee)} USDC</span>
+              </div>
+
+              {/* Total */}
+              <div className="rdm-dist-row rdm-dist-total">
+                <span className="rdm-dist-k">Total</span>
+                <span className="rdm-dist-v">{fmtNum(distribution.salesTotal)} USDC</span>
+              </div>
             </div>
           </div>
         )}
 
         <div className="rdm-tear" />
-
-        {/* ✅ Prize Distribution Section (added, minimal style changes) */}
-        <div style={{ padding: "0 20px 18px 20px" }}>
-          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1, color: "#94a3b8", textTransform: "uppercase", marginBottom: 10 }}>
-            Prize Distribution
-          </div>
-
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, marginBottom: 8, color: "#0f172a" }}>
-              <span>Gross Prize</span>
-              <span>{math.fmtUsdc(distribution.grossPrizeU.toString())} USDC</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, marginBottom: 8, color: "#166534" }}>
-              <span>Winner (Net)</span>
-              <span>{math.fmtUsdc(distribution.winnerNetU.toString())} USDC</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, marginBottom: 8, color: "#991b1b" }}>
-              <span>Platform Fee (Prize)</span>
-              <span>{math.fmtUsdc(distribution.platformPrizeFeeU.toString())} USDC</span>
-            </div>
-
-            <div style={{ height: 1, background: "#e2e8f0", margin: "10px 0" }} />
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, marginBottom: 8, color: "#0f172a" }}>
-              <span>Ticket Sales (Gross)</span>
-              <span>{math.fmtUsdc(distribution.grossSalesU.toString())} USDC</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, marginBottom: 8, color: "#991b1b" }}>
-              <span>Platform Fee (Sales)</span>
-              <span>{math.fmtUsdc(distribution.platformSalesFeeU.toString())} USDC</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 900, color: "#1e293b" }}>
-              <span>Creator (Net)</span>
-              <span>{math.fmtUsdc(distribution.creatorNetU.toString())} USDC</span>
-            </div>
-
-            <div style={{ marginTop: 10, fontSize: 10, fontWeight: 700, color: "#64748b", lineHeight: 1.3 }}>
-              Values update live as tickets are sold.
-            </div>
-          </div>
-        </div>
 
         {/* BUY SECTION */}
         <div className="rdm-buy-section">
@@ -457,7 +445,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     onChange={(e) => actions.setTickets(e.target.value)}
                     placeholder="1"
                   />
-                  <div className="rdm-cost-preview">Total: {math.fmtUsdc(math.totalCostU.toString())} USDC</div>
+                  <div className="rdm-cost-preview">
+                    Total: {math.fmtUsdc(math.totalCostU.toString())} USDC
+                  </div>
                 </div>
                 <button className="rdm-step-btn" onClick={() => actions.setTickets(String(math.ticketCount + 1))}>
                   +
@@ -534,6 +524,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                       </span>
                       <div className="rdm-lb-stats">
                         <span className="rdm-lb-count">{p.ticketsPurchased} 🎟</span>
+                        {/* ✅ space added via CSS gap/margin */}
                         <span className="rdm-lb-pct">({p.percentage}%)</span>
                       </div>
                     </div>
