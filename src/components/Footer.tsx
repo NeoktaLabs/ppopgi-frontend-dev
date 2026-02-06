@@ -29,7 +29,7 @@ export function Footer() {
           </div>
 
           <div className="footer-copy">
-            &copy; {currentYear} Ppopgi. All rights reserved.
+            &copy; {currentYear} Ppopgi. With love.
           </div>
         </div>
 
