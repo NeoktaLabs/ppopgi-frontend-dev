@@ -1,50 +1,87 @@
 /* src/components/SafetyProofModal.css */
 
-/* Overlay */
+/* ============================= */
+/* Overlay & Layout Fix          */
+/* ============================= */
 .sp-overlay {
   position: fixed;
   inset: 0;
+  z-index: 10000;
+
   background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(8px);
-  z-index: 10000;
+
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 16px;
+  align-items: flex-start;          /* ⬅️ prevent TopNav overlap */
+
+  padding-top: 96px;                /* ⬅️ space for TopNav */
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: 24px;
+
+  overflow-y: auto;                 /* allow scroll on small screens */
   perspective: 2000px;
 }
 
-/* Flip Animation */
+/* ============================= */
+/* Entry Animation (Stable)      */
+/* ============================= */
 @keyframes spFlipIn {
-  0% { opacity: 0; transform: rotateX(-20deg) scale(0.9); }
-  100% { opacity: 1; transform: rotateX(0deg) scale(1); }
+  0% {
+    opacity: 0;
+    transform: rotateX(-20deg) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateX(0deg) scale(1);
+  }
 }
 
+/* ============================= */
+/* Modal Card                    */
+/* ============================= */
 .sp-card {
   width: 100%;
   max-width: 560px;
+
   background: #ffffff;
   border-radius: 24px;
+
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255,255,255,0.1);
+
   overflow: hidden;
+
   animation: spFlipIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation-fill-mode: both;        /* ⬅️ prevents flicker */
   transform-origin: top center;
 }
 
-/* Header */
+/* ============================= */
+/* Header                        */
+/* ============================= */
 .sp-header {
   padding: 24px;
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
+
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
 }
 
-.sp-header-left { display: flex; gap: 16px; align-items: center; }
-.sp-shield-icon { font-size: 32px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+.sp-header-left {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.sp-shield-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+}
 
 .sp-title {
   margin: 0;
@@ -69,24 +106,34 @@
   font-size: 20px;
   color: #94a3b8;
   cursor: pointer;
+
   width: 32px;
   height: 32px;
   border-radius: 50%;
+
   display: grid;
   place-items: center;
+
   transition: all 0.2s;
 }
-.sp-close-btn:hover { background: #e2e8f0; color: #0f172a; }
+.sp-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
 
-/* Body */
+/* ============================= */
+/* Body                          */
+/* ============================= */
 .sp-body {
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
 }
 
-/* Grid for key facts */
+/* ============================= */
+/* Info Grid                     */
+/* ============================= */
 .sp-section-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -94,10 +141,16 @@
 }
 
 .sp-data-box {
-  background: #fff;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   padding: 12px;
   border-radius: 12px;
+}
+
+.sp-data-box.compact {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
 }
 
 .sp-lbl {
@@ -105,46 +158,76 @@
   font-weight: 800;
   color: #94a3b8;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
+/* ============================= */
+/* Links & Mono                  */
+/* ============================= */
 .sp-link {
   font-family: "Courier New", monospace;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 13px;
   color: #2563eb;
   text-decoration: none;
   display: inline-block;
 }
-.sp-link:hover { text-decoration: underline; }
+.sp-link:hover {
+  text-decoration: underline;
+}
 
 .sp-mono {
   font-family: "Courier New", monospace;
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 13px;
+  color: #64748b;
 }
 
-/* Status Pill */
+/* ============================= */
+/* Status Pills                  */
+/* ============================= */
 .sp-status-pill {
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 99px;
+
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.sp-status-pill.open { background: #dcfce7; color: #166534; }
-.sp-status-pill.canceled { background: #fee2e2; color: #991b1b; }
-.sp-status-pill.completed { background: #dbeafe; color: #1e40af; }
-.sp-status-pill.drawing,
-.sp-status-pill.finalizing { background: #e0f2fe; color: #075985; }
+.sp-status-pill.open {
+  background: #dcfce7;
+  color: #166534;
+}
 
-/* Panels */
+.sp-status-pill.canceled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.sp-status-pill.completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+/* ============================= */
+/* Panels                        */
+/* ============================= */
 .sp-panel {
   border-radius: 16px;
   padding: 16px;
   border: 1px solid #e2e8f0;
-  background: #ffffff;
+}
+
+.sp-panel.money-panel {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.sp-panel.rng-panel {
+  background: #fdf2f8;
+  border-color: #fce7f3;
 }
 
 .sp-panel-header {
@@ -152,157 +235,69 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+
   font-size: 13px;
-  font-weight: 1000;
-  color: #0f172a;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.sp-explain-panel {
-  background: #f0f9ff;
-  border-color: #bae6fd;
-}
-
-.sp-flow-panel {
-  background: #fdf2f8;
-  border-color: #fce7f3;
-}
-
-.sp-tech-panel {
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.sp-p {
-  margin: 0 0 10px 0;
-  font-size: 13px;
-  color: #334155;
-  line-height: 1.5;
-}
-
-.sp-bullets {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 6px;
-  color: #334155;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.sp-mini-note {
-  margin-top: 12px;
-  font-size: 12px;
-  color: #475569;
-  opacity: 0.95;
-  background: rgba(255,255,255,0.8);
-  border: 1px dashed rgba(15, 23, 42, 0.15);
-  padding: 10px 12px;
-  border-radius: 12px;
-}
-
-/* Flow pill */
-.sp-flow-pill {
-  font-size: 11px;
   font-weight: 900;
-  background: #e2e8f0;
   color: #334155;
-  padding: 3px 10px;
-  border-radius: 999px;
+  text-transform: uppercase;
 }
-.sp-flow-pill.active {
+
+.sp-verified-check {
+  font-size: 11px;
   background: #dcfce7;
-  color: #166534;
+  color: #15803d;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-/* Step timeline */
-.sp-flow {
-  display: grid;
-  gap: 12px;
-}
-
-.sp-step {
-  display: grid;
-  grid-template-columns: 36px 1fr;
-  gap: 10px;
-  align-items: start;
-}
-
-.sp-step-num {
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  font-weight: 1000;
-  font-size: 12px;
-  background: rgba(255,255,255,0.8);
-  border: 1px solid rgba(0,0,0,0.08);
-  color: #0f172a;
-}
-
-.sp-step-title {
+/* ============================= */
+/* Money Rows                    */
+/* ============================= */
+.sp-money-row {
+  display: flex;
+  justify-content: space-between;
   font-size: 13px;
-  font-weight: 900;
-  color: #0f172a;
-  margin-bottom: 4px;
-}
-
-.sp-step-text {
-  font-size: 13px;
+  font-weight: 600;
   color: #475569;
-  line-height: 1.45;
+  margin-bottom: 6px;
 }
 
-/* Proof details table */
-.sp-tech-note {
-  font-size: 11px;
-  font-weight: 800;
-  color: #64748b;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.sp-tech-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.sp-tech-row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 10px;
-  align-items: start;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-}
-
-.sp-k {
-  font-size: 11px;
+.sp-money-row.highlight {
+  font-size: 16px;
   font-weight: 900;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.sp-v {
-  font-size: 13px;
   color: #0f172a;
-  line-height: 1.4;
+  margin-bottom: 12px;
 }
 
-.sp-footnote {
+.sp-money-val {
+  color: #0284c7;
+}
+
+.sp-divider {
+  height: 1px;
+  background: #bfdbfe;
+  margin: 8px 0 12px 0;
+}
+
+.sp-micro-note {
   margin-top: 12px;
   font-size: 11px;
   color: #64748b;
-  line-height: 1.45;
+  line-height: 1.4;
   font-style: italic;
 }
 
-/* Mobile */
-@media (max-width: 520px) {
-  .sp-section-grid { grid-template-columns: 1fr; }
-  .sp-tech-row { grid-template-columns: 1fr; }
+/* ============================= */
+/* RNG Section                   */
+/* ============================= */
+.sp-rng-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sp-rng-text {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
 }
