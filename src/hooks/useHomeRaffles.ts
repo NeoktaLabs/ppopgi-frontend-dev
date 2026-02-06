@@ -127,20 +127,31 @@ export function useHomeRaffles() {
       .slice(0, 5);
   }, [active]);
 
+  /**
+   * ✅ Recently Finalized (Settled + Canceled)
+   * - Indexer only (live mode returns [])
+   * - Sorted by the most recent "final action" timestamp we can find:
+   *   completedAt -> finalizedAt -> lastUpdatedTimestamp
+   * - Shows the 5 most recent (leftmost should be most recent in your strip)
+   */
   const recentlyFinalized = useMemo(() => {
     if (mode === "live") return [];
-    const settled = all.filter((r) => r.status === "COMPLETED");
-    return [...settled]
+
+    const finalized = all.filter((r) => r.status === "COMPLETED" || r.status === "CANCELED");
+
+    return [...finalized]
       .sort((a, b) => {
         const aKey =
           numOr0((a as any).completedAt) ||
           numOr0((a as any).finalizedAt) ||
           numOr0((a as any).lastUpdatedTimestamp);
+
         const bKey =
           numOr0((b as any).completedAt) ||
           numOr0((b as any).finalizedAt) ||
           numOr0((b as any).lastUpdatedTimestamp);
-        return bKey - aKey;
+
+        return bKey - aKey; // most recent first
       })
       .slice(0, 5);
   }, [all, mode]);
