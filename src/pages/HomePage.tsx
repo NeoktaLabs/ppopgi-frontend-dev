@@ -6,9 +6,6 @@ import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard"; 
 import "./HomePage.css";
 
-useEffect(() => {
-  document.title = "Ppopgi 뽑기 — Home";
-}, []);
 
 type Props = {
   nowMs: number;
@@ -38,6 +35,11 @@ const num = (v: any) => {
 };
 
 export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
+  
+  useEffect(() => {
+  document.title = "Ppopgi 뽑기 — Home";
+}, []);
+  
   const { bigPrizes, endingSoon, stats, isLoading } = useHomeRaffles();
 
   // Podium Logic

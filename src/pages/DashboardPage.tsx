@@ -6,9 +6,6 @@ import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 
-useEffect(() => {
-  document.title = "Ppopgi 뽑기 — Dashboard";
-}, []);
 
 // Helpers
 const fmt = (v: string, dec = 18) => {
@@ -40,6 +37,11 @@ function shortAddr(a?: string | null, head = 6, tail = 4) {
 }
 
 export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
+  
+  useEffect(() => {
+  document.title = "Ppopgi 뽑기 — Dashboard";
+}, []);
+  
   const { data, actions, account: hookAccount } = useDashboardController();
 
   // ✅ Source of truth: hook account (fallback to prop)

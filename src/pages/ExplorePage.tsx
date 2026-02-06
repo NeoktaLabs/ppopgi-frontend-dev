@@ -5,9 +5,6 @@ import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 
-useEffect(() => {
-  document.title = "Ppopgi 뽑기 — Explore";
-}, []);
 
 type Props = {
   onOpenRaffle: (id: string) => void;
@@ -15,6 +12,11 @@ type Props = {
 };
 
 export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
+  
+  useEffect(() => {
+  document.title = "Ppopgi 뽑기 — Explore";
+}, []);
+  
   const { state, actions, meta } = useExploreController();
 
   const hasAnyItems = (state.items?.length ?? 0) > 0;
