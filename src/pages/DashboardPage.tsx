@@ -24,6 +24,10 @@ type Props = {
 
 type WithdrawMethod = "withdrawFunds" | "withdrawNative" | "claimTicketRefund";
 
+function norm(a?: string | null) {
+  return String(a || "").toLowerCase();
+}
+
 export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
   const { data, actions, account: hookAccount } = useDashboardController();
 
@@ -56,8 +60,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
     data.joined.forEach((r: any) => {
       const tickets = Number(r.userTicketsOwned || 0);
-      const sold = Number(r.sold || 1);
-      const percentage = tickets > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
+      const sold = Math.max(0, Number(r.sold || 0));
+      const percentage = sold > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
 
       const enriched = { ...r, userEntry: { count: tickets, percentage } };
 
@@ -76,7 +80,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
 
-  // ✅ FIXED: refund mapping
+  // ✅ Refunds: always claimTicketRefund (two-phase refund logic)
   const getPrimaryMethod = (opts: {
     isRefund: boolean;
     hasUsdc: boolean;
@@ -85,11 +89,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative, ticketCount } = opts;
 
-    // Refunds should ALWAYS be claimTicketRefund (two-phase refund logic)
-    if (isRefund) {
-      return ticketCount > 0 ? "claimTicketRefund" : null;
-    }
-
+    if (isRefund) return ticketCount > 0 ? "claimTicketRefund" : null;
     if (hasUsdc) return "withdrawFunds";
     if (hasNative) return "withdrawNative";
     return null;
@@ -131,7 +131,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       </div>
 
       {/* STATUS BANNER */}
-      {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
+      {data.msg && (
+        <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>
+      )}
 
       {/* CLAIMABLES SECTION */}
       <div className="db-section claim-section">
@@ -150,9 +152,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             {data.claimables.map((it: any) => {
               const r = it.raffle;
 
-              const acct = (account || "").toLowerCase();
-              const winner = (r.winner || "").toLowerCase();
+              const acct = norm(account);
+              const winner = norm(r.winner);
+              const creator = norm(r.creator);
+
               const iAmWinner = !!acct && acct === winner;
+              const iAmCreator = !!acct && acct === creator;
 
               const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
               const hasNative = BigInt(it.claimableNative || "0") > 0n;
@@ -162,38 +167,55 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative, ticketCount });
 
-              // ✅ New: contextual title + message
-              const claimTitle = isRefund ? "Refund Available" : iAmWinner ? "Winner Prize" : "Claim Available";
+              // =========================================================
+              // ✅ YOUR EXACT COPY RULES (with sane fallbacks)
+              // =========================================================
+              let badgeTitle = "Claim Available";
+              let message = "Funds available to claim.";
+              let primaryLabel = "Claim";
 
-              const claimMessage = (() => {
-                if (isRefund) return "Raffle canceled — reclaim your ticket price.";
-                if (iAmWinner) return "You won the raffle! Reclaim your prize!";
-                return "Reclaim available.";
-              })();
+              if (isRefund) {
+                // CANCELED: player refund action
+                badgeTitle = "Refund";
+                message = "Raffle canceled — reclaim your ticket price.";
+                primaryLabel = "Reclaim Refund";
+              } else if (iAmWinner) {
+                // SETTLED: winner claim
+                badgeTitle = "Winner";
+                message = "You won!! Congratulations! Reclaim your prize now!";
+                primaryLabel = hasUsdc ? "Claim Prize" : hasNative ? "Claim Prize" : "Claim Prize";
+              } else if (iAmCreator) {
+                // SETTLED: creator withdraws ticket revenue
+                badgeTitle = "Creator";
+                message = "Reclaim your ticket price revenue.";
+                primaryLabel = hasUsdc ? "Withdraw Revenue" : hasNative ? "Withdraw Revenue" : "Withdraw Revenue";
+              } else {
+                // Other claimables (rare)
+                badgeTitle = "Claim";
+                message = "Funds available to withdraw.";
+                primaryLabel = hasUsdc ? "Claim USDC" : hasNative ? "Claim Native" : "Claim";
+              }
 
-              const primaryLabel = (() => {
-                if (!primaryMethod) return "Nothing to Claim";
-                if (isRefund) return "Reclaim Refund";
-                if (primaryMethod === "withdrawFunds") return "Claim USDC";
-                if (primaryMethod === "withdrawNative") return "Claim Native";
-                return "Claim";
-              })();
-
+              // For non-refund claimables, allow dual buttons if both are >0
               const showDual = !isRefund && hasUsdc && hasNative;
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowS * 1000}
+                  />
 
                   <div className="db-claim-box">
                     <div className="db-claim-header">
-                      <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>{claimTitle}</span>
+                      <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>{badgeTitle}</span>
                     </div>
 
                     <div className="db-claim-text">
-                      {/* ✅ New: top message */}
-                      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10, color: "#334155" }}>
-                        {claimMessage}
+                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10, color: "#334155" }}>
+                        {message}
                       </div>
 
                       {isRefund ? (
@@ -290,7 +312,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 <RaffleCardSkeleton />
               </>
             )}
-            {!data.isPending && activeEntries.length === 0 && <div className="db-empty">You have no on-going raffles.</div>}
+            {!data.isPending && activeEntries.length === 0 && (
+              <div className="db-empty">You have no on-going raffles.</div>
+            )}
             {activeEntries.map((r: any) => (
               <RaffleCard
                 key={r.id}
@@ -306,18 +330,23 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "history" && (
           <div className="db-grid">
-            {!data.isPending && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
+            {!data.isPending && pastEntries.length === 0 && (
+              <div className="db-empty">No past participation found.</div>
+            )}
 
             {pastEntries.map((r: any) => {
-              const acct = account?.toLowerCase() || "";
-              const winner = (r.winner || "").toLowerCase();
+              const acct = norm(account);
+              const winner = norm(r.winner);
 
               const participated = Number(r.userEntry?.count || 0) > 0;
               const completed = r.status === "COMPLETED";
               const canceled = r.status === "CANCELED";
               const iWon = completed && acct && winner === acct;
 
+              // NOTE: This is only a UI badge. Actual claimability is handled in claimables.
               const isRefunded = canceled && Number(r.userEntry?.count || 0) === 0;
+
+              // ✅ YOUR RULE: Settled + participated + not winner
               const iLost = completed && participated && !iWon;
 
               return (
@@ -332,7 +361,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
-                  {iLost && <div className="db-history-badge lost">😕 Lost, better luck next time!</div>}
+                  {iLost && <div className="db-history-badge lost">Lost - Better luck next time!</div>}
                 </div>
               );
             })}
@@ -341,9 +370,17 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "created" && (
           <div className="db-grid">
-            {!data.isPending && data.created.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
+            {!data.isPending && data.created.length === 0 && (
+              <div className="db-empty">You haven't hosted any raffles yet.</div>
+            )}
             {data.created.map((r: any) => (
-              <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+              <RaffleCard
+                key={r.id}
+                raffle={r}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
+                nowMs={nowS * 1000}
+              />
             ))}
           </div>
         )}
