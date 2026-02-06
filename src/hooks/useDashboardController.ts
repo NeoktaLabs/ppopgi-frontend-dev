@@ -16,6 +16,7 @@ const RAFFLE_DASH_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
+
   {
     type: "function",
     name: "ticketsOwned",
@@ -126,7 +127,6 @@ export function useDashboardController() {
   const lastJoinedIdsRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
   const joinedIdsPromiseRef = useRef<Promise<Set<string>> | null>(null);
   const joinedBackoffMsRef = useRef(0);
-
   const runIdRef = useRef(0);
 
   useEffect(() => {
@@ -136,14 +136,12 @@ export function useDashboardController() {
     setHiddenClaimables({});
   }, [account]);
 
-  // ✅ FIX: everyone awaits the same in-flight promise (no empty-set returns)
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
     if (!account) return new Set<string>();
 
     const acct = account.toLowerCase();
     const now = Date.now();
     const cached = lastJoinedIdsRef.current;
-
     if (cached && cached.account === acct && now - cached.ts < 60_000) return cached.ids;
 
     if (joinedIdsPromiseRef.current) return await joinedIdsPromiseRef.current;
@@ -169,15 +167,21 @@ export function useDashboardController() {
 
         // Fallback: raffleEvents (TICKETS_PURCHASED)
         try {
-          const ev = await fetchMyJoinedRaffleIdsFromEvents(account, { first: 1000, maxPages: 8 });
-          ev.forEach((id) => ids.add(normId(id)));
+          let skip = 0;
+          const pageSize = 1000;
+          const maxPages = 8;
+          for (let pageN = 0; pageN < maxPages; pageN++) {
+            const page = await fetchMyJoinedRaffleIdsFromEvents(account, { first: pageSize, skip });
+            page.forEach((id) => ids.add(normId(id)));
+            if (page.length < pageSize) break;
+            skip += pageSize;
+          }
         } catch (e) {
           console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
         }
 
         lastJoinedIdsRef.current = { ts: Date.now(), account: acct, ids };
         joinedBackoffMsRef.current = 0;
-
         return ids;
       } catch (e) {
         if (isRateLimitError(e)) {
@@ -218,32 +222,36 @@ export function useDashboardController() {
       try {
         const myAddr = account.toLowerCase();
 
+        // Created is from store (fast)
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
+        // Joined IDs
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
         const joinedIdArr = Array.from(joinedIds);
 
-        // fast store filter first
+        // Fast path: from store
         const joinedBaseFromStore =
           joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
-        // show immediately (ticketsOwned will be enriched)
+        // Show immediately (before ticketsOwned enrichment)
         setCreated(myCreated);
         setJoined(joinedBaseFromStore.map((r) => ({ ...r, userTicketsOwned: "0" })));
 
-        // fetch by ids (more reliable)
+        // Backfill joined raffle objects by ids (robust)
         let joinedBase: RaffleListItem[] = joinedBaseFromStore;
         if (joinedIdArr.length > 0) {
           try {
             const fetched = await fetchRafflesByIds(joinedIdArr);
             if (runId !== runIdRef.current) return;
             if (fetched.length > 0) joinedBase = fetched;
-          } catch {}
+          } catch {
+            // ignore
+          }
         }
 
-        // enrich ticketsOwned
+        // Enrich ticketsOwned for joined display
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
@@ -264,9 +272,14 @@ export function useDashboardController() {
 
         if (runId !== runIdRef.current) return;
 
-        setJoined(joinedBase.map((r) => ({ ...r, userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0" })));
+        setJoined(
+          joinedBase.map((r) => ({
+            ...r,
+            userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
+          }))
+        );
 
-        // claimables (only real claimables)
+        // ---- CLAIMABLES: only show actionable tiles ----
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -309,12 +322,26 @@ export function useDashboardController() {
             participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
           };
 
+          // Winner claim
           const isWinnerEligible =
             r.status === "COMPLETED" &&
             r.winner?.toLowerCase() === myAddr &&
             (cf > 0n || cn > 0n);
 
+          // Participant refund (two-phase handled in UI): canceled + still has tickets
           const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
+
+          // Creator pot reclaim:
+          // Some versions may not report claimableFunds correctly until action time.
+          // So: if creator && terminal (COMPLETED/CANCELED), show ONLY if either:
+          //  - claimableFunds/native > 0 (obvious), OR
+          //  - status is CANCELED (creator usually withdraws), OR
+          //  - status is COMPLETED AND sold > 0 (there was revenue to withdraw)
+          const soldN = toBigInt(r.sold || "0");
+          const creatorLikelyActionable =
+            roles.created &&
+            (r.status === "CANCELED" ||
+              (r.status === "COMPLETED" && soldN > 0n));
 
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
@@ -342,7 +369,8 @@ export function useDashboardController() {
             return;
           }
 
-          if (isAnythingClaimable) {
+          // Creator / other
+          if (isAnythingClaimable || creatorLikelyActionable) {
             newClaimables.push({
               raffle: r,
               claimableUsdc: cf.toString(),
@@ -407,12 +435,18 @@ export function useDashboardController() {
   }, [recompute]);
 
   const createdSorted = useMemo(
-    () => [...created].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
+    () =>
+      [...created].sort(
+        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
+      ),
     [created]
   );
 
   const joinedSorted = useMemo(
-    () => [...joined].sort((a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")),
+    () =>
+      [...joined].sort(
+        (a, b) => Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0")
+      ),
     [joined]
   );
 
