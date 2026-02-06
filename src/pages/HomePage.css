@@ -24,13 +24,12 @@
   font-weight: 1000;
   margin: 0;
 
-  /* ✅ FIX CROPPING */
+  /* ✅ Fix cropping */
   line-height: 1.08;
   padding-bottom: 6px;
   display: inline-block;
 
   letter-spacing: -2.5px;
-
   background: linear-gradient(180deg, #4A0F2B 0%, #9A2A58 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -63,9 +62,7 @@
   backdrop-filter: blur(10px);
 }
 
-.hp-stat-item {
-  text-align: center;
-}
+.hp-stat-item { text-align: center; }
 
 .hp-stat-val {
   font-size: 28px;
@@ -126,6 +123,75 @@
   margin-top: 2px;
 }
 
+/* --- PODIUM (RESTORED) --- */
+.hp-podium-section {
+  position: relative;
+  z-index: 10;
+  margin-bottom: 80px;
+}
+
+.hp-podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0px;
+  padding-top: 40px;
+  perspective: 1000px;
+}
+
+.pp-gold-wrapper {
+  z-index: 10;
+  transform: scale(1.15) translateY(-20px);
+  position: relative;
+  box-shadow: 0 50px 100px -30px rgba(255, 180, 50, 0.35);
+  border-radius: 14px;
+}
+
+.pp-silver-wrapper {
+  z-index: 5;
+  transform: scale(0.9) translateX(30px) rotateY(15deg);
+  opacity: 0.95;
+  filter: brightness(0.98);
+  transition: all 0.3s;
+}
+.pp-silver-wrapper:hover {
+  transform: scale(0.95) translateX(10px) rotateY(5deg);
+  z-index: 11;
+  filter: brightness(1);
+}
+
+.pp-bronze-wrapper {
+  z-index: 5;
+  transform: scale(0.9) translateX(-30px) rotateY(-15deg);
+  opacity: 0.95;
+  filter: brightness(0.98);
+  transition: all 0.3s;
+}
+.pp-bronze-wrapper:hover {
+  transform: scale(0.95) translateX(-10px) rotateY(-5deg);
+  z-index: 11;
+  filter: brightness(1);
+}
+
+@media (max-width: 850px) {
+  .hp-podium {
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+    margin-top: 40px;
+  }
+  .pp-gold-wrapper {
+    transform: scale(1.1);
+    order: -1;
+    margin-bottom: 20px;
+  }
+  .pp-silver-wrapper,
+  .pp-bronze-wrapper {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* --- STRIP --- */
 .hp-strip {
   display: flex;
@@ -136,9 +202,7 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.hp-strip::-webkit-scrollbar {
-  display: none;
-}
+.hp-strip::-webkit-scrollbar { display: none; }
 
 .hp-strip-item {
   scroll-snap-align: center;
