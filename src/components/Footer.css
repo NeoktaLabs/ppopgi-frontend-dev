@@ -47,31 +47,11 @@
   line-height: 1.5;
 }
 
-/* Etherlink attribution */
-.footer-powered {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
+/* Etherlink line */
+.footer-built {
+  font-size: 12px;
   font-weight: 700;
-  color: #94a3b8;
-}
-
-.footer-etherlink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
-  color: #334155;
-}
-
-.footer-etherlink-logo {
-  height: 16px;
-  width: auto;
-}
-
-.footer-etherlink:hover {
-  text-decoration: underline;
+  color: #16a34a;
 }
 
 .footer-copy {
@@ -114,12 +94,6 @@
   color: #2563eb;
 }
 
-.footer-version {
-  font-size: 11px;
-  color: #cbd5e1;
-  margin-top: 6px;
-}
-
 /* Mobile */
 @media (max-width: 768px) {
   .footer-content {
@@ -130,6 +104,5 @@
   .footer-links {
     gap: 40px;
     width: 100%;
-    justify-content: space-between;
   }
 }
