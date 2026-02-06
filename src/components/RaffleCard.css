@@ -1,5 +1,3 @@
-/* src/components/RaffleCard.css */
-
 /* --- Base Card Container --- */
 .rc-card {
   position: relative;
@@ -90,6 +88,7 @@
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
+  position: relative; /* ✅ for centered odds */
 }
 
 .rc-chip {
@@ -102,6 +101,7 @@
   border: 1px solid rgba(0,0,0,0.1);
   letter-spacing: 0.5px;
 }
+
 /* Status Colors */
 .rc-chip.open { background: #d1fbe2; color: #0B4A24; border-color: #91f7b8; }
 .rc-chip.finalizing, .rc-chip.drawing { background: #dceeff; color: #0B2E5C; border-color: #a9d4ff; animation: rc-pulse 2s infinite; }
@@ -122,8 +122,26 @@
   border: 1px solid rgba(0,0,0,0.1);
   color: #4A0F2B;
   letter-spacing: 0.5px;
-  margin-left: 8px;
-  margin-right: auto;
+}
+
+/* ✅ Center odds in header */
+.rc-odds-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  pointer-events: none;
+}
+
+/* On very small widths, avoid overlaps */
+@media (max-width: 360px) {
+  .rc-odds-center {
+    position: static;
+    transform: none;
+    margin-left: 8px;
+    margin-right: auto;
+    pointer-events: auto;
+  }
 }
 
 .rc-actions { display: flex; gap: 8px; }
