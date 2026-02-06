@@ -3,20 +3,14 @@
 .rdm-overlay {
   position: fixed;
   inset: 0;
-  /* ✅ FIX: High z-index to sit above page content */
   z-index: 9000;
   background: rgba(15, 23, 42, 0.4);
   backdrop-filter: blur(4px);
-  
-  /* ✅ FIX: Push content down so it starts below TopNav (approx 90px) */
   padding-top: 100px;
-  
-  /* ✅ FIX: Align to top, not center, so it hangs from the padding */
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  
-  overflow-y: auto; /* Allow scrolling if screen is short */
+  overflow-y: auto;
 }
 
 .rdm-card {
@@ -28,11 +22,8 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  
-  /* ✅ FIX: Limit height so it doesn't go off bottom of screen */
   max-height: calc(100vh - 120px);
   margin-bottom: 20px;
-  
   animation: rdm-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -41,19 +32,15 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
-/* --- SCROLL AREA FOR CONTENT --- */
-/* We want the header/hero/buy section to stick, but if not, just scroll the whole thing */
 .rdm-card { overflow-y: auto; }
-
-/* ... (Rest of your existing styles for header, stats, timeline below) ... */
 
 .rdm-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 16px 20px; border-bottom: 1px solid #f1f5f9;
 }
 .rdm-close-btn {
-  background: none; border: none; cursor: pointer; font-size: 16px; 
-  width: 32px; height: 32px; border-radius: 50%; 
+  background: none; border: none; cursor: pointer; font-size: 16px;
+  width: 32px; height: 32px; border-radius: 50%;
   display: grid; place-items: center; transition: background 0.2s;
 }
 .rdm-close-btn:hover { background: #f1f5f9; }
@@ -63,8 +50,8 @@
   background: radial-gradient(circle at 50% 50%, #fff 0%, #f8fafc 100%);
 }
 .rdm-hero-lbl { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
-.rdm-hero-val { 
-  font-size: 32px; font-weight: 1000; color: #0f172a; margin: 4px 0; 
+.rdm-hero-val {
+  font-size: 32px; font-weight: 1000; color: #0f172a; margin: 4px 0;
   background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
@@ -78,8 +65,8 @@
 .rdm-sb-val { font-size: 14px; font-weight: 800; color: #1e293b; }
 .rdm-roi-badge { color: #166534; }
 
-.rdm-tear { 
-  height: 12px; background: 
+.rdm-tear {
+  height: 12px; background:
     radial-gradient(circle, transparent, transparent 50%, #fff 50%, #fff 100%) -7px -8px / 16px 16px repeat-x;
   transform: rotate(180deg); margin-bottom: -1px;
 }
@@ -90,15 +77,15 @@
 .rdm-balance-row { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase; }
 
 .rdm-stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.rdm-step-btn { 
-  width: 40px; height: 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; 
+.rdm-step-btn {
+  width: 40px; height: 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: white;
   font-size: 18px; font-weight: 700; cursor: pointer; color: #334155;
 }
 .rdm-step-btn:hover { background: #f1f5f9; }
 
 .rdm-input-wrapper { flex: 1; position: relative; }
-.rdm-amount { 
-  width: 100%; height: 40px; border-radius: 12px; border: 1px solid #e2e8f0; 
+.rdm-amount {
+  width: 100%; height: 40px; border-radius: 12px; border: 1px solid #e2e8f0;
   text-align: center; font-size: 16px; font-weight: 800; outline: none;
 }
 .rdm-amount:focus { border-color: #94a3b8; }
@@ -107,7 +94,7 @@
 }
 
 .rdm-cta {
-  width: 100%; padding: 14px; border-radius: 12px; border: none; font-size: 14px; font-weight: 800; 
+  width: 100%; padding: 14px; border-radius: 12px; border: none; font-size: 14px; font-weight: 800;
   cursor: pointer; text-transform: uppercase; margin-top: 12px;
 }
 .rdm-cta.approve { background: #0f172a; color: white; }
@@ -116,20 +103,19 @@
 
 .rdm-tab-group { display: flex; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
 .rdm-tab-btn {
-  flex: 1; padding: 12px; border: none; background: none; font-size: 12px; font-weight: 700; 
+  flex: 1; padding: 12px; border: none; background: none; font-size: 12px; font-weight: 700;
   color: #64748b; cursor: pointer; text-transform: uppercase; border-bottom: 2px solid transparent;
 }
 .rdm-tab-btn.active { color: #0f172a; border-bottom-color: #0f172a; background: white; }
 
-/* Timeline & List Styles */
 .rdm-scroll-content { padding: 0; }
 .rdm-receipt { padding: 20px; }
 .rdm-receipt-title { font-size: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; margin-bottom: 16px; }
 
 .rdm-timeline { position: relative; padding-left: 12px; border-left: 2px solid #e2e8f0; margin-left: 4px; }
 .rdm-tl-item { margin-bottom: 24px; position: relative; padding-left: 24px; }
-.rdm-tl-dot { 
-  width: 10px; height: 10px; background: #cbd5e1; border-radius: 50%; 
+.rdm-tl-dot {
+  width: 10px; height: 10px; background: #cbd5e1; border-radius: 50%;
   position: absolute; left: -6px; top: 4px; border: 2px solid white;
 }
 .rdm-tl-item.done .rdm-tl-dot { background: #16a34a; }
@@ -144,3 +130,74 @@
 .rdm-lb-header { display: flex; justify-content: space-between; padding: 10px 20px; background: #f8fafc; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
 .rdm-lb-row { display: flex; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; font-size: 13px; font-weight: 600; }
 .rdm-lb-empty { padding: 40px; text-align: center; color: #94a3b8; font-size: 12px; }
+
+/* ---------------------------------
+   ✅ NEW: Prize Distribution section
+---------------------------------- */
+
+.rdm-dist {
+  margin: 0 20px 18px 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.rdm-dist-title {
+  font-size: 10px;
+  font-weight: 900;
+  color: #64748b;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.rdm-dist-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.rdm-dist-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.rdm-dist-row span:first-child {
+  opacity: 0.85;
+  font-weight: 800;
+}
+
+.rdm-dist-row strong,
+.rdm-dist-row.strong {
+  font-weight: 1000;
+}
+
+.rdm-dist-row.strong span:last-child {
+  color: #0f172a;
+}
+
+.rdm-unit {
+  font-size: 10px;
+  font-weight: 900;
+  opacity: 0.65;
+  margin-left: 4px;
+}
+
+.rdm-dist-sep {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 6px 0;
+}
+
+.rdm-dist-foot {
+  margin-top: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  opacity: 0.9;
+}
