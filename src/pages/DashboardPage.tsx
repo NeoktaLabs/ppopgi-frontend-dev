@@ -28,6 +28,13 @@ function norm(a?: string | null) {
   return String(a || "").toLowerCase();
 }
 
+function shortAddr(a?: string | null, head = 6, tail = 4) {
+  const s = String(a || "");
+  if (!s) return "";
+  if (s.length <= head + tail + 3) return s;
+  return `${s.slice(0, head)}…${s.slice(-tail)}`;
+}
+
 export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
   const { data, actions, account: hookAccount } = useDashboardController();
 
@@ -97,6 +104,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
   const hasClaims = data.claimables.length > 0;
 
+  // ✅ silent refresh UX: only show skeletons on true cold load
+  const showColdSkeletons = data.isColdLoading && activeEntries.length === 0 && pastEntries.length === 0;
+
   return (
     <div className="db-container">
       {/* HERO */}
@@ -105,8 +115,10 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <div className="db-avatar-circle">👤</div>
           <div>
             <div className="db-hero-label">Player Dashboard</div>
+
+            {/* ✅ Short display on mobile, full copy on click */}
             <div className="db-hero-addr" onClick={handleCopy} title="Click to Copy">
-              {account || "Not Connected"}
+              {account ? shortAddr(account, 8, 6) : "Not Connected"}
               {account && <span className="db-copy-icon">{copied ? "✅" : "📋"}</span>}
             </div>
           </div>
@@ -131,9 +143,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       </div>
 
       {/* STATUS BANNER */}
-      {data.msg && (
-        <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>
-      )}
+      {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
       {/* CLAIMABLES SECTION */}
       <div className="db-section claim-section">
@@ -175,22 +185,18 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               let primaryLabel = "Claim";
 
               if (isRefund) {
-                // CANCELED: player refund action
                 badgeTitle = "Refund";
                 message = "Raffle canceled — reclaim your ticket price.";
                 primaryLabel = "Reclaim Refund";
               } else if (iAmWinner) {
-                // SETTLED: winner claim
                 badgeTitle = "Winner";
                 message = "You won!! Congratulations! Reclaim your prize now!";
-                primaryLabel = hasUsdc ? "Claim Prize" : hasNative ? "Claim Prize" : "Claim Prize";
+                primaryLabel = "Claim Prize";
               } else if (iAmCreator) {
-                // SETTLED: creator withdraws ticket revenue
                 badgeTitle = "Creator";
                 message = "Reclaim your ticket price revenue.";
-                primaryLabel = hasUsdc ? "Withdraw Revenue" : hasNative ? "Withdraw Revenue" : "Withdraw Revenue";
+                primaryLabel = "Withdraw Revenue";
               } else {
-                // Other claimables (rare)
                 badgeTitle = "Claim";
                 message = "Funds available to withdraw.";
                 primaryLabel = hasUsdc ? "Claim USDC" : hasNative ? "Claim Native" : "Claim";
@@ -201,12 +207,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowS * 1000}
-                  />
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
 
                   <div className="db-claim-box">
                     <div className="db-claim-header">
@@ -214,9 +215,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     </div>
 
                     <div className="db-claim-text">
-                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10, color: "#334155" }}>
-                        {message}
-                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10, color: "#334155" }}>{message}</div>
 
                       {isRefund ? (
                         <div className="db-refund-layout">
@@ -306,15 +305,18 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       <div className="db-grid-area">
         {tab === "active" && (
           <div className="db-grid">
-            {data.isPending && activeEntries.length === 0 && (
+            {/* ✅ skeleton only on cold load */}
+            {showColdSkeletons && (
               <>
                 <RaffleCardSkeleton />
                 <RaffleCardSkeleton />
               </>
             )}
-            {!data.isPending && activeEntries.length === 0 && (
-              <div className="db-empty">You have no on-going raffles.</div>
-            )}
+
+            {/* ✅ empty state only when not cold loading */}
+            {!data.isColdLoading && activeEntries.length === 0 && <div className="db-empty">You have no on-going raffles.</div>}
+
+            {/* ✅ show cards even if background refresh is happening */}
             {activeEntries.map((r: any) => (
               <RaffleCard
                 key={r.id}
@@ -330,9 +332,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "history" && (
           <div className="db-grid">
-            {!data.isPending && pastEntries.length === 0 && (
-              <div className="db-empty">No past participation found.</div>
-            )}
+            {/* ✅ empty state only when not cold loading */}
+            {!data.isColdLoading && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
 
             {pastEntries.map((r: any) => {
               const acct = norm(account);
@@ -351,14 +352,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className="db-history-card-wrapper">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowS * 1000}
-                    userEntry={r.userEntry}
-                  />
-
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry} />
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
                   {iLost && <div className="db-history-badge lost">Lost - Better luck next time!</div>}
@@ -370,17 +364,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "created" && (
           <div className="db-grid">
-            {!data.isPending && data.created.length === 0 && (
-              <div className="db-empty">You haven't hosted any raffles yet.</div>
-            )}
+            {/* ✅ empty state only when not cold loading */}
+            {!data.isColdLoading && data.created.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
+
             {data.created.map((r: any) => (
-              <RaffleCard
-                key={r.id}
-                raffle={r}
-                onOpen={onOpenRaffle}
-                onOpenSafety={onOpenSafety}
-                nowMs={nowS * 1000}
-              />
+              <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
             ))}
           </div>
         )}
