@@ -12,6 +12,7 @@ import {
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
 
+// Minimal ABI for dashboard logic
 const RAFFLE_DASH_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
@@ -40,12 +41,14 @@ const RAFFLE_DASH_ABI = [
   },
 ] as const;
 
-type JoinedRaffleItem = RaffleListItem & { userTicketsOwned: string };
+type JoinedRaffleItem = RaffleListItem & {
+  userTicketsOwned: string; // bigint string
+};
 
 type ClaimableItem = {
   raffle: RaffleListItem;
-  claimableUsdc: string;
-  claimableNative: string;
+  claimableUsdc: string; // bigint string
+  claimableNative: string; // bigint string
   type: "WIN" | "REFUND" | "OTHER";
   roles: { participated?: boolean; created?: boolean };
   userTicketsOwned?: string;
@@ -77,11 +80,14 @@ function toBigInt(v: any): bigint {
 }
 
 function normId(v: string): string {
-  const s = (v || "").toLowerCase();
+  const s = String(v || "").toLowerCase();
   if (!s) return s;
   return s.startsWith("0x") ? s : `0x${s}`;
 }
 
+/**
+ * Simple concurrency pool to avoid hammering RPC.
+ */
 async function mapPool<T, R>(
   items: readonly T[],
   concurrency: number,
@@ -89,6 +95,7 @@ async function mapPool<T, R>(
 ): Promise<R[]> {
   const out: R[] = new Array(items.length) as any;
   let i = 0;
+
   const workers = new Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
     while (true) {
       const idx = i++;
@@ -96,10 +103,14 @@ async function mapPool<T, R>(
       out[idx] = await fn(items[idx], idx);
     }
   });
+
   await Promise.all(workers);
   return out;
 }
 
+/**
+ * Prioritize likely-claimable raffles so important ones get scanned first.
+ */
 function scoreForClaimScan(r: RaffleListItem): number {
   if (r.status === "CANCELED") return 100;
   if (r.status === "COMPLETED") return 90;
@@ -124,24 +135,34 @@ export function useDashboardController() {
   const [msg, setMsg] = useState<string | null>(null);
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
+  // Cache + single-flight joinedIds
   const lastJoinedIdsRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
   const joinedIdsPromiseRef = useRef<Promise<Set<string>> | null>(null);
   const joinedBackoffMsRef = useRef(0);
+
   const runIdRef = useRef(0);
 
+  // Reset on wallet change
   useEffect(() => {
     lastJoinedIdsRef.current = null;
     joinedIdsPromiseRef.current = null;
     joinedBackoffMsRef.current = 0;
     setHiddenClaimables({});
+    setMsg(null);
   }, [account]);
 
+  /**
+   * ✅ FIX: Everyone awaits the SAME in-flight promise (no "empty set until next tick").
+   * ✅ Speed: Use raffleParticipants first; only hit events if participants returns empty.
+   * ✅ Types: No "maxPages" param passed to subgraph functions (avoids TS2353).
+   */
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
     if (!account) return new Set<string>();
 
     const acct = account.toLowerCase();
     const now = Date.now();
     const cached = lastJoinedIdsRef.current;
+
     if (cached && cached.account === acct && now - cached.ts < 60_000) return cached.ids;
 
     if (joinedIdsPromiseRef.current) return await joinedIdsPromiseRef.current;
@@ -150,11 +171,12 @@ export function useDashboardController() {
       const ids = new Set<string>();
 
       try {
-        // Primary: raffleParticipants aggregation
+        // Primary: raffleParticipants aggregation (fast + direct)
         try {
           let skip = 0;
           const pageSize = 1000;
           const maxPages = 5;
+
           for (let pageN = 0; pageN < maxPages; pageN++) {
             const page = await fetchMyJoinedRaffleIds(account, { first: pageSize, skip });
             page.forEach((id) => ids.add(normId(id)));
@@ -162,22 +184,28 @@ export function useDashboardController() {
             skip += pageSize;
           }
         } catch (e) {
+          // keep going, try fallback
+          // eslint-disable-next-line no-console
           console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
         }
 
-        // Fallback: raffleEvents (TICKETS_PURCHASED)
-        try {
-          let skip = 0;
-          const pageSize = 1000;
-          const maxPages = 8;
-          for (let pageN = 0; pageN < maxPages; pageN++) {
-            const page = await fetchMyJoinedRaffleIdsFromEvents(account, { first: pageSize, skip });
-            page.forEach((id) => ids.add(normId(id)));
-            if (page.length < pageSize) break;
-            skip += pageSize;
+        // Fallback: events only if still empty (reduces load + speeds up common case)
+        if (ids.size === 0) {
+          try {
+            let skip = 0;
+            const pageSize = 1000;
+            const maxPages = 8;
+
+            for (let pageN = 0; pageN < maxPages; pageN++) {
+              const page = await fetchMyJoinedRaffleIdsFromEvents(account, { first: pageSize, skip });
+              page.forEach((id) => ids.add(normId(id)));
+              if (page.length < pageSize) break;
+              skip += pageSize;
+            }
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
           }
-        } catch (e) {
-          console.warn("[dash] fetchMyJoinedRaffleIdsFromEvents failed", e);
         }
 
         lastJoinedIdsRef.current = { ts: Date.now(), account: acct, ids };
@@ -212,34 +240,39 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
+      // If store not ready yet, only show loader on foreground
       if (!store.items) {
-        setLocalPending(true);
+        if (!isBackground) setLocalPending(true);
         return;
       }
 
-      if (!isBackground) setLocalPending(true);
+      // ✅ Avoid flicker: only show loader when we truly have nothing yet
+      if (!isBackground) {
+        const nothingYet = created.length === 0 && joined.length === 0 && claimables.length === 0;
+        if (nothingYet) setLocalPending(true);
+      }
 
       try {
         const myAddr = account.toLowerCase();
 
-        // Created is from store (fast)
+        // Created: from store (fast)
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // Joined IDs
+        // Joined ids (cached/single-flight)
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
         const joinedIdArr = Array.from(joinedIds);
 
-        // Fast path: from store
+        // Fast join from store (instant UI)
         const joinedBaseFromStore =
           joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
-        // Show immediately (before ticketsOwned enrichment)
+        // Set immediately (no ticketsOwned yet)
         setCreated(myCreated);
         setJoined(joinedBaseFromStore.map((r) => ({ ...r, userTicketsOwned: "0" })));
 
-        // Backfill joined raffle objects by ids (robust)
+        // Fetch full raffle objects by ids (more reliable than "latest 1000" assumptions)
         let joinedBase: RaffleListItem[] = joinedBaseFromStore;
         if (joinedIdArr.length > 0) {
           try {
@@ -263,6 +296,7 @@ export function useDashboardController() {
               address: r.id,
               abi: RAFFLE_DASH_ABI,
             });
+
             const owned = await readContract({ contract, method: "ticketsOwned", params: [account] });
             ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
           } catch {
@@ -279,7 +313,13 @@ export function useDashboardController() {
           }))
         );
 
-        // ---- CLAIMABLES: only show actionable tiles ----
+        /**
+         * Claimables:
+         * ✅ Only include raffles that ACTUALLY require action.
+         * - Winner: completed + winner + (cf>0 || cn>0)
+         * - Participant refund step #1: canceled + ticketsOwned>0  (claimTicketRefund)
+         * - Any other: (cf>0 || cn>0)
+         */
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -292,7 +332,9 @@ export function useDashboardController() {
           return Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0");
         });
 
+        // Keep bounded (RPC safety)
         const candidates = uniqueCandidates.slice(0, 400);
+
         const newClaimables: ClaimableItem[] = [];
 
         await mapPool(candidates, 10, async (r) => {
@@ -322,28 +364,17 @@ export function useDashboardController() {
             participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
           };
 
-          // Winner claim
           const isWinnerEligible =
             r.status === "COMPLETED" &&
             r.winner?.toLowerCase() === myAddr &&
             (cf > 0n || cn > 0n);
 
-          // Participant refund (two-phase handled in UI): canceled + still has tickets
+          // Two-phase refund: show tile even if cf/cn are 0, because claimTicketRefund is step #1
           const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
-          // Creator pot reclaim:
-          // Some versions may not report claimableFunds correctly until action time.
-          // So: if creator && terminal (COMPLETED/CANCELED), show ONLY if either:
-          //  - claimableFunds/native > 0 (obvious), OR
-          //  - status is CANCELED (creator usually withdraws), OR
-          //  - status is COMPLETED AND sold > 0 (there was revenue to withdraw)
-          const soldN = toBigInt(r.sold || "0");
-          const creatorLikelyActionable =
-            roles.created &&
-            (r.status === "CANCELED" ||
-              (r.status === "COMPLETED" && soldN > 0n));
-
           const isAnythingClaimable = cf > 0n || cn > 0n;
+
+          if (!isWinnerEligible && !isParticipantRefundEligible && !isAnythingClaimable) return;
 
           if (isWinnerEligible) {
             newClaimables.push({
@@ -369,31 +400,33 @@ export function useDashboardController() {
             return;
           }
 
-          // Creator / other
-          if (isAnythingClaimable || creatorLikelyActionable) {
-            newClaimables.push({
-              raffle: r,
-              claimableUsdc: cf.toString(),
-              claimableNative: cn.toString(),
-              type: "OTHER",
-              roles,
-              userTicketsOwned: ticketsOwned.toString(),
-            });
-          }
+          // Other claims (creator withdraw, protocol fees, etc.)
+          newClaimables.push({
+            raffle: r,
+            claimableUsdc: cf.toString(),
+            claimableNative: cn.toString(),
+            type: "OTHER",
+            roles,
+            userTicketsOwned: ticketsOwned.toString(),
+          });
         });
 
         if (runId !== runIdRef.current) return;
+
         setClaimables(newClaimables);
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.error("Dashboard recompute error", e);
         if (!isBackground) setMsg("Failed to load dashboard data.");
       } finally {
         if (!isBackground) setLocalPending(false);
       }
     },
-    [account, allRaffles, getJoinedIds, store.items]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [account, allRaffles, getJoinedIds, store.items, created.length, joined.length, claimables.length]
   );
 
+  // On wallet connect: do one forced store refresh + compute (prevents “empty 15s” feeling)
   useEffect(() => {
     if (!account) {
       setLocalPending(false);
@@ -407,12 +440,14 @@ export function useDashboardController() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account]);
 
+  // Recompute when store updates (background-friendly)
   useEffect(() => {
     if (!account) return;
-    void recompute(false);
+    void recompute(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, store.lastUpdatedMs]);
 
+  // Focus + vis
   useEffect(() => {
     const onFocus = () => {
       void refreshRaffleStore(true, true);
@@ -481,6 +516,7 @@ export function useDashboardController() {
       await refreshRaffleStore(true, true);
       await recompute(true);
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error("Withdraw failed", e);
       setMsg("Claim failed or rejected.");
     }
