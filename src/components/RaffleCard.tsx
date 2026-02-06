@@ -92,11 +92,13 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
           >
             🛡
           </button>
+
+          {/* ✅ FIX: pass event to handleShare if it expects one */}
           <button
             className="rc-btn-icon"
             onClick={(e) => {
               e.stopPropagation();
-              actions.handleShare();
+              actions.handleShare(e);
             }}
             title="Share"
           >
@@ -216,7 +218,11 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
             <span>⚠️ Emergency Hatch</span>
             <span>{hatch.label}</span>
           </div>
-          <button className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`} disabled={hatch.disabled || hatch.busy} onClick={hatch.onClick}>
+          <button
+            className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`}
+            disabled={hatch.disabled || hatch.busy}
+            onClick={hatch.onClick}
+          >
             {hatch.busy ? "CONFIRMING..." : hatch.ready ? "HATCH (CANCEL)" : "LOCKED"}
           </button>
           {hatch.note && (
