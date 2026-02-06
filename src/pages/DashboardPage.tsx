@@ -6,6 +6,10 @@ import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 
+useEffect(() => {
+  document.title = "Ppopgi 뽑기 — Dashboard";
+}, []);
+
 // Helpers
 const fmt = (v: string, dec = 18) => {
   try {

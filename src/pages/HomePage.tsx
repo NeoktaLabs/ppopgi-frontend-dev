@@ -1,10 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard"; 
 import "./HomePage.css";
+
+useEffect(() => {
+  document.title = "Ppopgi 뽑기 — Home";
+}, []);
 
 type Props = {
   nowMs: number;

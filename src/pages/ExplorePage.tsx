@@ -1,8 +1,13 @@
 // src/pages/ExplorePage.tsx
+import { useEffect } from "react";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
+
+useEffect(() => {
+  document.title = "Ppopgi 뽑기 — Explore";
+}, []);
 
 type Props = {
   onOpenRaffle: (id: string) => void;
