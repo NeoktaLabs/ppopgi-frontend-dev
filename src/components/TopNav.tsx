@@ -1,3 +1,4 @@
+// src/components/TopNav.tsx
 import { useState, useEffect, memo } from "react";
 import "./TopNav.css";
 
@@ -33,27 +34,30 @@ export const TopNav = memo(function TopNav({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close menu when page changes
+  // Close menu when changing PAGE
   useEffect(() => {
     setMenuOpen(false);
   }, [page]);
 
+  const closeMenu = () => setMenuOpen(false);
+
+  // Wrapper for actions (optionally also navigates)
   const handleNav = (action: () => void, targetPage?: Page) => {
     if (targetPage) onNavigate(targetPage);
     action();
-    setMenuOpen(false);
+    closeMenu();
   };
 
   return (
     <div className="topnav-wrapper">
       <div className="topnav-pill">
-        {/* LEFT: BRAND */}
+        {/* --- LEFT: Brand --- */}
         <div className="topnav-brand" onClick={() => handleNav(() => {}, "home")}>
           <div className="brand-dot" />
           <span className="brand-text">Ppopgi</span>
         </div>
 
-        {/* CENTER: DESKTOP LINKS */}
+        {/* --- CENTER: Desktop Links --- */}
         <nav className="topnav-desktop-links">
           <button
             className={`nav-link ${page === "explore" ? "active" : ""}`}
@@ -76,42 +80,35 @@ export const TopNav = memo(function TopNav({
           </button>
         </nav>
 
-        {/* RIGHT */}
+        {/* --- RIGHT: Account & Mobile Toggle --- */}
         <div className="topnav-right">
-          {/* DESKTOP ACTIONS */}
+          {/* Desktop Only Actions */}
           <div className="desktop-actions">
             <button
               className="nav-link cashier-btn"
-              onClick={() => {
-                setMenuOpen(false);
-                onOpenCashier();
-              }}
+              onClick={() => handleNav(onOpenCashier)}
+              title="Open Cashier"
             >
               🏦 Cashier
             </button>
 
             {!account ? (
-              <button
-                className="nav-link signin-btn"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onOpenSignIn();
-                }}
-              >
+              <button className="nav-link signin-btn" onClick={() => handleNav(onOpenSignIn)}>
                 Sign In
               </button>
             ) : (
-              <div className="account-badge" onClick={onSignOut}>
+              <div className="account-badge" onClick={() => handleNav(onSignOut)} title="Click to Sign Out">
                 <div className="acct-dot" />
                 {short(account)}
               </div>
             )}
           </div>
 
-          {/* MOBILE BURGER */}
+          {/* Mobile Toggle */}
           <button
             className={`mobile-burger ${menuOpen ? "open" : ""}`}
             onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Toggle menu"
           >
             <span />
             <span />
@@ -119,14 +116,12 @@ export const TopNav = memo(function TopNav({
         </div>
       </div>
 
-      {/* MOBILE MENU */}
+      {/* --- MOBILE DROPDOWN --- */}
       <div className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
         <div className="mobile-menu-inner">
           <button onClick={() => handleNav(onOpenExplore, "explore")}>🌍 Explore</button>
 
-          {account && (
-            <button onClick={() => handleNav(onOpenDashboard, "dashboard")}>👤 Dashboard</button>
-          )}
+          {account && <button onClick={() => handleNav(onOpenDashboard, "dashboard")}>👤 Dashboard</button>}
 
           <button className="highlight" onClick={() => handleNav(onOpenCreate)}>
             ✨ Create Raffle
@@ -134,35 +129,23 @@ export const TopNav = memo(function TopNav({
 
           <div className="mobile-divider" />
 
-          <button
-            onClick={() => {
-              setMenuOpen(false);
-              onOpenCashier();
-            }}
-          >
-            🏦 Cashier
-          </button>
+          {/* ✅ FIX: close menu on Cashier / Sign-in too */}
+          <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
 
           {!account ? (
-            <button
-              className="primary"
-              onClick={() => {
-                setMenuOpen(false);
-                onOpenSignIn();
-              }}
-            >
+            <button className="primary" onClick={() => handleNav(onOpenSignIn)}>
               Sign In
             </button>
           ) : (
-            <button className="danger" onClick={onSignOut}>
+            <button className="danger" onClick={() => handleNav(onSignOut)}>
               Sign Out ({short(account)})
             </button>
           )}
         </div>
       </div>
 
-      {/* CLICK-OUTSIDE OVERLAY */}
-      {menuOpen && <div className="mobile-overlay" onClick={() => setMenuOpen(false)} />}
+      {/* Overlay to close menu when clicking outside */}
+      {menuOpen && <div className="mobile-overlay" onMouseDown={closeMenu} />}
     </div>
   );
 });
