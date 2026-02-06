@@ -1,5 +1,5 @@
-// src/components/RaffleDetailsModal.tsx
-import { useState, useEffect, useMemo } from "react"; 
+import { useState, useEffect, useMemo } from "react";
+import { formatUnits } from "ethers";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
@@ -102,6 +102,38 @@ async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
   } catch {
     return [];
   }
+}
+
+/* ---------------------------
+   ✅ Prize Distribution helpers
+---------------------------- */
+
+const USDC_DECIMALS = 6;
+
+function toBigIntSafe(v: any): bigint {
+  try {
+    if (typeof v === "bigint") return v;
+    if (typeof v === "number") return BigInt(Math.trunc(v));
+    if (typeof v === "string") return BigInt(v || "0");
+    if (v?.toString) return BigInt(v.toString());
+    return 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+function fmtUsdcBI(v: bigint) {
+  try {
+    const s = formatUnits(v, USDC_DECIMALS);
+    return Number(s).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  } catch {
+    return "0.00";
+  }
+}
+
+function mulDiv(a: bigint, b: bigint, d: bigint) {
+  if (d === 0n) return 0n;
+  return (a * b) / d;
 }
 
 type Props = {
@@ -298,14 +330,45 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const price = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
     const sold = Number(displayData.sold || "0");
-    
+
     // Net Payout is 90% of pot
     const netPot = pot * 0.9;
     const roi = price > 0 ? (netPot / price).toFixed(1) : "0";
-    
+
     const odds = sold > 0 ? `1 in ${sold + 1}` : "100%";
     return { roi, odds, pot, price };
   }, [displayData, math]);
+
+  // ✅ NEW: Prize Distribution (live, derived from indexed raffle data)
+  const prizeDist = useMemo(() => {
+    if (!displayData) return null;
+
+    // winner gets 90%, platform gets 10% from prize
+    const WINNER_BPS = 9000n;
+    const PLATFORM_BPS = 1000n;
+    const BPS = 10_000n;
+
+    const sold = toBigIntSafe(displayData.sold || "0");
+    const ticketPrice = toBigIntSafe(displayData.ticketPrice || "0");
+    const grossPrize = toBigIntSafe(displayData.winningPot || "0");
+
+    const grossTicketSales = sold * ticketPrice;
+
+    const winnerNet = mulDiv(grossPrize, WINNER_BPS, BPS);
+    const platformFromPrize = grossPrize - winnerNet;
+
+    const platformFromTickets = mulDiv(grossTicketSales, PLATFORM_BPS, BPS);
+    const creatorNetRevenue = grossTicketSales - platformFromTickets;
+
+    return {
+      grossPrize,
+      winnerNet,
+      platformFromPrize,
+      grossTicketSales,
+      creatorNetRevenue,
+      platformFromTickets,
+    };
+  }, [displayData]);
 
   if (!open) return null;
 
@@ -330,7 +393,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         {/* HERO */}
         <div className="rdm-hero">
           <div className="rdm-hero-lbl">Total Prize Pool</div>
-          <div className="rdm-hero-val">{math.fmtUsdc(displayData?.winningPot || "0")}</div>
+          {/* ✅ add USDC */}
+          <div className="rdm-hero-val">
+            {math.fmtUsdc(displayData?.winningPot || "0")} <span style={{ fontSize: 14, opacity: 0.7 }}>USDC</span>
+          </div>
           <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 700, marginTop: -4, marginBottom: 12 }}>
             *Winner receives 90% (10% protocol fee)
           </div>
@@ -356,7 +422,66 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             </div>
             <div className="rdm-stat-box">
               <div className="rdm-sb-lbl">Price</div>
-              <div className="rdm-sb-val">${stats.price}</div>
+              {/* ✅ show USDC instead of $ */}
+              <div className="rdm-sb-val">
+                {stats.price} <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 900 }}>USDC</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ NEW: Prize Distribution section (minimal addition, no revamp) */}
+        {prizeDist && (
+          <div className="rdm-dist">
+            <div className="rdm-dist-title">Prize distribution</div>
+            <div className="rdm-dist-grid">
+              <div className="rdm-dist-row">
+                <span>Gross prize pool</span>
+                <span>
+                  {fmtUsdcBI(prizeDist.grossPrize)} <span className="rdm-unit">USDC</span>
+                </span>
+              </div>
+
+              <div className="rdm-dist-row strong">
+                <span>Winner receives (net)</span>
+                <span>
+                  {fmtUsdcBI(prizeDist.winnerNet)} <span className="rdm-unit">USDC</span>
+                </span>
+              </div>
+
+              <div className="rdm-dist-row">
+                <span>Platform fee (from prize)</span>
+                <span>
+                  {fmtUsdcBI(prizeDist.platformFromPrize)} <span className="rdm-unit">USDC</span>
+                </span>
+              </div>
+
+              <div className="rdm-dist-sep" />
+
+              <div className="rdm-dist-row">
+                <span>Ticket sales (gross)</span>
+                <span>
+                  {fmtUsdcBI(prizeDist.grossTicketSales)} <span className="rdm-unit">USDC</span>
+                </span>
+              </div>
+
+              <div className="rdm-dist-row strong">
+                <span>Creator revenue (net)</span>
+                <span>
+                  {fmtUsdcBI(prizeDist.creatorNetRevenue)} <span className="rdm-unit">USDC</span>
+                </span>
+              </div>
+
+              <div className="rdm-dist-row">
+                <span>Platform fee (from ticket sales)</span>
+                <span>
+                  {fmtUsdcBI(prizeDist.platformFromTickets)} <span className="rdm-unit">USDC</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="rdm-dist-foot">
+              *Live estimate based on the latest indexed data — updates as tickets are sold.
             </div>
           </div>
         )}
