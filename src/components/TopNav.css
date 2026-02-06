@@ -5,8 +5,7 @@
   position: sticky;
   top: 20px;
 
-  /* ✅ CRITICAL FIX:
-     Lower than thirdweb internal overlays so "All wallets" doesn't go behind TopNav */
+  /* Lower than thirdweb internal overlays */
   z-index: 300;
 
   display: flex;
@@ -46,13 +45,17 @@
   cursor: pointer;
   user-select: none;
 }
-.brand-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #FF8DBB, #CBB7F6);
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.8);
+
+/* ✅ New: Logo next to text */
+.topnav-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 999px; /* keeps it nice if your PNG has edges */
+  flex: 0 0 auto;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.08));
 }
+
 .brand-text {
   font-weight: 1000;
   font-size: 18px;
@@ -173,7 +176,6 @@
   transform: translateY(-10px);
   transition: all 0.2s ease;
 
-  /* stays above nav pill, but still below modals */
   z-index: 350;
 }
 .mobile-menu.visible {
@@ -218,7 +220,5 @@
 .mobile-overlay {
   position: fixed;
   inset: 0;
-
-  /* must be below modals, above page */
   z-index: 320;
 }

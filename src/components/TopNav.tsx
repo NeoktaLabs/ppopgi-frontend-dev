@@ -53,7 +53,13 @@ export const TopNav = memo(function TopNav({
       <div className="topnav-pill">
         {/* --- LEFT: Brand --- */}
         <div className="topnav-brand" onClick={() => handleNav(() => {}, "home")}>
-          <div className="brand-dot" />
+          {/* ✅ Logo + Text */}
+          <img
+            className="topnav-logo"
+            src="/ppopgi-logo.png"
+            alt="Ppopgi logo"
+            draggable={false}
+          />
           <span className="brand-text">Ppopgi</span>
         </div>
 
@@ -97,7 +103,11 @@ export const TopNav = memo(function TopNav({
                 Sign In
               </button>
             ) : (
-              <div className="account-badge" onClick={() => handleNav(onSignOut)} title="Click to Sign Out">
+              <div
+                className="account-badge"
+                onClick={() => handleNav(onSignOut)}
+                title="Click to Sign Out"
+              >
                 <div className="acct-dot" />
                 {short(account)}
               </div>
@@ -129,7 +139,7 @@ export const TopNav = memo(function TopNav({
 
           <div className="mobile-divider" />
 
-          {/* ✅ FIX: close menu on Cashier / Sign-in too */}
+          {/* ✅ close menu on Cashier / Sign-in too */}
           <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
 
           {!account ? (
