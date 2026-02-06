@@ -1,3 +1,4 @@
+// src/pages/HomePage.tsx
 import { useEffect, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
