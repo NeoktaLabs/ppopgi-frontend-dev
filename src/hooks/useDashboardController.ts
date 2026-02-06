@@ -184,7 +184,6 @@ export function useDashboardController() {
             skip += pageSize;
           }
         } catch (e) {
-          // keep going, try fallback
           // eslint-disable-next-line no-console
           console.warn("[dash] fetchMyJoinedRaffleIds failed", e);
         }
@@ -490,10 +489,7 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  const withdraw = async (
-    raffleId: string,
-    method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
-  ) => {
+  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
     if (!account) return;
     setMsg(null);
 
@@ -532,13 +528,25 @@ export function useDashboardController() {
     await recompute(false);
   };
 
+  // ✅ NEW: distinguish "cold load" vs "background refresh" (prevents 15s flicker in UI)
+  const hasBootstrapped = !!store.items;
+  const isColdLoading = !hasBootstrapped && (localPending || store.isLoading);
+  const isRefreshing = hasBootstrapped && store.isLoading;
+
   return {
     data: {
       created: createdSorted,
       joined: joinedSorted,
       claimables: claimablesSorted,
       msg,
+
+      // keep existing flag so you don't break any callers
       isPending: localPending || store.isLoading,
+
+      // new flags for silent refresh UI
+      isColdLoading,
+      isRefreshing,
+
       storeNote: store.note,
       storeLastUpdatedMs: store.lastUpdatedMs,
       joinedBackoffMs: joinedBackoffMsRef.current,
