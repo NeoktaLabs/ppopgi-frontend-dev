@@ -1,5 +1,5 @@
 import "./Footer.css";
-import ppopgiLogo from "../assets/ppopgi-logo.png";
+import ppopgiLogo from "/ppopgi-logo.png";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -40,7 +40,7 @@ export function Footer() {
             <h4>Transparency</h4>
 
             <a
-              href="https://github.com/YOUR_USERNAME/ppopgi-frontend"
+              href="https://github.com/NeoktaLabs/ppopgi-frontend-dev"
               target="_blank"
               rel="noreferrer"
             >
@@ -48,7 +48,7 @@ export function Footer() {
             </a>
 
             <a
-              href="https://github.com/YOUR_USERNAME/ppopgi-contracts"
+              href="https://github.com/NeoktaLabs/ppopgi-smartcontracts"
               target="_blank"
               rel="noreferrer"
             >
@@ -56,7 +56,7 @@ export function Footer() {
             </a>
 
             <a
-              href="https://github.com/YOUR_USERNAME/ppopgi-finalizer"
+              href="https://github.com/NeoktaLabs/ppopgi-finalizerbot"
               target="_blank"
               rel="noreferrer"
             >
