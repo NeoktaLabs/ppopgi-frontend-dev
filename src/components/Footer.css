@@ -1,10 +1,8 @@
-/* src/components/Footer.css */
-
 .footer-container {
   border-top: 1px solid #e2e8f0;
   background: white;
   padding: 40px 20px;
-  margin-top: auto; /* Pushes footer to bottom if using flex-col layout */
+  margin-top: auto;
 }
 
 .footer-content {
@@ -18,17 +16,28 @@
 
 /* BRAND COLUMN */
 .footer-brand {
-  max-width: 300px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.footer-logo {
+.footer-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.footer-logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.footer-logo-text {
   font-size: 18px;
-  font-weight: 900;
-  color: #0f172a;
-  text-transform: uppercase;
+  font-weight: 1000;
+  color: #4A0F2B;
   letter-spacing: -0.5px;
 }
 
@@ -81,16 +90,16 @@
 .footer-version {
   font-size: 11px;
   color: #cbd5e1;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
-/* Mobile Responsiveness */
+/* Mobile */
 @media (max-width: 768px) {
   .footer-content {
     flex-direction: column;
     gap: 30px;
   }
-  
+
   .footer-links {
     gap: 40px;
     width: 100%;
