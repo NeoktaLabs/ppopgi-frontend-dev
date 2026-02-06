@@ -195,6 +195,10 @@
 }
 
 /* --- STRIP --- */
+.hp-strip-wrap {
+  position: relative;
+}
+
 .hp-strip {
   display: flex;
   gap: 24px;
@@ -203,11 +207,14 @@
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+
+  /* smoother when using arrows */
+  scroll-behavior: smooth;
 }
 .hp-strip::-webkit-scrollbar { display: none; }
 
 .hp-strip-item {
-  scroll-snap-align: center;
+  scroll-snap-align: start; /* ✅ shows left-most item first */
   flex: 0 0 auto;
   width: 320px;
 }
@@ -221,6 +228,55 @@
   font-weight: 700;
   opacity: 0.6;
   color: #64748b;
+  min-width: 320px;
+}
+
+/* ✅ SLIDER ARROWS (auto-hide via React render) */
+.hp-strip-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-55%);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+
+  display: grid;
+  place-items: center;
+
+  font-size: 22px;
+  font-weight: 900;
+  color: #334155;
+
+  z-index: 5;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+  transition: transform 0.15s ease;
+}
+.hp-strip-arrow:hover { transform: translateY(-55%) scale(1.05); }
+.hp-strip-arrow:active { transform: translateY(-55%) scale(0.98); }
+
+.hp-strip-arrow.left { left: 10px; }
+.hp-strip-arrow.right { right: 10px; }
+
+/* ✅ Edge fade hints (also auto-hide) */
+.hp-strip-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 56px;
+  pointer-events: none;
+  z-index: 4;
+}
+.hp-strip-fade.left {
+  left: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,1), rgba(255,255,255,0));
+}
+.hp-strip-fade.right {
+  right: 0;
+  background: linear-gradient(270deg, rgba(255,255,255,1), rgba(255,255,255,0));
 }
 
 /* --- MOBILE --- */
@@ -242,4 +298,21 @@
     width: 40px;
     height: 1px;
   }
+
+  /* tighter strip on mobile */
+  .hp-strip {
+    padding: 10px 18px 50px 18px;
+    gap: 16px;
+  }
+  .hp-strip-item {
+    width: 300px;
+  }
+
+  .hp-strip-arrow {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+  .hp-strip-arrow.left { left: 6px; }
+  .hp-strip-arrow.right { right: 6px; }
 }
