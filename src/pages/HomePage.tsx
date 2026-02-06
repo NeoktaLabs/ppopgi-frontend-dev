@@ -38,13 +38,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
 
-  // Keep it compatible even if your hook doesn't yet return recentlySettled.
-  const home: any = useHomeRaffles();
-  const { bigPrizes, endingSoon, stats, isLoading } = home;
-
-  // If your hook already has it, this will pick it up.
-  // If not, it will simply render an empty section (no crash).
-  const recentlySettled = (home.recentlySettled || home.settledRecently || home.recentSettled || []) as any[];
+  const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading } = useHomeRaffles();
 
   // Podium Logic
   const podium = useMemo(() => {
@@ -71,18 +65,10 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     return [...endingSoon].sort((a, b) => num(a.deadline) - num(b.deadline));
   }, [endingSoon]);
 
-  // Recently Settled Logic (most recent first, left-most)
+  // Recently Settled (already sorted in hook, but keep stable + ensure max 5)
   const recentlySettledSorted = useMemo(() => {
-    if (!recentlySettled || recentlySettled.length === 0) return [];
-
-    const getSettledTs = (r: any) =>
-      num(r.completedAtTimestamp || r.completedAt || r.settledAtTimestamp || r.settledAt || r.updatedAtTimestamp);
-
-    return [...recentlySettled]
-      .filter((r) => String(r.status || "").toUpperCase() === "COMPLETED")
-      .sort((a, b) => getSettledTs(b) - getSettledTs(a))
-      .slice(0, 5);
-  }, [recentlySettled]);
+    return (recentlyFinalized ?? []).slice(0, 5);
+  }, [recentlyFinalized]);
 
   return (
     <>
