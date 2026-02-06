@@ -24,8 +24,12 @@ type Props = {
 
 type WithdrawMethod = "withdrawFunds" | "withdrawNative" | "claimTicketRefund";
 
-export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
-  const { data, actions } = useDashboardController();
+export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
+  const { data, actions, account: hookAccount } = useDashboardController();
+
+  // ✅ Source of truth: hook account (fallback to prop)
+  const account = hookAccount ?? accountProp;
+
   const [tab, setTab] = useState<"active" | "history" | "created">("active");
   const [copied, setCopied] = useState(false);
 
@@ -72,10 +76,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
 
-  // Decide which primary withdraw method to use.
-  // Refund is TWO-PHASE:
-  //  - If claimableUsdc > 0 => user already allocated, so withdrawFunds transfers
-  //  - Else if ticketsOwned > 0 => claimTicketRefund allocates
+  // ✅ FIXED: refund mapping
   const getPrimaryMethod = (opts: {
     isRefund: boolean;
     hasUsdc: boolean;
@@ -84,16 +85,17 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
   }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative, ticketCount } = opts;
 
+    // Refunds should ALWAYS be claimTicketRefund (two-phase refund logic)
     if (isRefund) {
-      if (hasUsdc) return "withdrawFunds"; // money already allocated
-      if (ticketCount > 0) return "claimTicketRefund"; // allocate refund
-      return null;
+      return ticketCount > 0 ? "claimTicketRefund" : null;
     }
 
     if (hasUsdc) return "withdrawFunds";
     if (hasNative) return "withdrawNative";
     return null;
   };
+
+  const hasClaims = data.claimables.length > 0;
 
   return (
     <div className="db-container">
@@ -113,13 +115,13 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
         <div className="db-hero-stats">
           <div className="db-stat">
             <div className="db-stat-num">{activeEntries.length}</div>
-            <div className="db-stat-lbl">Active Entries</div>
+            <div className="db-stat-lbl">On-going</div>
           </div>
           <div className="db-stat">
             <div className="db-stat-num">{pastEntries.length}</div>
-            <div className="db-stat-lbl">History</div>
+            <div className="db-stat-lbl">Past</div>
           </div>
-          {data.claimables.length > 0 && (
+          {hasClaims && (
             <div className="db-stat highlight">
               <div className="db-stat-num">{data.claimables.length}</div>
               <div className="db-stat-lbl">To Claim</div>
@@ -135,48 +137,39 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
         </div>
       )}
 
-      {/* CLAIMABLES */}
-      {data.claimables.length > 0 && (
-        <div className="db-section claim-section">
-          <div className="db-section-header">
-            <div className="db-section-title">💰 Winnings & Refunds</div>
-            <span className="db-pill pulse">Action Required</span>
-          </div>
+      {/* CLAIMABLES SECTION */}
+      <div className="db-section claim-section">
+        <div className="db-section-header">
+          <div className="db-section-title">Claimables</div>
+          {hasClaims && <span className="db-pill pulse">Action Required</span>}
+        </div>
 
+        {!hasClaims ? (
+          <div className="db-empty-claims">
+            <div style={{ fontSize: 24, marginBottom: 8 }}>🎉</div>
+            <div>You’ve already claimed everything!</div>
+          </div>
+        ) : (
           <div className="db-grid">
             {data.claimables.map((it: any) => {
               const r = it.raffle;
-
               const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
               const hasNative = BigInt(it.claimableNative || "0") > 0n;
-
-              // ✅ IMPORTANT: refund UX only when the controller labeled it REFUND
               const isRefund = it.type === "REFUND";
               const ticketCount = Number(it.userTicketsOwned || 0);
 
-              const primaryMethod = getPrimaryMethod({
-                isRefund,
-                hasUsdc,
-                hasNative,
-                ticketCount,
-              });
+              const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative, ticketCount });
 
               const title = isRefund ? "Refund Available" : "Claim Available";
 
               const primaryLabel = (() => {
                 if (!primaryMethod) return "Nothing to Claim";
-
-                if (isRefund) {
-                  if (primaryMethod === "withdrawFunds") return "Claim USDC";
-                  return "Reclaim Refund";
-                }
-
+                if (isRefund) return "Reclaim Refund";
                 if (primaryMethod === "withdrawFunds") return "Claim USDC";
                 if (primaryMethod === "withdrawNative") return "Claim Native";
                 return "Claim";
               })();
 
-              // Dual-asset claim only makes sense for non-refund claims
               const showDual = !isRefund && hasUsdc && hasNative;
 
               return (
@@ -198,16 +191,12 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                     <div className="db-claim-text">
                       {isRefund ? (
                         <div className="db-refund-layout">
-                          {hasUsdc ? (
-                            <>
-                              <div className="db-refund-val">{fmt(it.claimableUsdc, 6)} USDC</div>
-                              <div className="db-refund-sub">
-                                Refund {ticketCount > 0 ? <>for <b>{ticketCount}</b> ticket{ticketCount !== 1 ? "s" : ""}</> : null}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="db-refund-val">
-                              Reclaim {ticketCount || "your"} ticket{ticketCount !== 1 ? "s" : ""}
+                          <div className="db-refund-val">
+                            Reclaim {ticketCount || "your"} ticket{ticketCount !== 1 ? "s" : ""}
+                          </div>
+                          {hasUsdc && (
+                            <div className="db-refund-sub">
+                              Expected: <b>{fmt(it.claimableUsdc, 6)} USDC</b>
                             </div>
                           )}
                         </div>
@@ -261,17 +250,22 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* MY RAFFLES TITLE */}
+      <div className="db-section-header">
+        <div className="db-section-title">My Raffles</div>
+      </div>
 
       {/* TABS */}
       <div className="db-tabs-container">
         <div className="db-tabs">
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
-            Active Entries
+            On-going
           </button>
           <button className={`db-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>
-            History
+            Past
           </button>
           <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
             Created
@@ -290,7 +284,7 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
               </>
             )}
             {!data.isPending && activeEntries.length === 0 && (
-              <div className="db-empty">You have no active tickets.</div>
+              <div className="db-empty">You have no on-going raffles.</div>
             )}
             {activeEntries.map((r: any) => (
               <RaffleCard
@@ -310,8 +304,21 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
             {!data.isPending && pastEntries.length === 0 && (
               <div className="db-empty">No past participation found.</div>
             )}
+
             {pastEntries.map((r: any) => {
-              const isRefunded = r.status === "CANCELED" && r.userEntry?.count === 0;
+              const acct = account?.toLowerCase() || "";
+              const winner = (r.winner || "").toLowerCase();
+
+              const participated = Number(r.userEntry?.count || 0) > 0;
+              const completed = r.status === "COMPLETED";
+              const canceled = r.status === "CANCELED";
+              const iWon = completed && acct && winner === acct;
+
+              // Existing logic
+              const isRefunded = canceled && Number(r.userEntry?.count || 0) === 0;
+
+              // ✅ NEW: Lost badge
+              const iLost = completed && participated && !iWon;
 
               return (
                 <div key={r.id} className="db-history-card-wrapper">
@@ -322,11 +329,10 @@ export function DashboardPage({ account, onOpenRaffle, onOpenSafety }: Props) {
                     nowMs={nowS * 1000}
                     userEntry={r.userEntry}
                   />
+
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
-                  {r.status === "COMPLETED" &&
-                    r.winner?.toLowerCase() === account?.toLowerCase() && (
-                      <div className="db-history-badge won">🏆 Winner</div>
-                    )}
+                  {iWon && <div className="db-history-badge won">🏆 Winner</div>}
+                  {iLost && <div className="db-history-badge lost">😕 Lost, better luck next time!</div>}
                 </div>
               );
             })}
