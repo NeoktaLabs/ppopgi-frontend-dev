@@ -85,7 +85,7 @@
   font-weight: 1000; 
   letter-spacing: -0.5px;
   color: #ffffff; 
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3); /* Subtle shadow for readability */
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .db-pill {
@@ -109,9 +109,21 @@
 /* Claim Card Wrapper */
 .db-claim-wrapper {
   background: #fff0f5; 
-  padding: 12px; border-radius: 16px;
+  padding: 12px;
+  border-radius: 16px;
   border: 1px dashed #f9a8d4;
-  display: flex; flex-direction: column; gap: 12px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  /* ✅ NEW: ensure the card + claim box are centered and aligned */
+  align-items: center;
+}
+
+/* ✅ NEW: force child blocks to fill wrapper width so they align perfectly */
+.db-claim-wrapper > * {
+  width: 100%;
 }
 
 .db-claim-box {
@@ -197,11 +209,18 @@
 /* --- GRID --- */
 .db-grid-area { min-height: 200px; }
 .db-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 .db-empty {
-  grid-column: 1 / -1; padding: 60px; text-align: center;
-  background: #f8fafc; border-radius: 16px; color: #94a3b8; font-weight: 600;
+  grid-column: 1 / -1;
+  padding: 60px;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 16px;
+  color: #94a3b8;
+  font-weight: 600;
 }
 
 
@@ -241,7 +260,6 @@
   box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1);
 }
 
-/* ✅ NEW: Lost Badge Style */
 .db-history-badge.lost {
   background: #475569;
   color: #f1f5f9;
@@ -255,7 +273,6 @@
     flex-direction: column; 
     text-align: center; 
     gap: 32px; 
-    /* ✅ FIX: Force centering */
     align-items: center;
   }
   
