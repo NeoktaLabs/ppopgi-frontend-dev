@@ -173,38 +173,44 @@ export function ActivityBoard() {
 
               <div className="ab-content">
                 <div className="ab-main-text">
-                  <a
-                    href={`https://explorer.etherlink.com/address/${item.subject}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ab-user"
-                  >
-                    {short(item.subject)}
-                  </a>
+                  {/* ✅ CANCEL message: human-friendly sentence, no address prefix */}
+                  {isCancel ? (
+                    <>
+                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
+                        {item.raffleName}
+                      </a>{" "}
+                      got <b style={{ color: "#991b1b" }}>canceled</b> due to min ticket not reached
+                    </>
+                  ) : (
+                    <>
+                      <a
+                        href={`https://explorer.etherlink.com/address/${item.subject}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ab-user"
+                      >
+                        {short(item.subject)}
+                      </a>
 
-                  {isBuy && (
-                    <>
-                      {" "}
-                      bought <b>{item.value} tix</b> in{" "}
-                    </>
-                  )}
-                  {isCreate && <> created </>}
-                  {isWin && (
-                    <>
-                      {" "}
-                      <b style={{ color: "#166534" }}>won</b> the pot on{" "}
-                    </>
-                  )}
-                  {isCancel && (
-                    <>
-                      {" "}
-                      <b style={{ color: "#991b1b" }}>canceled</b>{" "}
-                    </>
-                  )}
+                      {isBuy && (
+                        <>
+                          {" "}
+                          bought <b>{item.value} tix</b> in{" "}
+                        </>
+                      )}
+                      {isCreate && <> created </>}
+                      {isWin && (
+                        <>
+                          {" "}
+                          <b style={{ color: "#166534" }}>won</b> the pot on{" "}
+                        </>
+                      )}
 
-                  <a href={`/?raffle=${item.raffleId}`} className="ab-link">
-                    {item.raffleName}
-                  </a>
+                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
+                        {item.raffleName}
+                      </a>
+                    </>
+                  )}
                 </div>
 
                 <div className="ab-meta">
