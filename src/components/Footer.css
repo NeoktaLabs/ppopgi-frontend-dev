@@ -47,6 +47,33 @@
   line-height: 1.5;
 }
 
+/* Etherlink attribution */
+.footer-powered {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.footer-etherlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: #334155;
+}
+
+.footer-etherlink-logo {
+  height: 16px;
+  width: auto;
+}
+
+.footer-etherlink:hover {
+  text-decoration: underline;
+}
+
 .footer-copy {
   font-size: 11px;
   color: #94a3b8;
