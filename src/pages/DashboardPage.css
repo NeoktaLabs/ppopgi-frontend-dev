@@ -87,6 +87,18 @@
 .db-pill.pulse { animation: db-pulse 2s infinite; }
 @keyframes db-pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
+/* ✅ New: Empty State for Claims */
+.db-empty-claims {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 14px;
+}
+
 /* Claim Card Wrapper */
 .db-claim-wrapper {
   background: #fff0f5; 
@@ -144,7 +156,7 @@
 .db-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 
-/* --- NEW TABS (Floating Segmented Control) --- */
+/* --- TABS --- */
 .db-tabs-container {
   display: flex;
   justify-content: flex-start;
@@ -187,11 +199,6 @@
   box-shadow: 0 4px 10px rgba(30, 41, 59, 0.2);
 }
 
-.db-refresh-btn {
-  /* Hidden in UI, keeping style just in case needed later, otherwise redundant */
-  display: none; 
-}
-
 
 /* --- GRID --- */
 .db-grid-area { min-height: 200px; }
@@ -208,12 +215,11 @@
 .db-history-card-wrapper {
   display: flex; 
   flex-direction: column; 
-  align-items: center; /* Center horizontally */
+  align-items: center; 
   width: 100%; 
   position: relative;
 }
 
-/* ✅ FIXED BADGE: Centered & Constrained Width */
 .db-history-badge {
   text-align: center;
   font-size: 11px;
@@ -221,12 +227,8 @@
   text-transform: uppercase;
   padding: 8px 16px;
   border-radius: 12px;
-  
-  /* Pull up over the card slightly */
   margin-top: -12px; 
   z-index: 5;
-  
-  /* Prevent overflow */
   width: auto;
   max-width: 90%;
   box-sizing: border-box;
@@ -236,26 +238,41 @@
 }
 
 .db-history-badge.refunded {
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
+  background: #f8fafc; color: #64748b; border: 1px solid #cbd5e1;
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
 
 .db-history-badge.won {
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #86efac;
+  background: #dcfce7; color: #15803d; border: 1px solid #86efac;
   box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1);
 }
 
 /* Mobile adjustments */
 @media (max-width: 600px) {
-  .db-hero { flex-direction: column; text-align: center; gap: 32px; }
-  .db-hero-content { flex-direction: column; }
-  .db-hero-addr { font-size: 14px; }
+  .db-hero { 
+    flex-direction: column; 
+    text-align: center; 
+    gap: 32px; 
+  }
   
-  /* Make tabs scrollable on mobile */
+  .db-hero-content { 
+    flex-direction: column; 
+    /* ✅ FIX: Force center alignment */
+    align-items: center; 
+  }
+  
+  .db-hero-addr { 
+    font-size: 14px; 
+    /* ✅ FIX: Force center alignment for text inside the address */
+    justify-content: center; 
+  }
+  
+  .db-hero-stats {
+    /* ✅ FIX: Center the stats row on mobile */
+    justify-content: center;
+    width: 100%;
+  }
+  
   .db-tabs-container {
     overflow-x: auto;
     padding-bottom: 5px;
