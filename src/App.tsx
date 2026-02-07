@@ -10,6 +10,7 @@ import { MainLayout } from "./layouts/MainLayout";
 import { HomePage } from "./pages/HomePage";
 import { ExplorePage } from "./pages/ExplorePage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { AboutPage } from "./pages/AboutPage"; // ✅ IMPORTED
 
 // --- Components (Modals) ---
 import { SignInModal } from "./components/SignInModal";
@@ -17,7 +18,7 @@ import { CreateRaffleModal } from "./components/CreateRaffleModal";
 import { RaffleDetailsModal } from "./components/RaffleDetailsModal";
 import { CashierModal } from "./components/CashierModal";
 import { SafetyProofModal } from "./components/SafetyProofModal";
-import { DisclaimerGate } from "./components/DisclaimerGate"; // ✅ IMPORTED
+import { DisclaimerGate } from "./components/DisclaimerGate";
 
 // --- Hooks ---
 import { useSession } from "./state/useSession";
@@ -36,7 +37,8 @@ export default function App() {
   const activeWallet = useActiveWallet();
 
   // 3. Routing & Navigation
-  const [page, setPage] = useState<"home" | "explore" | "dashboard">("home");
+  // ✅ UPDATED TYPE to include "about"
+  const [page, setPage] = useState<"home" | "explore" | "dashboard" | "about">("home");
   const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting();
 
   // 4. Modal States
@@ -44,7 +46,7 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
   
-  // ✅ GATE STATE
+  // GATE STATE
   const [showGate, setShowGate] = useState(false);
   
   // Safety Modal Logic
@@ -54,7 +56,7 @@ export default function App() {
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  // ✅ CHECK DISCLAIMER STATUS ON LOAD
+  // CHECK DISCLAIMER STATUS ON LOAD
   useEffect(() => {
     const hasAccepted = localStorage.getItem("ppopgi_terms_accepted");
     if (!hasAccepted) {
@@ -81,12 +83,11 @@ export default function App() {
     setSafetyId(id); 
   };
 
-  // Data for Safety Modal (Fetches only when ID is set)
+  // Data for Safety Modal
   const { data: safetyData } = useRaffleDetails(safetyId, !!safetyId);
 
   return (
     <>
-      {/* ✅ DISCLAIMER GATE (Highest Priority) */}
       <DisclaimerGate open={showGate} onAccept={handleAcceptGate} />
 
       <MainLayout
@@ -122,6 +123,11 @@ export default function App() {
           />
         )}
 
+        {/* ✅ NEW PAGE RENDER */}
+        {page === "about" && (
+          <AboutPage />
+        )}
+
         {/* --- Global Modals --- */}
         <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
         
@@ -133,7 +139,6 @@ export default function App() {
         
         <CashierModal open={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-        {/* Detail Modals */}
         <RaffleDetailsModal 
           open={!!selectedRaffleId} 
           raffleId={selectedRaffleId} 
