@@ -32,7 +32,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const [createdAddr, setCreatedAddr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // ✅ FIX: Intercept success, show view, DO NOT close yet.
+  // ✅ Intercept success, show view, DO NOT close yet.
   const handleSuccess = (addr?: string) => {
     fireConfetti();
     if (addr) {
@@ -41,15 +41,13 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     }
   };
 
-  // ✅ FIX: Handle the final "Close" action
+  // ✅ Handle the final "Close" action
   const handleFinalClose = () => {
     if (onCreated && createdAddr) onCreated(createdAddr);
     onClose();
 
     if (window.location.pathname !== "/") {
       window.location.href = "/";
-    } else {
-      // optional: window.location.reload();
     }
   };
 
@@ -99,7 +97,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   }, [open]);
 
   // ---------------------------------------------
-  // ✅ NEW: Balance vs Winning Pot validation
+  // ✅ Balance vs Winning Pot validation
   // IMPORTANT: Must be BEFORE any early return
   // ---------------------------------------------
   const winningPotU6 = useMemo(() => toBigInt6(form.winningPot), [form.winningPot]);
@@ -108,14 +106,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const hasBalanceInfo = usdcBalU6 !== null;
   const insufficientPrizeFunds = hasBalanceInfo ? winningPotU6 > usdcBalU6! : false;
 
-  const shortageU6 = hasBalanceInfo && insufficientPrizeFunds ? winningPotU6 - usdcBalU6! : 0n;
-
-  const shortageText =
-    shortageU6 > 0n
-      ? Number(formatUnits(shortageU6, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 })
-      : "0";
-
-  // ✅ Gate create
+  // ✅ Gate create (just disables / grays out)
   const canCreate = validation.canSubmit && !status.isPending && !insufficientPrizeFunds;
 
   if (!open) return null;
@@ -127,7 +118,9 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
+            <span>
+              {step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}
+            </span>
           </div>
           <button className="crm-close-btn" onClick={handleFinalClose}>
             ✕
@@ -218,7 +211,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 </div>
               </div>
 
-              {/* ✅ NEW: Warn if prize > balance */}
+              {/* ✅ Warn if prize > balance */}
               {hasBalanceInfo && insufficientPrizeFunds && (
                 <div
                   className="crm-status-msg"
@@ -230,7 +223,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     fontWeight: 800,
                   }}
                 >
-                  Not enough USDC to fund this prize. You’re short by ~{shortageText} USDC.
+                  Your wallet balance isn’t enough to fund this prize.
                 </div>
               )}
 
@@ -246,7 +239,11 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 </div>
                 <div className="crm-input-group">
                   <label>Unit</label>
-                  <select className="crm-select" value={form.durationUnit} onChange={(e) => form.setDurationUnit(e.target.value as any)}>
+                  <select
+                    className="crm-select"
+                    value={form.durationUnit}
+                    onChange={(e) => form.setDurationUnit(e.target.value as any)}
+                  >
                     <option value="minutes">Minutes</option>
                     <option value="hours">Hours</option>
                     <option value="days">Days</option>
@@ -306,9 +303,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     title={insufficientPrizeFunds ? "Insufficient USDC balance for prize pot" : undefined}
                   >
                     <span className="crm-step-icon">{status.isPending ? "⏳" : "2"}</span>
-                    <span>
-                      {status.isPending ? "Creating..." : insufficientPrizeFunds ? "Add USDC to Continue" : "Create Raffle"}
-                    </span>
+                    <span>{status.isPending ? "Creating..." : "Create Raffle"}</span>
                   </button>
                 </div>
 
