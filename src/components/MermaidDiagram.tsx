@@ -1,40 +1,73 @@
-import { useEffect, useRef } from "react";
+// src/components/MermaidDiagram.tsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import mermaid from "mermaid";
 
 type Props = {
   code: string;
-  id?: string;
+  className?: string;
 };
 
-export function MermaidDiagram({ code, id = "mermaid-diagram" }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+export function MermaidDiagram({ code, className }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // unique id per render (mermaid needs unique render ids)
+  const renderId = useMemo(() => `mmd-${Math.random().toString(16).slice(2)}`, [code]);
 
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-      securityLevel: "strict",
-      flowchart: {
-        curve: "basis",
-      },
-    });
+    let cancelled = false;
 
-    if (ref.current) {
-      ref.current.innerHTML = "";
-      mermaid.render(id, code).then(({ svg }) => {
-        if (ref.current) {
-          ref.current.innerHTML = svg;
+    async function run() {
+      try {
+        setError(null);
+
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "default",
+          flowchart: { curve: "basis" },
+        });
+
+        // mermaid.render returns { svg, bindFunctions }
+        const { svg } = await mermaid.render(renderId, code);
+
+        if (cancelled) return;
+
+        if (containerRef.current) {
+          containerRef.current.innerHTML = svg;
+
+          // Make it responsive + horizontally scrollable
+          const svgEl = containerRef.current.querySelector("svg");
+          if (svgEl) {
+            svgEl.setAttribute("width", "100%");
+            svgEl.style.height = "auto";
+            svgEl.style.maxWidth = "1100px";
+          }
         }
-      });
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.message || "Mermaid failed to render.");
+      }
     }
-  }, [code, id]);
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code, renderId]);
 
   return (
-    <div
-      ref={ref}
-      className="mermaid-wrapper"
-      aria-label="Raffle lifecycle diagram"
-      role="img"
-    />
+    <div className={className} style={{ overflowX: "auto" }}>
+      {error ? (
+        <div style={{ padding: 12, color: "#b91c1c", fontWeight: 700 }}>
+          Mermaid render error: {error}
+        </div>
+      ) : (
+        <div ref={containerRef} />
+      )}
+    </div>
   );
 }
+
+export default MermaidDiagram;
