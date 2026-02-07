@@ -12,7 +12,7 @@
   padding-bottom: 30px;
 }
 
-/* ✅ UPDATED: White text with shadow for visibility */
+/* ✅ White text with shadow for visibility on dark background */
 .faq-h1 {
   margin: 0;
   font-size: 42px;
@@ -22,7 +22,7 @@
   text-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
-/* ✅ UPDATED: Light text for subtitle */
+/* ✅ Light text for subtitle */
 .faq-sub {
   margin: 12px auto 0;
   max-width: 600px;
@@ -33,14 +33,14 @@
   text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-/* ✅ UPDATED: Section titles (H2) */
+/* ✅ Section titles (H2) */
 .faq-h2 {
   margin: 40px 0 16px;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.85); /* Off-white for section headers */
+  color: rgba(255, 255, 255, 0.85);
   padding-left: 4px;
   text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
@@ -61,7 +61,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #64748b; /* Stays dark because it's inside the white card */
+  color: #64748b;
   margin-bottom: 16px;
   text-align: center;
 }
@@ -98,7 +98,7 @@
 .faq-item {
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: white; /* Cards stay white */
+  background: white;
   overflow: hidden;
   transition: all 0.2s ease;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
@@ -131,7 +131,7 @@
 .faq-q-text {
   font-size: 16px;
   font-weight: 700;
-  color: #1e293b; /* Dark text inside card */
+  color: #1e293b;
 }
 
 .faq-item.open .faq-q-text {
@@ -205,18 +205,17 @@
   color: #0f172a;
 }
 
-/* --- MERMAID WRAPPER (If used) --- */
+/* --- MERMAID WRAPPER --- */
 .faq-mermaid {
   margin: 20px auto 40px;
   padding: 24px;
   background: white;
   border-radius: 20px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 10px 40px -5px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 40px -5px rgba(0,0,0,0.2);
   overflow-x: auto;
 }
 
-/* ✅ UPDATED: Footer note visibility */
 .faq-footer-note {
   margin-top: 40px;
   text-align: center;
