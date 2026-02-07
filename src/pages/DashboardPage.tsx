@@ -35,6 +35,8 @@ function shortAddr(a?: string | null, head = 6, tail = 4) {
   return `${s.slice(0, head)}…${s.slice(-tail)}`;
 }
 
+const ACTIVE_STATUSES = ["OPEN", "FUNDING_PENDING", "DRAWING"] as const;
+
 export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Dashboard";
@@ -45,7 +47,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   // ✅ Source of truth: hook account (fallback to prop)
   const account = hookAccount ?? accountProp;
 
-  const [tab, setTab] = useState<"active" | "history" | "created">("active");
+  // ✅ renamed "history" -> "joined" for clarity
+  const [tab, setTab] = useState<"active" | "joined" | "created">("active");
   const [copied, setCopied] = useState(false);
 
   // Clock
@@ -63,7 +66,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   };
 
   // --- JOINED RAFFLES PROCESSING ---
-  const { active: activeEntries, past: pastEntries } = useMemo(() => {
+  const { active: activeJoined, past: pastJoined } = useMemo(() => {
     const active: any[] = [];
     const past: any[] = [];
 
@@ -76,17 +79,41 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
       const enriched = { ...r, userEntry: { count: tickets, percentage } };
 
-      if (["OPEN", "FUNDING_PENDING", "DRAWING"].includes(r.status)) {
-        active.push(enriched);
-      } else {
-        past.push(enriched);
-      }
+      if (ACTIVE_STATUSES.includes(r.status)) active.push(enriched);
+      else past.push(enriched);
     });
 
     return { active, past };
   }, [data.joined]);
 
-  // ✅ count created raffles for stats + tab label
+  // --- CREATED RAFFLES (split active/past) ---
+  const { active: activeCreated, past: pastCreated } = useMemo(() => {
+    const active: any[] = [];
+    const past: any[] = [];
+
+    const arr = data.created ?? [];
+    arr.forEach((r: any) => {
+      if (ACTIVE_STATUSES.includes(r.status)) active.push(r);
+      else past.push(r);
+    });
+
+    return { active, past };
+  }, [data.created]);
+
+  // ✅ On-going should include BOTH joined-active and created-active (dedup by id)
+  const ongoingRaffles = useMemo(() => {
+    const byId = new Map<string, any>();
+
+    // keep joined version first so it preserves userEntry on cards where applicable
+    for (const r of activeJoined) byId.set(String(r.id), r);
+    for (const r of activeCreated) {
+      const id = String(r.id);
+      if (!byId.has(id)) byId.set(id, r);
+    }
+
+    return Array.from(byId.values());
+  }, [activeJoined, activeCreated]);
+
   const createdCount = data.created?.length ?? 0;
 
   const msgIsSuccess = useMemo(() => {
@@ -107,7 +134,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const hasClaims = data.claimables.length > 0;
 
   // ✅ silent refresh UX: only show skeletons on true cold load
-  const showColdSkeletons = data.isColdLoading && activeEntries.length === 0 && pastEntries.length === 0;
+  const showColdSkeletons = data.isColdLoading && ongoingRaffles.length === 0;
 
   return (
     <div className="db-container">
@@ -128,16 +155,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         <div className="db-hero-stats">
           <div className="db-stat">
-            <div className="db-stat-num">{activeEntries.length}</div>
+            <div className="db-stat-num">{ongoingRaffles.length}</div>
             <div className="db-stat-lbl">On-going</div>
           </div>
 
           <div className="db-stat">
-            <div className="db-stat-num">{pastEntries.length}</div>
-            <div className="db-stat-lbl">Past</div>
+            <div className="db-stat-num">{pastJoined.length}</div>
+            <div className="db-stat-lbl">Joined</div>
           </div>
 
-          {/* ✅ NEW: Created stat */}
           <div className="db-stat">
             <div className="db-stat-num">{createdCount}</div>
             <div className="db-stat-lbl">Created</div>
@@ -187,7 +213,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative, ticketCount });
 
-              // ✅ YOUR EXACT COPY RULES (with sane fallbacks)
               let badgeTitle = "Claim Available";
               let message = "Funds available to claim.";
               let primaryLabel = "Claim";
@@ -210,7 +235,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 primaryLabel = hasUsdc ? "Claim USDC" : hasNative ? "Claim Native" : "Claim";
               }
 
-              // For non-refund claimables, allow dual buttons if both are >0
               const showDual = !isRefund && hasUsdc && hasNative;
 
               return (
@@ -293,11 +317,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             On-going
           </button>
 
-          <button className={`db-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>
-            Past
+          {/* ✅ renamed Past -> Joined */}
+          <button className={`db-tab ${tab === "joined" ? "active" : ""}`} onClick={() => setTab("joined")}>
+            Joined
           </button>
 
-          {/* ✅ Updated label with count */}
           <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
             Created <span style={{ opacity: 0.7 }}>({createdCount})</span>
           </button>
@@ -316,29 +340,29 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               </>
             )}
 
-            {/* ✅ empty state only when not cold loading */}
-            {!data.isColdLoading && activeEntries.length === 0 && <div className="db-empty">You have no on-going raffles.</div>}
+            {!data.isColdLoading && ongoingRaffles.length === 0 && (
+              <div className="db-empty">You have no on-going raffles (joined or created).</div>
+            )}
 
-            {/* ✅ show cards even if background refresh is happening */}
-            {activeEntries.map((r: any) => (
+            {ongoingRaffles.map((r: any) => (
               <RaffleCard
                 key={r.id}
                 raffle={r}
                 onOpen={onOpenRaffle}
                 onOpenSafety={onOpenSafety}
                 nowMs={nowS * 1000}
+                // only joined raffles have userEntry
                 userEntry={r.userEntry}
               />
             ))}
           </div>
         )}
 
-        {tab === "history" && (
+        {tab === "joined" && (
           <div className="db-grid">
-            {/* ✅ empty state only when not cold loading */}
-            {!data.isColdLoading && pastEntries.length === 0 && <div className="db-empty">No past participation found.</div>}
+            {!data.isColdLoading && pastJoined.length === 0 && <div className="db-empty">No joined raffles history found.</div>}
 
-            {pastEntries.map((r: any) => {
+            {pastJoined.map((r: any) => {
               const acct = norm(account);
               const winner = norm(r.winner);
 
@@ -355,7 +379,13 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className="db-history-card-wrapper">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry} />
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowS * 1000}
+                    userEntry={r.userEntry}
+                  />
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
                   {iLost && <div className="db-history-badge lost">Lost - Better luck next time!</div>}
@@ -367,7 +397,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "created" && (
           <div className="db-grid">
-            {/* ✅ empty state only when not cold loading */}
             {!data.isColdLoading && data.created.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
 
             {data.created.map((r: any) => (
