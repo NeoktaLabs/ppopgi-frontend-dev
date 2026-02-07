@@ -3,7 +3,6 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import "./FaqPage.css";
 
-// ✅ Mermaid renderer component
 import { MermaidDiagram } from "../components/MermaidDiagram";
 
 type FaqItem = {
@@ -102,9 +101,7 @@ const FAQ_ITEMS: FaqItem[] = [
             When a raffle is ready to settle (deadline reached or sold out), the raffle contract{" "}
             <b>requests a random value</b> from Pyth Entropy.
           </li>
-          <li>
-            Pyth Entropy later returns a <b>random value back to the raffle contract</b> on-chain.
-          </li>
+          <li>Pyth Entropy later returns a <b>random value back to the raffle contract</b> on-chain.</li>
           <li>
             The contract uses that value to select a winner in a fully deterministic way — think{" "}
             <b>“random number mapped into the range of sold tickets”</b>.
@@ -324,128 +321,6 @@ function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="faq-h2">{children}</h2>;
 }
 
-function Diagram() {
-  return (
-    <div className="faq-diagram-wrapper">
-      <div className="faq-diagram-title">How Ppopgi Works (Quick Overview)</div>
-
-      {/* Scroll container for mobile */}
-      <div className="faq-diagram-scroll">
-        <svg viewBox="0 0 860 240" className="faq-svg" role="img" aria-label="Ppopgi raffle overview diagram">
-          <defs>
-            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-              <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.1" />
-            </filter>
-            <linearGradient id="boxGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ffffff" />
-              <stop offset="100%" stopColor="#f8fafc" />
-            </linearGradient>
-          </defs>
-
-          {/* Connectors */}
-          <g stroke="#cbd5e1" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 4">
-            <path d="M270 75 L305 75" />
-            <path d="M555 75 L590 75" />
-            <path d="M270 178 L305 178" />
-            <path d="M555 178 L590 178" />
-          </g>
-
-          {/* Vertical Connectors (Solid) */}
-          <g stroke="#94a3b8" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M145 114 L145 140" />
-            <path d="M430 114 L430 140" />
-            <path d="M715 114 L715 140" />
-          </g>
-
-          {/* Boxes */}
-          <g filter="url(#shadow)">
-            {/* Top Row */}
-            <rect x="20" y="36" width="250" height="78" rx="12" fill="url(#boxGrad)" stroke="#e2e8f0" />
-            <rect x="305" y="36" width="250" height="78" rx="12" fill="url(#boxGrad)" stroke="#e2e8f0" />
-            <rect x="590" y="36" width="250" height="78" rx="12" fill="url(#boxGrad)" stroke="#e2e8f0" />
-
-            {/* Bottom Row */}
-            <rect x="20" y="140" width="250" height="78" rx="12" fill="#ffffff" stroke="#e2e8f0" />
-            <rect x="305" y="140" width="250" height="78" rx="12" fill="#ffffff" stroke="#e2e8f0" />
-            <rect x="590" y="140" width="250" height="78" rx="12" fill="#ffffff" stroke="#e2e8f0" />
-          </g>
-
-          {/* Labels */}
-          <g fontFamily="ui-sans-serif, system-ui, sans-serif" fill="#1e293b">
-            {/* 1. Fund */}
-            <text x="45" y="70" fontSize="15" fontWeight="700">
-              Creator Funds Pot
-            </text>
-            <text x="45" y="90" fontSize="12" fill="#64748b">
-              Deposits USDC to the raffle
-            </text>
-
-            {/* 2. Buy */}
-            <text x="330" y="70" fontSize="15" fontWeight="700">
-              Ticket Sales Open
-            </text>
-            <text x="330" y="90" fontSize="12" fill="#64748b">
-              Players buy tickets
-            </text>
-
-            {/* 3. Draw */}
-            <text x="615" y="70" fontSize="15" fontWeight="700">
-              Verifiable Draw
-            </text>
-            <text x="615" y="90" fontSize="12" fill="#64748b">
-              Randomness via Pyth Entropy
-            </text>
-
-            {/* 4. Winner */}
-            <text x="45" y="174" fontSize="15" fontWeight="700">
-              Winner Selected
-            </text>
-            <text x="45" y="194" fontSize="12" fill="#64748b">
-              Outcome stored on-chain
-            </text>
-
-            {/* 5. Claims */}
-            <text x="330" y="174" fontSize="15" fontWeight="700">
-              Claim Portal
-            </text>
-            <text x="330" y="194" fontSize="12" fill="#64748b">
-              Users claim funds themselves
-            </text>
-
-            {/* 6. Fees */}
-            <text x="615" y="174" fontSize="15" fontWeight="700">
-              Transparent Fees
-            </text>
-            <text x="615" y="194" fontSize="12" fill="#64748b">
-              10% Pot + 10% Ticket Sales
-            </text>
-          </g>
-
-          {/* Numbers for flow */}
-          <g>
-            <circle cx="20" cy="36" r="12" fill="#db2777" />
-            <text x="20" y="41" fontSize="12" fontWeight="bold" fill="white" textAnchor="middle">
-              1
-            </text>
-
-            <circle cx="305" cy="36" r="12" fill="#db2777" />
-            <text x="305" y="41" fontSize="12" fontWeight="bold" fill="white" textAnchor="middle">
-              2
-            </text>
-
-            <circle cx="590" cy="36" r="12" fill="#db2777" />
-            <text x="590" y="41" fontSize="12" fontWeight="bold" fill="white" textAnchor="middle">
-              3
-            </text>
-          </g>
-        </svg>
-      </div>
-
-      <div className="faq-diagram-note">Scroll to view the full overview</div>
-    </div>
-  );
-}
-
 export function FaqPage() {
   const [openId, setOpenId] = useState<string | null>("what-is");
   const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
@@ -457,15 +332,12 @@ export function FaqPage() {
         <p className="faq-sub">Everything you need to know about trust, fees, and how Ppopgi works.</p>
       </div>
 
-      {/* ✅ Mermaid lifecycle diagram (full state flow) */}
+      {/* ✅ Mermaid lifecycle diagram */}
       <div className="faq-mermaid">
         <div className="faq-diagram-title">Raffle Lifecycle (All States)</div>
         <MermaidDiagram code={RAFFLE_FLOW} />
         <div className="faq-diagram-note">Scroll to view the full lifecycle</div>
       </div>
-
-      {/* Quick overview diagram (SVG) */}
-      <Diagram />
 
       <SectionTitle>Common Questions</SectionTitle>
 
