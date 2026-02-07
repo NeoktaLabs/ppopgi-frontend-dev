@@ -25,19 +25,18 @@ function toBigInt6(v: string): bigint {
 }
 
 export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
+  // ✅ Hooks must be called unconditionally (even when open=false)
   const { fireConfetti } = useConfetti();
   const account = useActiveAccount();
   const isConnected = !!account?.address;
 
-  // State for Success View
   const [step, setStep] = useState<"form" | "success">("form");
   const [createdAddr, setCreatedAddr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Track submit attempt → enables red highlights
+  // enables red highlights
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  // Advanced options toggle
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const handleSuccess = (addr?: string) => {
@@ -76,9 +75,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const hasBalanceInfo = usdcBalU6 !== null;
   const insufficientPrizeFunds = hasBalanceInfo ? winningPotU6 > usdcBalU6! : false;
 
-  // Only allow create if connected
-  const canCreate = isConnected && validation.canSubmit && !status.isPending && !insufficientPrizeFunds;
-
   // ---------------------------------------------
   // Required field validation (UI only)
   // ---------------------------------------------
@@ -89,17 +85,19 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
   const showInvalid = submitAttempted;
 
-  const fieldClass = (invalid: boolean) => `crm-input ${showInvalid && invalid ? "crm-input-invalid" : ""}`;
+  const fieldClass = (invalid: boolean) =>
+    `crm-input ${showInvalid && invalid ? "crm-input-invalid" : ""}`;
 
-  // ---------------------------------------------
-  // Button visual disable
-  // ---------------------------------------------
+  // ✅ Only allow create if connected + valid + enough balance
+  const canCreate = isConnected && validation.canSubmit && !status.isPending && !insufficientPrizeFunds;
+
+  // ✅ button visuals when disabled
   const createDisabled = !canCreate;
   const createBtnStyle: React.CSSProperties = createDisabled
     ? { opacity: 0.45, cursor: "not-allowed", filter: "grayscale(0.35)" }
     : {};
 
-  // Generate Share Links
+  // Share links (success view)
   const shareLink = createdAddr ? `${window.location.origin}/?raffle=${createdAddr}` : "";
   const tweetText = `I just created a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(
@@ -117,7 +115,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     }
   };
 
-  // Preview (HOOK) — must be above any early return
   const previewRaffle = useMemo(
     () => ({
       id: "preview",
@@ -138,7 +135,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     [form.name, derived, validation.durationSecondsN]
   );
 
-  // ✅ IMPORTANT: early return AFTER all hooks
+  // ✅ AFTER all hooks
   if (!open) return null;
 
   return (
@@ -149,7 +146,9 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
             <span>
-              {step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}
+              {step === "success"
+                ? "Your raffle is now on the blockchain."
+                : "Create your provably fair raffle."}
             </span>
           </div>
           <button className="crm-close-btn" onClick={handleFinalClose}>
@@ -157,12 +156,14 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           </button>
         </div>
 
-        {/* --- VIEW 1: SUCCESS (SHARE) --- */}
+        {/* SUCCESS */}
         {step === "success" ? (
           <div className="crm-success-view">
             <div className="crm-success-icon">✓</div>
             <div className="crm-success-title">Raffle Created!</div>
-            <div className="crm-success-sub">Your contract is live. Share the link below to start selling tickets.</div>
+            <div className="crm-success-sub">
+              Your contract is live. Share the link below to start selling tickets.
+            </div>
 
             <div className="crm-share-box">
               <label className="crm-label" style={{ textAlign: "left" }}>
@@ -200,13 +201,15 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
             </button>
           </div>
         ) : (
-          /* --- VIEW 2: FORM --- */
+          /* FORM */
           <div className="crm-body">
             {/* LEFT */}
             <div className="crm-form-col">
               <div className="crm-bal-row">
                 <span className="crm-bal-label">My Balance</span>
-                <span className="crm-bal-val">{status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC</span>
+                <span className="crm-bal-val">
+                  {status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC
+                </span>
               </div>
 
               <div className="crm-input-group">
@@ -248,7 +251,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 </div>
               </div>
 
-              {/* Warn if prize > balance */}
+              {/* ✅ Not enough balance + spacing */}
               {hasBalanceInfo && insufficientPrizeFunds && (
                 <div
                   className="crm-status-msg"
@@ -275,6 +278,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     onChange={(e) => form.setDurationValue(helpers.sanitizeInt(e.target.value))}
                   />
                 </div>
+
                 <div className="crm-input-group">
                   <label>Unit</label>
                   <select
@@ -344,7 +348,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     }}
                     disabled={createDisabled}
                     style={createBtnStyle}
-                    title={insufficientPrizeFunds ? "Insufficient USDC balance for prize pot" : undefined}
                   >
                     <span className="crm-step-icon">{status.isPending ? "⏳" : "2"}</span>
                     <span>{status.isPending ? "Creating..." : "Create Raffle"}</span>
