@@ -1,3 +1,4 @@
+// src/components/RaffleDetailsModal.tsx
 import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
@@ -289,7 +290,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const meAddr = String(account?.address || "").toLowerCase();
   const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
 
-  // ✅ enforce "1" as UI default (your hook already sets to minBuy; we override UI to 1)
+  // ✅ enforce "1" as UI default
   useEffect(() => {
     if (!open || !raffleId) return;
     if (clampTicketsUi(state.tickets) !== 1) actions.setTickets("1");
@@ -299,6 +300,26 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   if (!open) return null;
 
   const createdOnTs = timeline?.[0]?.date ?? null;
+
+  // ✅ Remaining tickets message (only if maxTickets exists)
+  const remaining = math.remainingTickets; // null or number
+  const showRemaining = typeof remaining === "number" && remaining >= 0;
+  const remainingText =
+    showRemaining ? `Only ${remaining} ticket${remaining === 1 ? "" : "s"} remaining` : null;
+
+  // ✅ Cap for UI (+ button / typed)
+  const capMax = Math.max(1, math.maxBuy);
+  const uiVal = clampTicketsUi(state.tickets);
+  const uiValCapped = Math.min(uiVal, capMax);
+
+  // If user typed over the cap, clamp back down (quietly)
+  useEffect(() => {
+    if (!flags.raffleIsOpen) return;
+    if (String(uiValCapped) !== String(state.tickets)) {
+      actions.setTickets(String(uiValCapped));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capMax, flags.raffleIsOpen]);
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -428,7 +449,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         <div className="rdm-buy-section">
           {!flags.raffleIsOpen ? (
             <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
-              {state.displayStatus === "Open" ? "Raffle is finalizing..." : "Raffle Closed"}
+              {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
             </div>
           ) : isCreator ? (
             <div className="rdm-buy-disabled">
@@ -441,11 +462,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                 <span>Max: {math.maxBuy} Tickets</span>
               </div>
 
+              {remainingText && (
+                <div style={{ textAlign: "center", fontSize: 11, fontWeight: 800, color: "#9a3412", marginBottom: 10 }}>
+                  {remainingText}
+                </div>
+              )}
+
               <div className="rdm-stepper">
                 <button
                   className="rdm-step-btn"
-                  onClick={() => actions.setTickets(String(Math.max(1, clampTicketsUi(math.ticketCount - 1))))}
-                  disabled={clampTicketsUi(math.ticketCount) <= 1}
+                  onClick={() => actions.setTickets(String(Math.max(1, uiValCapped - 1)))}
+                  disabled={uiValCapped <= 1}
                 >
                   −
                 </button>
@@ -454,25 +481,32 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   <input
                     className="rdm-amount"
                     inputMode="numeric"
-                    value={state.tickets}
-                    onChange={(e) => actions.setTickets(String(clampTicketsUi(e.target.value)))}
+                    value={String(uiValCapped)}
+                    onChange={(e) => {
+                      const v = clampTicketsUi(e.target.value);
+                      actions.setTickets(String(Math.min(v, capMax)));
+                    }}
                     placeholder="1"
                   />
                   <div className="rdm-cost-preview">Total: {math.fmtUsdc(math.totalCostU.toString())} USDC</div>
                 </div>
 
-                <button className="rdm-step-btn" onClick={() => actions.setTickets(String(clampTicketsUi(math.ticketCount + 1)))}>
+                <button
+                  className="rdm-step-btn"
+                  onClick={() => actions.setTickets(String(Math.min(capMax, uiValCapped + 1)))}
+                  disabled={uiValCapped >= capMax}
+                >
                   +
                 </button>
               </div>
 
               {!flags.hasEnoughAllowance ? (
                 <button className="rdm-cta approve" onClick={actions.approve} disabled={state.isPending}>
-                  {state.isPending ? "Approving..." : "1. Approve USDC"}
+                  {state.isPending ? "Preparing..." : "1. Prepare Wallet"}
                 </button>
               ) : (
                 <button className="rdm-cta buy" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
-                  {state.isPending ? "Confirming..." : `Buy ${clampTicketsUi(state.tickets)} Ticket${clampTicketsUi(state.tickets) !== 1 ? "s" : ""}`}
+                  {state.isPending ? "Confirming..." : `Buy ${uiValCapped} Ticket${uiValCapped !== 1 ? "s" : ""}`}
                 </button>
               )}
 
