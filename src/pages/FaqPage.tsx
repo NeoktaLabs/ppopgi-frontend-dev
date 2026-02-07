@@ -16,26 +16,33 @@ type FaqItem = {
 const RAFFLE_FLOW = `
 flowchart TD
 
-  A[Creator creates raffle]
-  B[Prize pot funded in USDC]
+  classDef start fill:#fff7ed,stroke:#fb923c,stroke-width:2,color:#9a3412;
+  classDef decision fill:#f8fafc,stroke:#94a3b8,color:#1e293b;
+  classDef success fill:#ecfeff,stroke:#06b6d4,color:#0f172a;
+  classDef danger fill:#fef2f2,stroke:#ef4444,color:#7f1d1d;
+
+  A[Creator creates raffle]:::start
+  B[Prize pot funded in USDC]:::start
   C[Raffle is Open]
-  D{Max tickets reached?}
-  E{Deadline passed?}
-  F{Minimum tickets reached?}
-  G[Cancel raffle]
+
+  D{Max tickets reached?}:::decision
+  E{Deadline passed?}:::decision
+  F{Minimum tickets reached?}:::decision
+
+  G[Cancel raffle]:::danger
   H[Drawing phase]
   I[Pyth Entropy randomness]
-  J[Winner selected]
+  J[Winner selected]:::success
+
   K[Winner claims prize]
   L[Creator claims ticket revenue]
   M[Players refund tickets]
   N[Creator reclaims prize pot]
+
   O[Any user can call finalize]
-  P[Finalizer bot runs every ~5 minutes]
+  P[Finalizer bot<br/>runs every ~5 minutes]
 
-  A --> B
-  B --> C
-
+  A --> B --> C
   C --> D
   D -->|Yes| F
   D -->|No| E
@@ -48,8 +55,7 @@ flowchart TD
   G --> M
   G --> N
 
-  H --> I
-  I --> J
+  H --> I --> J
   J --> K
   J --> L
 
