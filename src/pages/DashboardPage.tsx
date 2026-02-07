@@ -86,18 +86,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return { active, past };
   }, [data.joined]);
 
-  // --- CREATED RAFFLES (split active/past) ---
-  const { active: activeCreated, past: pastCreated } = useMemo(() => {
+  // --- CREATED RAFFLES (active only; past not needed right now) ---
+  const activeCreated = useMemo(() => {
     const active: any[] = [];
-    const past: any[] = [];
-
     const arr = data.created ?? [];
     arr.forEach((r: any) => {
       if (ACTIVE_STATUSES.includes(r.status)) active.push(r);
-      else past.push(r);
     });
-
-    return { active, past };
+    return active;
   }, [data.created]);
 
   // ✅ On-going should include BOTH joined-active and created-active (dedup by id)
@@ -332,7 +328,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       <div className="db-grid-area">
         {tab === "active" && (
           <div className="db-grid">
-            {/* ✅ skeleton only on cold load */}
             {showColdSkeletons && (
               <>
                 <RaffleCardSkeleton />
@@ -351,7 +346,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 onOpen={onOpenRaffle}
                 onOpenSafety={onOpenSafety}
                 nowMs={nowS * 1000}
-                // only joined raffles have userEntry
                 userEntry={r.userEntry}
               />
             ))}
@@ -379,13 +373,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className="db-history-card-wrapper">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowS * 1000}
-                    userEntry={r.userEntry}
-                  />
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry} />
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
                   {iLost && <div className="db-history-badge lost">Lost - Better luck next time!</div>}
