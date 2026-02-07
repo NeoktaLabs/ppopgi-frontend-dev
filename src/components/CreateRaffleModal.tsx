@@ -15,7 +15,6 @@ type Props = {
 
 function toBigInt6(v: string): bigint {
   // expects integer USDC input (your sanitizeInt enforces this)
-  // still guard: strip non-digits
   const clean = String(v || "").replace(/[^\d]/g, "");
   if (!clean) return 0n;
   try {
@@ -35,10 +34,10 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
   // ✅ FIX: Intercept success, show view, DO NOT close yet.
   const handleSuccess = (addr?: string) => {
-    fireConfetti(); // Boom!
+    fireConfetti();
     if (addr) {
       setCreatedAddr(addr);
-      setStep("success"); // Switch to "Share" view
+      setStep("success");
     }
   };
 
@@ -50,7 +49,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     if (window.location.pathname !== "/") {
       window.location.href = "/";
     } else {
-      // optional hard refresh: window.location.reload();
+      // optional: window.location.reload();
     }
   };
 
@@ -99,10 +98,9 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     }
   }, [open]);
 
-  if (!open) return null;
-
   // ---------------------------------------------
   // ✅ NEW: Balance vs Winning Pot validation
+  // IMPORTANT: Must be BEFORE any early return
   // ---------------------------------------------
   const winningPotU6 = useMemo(() => toBigInt6(form.winningPot), [form.winningPot]);
   const usdcBalU6 = status.usdcBal ?? null;
@@ -110,14 +108,17 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const hasBalanceInfo = usdcBalU6 !== null;
   const insufficientPrizeFunds = hasBalanceInfo ? winningPotU6 > usdcBalU6! : false;
 
-  const shortageU6 =
-    hasBalanceInfo && insufficientPrizeFunds ? winningPotU6 - usdcBalU6! : 0n;
+  const shortageU6 = hasBalanceInfo && insufficientPrizeFunds ? winningPotU6 - usdcBalU6! : 0n;
 
   const shortageText =
-    shortageU6 > 0n ? Number(formatUnits(shortageU6, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "0";
+    shortageU6 > 0n
+      ? Number(formatUnits(shortageU6, 6)).toLocaleString("en-US", { maximumFractionDigits: 2 })
+      : "0";
 
   // ✅ Gate create
   const canCreate = validation.canSubmit && !status.isPending && !insufficientPrizeFunds;
+
+  if (!open) return null;
 
   return (
     <div className="crm-overlay" onMouseDown={handleFinalClose}>
@@ -306,11 +307,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                   >
                     <span className="crm-step-icon">{status.isPending ? "⏳" : "2"}</span>
                     <span>
-                      {status.isPending
-                        ? "Creating..."
-                        : insufficientPrizeFunds
-                          ? "Add USDC to Continue"
-                          : "Create Raffle"}
+                      {status.isPending ? "Creating..." : insufficientPrizeFunds ? "Add USDC to Continue" : "Create Raffle"}
                     </span>
                   </button>
                 </div>
