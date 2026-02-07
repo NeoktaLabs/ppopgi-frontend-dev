@@ -158,6 +158,21 @@
   font-weight: 750;
 }
 
+.faq-mermaid {
+  margin: 48px auto;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  overflow-x: auto;
+}
+
+.mermaid-wrapper svg {
+  max-width: 100%;
+  height: auto;
+}
+
+
 @media (max-width: 720px) {
   .faq-page {
     padding: 12px 10px 50px;
