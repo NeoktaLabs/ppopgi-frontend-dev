@@ -24,6 +24,13 @@ function toBigInt6(v: string): bigint {
   }
 }
 
+function toInt(v: string): number {
+  const clean = String(v || "").replace(/[^\d]/g, "");
+  if (!clean) return 0;
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   // ✅ Hooks must be called unconditionally (even when open=false)
   const { fireConfetti } = useConfetti();
@@ -67,6 +74,48 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   }, [open]);
 
   // ---------------------------------------------
+  // ✅ Min/Max safeguard (UI auto-bump)
+  // - maxTickets: "0" means unlimited => NEVER change it automatically
+  // - if max > 0 and min > max => bump max up to min
+  // - if max > 0 and max < min => lower min down to max
+  // ---------------------------------------------
+  const handleMinTicketsChange = (raw: string) => {
+    const nextMinStr = helpers.sanitizeInt(raw);
+    const nextMin = toInt(nextMinStr);
+
+    const curMaxStr = form.maxTickets || "0";
+    const curMax = toInt(curMaxStr);
+
+    // If max is limited and next min exceeds it => bump max up to min
+    if (curMax > 0 && nextMin > curMax) {
+      form.setMaxTickets(String(nextMin));
+    }
+
+    form.setMinTickets(nextMinStr);
+  };
+
+  const handleMaxTicketsChange = (raw: string) => {
+    const nextMaxStr = helpers.sanitizeInt(raw);
+    const nextMax = toInt(nextMaxStr);
+
+    // If user sets max back to 0 => unlimited, allow any min (no auto changes)
+    if (nextMax === 0) {
+      form.setMaxTickets(nextMaxStr);
+      return;
+    }
+
+    const curMinStr = form.minTickets || "0";
+    const curMin = toInt(curMinStr);
+
+    // If max becomes smaller than min => lower min down to max
+    if (curMin > 0 && nextMax < curMin) {
+      form.setMinTickets(String(nextMax));
+    }
+
+    form.setMaxTickets(nextMaxStr);
+  };
+
+  // ---------------------------------------------
   // Balance vs Winning Pot validation
   // ---------------------------------------------
   const winningPotU6 = useMemo(() => toBigInt6(form.winningPot), [form.winningPot]);
@@ -85,8 +134,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
   const showInvalid = submitAttempted;
 
-  const fieldClass = (invalid: boolean) =>
-    `crm-input ${showInvalid && invalid ? "crm-input-invalid" : ""}`;
+  const fieldClass = (invalid: boolean) => `crm-input ${showInvalid && invalid ? "crm-input-invalid" : ""}`;
 
   // ✅ Only allow create if connected + valid + enough balance
   const canCreate = isConnected && validation.canSubmit && !status.isPending && !insufficientPrizeFunds;
@@ -100,9 +148,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   // Share links (success view)
   const shareLink = createdAddr ? `${window.location.origin}/?raffle=${createdAddr}` : "";
   const tweetText = `I just created a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
-  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(
-    shareLink
-  )}`;
+  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(shareLink)}`;
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(tweetText)}`;
 
   const handleCopy = async () => {
@@ -145,11 +191,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>
-              {step === "success"
-                ? "Your raffle is now on the blockchain."
-                : "Create your provably fair raffle."}
-            </span>
+            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
           </div>
           <button className="crm-close-btn" onClick={handleFinalClose}>
             ✕
@@ -161,9 +203,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           <div className="crm-success-view">
             <div className="crm-success-icon">✓</div>
             <div className="crm-success-title">Raffle Created!</div>
-            <div className="crm-success-sub">
-              Your contract is live. Share the link below to start selling tickets.
-            </div>
+            <div className="crm-success-sub">Your contract is live. Share the link below to start selling tickets.</div>
 
             <div className="crm-share-box">
               <label className="crm-label" style={{ textAlign: "left" }}>
@@ -207,9 +247,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
             <div className="crm-form-col">
               <div className="crm-bal-row">
                 <span className="crm-bal-label">My Balance</span>
-                <span className="crm-bal-val">
-                  {status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC
-                </span>
+                <span className="crm-bal-val">{status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC</span>
               </div>
 
               <div className="crm-input-group">
@@ -281,11 +319,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
                 <div className="crm-input-group">
                   <label>Unit</label>
-                  <select
-                    className="crm-select"
-                    value={form.durationUnit}
-                    onChange={(e) => form.setDurationUnit(e.target.value as any)}
-                  >
+                  <select className="crm-select" value={form.durationUnit} onChange={(e) => form.setDurationUnit(e.target.value as any)}>
                     <option value="minutes">Minutes</option>
                     <option value="hours">Hours</option>
                     <option value="days">Days</option>
@@ -307,7 +341,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                         <input
                           className="crm-input"
                           value={form.minTickets}
-                          onChange={(e) => form.setMinTickets(helpers.sanitizeInt(e.target.value))}
+                          onChange={(e) => handleMinTicketsChange(e.target.value)}
                         />
                       </div>
                       <div className="crm-input-group">
@@ -315,7 +349,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                         <input
                           className="crm-input"
                           value={form.maxTickets}
-                          onChange={(e) => form.setMaxTickets(helpers.sanitizeInt(e.target.value))}
+                          onChange={(e) => handleMaxTicketsChange(e.target.value)}
                           placeholder="∞"
                         />
                       </div>
@@ -328,11 +362,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
               <div className="crm-actions">
                 <div className="crm-steps">
                   {/* STEP 1 */}
-                  <button
-                    className={`crm-step-btn ${status.isReady ? "done" : "active"}`}
-                    onClick={status.approve}
-                    disabled={!isConnected || status.isReady}
-                  >
+                  <button className={`crm-step-btn ${status.isReady ? "done" : "active"}`} onClick={status.approve} disabled={!isConnected || status.isReady}>
                     <span className="crm-step-icon">{status.isReady ? "✓" : "1"}</span>
                     <span>{status.isReady ? "Wallet Prepared" : "Prepare Wallet"}</span>
                   </button>
