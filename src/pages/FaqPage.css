@@ -12,31 +12,37 @@
   padding-bottom: 30px;
 }
 
+/* ✅ UPDATED: White text with shadow for visibility */
 .faq-h1 {
   margin: 0;
   font-size: 42px;
-  font-weight: 800; /* Standardized bold weight */
-  color: #0f172a;
+  font-weight: 800;
+  color: #ffffff;
   letter-spacing: -1px;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
+/* ✅ UPDATED: Light text for subtitle */
 .faq-sub {
   margin: 12px auto 0;
   max-width: 600px;
   font-size: 16px;
   font-weight: 500;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.9);
   line-height: 1.5;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+/* ✅ UPDATED: Section titles (H2) */
 .faq-h2 {
   margin: 40px 0 16px;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.85); /* Off-white for section headers */
   padding-left: 4px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 /* --- DIAGRAM CARD --- */
@@ -44,8 +50,8 @@
   margin: 20px auto 40px;
   border-radius: 24px;
   border: 1px solid #e2e8f0;
-  background: white;
-  box-shadow: 0 10px 40px -5px rgba(0,0,0,0.05); /* Ppopgi Soft Shadow */
+  background: white; /* Keeps internal text readable */
+  box-shadow: 0 10px 40px -5px rgba(0,0,0,0.2);
   overflow: hidden;
   padding: 24px;
 }
@@ -55,7 +61,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #64748b;
+  color: #64748b; /* Stays dark because it's inside the white card */
   margin-bottom: 16px;
   text-align: center;
 }
@@ -64,12 +70,12 @@
 .faq-diagram-scroll {
   width: 100%;
   overflow-x: auto;
-  padding-bottom: 10px; /* Space for scrollbar */
+  padding-bottom: 10px;
   -webkit-overflow-scrolling: touch;
 }
 
 .faq-svg {
-  width: 860px; /* Fixed width to force scroll on small screens */
+  width: 860px;
   height: 240px;
   display: block;
 }
@@ -91,20 +97,22 @@
 
 .faq-item {
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  background: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: white; /* Cards stay white */
   overflow: hidden;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
 
 .faq-item:hover {
   border-color: #cbd5e1;
+  transform: translateY(-1px);
 }
 
-/* Active State - Ppopgi Pink */
+/* Active State */
 .faq-item.open {
   border-color: #fbcfe8; 
-  box-shadow: 0 4px 20px -5px rgba(219, 39, 119, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(219, 39, 119, 0.15);
 }
 
 .faq-q {
@@ -123,11 +131,11 @@
 .faq-q-text {
   font-size: 16px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1e293b; /* Dark text inside card */
 }
 
 .faq-item.open .faq-q-text {
-  color: #db2777; /* Highlight active text */
+  color: #db2777;
 }
 
 .faq-chevron {
@@ -158,7 +166,7 @@
 }
 
 .faq-a-wrapper.open {
-  max-height: 800px; /* Allow enough height for long answers */
+  max-height: 800px;
 }
 
 .faq-a {
@@ -208,12 +216,14 @@
   overflow-x: auto;
 }
 
+/* ✅ UPDATED: Footer note visibility */
 .faq-footer-note {
   margin-top: 40px;
   text-align: center;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 /* Mobile Adjustments */
