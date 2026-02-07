@@ -1,7 +1,13 @@
+// src/components/Footer.tsx
 import "./Footer.css";
 import ppopgiLogo from "/ppopgi-logo.png";
 
-export function Footer() {
+// ✅ Define Props
+type Props = {
+  onNavigate: () => void;
+};
+
+export function Footer({ onNavigate }: Props) {
   const currentYear = new Date().getFullYear();
 
   return (
@@ -23,7 +29,6 @@ export function Footer() {
             Fair, verifiable, on-chain raffles.
           </div>
 
-          {/* Etherlink attribution */}
           <div className="footer-built">
             Built with love on Etherlink 💚
           </div>
@@ -36,6 +41,30 @@ export function Footer() {
         {/* RIGHT: Links Grid */}
         <div className="footer-links">
           
+          {/* ✅ NEW COLUMN: Project */}
+          <div className="footer-col">
+            <h4>Project</h4>
+            {/* Button styled as a link */}
+            <button 
+              onClick={onNavigate}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "#334155",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "#2563eb"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "#334155"}
+            >
+              About & Founder's Note
+            </button>
+          </div>
+
           <div className="footer-col">
             <h4>Transparency</h4>
 
