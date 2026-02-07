@@ -3,8 +3,8 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import "./FaqPage.css";
 
-// ✅ Assuming you have this component, or you can remove this section if not using Mermaid yet
-// import { MermaidDiagram } from "../components/MermaidDiagram";
+// ✅ Mermaid renderer component
+import { MermaidDiagram } from "../components/MermaidDiagram";
 
 type FaqItem = {
   id: string;
@@ -12,6 +12,51 @@ type FaqItem = {
   a: ReactNode;
   tags?: string[];
 };
+
+// ✅ Mermaid flow (Option A)
+const RAFFLE_FLOW = `
+flowchart TD
+
+  A[Creator creates raffle]
+  B[Prize pot funded in USDC]
+  C[Raffle is Open]
+  D{Max tickets reached?}
+  E{Deadline passed?}
+  F{Minimum tickets reached?}
+  G[Cancel raffle]
+  H[Drawing phase]
+  I[Pyth Entropy randomness]
+  J[Winner selected]
+  K[Winner claims prize]
+  L[Creator claims ticket revenue]
+  M[Players refund tickets]
+  N[Creator reclaims prize pot]
+  O[Any user can call finalize]
+  P[Finalizer bot runs every ~5 minutes]
+
+  A --> B
+  B --> C
+
+  C --> D
+  D -->|Yes| F
+  D -->|No| E
+  E -->|No| C
+  E -->|Yes| F
+
+  F -->|No| G
+  F -->|Yes| H
+
+  G --> M
+  G --> N
+
+  H --> I
+  I --> J
+  J --> K
+  J --> L
+
+  O --> H
+  P --> H
+`;
 
 // Moved data outside component to keep the render logic clean
 const FAQ_ITEMS: FaqItem[] = [
@@ -54,8 +99,8 @@ const FAQ_ITEMS: FaqItem[] = [
         Ppopgi uses <b>Pyth Entropy</b> for randomness. At a high level:
         <ol className="faq-ol">
           <li>
-            When a raffle is ready to settle (deadline reached or sold out), the raffle contract <b>requests a random value</b>{" "}
-            from Pyth Entropy.
+            When a raffle is ready to settle (deadline reached or sold out), the raffle contract{" "}
+            <b>requests a random value</b> from Pyth Entropy.
           </li>
           <li>
             Pyth Entropy later returns a <b>random value back to the raffle contract</b> on-chain.
@@ -105,7 +150,9 @@ const FAQ_ITEMS: FaqItem[] = [
         To protect users, the contracts include an <b>emergency recovery</b>:
         <ul className="faq-ul">
           <li>After a short delay, the creator (or the protocol owner) can recover the raffle.</li>
-          <li>After a longer delay, <b>anyone</b> can recover it.</li>
+          <li>
+            After a longer delay, <b>anyone</b> can recover it.
+          </li>
         </ul>
         In recovery mode, the raffle is canceled and funds become refundable through the usual claim flow.
         <div className="faq-callout">The goal is simple: raffles should never remain stuck forever.</div>
@@ -296,14 +343,7 @@ function Diagram() {
           </defs>
 
           {/* Connectors */}
-          <g
-            stroke="#cbd5e1"
-            strokeWidth="2"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray="6 4"
-          >
+          <g stroke="#cbd5e1" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 4">
             <path d="M270 75 L305 75" />
             <path d="M555 75 L590 75" />
             <path d="M270 178 L305 178" />
@@ -415,6 +455,13 @@ export function FaqPage() {
       <div className="faq-hero">
         <h1 className="faq-h1">FAQ</h1>
         <p className="faq-sub">Everything you need to know about trust, fees, and how Ppopgi works.</p>
+      </div>
+
+      {/* ✅ Mermaid lifecycle diagram (full state flow) */}
+      <div className="faq-mermaid">
+        <div className="faq-diagram-title">Raffle Lifecycle (All States)</div>
+        <MermaidDiagram code={RAFFLE_FLOW} />
+        <div className="faq-diagram-note">Scroll to view the full lifecycle</div>
       </div>
 
       {/* Quick overview diagram (SVG) */}
