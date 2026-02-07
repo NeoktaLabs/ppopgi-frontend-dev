@@ -6,17 +6,11 @@ import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
 import "./RaffleDetailsModal.css";
 
-// Helper for clickable addresses
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
   if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{label || "—"}</span>;
   const a = String(addr).toLowerCase();
   return (
-    <a
-      href={`https://explorer.etherlink.com/address/${a}`}
-      target="_blank"
-      rel="noreferrer"
-      className="rdm-info-link"
-    >
+    <a href={`https://explorer.etherlink.com/address/${a}`} target="_blank" rel="noreferrer" className="rdm-info-link">
       {label || `${a.slice(0, 6)}...${a.slice(-4)}`}
     </a>
   );
@@ -120,7 +114,6 @@ function fmtNum(n: number) {
   return safe.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-// ✅ UI clamp: never allow < 1
 function clampTicketsUi(v: any) {
   const n = Math.floor(Number(String(v ?? "").trim()));
   if (!Number.isFinite(n)) return 1;
@@ -285,46 +278,32 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return { isSettled, isCanceled, winnerNet, platformPrizeFee, prizeTotal, creatorNet, platformSalesFee, salesTotal };
   }, [displayData, math]);
 
-  // ✅ creator block (use actual connected account)
   const creatorAddr = String(displayData?.creator || "").toLowerCase();
   const meAddr = String(account?.address || "").toLowerCase();
   const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
 
-  // ✅ enforce "1" as UI default
+  // Keep UI tickets clamped into [1..maxBuy] (maxBuy is already remaining-aware)
+  const maxBuy = Math.max(1, math.maxBuy);
+  const uiTicket = clampTicketsUi(state.tickets);
+  const clampedUiTicket = Math.min(uiTicket, maxBuy);
+
   useEffect(() => {
     if (!open || !raffleId) return;
-    if (clampTicketsUi(state.tickets) !== 1) actions.setTickets("1");
+    if (String(clampedUiTicket) !== String(state.tickets)) {
+      actions.setTickets(String(clampedUiTicket));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raffleId]);
+  }, [open, raffleId, maxBuy]);
 
   if (!open) return null;
 
   const createdOnTs = timeline?.[0]?.date ?? null;
 
-  // ✅ Remaining tickets message (only if maxTickets exists)
-  const remaining = math.remainingTickets; // null or number
-  const showRemaining = typeof remaining === "number" && remaining >= 0;
-  const remainingText =
-    showRemaining ? `Only ${remaining} ticket${remaining === 1 ? "" : "s"} remaining` : null;
-
-  // ✅ Cap for UI (+ button / typed)
-  const capMax = Math.max(1, math.maxBuy);
-  const uiVal = clampTicketsUi(state.tickets);
-  const uiValCapped = Math.min(uiVal, capMax);
-
-  // If user typed over the cap, clamp back down (quietly)
-  useEffect(() => {
-    if (!flags.raffleIsOpen) return;
-    if (String(uiValCapped) !== String(state.tickets)) {
-      actions.setTickets(String(uiValCapped));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capMax, flags.raffleIsOpen]);
+  const showRemainingNote = typeof math.remainingTickets === "number" && math.remainingTickets > 0;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* HEADER */}
         <div className="rdm-header">
           <div style={{ display: "flex", gap: 8 }}>
             <button className="rdm-close-btn" onClick={actions.handleShare} title="Copy Link">
@@ -339,7 +318,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </button>
         </div>
 
-        {/* HERO */}
         <div className="rdm-hero">
           <div className="rdm-hero-lbl">Total Prize Pool</div>
 
@@ -359,7 +337,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         </div>
 
-        {/* STATS */}
         {stats && (
           <div className="rdm-stats-grid">
             <div className="rdm-stat-box highlight">
@@ -381,7 +358,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
-        {/* ✅ Distributions / Canceled message */}
         {distribution && (
           <>
             {distribution.isCanceled ? (
@@ -445,8 +421,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
         <div className="rdm-tear" />
 
-        {/* BUY SECTION */}
         <div className="rdm-buy-section">
+          {/* CLOSED states: canceled/settled/finalizing/max reached/etc */}
           {!flags.raffleIsOpen ? (
             <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
               {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
@@ -462,17 +438,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                 <span>Max: {math.maxBuy} Tickets</span>
               </div>
 
-              {remainingText && (
+              {showRemainingNote && (
                 <div style={{ textAlign: "center", fontSize: 11, fontWeight: 800, color: "#9a3412", marginBottom: 10 }}>
-                  {remainingText}
+                  Only {math.remainingTickets} ticket{math.remainingTickets === 1 ? "" : "s"} remaining
                 </div>
               )}
 
               <div className="rdm-stepper">
                 <button
                   className="rdm-step-btn"
-                  onClick={() => actions.setTickets(String(Math.max(1, uiValCapped - 1)))}
-                  disabled={uiValCapped <= 1}
+                  onClick={() => actions.setTickets(String(Math.max(1, clampedUiTicket - 1)))}
+                  disabled={clampedUiTicket <= 1}
                 >
                   −
                 </button>
@@ -481,10 +457,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   <input
                     className="rdm-amount"
                     inputMode="numeric"
-                    value={String(uiValCapped)}
+                    value={String(clampedUiTicket)}
                     onChange={(e) => {
                       const v = clampTicketsUi(e.target.value);
-                      actions.setTickets(String(Math.min(v, capMax)));
+                      actions.setTickets(String(Math.min(v, maxBuy)));
                     }}
                     placeholder="1"
                   />
@@ -493,8 +469,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
                 <button
                   className="rdm-step-btn"
-                  onClick={() => actions.setTickets(String(Math.min(capMax, uiValCapped + 1)))}
-                  disabled={uiValCapped >= capMax}
+                  onClick={() => actions.setTickets(String(Math.min(maxBuy, clampedUiTicket + 1)))}
+                  disabled={clampedUiTicket >= maxBuy}
                 >
                   +
                 </button>
@@ -506,7 +482,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                 </button>
               ) : (
                 <button className="rdm-cta buy" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
-                  {state.isPending ? "Confirming..." : `Buy ${uiValCapped} Ticket${uiValCapped !== 1 ? "s" : ""}`}
+                  {state.isPending ? "Confirming..." : `Buy ${clampedUiTicket} Ticket${clampedUiTicket !== 1 ? "s" : ""}`}
                 </button>
               )}
 
@@ -519,7 +495,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           )}
         </div>
 
-        {/* TABS */}
         <div className="rdm-tab-group">
           <button className={`rdm-tab-btn ${tab === "receipt" ? "active" : ""}`} onClick={() => setTab("receipt")}>
             Lifecycle
@@ -529,7 +504,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </button>
         </div>
 
-        {/* TAB CONTENT */}
         <div className="rdm-scroll-content">
           {tab === "receipt" && (
             <div className="rdm-receipt">
