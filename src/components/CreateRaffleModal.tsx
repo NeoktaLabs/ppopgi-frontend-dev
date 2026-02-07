@@ -79,8 +79,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   // Only allow create if connected
   const canCreate = isConnected && validation.canSubmit && !status.isPending && !insufficientPrizeFunds;
 
-  if (!open) return null;
-
   // ---------------------------------------------
   // Required field validation (UI only)
   // ---------------------------------------------
@@ -119,7 +117,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     }
   };
 
-  // Preview
+  // Preview (HOOK) — must be above any early return
   const previewRaffle = useMemo(
     () => ({
       id: "preview",
@@ -140,6 +138,9 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     [form.name, derived, validation.durationSecondsN]
   );
 
+  // ✅ IMPORTANT: early return AFTER all hooks
+  if (!open) return null;
+
   return (
     <div className="crm-overlay" onMouseDown={handleFinalClose}>
       <div className="crm-modal" onMouseDown={(e) => e.stopPropagation()}>
@@ -147,7 +148,9 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
+            <span>
+              {step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}
+            </span>
           </div>
           <button className="crm-close-btn" onClick={handleFinalClose}>
             ✕
@@ -317,7 +320,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 )}
               </div>
 
-              {/* ✅ Actions (NO blur anymore) */}
+              {/* Actions */}
               <div className="crm-actions">
                 <div className="crm-steps">
                   {/* STEP 1 */}
