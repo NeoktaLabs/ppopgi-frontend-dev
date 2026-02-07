@@ -29,12 +29,16 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   const account = useActiveAccount();
   const isConnected = !!account?.address;
 
+  // State for Success View
   const [step, setStep] = useState<"form" | "success">("form");
   const [createdAddr, setCreatedAddr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Track submit attempt → enables red highlights
   const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  // Advanced options toggle
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const handleSuccess = (addr?: string) => {
     fireConfetti();
@@ -51,13 +55,15 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   };
 
   const { form, validation, derived, status, helpers } = useCreateRaffleForm(open, handleSuccess);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  // Reset internal state if modal is re-opened
   React.useEffect(() => {
     if (open) {
       setStep("form");
       setCreatedAddr(null);
+      setCopied(false);
       setSubmitAttempted(false);
+      setAdvancedOpen(false);
     }
   }, [open]);
 
@@ -99,13 +105,19 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   // Generate Share Links
   const shareLink = createdAddr ? `${window.location.origin}/?raffle=${createdAddr}` : "";
   const tweetText = `I just created a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
-  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(shareLink)}`;
+  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(
+    shareLink
+  )}`;
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(tweetText)}`;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(shareLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // ignore
+    }
   };
 
   // Preview
@@ -136,9 +148,15 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
+            <span>
+              {step === "success"
+                ? "Your raffle is now on the blockchain."
+                : "Create your provably fair raffle."}
+            </span>
           </div>
-          <button className="crm-close-btn" onClick={handleFinalClose}>✕</button>
+          <button className="crm-close-btn" onClick={handleFinalClose}>
+            ✕
+          </button>
         </div>
 
         {/* --- VIEW 1: SUCCESS (SHARE) --- */}
@@ -146,21 +164,39 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           <div className="crm-success-view">
             <div className="crm-success-icon">✓</div>
             <div className="crm-success-title">Raffle Created!</div>
-            <div className="crm-success-sub">Your contract is live. Share the link below to start selling tickets.</div>
+            <div className="crm-success-sub">
+              Your contract is live. Share the link below to start selling tickets.
+            </div>
 
             <div className="crm-share-box">
-              <label className="crm-label" style={{ textAlign: "left" }}>Direct Link</label>
+              <label className="crm-label" style={{ textAlign: "left" }}>
+                Direct Link
+              </label>
               <div className="crm-link-row">
-                <input className="crm-link-input" readOnly value={shareLink} onClick={(e) => (e.target as HTMLInputElement).select()} />
-                <button className={`crm-copy-btn ${copied ? "copied" : ""}`} onClick={handleCopy}>
+                <input
+                  className="crm-link-input"
+                  readOnly
+                  value={shareLink}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  className={`crm-copy-btn ${copied ? "copied" : ""}`}
+                  onClick={handleCopy}
+                  disabled={!shareLink}
+                  title={!shareLink ? "No link yet" : "Copy link"}
+                >
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
             </div>
 
             <div className="crm-social-row">
-              <a href={tweetUrl} target="_blank" rel="noreferrer" className="crm-social-btn twitter">Share on 𝕏</a>
-              <a href={tgUrl} target="_blank" rel="noreferrer" className="crm-social-btn telegram">Telegram</a>
+              <a href={tweetUrl} target="_blank" rel="noreferrer" className="crm-social-btn twitter">
+                Share on 𝕏
+              </a>
+              <a href={tgUrl} target="_blank" rel="noreferrer" className="crm-social-btn telegram">
+                Telegram
+              </a>
             </div>
 
             <button className="crm-done-btn" onClick={handleFinalClose}>
@@ -224,7 +260,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                   className="crm-status-msg"
                   style={{
                     marginTop: 10,
-                    marginBottom: 14,
+                    marginBottom: 14, // ✅ space before duration
                     background: "#fff7ed",
                     border: "1px solid #fed7aa",
                     color: "#9a3412",
@@ -248,7 +284,11 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
                 <div className="crm-input-group">
                   <label>Unit</label>
-                  <select className="crm-select" value={form.durationUnit} onChange={(e) => form.setDurationUnit(e.target.value as any)}>
+                  <select
+                    className="crm-select"
+                    value={form.durationUnit}
+                    onChange={(e) => form.setDurationUnit(e.target.value as any)}
+                  >
                     <option value="minutes">Minutes</option>
                     <option value="hours">Hours</option>
                     <option value="days">Days</option>
@@ -256,8 +296,13 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 </div>
               </div>
 
+              {/* Advanced */}
               <div className="crm-advanced">
-                <button type="button" className="crm-adv-toggle" onClick={() => setAdvancedOpen(!advancedOpen)}>
+                <button
+                  type="button"
+                  className="crm-adv-toggle"
+                  onClick={() => setAdvancedOpen((v) => !v)}
+                >
                   {advancedOpen ? "− Less Options" : "+ Advanced Options (Limits)"}
                 </button>
 
@@ -266,11 +311,20 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     <div className="crm-grid-2">
                       <div className="crm-input-group">
                         <label>Min Tickets to Draw</label>
-                        <input className="crm-input" value={form.minTickets} onChange={(e) => form.setMinTickets(helpers.sanitizeInt(e.target.value))} />
+                        <input
+                          className="crm-input"
+                          value={form.minTickets}
+                          onChange={(e) => form.setMinTickets(helpers.sanitizeInt(e.target.value))}
+                        />
                       </div>
                       <div className="crm-input-group">
                         <label>Max Capacity (Opt)</label>
-                        <input className="crm-input" value={form.maxTickets} onChange={(e) => form.setMaxTickets(helpers.sanitizeInt(e.target.value))} placeholder="∞" />
+                        <input
+                          className="crm-input"
+                          value={form.maxTickets}
+                          onChange={(e) => form.setMaxTickets(helpers.sanitizeInt(e.target.value))}
+                          placeholder="∞"
+                        />
                       </div>
                     </div>
                   </div>
@@ -289,6 +343,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 }}
               >
                 <div className="crm-steps">
+                  {/* STEP 1 */}
                   <button
                     className={`crm-step-btn ${status.isReady ? "done" : "active"}`}
                     onClick={status.approve}
@@ -300,6 +355,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
                   <div className="crm-step-line" />
 
+                  {/* STEP 2 */}
                   <button
                     className={`crm-step-btn ${status.isReady ? "active primary" : ""}`}
                     onClick={() => {
