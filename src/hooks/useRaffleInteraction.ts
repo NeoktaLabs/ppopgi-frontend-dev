@@ -54,10 +54,20 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const deadlineMs = Number(data?.deadline || "0") * 1000;
   const deadlinePassed = deadlineMs > 0 && nowMs >= deadlineMs;
 
+  const soldNow = Number(data?.sold || "0");
+  const maxTicketsN = Number(data?.maxTickets || "0");
+
+  // ✅ SOLD OUT detection (if maxTickets is set)
+  const soldOut = maxTicketsN > 0 && soldNow >= maxTicketsN;
+
+  // ✅ Remaining tickets (null when unlimited)
+  const remainingTickets = maxTicketsN > 0 ? Math.max(0, maxTicketsN - soldNow) : null;
+
   // Status Logic
   let displayStatus = "Unknown";
   if (data) {
-    if (data.status === "OPEN" && deadlinePassed) displayStatus = "Finalizing";
+    // ✅ Finalizing if deadline passed OR sold-out
+    if (data.status === "OPEN" && (deadlinePassed || soldOut)) displayStatus = "Finalizing";
     else if (data.status === "FUNDING_PENDING") displayStatus = "Getting ready";
     else if (data.status === "COMPLETED") displayStatus = "Settled";
     else if (data.status === "CANCELED") displayStatus = "Canceled";
@@ -66,10 +76,10 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   }
 
   const minBuy = Math.floor(Number(data?.minPurchaseAmount || "1") || 1);
-  const soldNow = Number(data?.sold || "0");
-  const maxTicketsN = Number(data?.maxTickets || "0");
-  const remaining = maxTicketsN > 0 ? Math.max(0, maxTicketsN - soldNow) : 500; // UX cap
-  const maxBuy = Math.max(minBuy, remaining);
+
+  // ✅ maxBuy is capped by remaining when maxTickets is set
+  const remainingCap = remainingTickets == null ? 500 : remainingTickets; // UX cap if unlimited
+  const maxBuy = Math.max(minBuy, remainingCap);
 
   const ticketCount = clampInt(toInt(tickets, minBuy), minBuy, maxBuy);
   const ticketPriceU = BigInt(data?.ticketPrice || "0");
@@ -87,7 +97,13 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   }, [data?.usdcToken]);
 
   const isConnected = !!account?.address;
-  const raffleIsOpen = data?.status === "OPEN" && !data.paused && !deadlinePassed;
+
+  // ✅ Close buy when sold-out too
+  const raffleIsOpen =
+    data?.status === "OPEN" &&
+    !data.paused &&
+    !deadlinePassed &&
+    !soldOut;
 
   // Permissions
   const hasEnoughAllowance = allowance !== null ? allowance >= totalCostU : false;
@@ -158,10 +174,10 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         params: [raffleId, totalCostU],
       });
       await sendAndConfirm(tx);
-      setBuyMsg("✅ Coins allowed.");
+      setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
     } catch {
-      setBuyMsg("Approval failed.");
+      setBuyMsg("Prepare wallet failed.");
     }
   }, [account?.address, usdcContract, raffleId, totalCostU, sendAndConfirm, refreshAllowance]);
 
@@ -202,10 +218,10 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   useEffect(() => {
     if (!isOpen) return;
 
+    // start at minBuy
     setTickets(String(minBuy));
     setBuyMsg(null);
 
-    // Kick a single balance/allowance refresh for the opened raffle
     refreshAllowance("open");
   }, [isOpen, raffleId, account?.address, minBuy, refreshAllowance]);
 
@@ -233,6 +249,8 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       short,
       nowMs,
       deadlineMs,
+      remainingTickets, // ✅ NEW
+      soldOut, // ✅ NEW
     },
     flags: {
       hasEnoughAllowance,
