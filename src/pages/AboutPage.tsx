@@ -11,12 +11,12 @@ export function AboutPage() {
         <div className="about-header">
           <div className="about-icon">✍️</div>
           <h1 className="about-title">A Personal Note</h1>
-          <div className="about-subtitle">From the Founder</div>
+          <div className="about-subtitle">From Ppopgi (뽑기)'s creator</div>
         </div>
 
         <div className="about-content">
           <p>
-            <strong>Hi, I’m an IT engineer and a lifelong technology enthusiast.</strong>
+            <strong>Hi, My name is Julien, I am an IT engineer and a lifelong technology enthusiast.</strong>
           </p>
 
           <p>
@@ -76,7 +76,7 @@ export function AboutPage() {
           </p>
 
           <div className="about-signoff">
-            — The Founder
+            — Julien
           </div>
         </div>
       </div>
