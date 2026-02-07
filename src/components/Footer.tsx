@@ -2,7 +2,7 @@
 import "./Footer.css";
 import ppopgiLogo from "/ppopgi-logo.png";
 
-type Page = "home" | "explore" | "dashboard" | "about";
+type Page = "home" | "explore" | "dashboard" | "about" | "faq"; // ✅ add faq
 
 type Props = {
   onNavigate: (page: Page) => void;
@@ -15,6 +15,24 @@ export function Footer({ onNavigate }: Props) {
     onNavigate("about");
     // ✅ Important: users are at the bottom when clicking footer → scroll up to actually see About
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goFaq = () => {
+    onNavigate("faq");
+    // ✅ Same behavior for FAQ
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const linkBtnStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    padding: 0,
+    color: "#334155",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "inherit",
   };
 
   return (
@@ -43,21 +61,22 @@ export function Footer({ onNavigate }: Props) {
             <button
               type="button"
               onClick={goAbout}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                color: "#334155",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}
+              style={linkBtnStyle}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#2563eb")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "#334155")}
             >
               About &amp; Founder's Note
+            </button>
+
+            {/* ✅ NEW FAQ LINK */}
+            <button
+              type="button"
+              onClick={goFaq}
+              style={{ ...linkBtnStyle, marginTop: 10 }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#2563eb")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#334155")}
+            >
+              FAQ
             </button>
           </div>
 

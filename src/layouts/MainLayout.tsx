@@ -11,7 +11,7 @@ import bg3 from "../assets/backgrounds/bg3.webp";
 
 const BACKGROUNDS = [bg1, bg2, bg3];
 
-type Page = "home" | "explore" | "dashboard" | "about";
+type Page = "home" | "explore" | "dashboard" | "about" | "faq"; // ✅ add faq
 
 type Props = {
   children: ReactNode;
@@ -35,10 +35,7 @@ export function MainLayout({
   onSignOut,
 }: Props) {
   // Pick a random background once on mount
-  const chosenBg = useMemo(
-    () => BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)],
-    []
-  );
+  const chosenBg = useMemo(() => BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)], []);
 
   return (
     <div className="layout-shell">
@@ -48,9 +45,9 @@ export function MainLayout({
 
       {/* 2. Navigation */}
       <TopNav
-        page={page}
+        page={page as any} // TopNav doesn't include "faq/about" in its Page union, so keep safe cast
         account={account}
-        onNavigate={onNavigate}
+        onNavigate={onNavigate as any}
         onOpenExplore={() => onNavigate("explore")}
         onOpenDashboard={() => onNavigate("dashboard")}
         onOpenCreate={onOpenCreate}

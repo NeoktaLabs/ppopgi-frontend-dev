@@ -11,6 +11,7 @@ import { HomePage } from "./pages/HomePage";
 import { ExplorePage } from "./pages/ExplorePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AboutPage } from "./pages/AboutPage";
+import { FaqPage } from "./pages/FaqPage"; // ✅ add
 
 // --- Components (Modals) ---
 import { SignInModal } from "./components/SignInModal";
@@ -25,6 +26,8 @@ import { useSession } from "./state/useSession";
 import { useAppRouting } from "./hooks/useAppRouting";
 import { useRaffleDetails } from "./hooks/useRaffleDetails";
 
+type Page = "home" | "explore" | "dashboard" | "about" | "faq"; // ✅ add faq
+
 export default function App() {
   // 1. Thirdweb Config
   useAutoConnect({ client: thirdwebClient, chain: ETHERLINK_CHAIN, wallets: [createWallet("io.metamask")] });
@@ -37,7 +40,7 @@ export default function App() {
   const activeWallet = useActiveWallet();
 
   // 3. Routing & Navigation
-  const [page, setPage] = useState<"home" | "explore" | "dashboard" | "about">("home");
+  const [page, setPage] = useState<Page>("home");
   const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting();
 
   // 4. Modal States
@@ -98,7 +101,7 @@ export default function App() {
         account={account}
         onOpenSignIn={() => setSignInOpen(true)}
         onOpenCreate={() => (account ? setCreateOpen(true) : setSignInOpen(true))}
-        onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))} // ✅ UPDATED
+        onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))} // ✅ already updated
         onSignOut={handleSignOut}
       >
         {/* --- Page Routing --- */}
@@ -113,6 +116,9 @@ export default function App() {
         )}
 
         {page === "about" && <AboutPage />}
+
+        {/* ✅ NEW FAQ PAGE */}
+        {page === "faq" && <FaqPage />}
 
         {/* --- Global Modals --- */}
         <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
