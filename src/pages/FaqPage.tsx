@@ -12,55 +12,104 @@ type FaqItem = {
   tags?: string[];
 };
 
-// ✅ Mermaid flow (Option A)
+// ✅ STYLISH MERMAID CONFIGURATION
+// Matches Ppopgi Brand: Pink, Rounded Corners, Smooth Curves
 const RAFFLE_FLOW = `
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#ffffff',
+      'primaryTextColor': '#1e293b',
+      'primaryBorderColor': '#e2e8f0',
+      'lineColor': '#94a3b8',
+      'fontFamily': 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+      'fontSize': '14px'
+    },
+    'flowchart': {
+      'curve': 'basis',
+      'nodeSpacing': 40,
+      'rankSpacing': 60
+    }
+  }
+}%%
+
 flowchart TD
+  %% --- STYLES ---
+  %% Brand Pink (Active Steps)
+  classDef brand fill:#fdf2f8,stroke:#db2777,stroke-width:2px,color:#be185d,rx:12,ry:12;
+  
+  %% Neutral/Decision (Gray)
+  classDef decision fill:#ffffff,stroke:#64748b,stroke-width:2px,color:#1e293b,rx:6,ry:6,stroke-dasharray: 5 5;
+  
+  %% Success/Winner (Green)
+  classDef success fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d,rx:12,ry:12;
+  
+  %% Failure/Cancel (Red)
+  classDef fail fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#991b1b,rx:12,ry:12;
+  
+  %% Tech/System (Blue)
+  classDef tech fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0369a1,rx:12,ry:12;
 
-  classDef start fill:#fff7ed,stroke:#fb923c,stroke-width:2,color:#9a3412;
-  classDef decision fill:#f8fafc,stroke:#94a3b8,color:#1e293b;
-  classDef success fill:#ecfeff,stroke:#06b6d4,color:#0f172a;
-  classDef danger fill:#fef2f2,stroke:#ef4444,color:#7f1d1d;
+  %% --- NODES ---
 
-  A[Creator creates raffle]:::start
-  B[Prize pot funded in USDC]:::start
-  C[Raffle is Open]
+  %% 1. Creation Flow
+  A[Creator Launches]:::brand
+  B[Prize Pot Funded]:::brand
+  C[Raffle OPEN]:::brand
 
-  D{Max tickets reached?}:::decision
-  E{Deadline passed?}:::decision
-  F{Minimum tickets reached?}:::decision
+  %% 2. Checks
+  D{Max Tickets?}:::decision
+  E{Deadline?}:::decision
+  F{Min Tickets?}:::decision
 
-  G[Cancel raffle]:::danger
-  H[Drawing phase]
-  I[Pyth Entropy randomness]
-  J[Winner selected]:::success
+  %% 3. External Actors
+  Bot[Finalizer Bot]:::tech
+  User[Any User]:::tech
 
-  K[Winner claims prize]
-  L[Creator claims ticket revenue]
-  M[Players refund tickets]
-  N[Creator reclaims prize pot]
+  %% 4. Finalization
+  H[Drawing Phase]:::tech
+  I[Pyth Entropy<br/>Verifiable Randomness]:::tech
 
-  O[Any user can call finalize]
-  P[Finalizer bot<br/>runs every ~5 minutes]
+  %% 5. Outcomes
+  J[Winner Selected]:::success
+  G[Raffle Canceled]:::fail
 
+  %% 6. Claims
+  K[Winner Claims Prize]:::success
+  L[Creator Claims Revenue]:::success
+  M[Players Refund]:::fail
+  N[Creator Reclaims Pot]:::fail
+
+  %% --- CONNECTIONS ---
+  
+  %% Happy Path Start
   A --> B --> C
   C --> D
-  D -->|Yes| F
-  D -->|No| E
-  E -->|No| C
-  E -->|Yes| F
 
-  F -->|No| G
-  F -->|Yes| H
+  %% Loop Logic
+  D -- No --> E
+  E -- No --> C
+  
+  %% Trigger Finalization
+  D -- Yes --> F
+  E -- Yes --> F
 
-  G --> M
-  G --> N
+  %% Decision: Cancel
+  F -- No --> G
+  G --> M & N
 
+  %% Decision: Draw
+  F -- Yes --> H
+  Bot -.-> H
+  User -.-> H
+  
+  %% The Draw
   H --> I --> J
-  J --> K
-  J --> L
+  J --> K & L
 
-  O --> H
-  P --> H
+  %% Link Styling (Cleaner lines)
+  linkStyle default stroke:#94a3b8,stroke-width:2px,fill:none;
 `;
 
 // Moved data outside component to keep the render logic clean
@@ -327,6 +376,99 @@ function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="faq-h2">{children}</h2>;
 }
 
+function Diagram() {
+  // Simple inline SVG so you don't need any assets/libs for the header overview
+  return (
+    <div className="faq-diagram-wrapper">
+      <div className="faq-diagram-title">How Ppopgi Works (Quick Overview)</div>
+      
+      {/* Scroll container for mobile */}
+      <div className="faq-diagram-scroll">
+        <svg viewBox="0 0 860 240" className="faq-svg" role="img" aria-label="Ppopgi raffle overview diagram">
+          <defs>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.1" />
+            </filter>
+            <linearGradient id="boxGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="100%" stopColor="#f8fafc" />
+            </linearGradient>
+          </defs>
+
+          {/* Connectors */}
+          <g stroke="#cbd5e1" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 4">
+            <path d="M270 75 L305 75" />
+            <path d="M555 75 L590 75" />
+            <path d="M270 178 L305 178" />
+            <path d="M555 178 L590 178" />
+          </g>
+
+          {/* Vertical Connectors (Solid) */}
+          <g stroke="#94a3b8" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M145 114 L145 140" />
+            <path d="M430 114 L430 140" />
+            <path d="M715 114 L715 140" />
+          </g>
+
+          {/* Boxes */}
+          <g filter="url(#shadow)">
+            {/* Top Row */}
+            <rect x="20" y="36" width="250" height="78" rx="12" fill="url(#boxGrad)" stroke="#e2e8f0" />
+            <rect x="305" y="36" width="250" height="78" rx="12" fill="url(#boxGrad)" stroke="#e2e8f0" />
+            <rect x="590" y="36" width="250" height="78" rx="12" fill="url(#boxGrad)" stroke="#e2e8f0" />
+
+            {/* Bottom Row */}
+            <rect x="20" y="140" width="250" height="78" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+            <rect x="305" y="140" width="250" height="78" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+            <rect x="590" y="140" width="250" height="78" rx="12" fill="#ffffff" stroke="#e2e8f0" />
+          </g>
+
+          {/* Labels */}
+          <g fontFamily="ui-sans-serif, system-ui, sans-serif" fill="#1e293b">
+            {/* 1. Fund */}
+            <text x="45" y="70" fontSize="15" fontWeight="700">Creator Funds Pot</text>
+            <text x="45" y="90" fontSize="12" fill="#64748b">Deposits USDC to the raffle</text>
+
+            {/* 2. Buy */}
+            <text x="330" y="70" fontSize="15" fontWeight="700">Ticket Sales Open</text>
+            <text x="330" y="90" fontSize="12" fill="#64748b">Players buy tickets</text>
+
+            {/* 3. Draw */}
+            <text x="615" y="70" fontSize="15" fontWeight="700">Verifiable Draw</text>
+            <text x="615" y="90" fontSize="12" fill="#64748b">Randomness via Pyth Entropy</text>
+
+            {/* 4. Winner */}
+            <text x="45" y="174" fontSize="15" fontWeight="700">Winner Selected</text>
+            <text x="45" y="194" fontSize="12" fill="#64748b">Outcome stored on-chain</text>
+
+            {/* 5. Claims */}
+            <text x="330" y="174" fontSize="15" fontWeight="700">Claim Portal</text>
+            <text x="330" y="194" fontSize="12" fill="#64748b">Users claim funds themselves</text>
+
+            {/* 6. Fees */}
+            <text x="615" y="174" fontSize="15" fontWeight="700">Transparent Fees</text>
+            <text x="615" y="194" fontSize="12" fill="#64748b">10% Pot + 10% Ticket Sales</text>
+          </g>
+
+          {/* Numbers for flow */}
+          <g>
+            <circle cx="20" cy="36" r="12" fill="#db2777" />
+            <text x="20" y="41" fontSize="12" fontWeight="bold" fill="white" textAnchor="middle">1</text>
+
+            <circle cx="305" cy="36" r="12" fill="#db2777" />
+            <text x="305" y="41" fontSize="12" fontWeight="bold" fill="white" textAnchor="middle">2</text>
+
+            <circle cx="590" cy="36" r="12" fill="#db2777" />
+            <text x="590" y="41" fontSize="12" fontWeight="bold" fill="white" textAnchor="middle">3</text>
+          </g>
+        </svg>
+      </div>
+
+      <div className="faq-diagram-note">Scroll to view the full overview</div>
+    </div>
+  );
+}
+
 export function FaqPage() {
   const [openId, setOpenId] = useState<string | null>("what-is");
   const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
@@ -338,11 +480,13 @@ export function FaqPage() {
         <p className="faq-sub">Everything you need to know about trust, fees, and how Ppopgi works.</p>
       </div>
 
+      {/* Quick overview diagram (SVG) */}
+      <Diagram />
+
       {/* ✅ Mermaid lifecycle diagram */}
+      <SectionTitle>Raffle Lifecycle (All States)</SectionTitle>
       <div className="faq-mermaid">
-        <div className="faq-diagram-title">Raffle Lifecycle (All States)</div>
-        <MermaidDiagram code={RAFFLE_FLOW} />
-        <div className="faq-diagram-note">Scroll to view the full lifecycle</div>
+        <MermaidDiagram code={RAFFLE_FLOW} id="ppopgi-raffle-lifecycle" />
       </div>
 
       <SectionTitle>Common Questions</SectionTitle>
