@@ -91,8 +91,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
   const showInvalid = submitAttempted;
 
-  const fieldClass = (invalid: boolean) =>
-    `crm-input ${showInvalid && invalid ? "crm-input-invalid" : ""}`;
+  const fieldClass = (invalid: boolean) => `crm-input ${showInvalid && invalid ? "crm-input-invalid" : ""}`;
 
   // ---------------------------------------------
   // Button visual disable
@@ -148,11 +147,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>
-              {step === "success"
-                ? "Your raffle is now on the blockchain."
-                : "Create your provably fair raffle."}
-            </span>
+            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
           </div>
           <button className="crm-close-btn" onClick={handleFinalClose}>
             ✕
@@ -164,9 +159,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           <div className="crm-success-view">
             <div className="crm-success-icon">✓</div>
             <div className="crm-success-title">Raffle Created!</div>
-            <div className="crm-success-sub">
-              Your contract is live. Share the link below to start selling tickets.
-            </div>
+            <div className="crm-success-sub">Your contract is live. Share the link below to start selling tickets.</div>
 
             <div className="crm-share-box">
               <label className="crm-label" style={{ textAlign: "left" }}>
@@ -210,9 +203,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
             <div className="crm-form-col">
               <div className="crm-bal-row">
                 <span className="crm-bal-label">My Balance</span>
-                <span className="crm-bal-val">
-                  {status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC
-                </span>
+                <span className="crm-bal-val">{status.usdcBal !== null ? formatUnits(status.usdcBal, 6) : "..."} USDC</span>
               </div>
 
               <div className="crm-input-group">
@@ -260,7 +251,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                   className="crm-status-msg"
                   style={{
                     marginTop: 10,
-                    marginBottom: 14, // ✅ space before duration
+                    marginBottom: 14,
                     background: "#fff7ed",
                     border: "1px solid #fed7aa",
                     color: "#9a3412",
@@ -281,7 +272,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     onChange={(e) => form.setDurationValue(helpers.sanitizeInt(e.target.value))}
                   />
                 </div>
-
                 <div className="crm-input-group">
                   <label>Unit</label>
                   <select
@@ -298,11 +288,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
               {/* Advanced */}
               <div className="crm-advanced">
-                <button
-                  type="button"
-                  className="crm-adv-toggle"
-                  onClick={() => setAdvancedOpen((v) => !v)}
-                >
+                <button type="button" className="crm-adv-toggle" onClick={() => setAdvancedOpen((v) => !v)}>
                   {advancedOpen ? "− Less Options" : "+ Advanced Options (Limits)"}
                 </button>
 
@@ -331,17 +317,8 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 )}
               </div>
 
-              {/* ✅ Actions (blur + overlay if not connected) */}
-              <div
-                className="crm-actions"
-                style={{
-                  position: "relative",
-                  filter: !isConnected ? "blur(3px)" : undefined,
-                  opacity: !isConnected ? 0.65 : 1,
-                  pointerEvents: !isConnected ? "none" : "auto",
-                  transition: "filter 0.2s ease, opacity 0.2s ease",
-                }}
-              >
+              {/* ✅ Actions (NO blur anymore) */}
+              <div className="crm-actions">
                 <div className="crm-steps">
                   {/* STEP 1 */}
                   <button
@@ -373,24 +350,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
                 {status.msg && <div className="crm-status-msg">{status.msg}</div>}
               </div>
-
-              {/* Overlay message (not blurred) */}
-              {!isConnected && (
-                <div
-                  style={{
-                    marginTop: 10,
-                    background: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                    borderRadius: 14,
-                    padding: "12px 14px",
-                    color: "#e5e7eb",
-                    fontWeight: 900,
-                    textAlign: "center",
-                  }}
-                >
-                  Connect your wallet to create a raffle.
-                </div>
-              )}
             </div>
 
             {/* RIGHT */}
