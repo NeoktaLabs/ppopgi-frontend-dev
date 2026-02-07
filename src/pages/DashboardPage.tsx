@@ -6,7 +6,6 @@ import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 
-
 // Helpers
 const fmt = (v: string, dec = 18) => {
   try {
@@ -37,11 +36,10 @@ function shortAddr(a?: string | null, head = 6, tail = 4) {
 }
 
 export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
-  
   useEffect(() => {
-  document.title = "Ppopgi 뽑기 — Dashboard";
-}, []);
-  
+    document.title = "Ppopgi 뽑기 — Dashboard";
+  }, []);
+
   const { data, actions, account: hookAccount } = useDashboardController();
 
   // ✅ Source of truth: hook account (fallback to prop)
@@ -88,18 +86,16 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return { active, past };
   }, [data.joined]);
 
+  // ✅ count created raffles for stats + tab label
+  const createdCount = data.created?.length ?? 0;
+
   const msgIsSuccess = useMemo(() => {
     if (!data.msg) return false;
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
 
   // ✅ Refunds: always claimTicketRefund (two-phase refund logic)
-  const getPrimaryMethod = (opts: {
-    isRefund: boolean;
-    hasUsdc: boolean;
-    hasNative: boolean;
-    ticketCount: number;
-  }): WithdrawMethod | null => {
+  const getPrimaryMethod = (opts: { isRefund: boolean; hasUsdc: boolean; hasNative: boolean; ticketCount: number }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative, ticketCount } = opts;
 
     if (isRefund) return ticketCount > 0 ? "claimTicketRefund" : null;
@@ -135,10 +131,18 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             <div className="db-stat-num">{activeEntries.length}</div>
             <div className="db-stat-lbl">On-going</div>
           </div>
+
           <div className="db-stat">
             <div className="db-stat-num">{pastEntries.length}</div>
             <div className="db-stat-lbl">Past</div>
           </div>
+
+          {/* ✅ NEW: Created stat */}
+          <div className="db-stat">
+            <div className="db-stat-num">{createdCount}</div>
+            <div className="db-stat-lbl">Created</div>
+          </div>
+
           {hasClaims && (
             <div className="db-stat highlight">
               <div className="db-stat-num">{data.claimables.length}</div>
@@ -183,9 +187,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative, ticketCount });
 
-              // =========================================================
               // ✅ YOUR EXACT COPY RULES (with sane fallbacks)
-              // =========================================================
               let badgeTitle = "Claim Available";
               let message = "Funds available to claim.";
               let primaryLabel = "Claim";
@@ -253,19 +255,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     <div className="db-claim-actions">
                       {showDual ? (
                         <>
-                          <button
-                            className="db-btn primary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
-                          >
+                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
                             {data.isPending ? "Processing..." : "Claim USDC"}
                           </button>
 
-                          <button
-                            className="db-btn secondary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
-                          >
+                          <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
                             {data.isPending ? "Processing..." : "Claim Native"}
                           </button>
                         </>
@@ -298,11 +292,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             On-going
           </button>
+
           <button className={`db-tab ${tab === "history" ? "active" : ""}`} onClick={() => setTab("history")}>
             Past
           </button>
+
+          {/* ✅ Updated label with count */}
           <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
-            Created
+            Created <span style={{ opacity: 0.7 }}>({createdCount})</span>
           </button>
         </div>
       </div>
