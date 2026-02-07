@@ -342,6 +342,11 @@
 
 .crm-done-btn { background: none; border: none; font-weight: 700; color: #94a3b8; cursor: pointer; text-decoration: underline; }
 
+.crm-input-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.4);
+}
+
 /* --- Responsive Mobile --- */
 @media (max-width: 800px) {
   /* ✅ More breathing room from sticky TopNav on mobile */
@@ -355,9 +360,4 @@
   .crm-preview-col { display: none; }
   .crm-form-col { border-right: none; }
   .crm-grid-2, .crm-grid-dur { grid-template-columns: 1fr; }
-}
-
-.crm-input-invalid {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.4);
 }
