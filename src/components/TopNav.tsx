@@ -1,3 +1,4 @@
+// src/components/TopNav.tsx
 import { useState, useEffect, memo } from "react";
 import { useWalletBalance } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
@@ -5,7 +6,8 @@ import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 import "./TopNav.css";
 
-type Page = "home" | "explore" | "dashboard";
+// ✅ include pages that can be navigated to via footer (even if TopNav has no buttons for them)
+type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 
 type Props = {
   page: Page;
@@ -28,7 +30,6 @@ function fmtBal(v?: string, maxDp = 4) {
   if (!v) return "—";
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
-  // keep it compact
   if (n === 0) return "0";
   if (n < 0.0001) return "<0.0001";
   return n.toLocaleString("en-US", { maximumFractionDigits: maxDp });
@@ -47,7 +48,13 @@ export const TopNav = memo(function TopNav({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close menu when changing PAGE
+  /**
+   * ✅ Auto-close burger menu on ANY page change
+   * This covers:
+   * - clicking TopNav buttons
+   * - clicking Footer links (About/FAQ)
+   * - any programmatic navigation in App.tsx
+   */
   useEffect(() => {
     setMenuOpen(false);
   }, [page]);
@@ -109,12 +116,18 @@ export const TopNav = memo(function TopNav({
 
         {/* --- CENTER: Desktop Links --- */}
         <nav className="topnav-desktop-links">
-          <button className={`nav-link ${page === "explore" ? "active" : ""}`} onClick={() => handleNav(onOpenExplore, "explore")}>
+          <button
+            className={`nav-link ${page === "explore" ? "active" : ""}`}
+            onClick={() => handleNav(onOpenExplore, "explore")}
+          >
             Explore
           </button>
 
           {account && (
-            <button className={`nav-link ${page === "dashboard" ? "active" : ""}`} onClick={() => handleNav(onOpenDashboard, "dashboard")}>
+            <button
+              className={`nav-link ${page === "dashboard" ? "active" : ""}`}
+              onClick={() => handleNav(onOpenDashboard, "dashboard")}
+            >
               Dashboard
             </button>
           )}
@@ -136,9 +149,7 @@ export const TopNav = memo(function TopNav({
                 title="Open Cashier"
                 type="button"
               >
-                <div className="balances-title">
-                  {balancesLoading ? "Loading…" : "Balances"}
-                </div>
+                <div className="balances-title">{balancesLoading ? "Loading…" : "Balances"}</div>
 
                 <div className="balances-rows">
                   <div className="bal-row">
