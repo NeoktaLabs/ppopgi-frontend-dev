@@ -1,7 +1,6 @@
 // src/layouts/MainLayout.tsx
-import { type ReactNode, useMemo } from "react"; // ✅ Fixed imports
+import { type ReactNode, useMemo } from "react";
 import { TopNav } from "../components/TopNav";
-// import { Toast } from "../components/Toast"; // ✅ Commented out Toast (requires props)
 import { Footer } from "../components/Footer";
 import "./MainLayout.css";
 
@@ -14,8 +13,9 @@ const BACKGROUNDS = [bg1, bg2, bg3];
 
 type Props = {
   children: ReactNode;
-  page: "home" | "explore" | "dashboard";
-  onNavigate: (page: "home" | "explore" | "dashboard") => void;
+  // ✅ UPDATED: Include "about"
+  page: "home" | "explore" | "dashboard" | "about";
+  onNavigate: (page: "home" | "explore" | "dashboard" | "about") => void;
   account: string | null;
   onOpenSignIn: () => void;
   onOpenCreate: () => void;
@@ -46,10 +46,7 @@ export function MainLayout({
       />
       <div className="layout-overlay" />
 
-      {/* 2. Global Gates & Modals */}
-      {/* <Toast /> */} {/* ✅ Commented out until it has proper props */}
-
-      {/* 3. Navigation */}
+      {/* 2. Navigation */}
       <TopNav 
         page={page}
         account={account}
@@ -62,13 +59,14 @@ export function MainLayout({
         onSignOut={onSignOut}
       />
 
-      {/* 4. Page Content */}
+      {/* 3. Page Content */}
       <main className="layout-content">
         {children}
       </main>
 
-      {/* 5. Footer */}
-      <Footer />
+      {/* 4. Footer */}
+      {/* ✅ PASS ONNAVIGATE TO FOOTER */}
+      <Footer onNavigate={() => onNavigate("about")} />
     </div>
   );
 }
