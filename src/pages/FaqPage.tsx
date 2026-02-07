@@ -3,8 +3,8 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import "./FaqPage.css";
 
-// ✅ Mermaid diagram renderer (Option A)
-import { MermaidDiagram } from "../components/MermaidDiagram";
+// ✅ Assuming you have this component, or you can remove this section if not using Mermaid yet
+// import { MermaidDiagram } from "../components/MermaidDiagram";
 
 type FaqItem = {
   id: string;
@@ -12,36 +12,6 @@ type FaqItem = {
   a: ReactNode;
   tags?: string[];
 };
-
-// ✅ Mermaid lifecycle diagram (full state flow)
-const RAFFLE_FLOW_MERMAID = `
-flowchart TD
-  A[Creator creates raffle] --> B[Prize pot funded in USDC]
-  B --> C[Raffle is Open]
-
-  C --> D{Max tickets reached?}
-  D -->|No| E{Deadline passed?}
-  E -->|No| C
-
-  D -->|Yes| R[Ready to finalize]
-  E -->|Yes| R
-
-  O[Any user can finalize] --> R
-  P[Finalizer bot runs every ~5 minutes] --> R
-
-  R --> G{Minimum tickets reached?}
-  G -->|No| X[Raffle canceled]
-  G -->|Yes| H[Drawing phase]
-
-  H --> I[Pyth Entropy provides verifiable randomness]
-  I --> J[Winner selected on-chain]
-
-  J --> K[Winner claims prize (USDC)]
-  J --> L[Creator claims ticket revenue (USDC)]
-
-  X --> M[Players reclaim ticket refunds]
-  X --> N[Creator reclaims prize pot]
-`;
 
 // Moved data outside component to keep the render logic clean
 const FAQ_ITEMS: FaqItem[] = [
@@ -73,7 +43,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "randomness",
     q: "How does randomness work? Is it verifiable?",
@@ -103,7 +72,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "finalize-fee",
     q: "Who settles a raffle, and who pays for randomness?",
@@ -126,7 +94,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "stuck-drawing",
     q: "What if a raffle gets stuck while settling?",
@@ -145,7 +112,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "fees",
     q: "What are the fees?",
@@ -167,7 +133,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "why-fees",
     q: "Why are there fees?",
@@ -185,7 +150,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "fees-fixed",
     q: "Are fees fixed once a raffle is created?",
@@ -198,7 +162,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "permissions",
     q: "Who can do what? (Owner vs creator vs players)",
@@ -225,7 +188,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "owner-rug",
     q: "Can the owner steal funds or change the winner?",
@@ -246,7 +208,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "pull-payments",
     q: "What does “pull payments” mean, and why is it safer?",
@@ -261,7 +222,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "canceled",
     q: "What happens if a raffle is canceled?",
@@ -279,7 +239,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "etherlink",
     q: "Why Etherlink?",
@@ -302,7 +261,6 @@ const FAQ_ITEMS: FaqItem[] = [
       </>
     ),
   },
-
   {
     id: "open-source",
     q: "Is the code open-source?",
@@ -461,12 +419,6 @@ export function FaqPage() {
 
       {/* Quick overview diagram (SVG) */}
       <Diagram />
-
-      {/* Full lifecycle diagram (Mermaid) */}
-      <SectionTitle>Raffle lifecycle (all states)</SectionTitle>
-      <div className="faq-mermaid">
-        <MermaidDiagram code={RAFFLE_FLOW_MERMAID} id="ppopgi-raffle-lifecycle" />
-      </div>
 
       <SectionTitle>Common Questions</SectionTitle>
 
