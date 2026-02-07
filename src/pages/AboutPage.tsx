@@ -1,5 +1,4 @@
 // src/pages/AboutPage.tsx
-import React from "react";
 import "./AboutPage.css";
 
 export function AboutPage() {
