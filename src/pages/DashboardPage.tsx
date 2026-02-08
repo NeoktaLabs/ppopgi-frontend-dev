@@ -126,13 +126,15 @@ function TicketPile({
 }) {
   if (!count || count <= 0) return null;
 
-  const layers = Math.min(3, count);
-  const displayCount = count > 99 ? "99+" : count;
+  // ✅ show x10 etc, but render at most 5 stacked layers
+  const layers = Math.min(5, count);
+  const displayCount = count > 999 ? "999+" : count;
 
   return (
     <div className={`ticket-pile-container ${variant}`} aria-label={`${count} tickets`}>
       <div className="ticket-pile-stack">
-        {Array.from({ length: layers - 1 }).map((_, i) => (
+        {/* Render bottom layers (max 4), top layer contains the badge */}
+        {Array.from({ length: Math.max(0, layers - 1) }).map((_, i) => (
           <div key={i} className={`ticket-layer layer-${i}`} />
         ))}
 
@@ -538,7 +540,10 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const iLost = completed && participatedEver && !iWon;
 
               return (
-                <div key={r.id} className="db-history-card-wrapper card-hover-trigger">
+                <div
+                  key={r.id}
+                  className={`db-history-card-wrapper card-hover-trigger ${iWon ? "db-winner-card" : ""}`}
+                >
                   <TicketPile count={displayCount} variant={iWon ? "gold" : "slate"} />
                   <RaffleCard
                     raffle={r}
@@ -571,3 +576,5 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     </div>
   );
 }
+
+export default DashboardPage;
