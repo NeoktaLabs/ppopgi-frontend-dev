@@ -120,9 +120,7 @@ async function fetchTicketsPurchasedByRaffle(
   return out;
 }
 
-/**
- * ✅ BIG multiplier badge (xN) — shows even for x1
- */
+/** ✅ BIG multiplier badge (xN) — shows even for x1 */
 function MultiplierBadge({ count }: { count: number }) {
   const safe = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
   const display = safe > 999 ? "999+" : String(safe);
@@ -136,12 +134,7 @@ function MultiplierBadge({ count }: { count: number }) {
 
 /**
  * ✅ REAL card pile (top real card + up to 4 real shadow cards)
- * - visual max is 5 cards
- * - multiplier shows real ticket count (e.g. x10)
- * - shadows are pointerEvents:none so clicks go to top card
- *
- * NOTE: We intentionally DO NOT pass userEntry into RaffleCard here
- * so the yellow "X owned" badge is not shown on Dashboard ongoing/joined.
+ * Dashboard-only: do NOT pass userEntry to remove yellow "X owned" badge.
  */
 function RaffleCardPile({
   raffle,
@@ -159,11 +152,8 @@ function RaffleCardPile({
   nowMs: number;
 }) {
   const safeTickets = Number.isFinite(ticketCount) ? Math.max(1, Math.floor(ticketCount)) : 1;
-
-  // render max 5 cards visually: front + up to 4 shadows
   const shadowCount = Math.min(4, Math.max(0, safeTickets - 1));
 
-  // ensure the passed raffle doesn't contain userEntry (some RaffleCard impls read from raffle itself)
   const raffleForCard = useMemo(() => {
     const c = { ...(raffle ?? {}) };
     if ("userEntry" in c) delete (c as any).userEntry;
@@ -174,7 +164,6 @@ function RaffleCardPile({
 
   return (
     <div className={pileClass}>
-      {/* back/shadow real cards */}
       {shadowCount >= 4 && (
         <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
           <div className="db-card-shadow-inner">
@@ -204,7 +193,6 @@ function RaffleCardPile({
         </div>
       )}
 
-      {/* top/front real card */}
       <div className="db-card-front">
         <MultiplierBadge count={safeTickets} />
         <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
@@ -267,7 +255,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return active;
   }, [data.created]);
 
-  // ✅ On-going should include BOTH joined-active and created-active (dedup by id)
   const ongoingRaffles = useMemo(() => {
     const byId = new Map<string, any>();
     for (const r of activeJoined) byId.set(String(r.id), r);
@@ -279,13 +266,13 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   }, [activeJoined, activeCreated]);
 
   const createdCount = data.created?.length ?? 0;
+  const joinedCount = pastJoined.length;
 
   const msgIsSuccess = useMemo(() => {
     if (!data.msg) return false;
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
 
-  // ✅ Refunds: allow refund button when there's actually claimable USDC
   const getPrimaryMethod = (opts: { isRefund: boolean; hasUsdc: boolean; hasNative: boolean }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative } = opts;
     if (isRefund) return hasUsdc ? "claimTicketRefund" : null;
@@ -297,7 +284,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const hasClaims = data.claimables.length > 0;
   const showColdSkeletons = data.isColdLoading && ongoingRaffles.length === 0;
 
-  // --- Fetch Historical Purchases (so canceled/refunded still shows “you bought X”) ---
+  // --- Fetch Historical Purchases ---
   const [purchasedByRaffle, setPurchasedByRaffle] = useState<Map<string, number>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
 
@@ -377,7 +364,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       {/* STATUS BANNER */}
       {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
-      {/* CLAIMABLES (unchanged) */}
+      {/* CLAIMABLES */}
       <div className="db-section claim-section">
         <div className="db-section-header">
           <div className="db-section-title">Claimables</div>
@@ -513,13 +500,18 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       <div className="db-tabs-container">
         <div className="db-tabs">
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
-            On-going
+            <span className="db-tab-live">
+              <span className="db-live-dot" aria-hidden="true" />
+              On-going
+            </span>
           </button>
+
           <button className={`db-tab ${tab === "joined" ? "active" : ""}`} onClick={() => setTab("joined")}>
-            Joined
+            Joined <span className="db-tab-count">({joinedCount})</span>
           </button>
+
           <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
-            Created <span style={{ opacity: 0.7 }}>({createdCount})</span>
+            Created <span className="db-tab-count">({createdCount})</span>
           </button>
         </div>
       </div>
