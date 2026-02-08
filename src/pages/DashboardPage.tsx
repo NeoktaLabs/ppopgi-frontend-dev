@@ -116,10 +116,7 @@ async function fetchTicketsPurchasedByRaffle(
   return out;
 }
 
-/**
- * ✅ BIG multiplier badge (xN) for the stack
- * (We show x10 etc, but we never render more than 5 card backs.)
- */
+/** Big multiplier badge (xN) shown on the top card only */
 function MultiplierBadge({ count }: { count: number }) {
   if (!count || count <= 1) return null;
   const display = count > 999 ? "999+" : String(count);
@@ -131,35 +128,53 @@ function MultiplierBadge({ count }: { count: number }) {
 }
 
 /**
- * ✅ Stack wrapper that makes the *RaffleCard itself* look like it's in a pile
- * - Renders N-1 "card backs" behind
- * - Renders 1 real RaffleCard on top
- * - On hover: backs collapse vertically (tighter stack)
+ * ✅ REAL RaffleCard pile:
+ * - Render up to 3 real cards behind (performance-friendly)
+ * - Still show xN badge for any ticketCount (like x10)
+ * - Hover collapses vertically
  */
-function RaffleCardStack({
-  layers,
+function RaffleCardPile({
+  ticketCount,
   isWinner,
-  badgeCount,
-  children,
+  raffle,
+  onOpenRaffle,
+  onOpenSafety,
+  nowMs,
+  userEntry,
 }: {
-  layers: number; // how many cards in the stack (visual), max 5
+  ticketCount: number;
   isWinner?: boolean;
-  badgeCount?: number; // actual tickets count to display as xN
-  children: ReactNode;
+  raffle: any;
+  onOpenRaffle: (id: string) => void;
+  onOpenSafety: (id: string) => void;
+  nowMs: number;
+  userEntry?: any;
 }) {
-  const safeLayers = Math.max(1, Math.min(5, Math.floor(layers || 1)));
+  const layersVisual = Math.max(1, Math.min(3, ticketCount || 1)); // ✅ 3 real cards max
 
   return (
-    <div className={`db-card-stack card-hover-trigger ${isWinner ? "is-winner" : ""}`} data-layers={safeLayers}>
-      {/* Back cards (pure CSS blocks, not real raffle cards) */}
-      {Array.from({ length: safeLayers - 1 }).map((_, i) => (
-        <div key={i} className={`db-card-back back-${i}`} aria-hidden="true" />
-      ))}
+    <div className={`db-card-pile card-hover-trigger ${isWinner ? "is-winner" : ""}`} data-layers={layersVisual}>
+      {/* Back cards (real RaffleCard, non-interactive) */}
+      {layersVisual >= 3 && (
+        <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
+          <div className="db-card-shadow-inner">
+            <RaffleCard raffle={raffle} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} userEntry={userEntry} />
+          </div>
+        </div>
+      )}
 
-      {/* Top/real card */}
+      {layersVisual >= 2 && (
+        <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
+          <div className="db-card-shadow-inner">
+            <RaffleCard raffle={raffle} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} userEntry={userEntry} />
+          </div>
+        </div>
+      )}
+
+      {/* Front card (interactive) */}
       <div className="db-card-front">
-        <MultiplierBadge count={badgeCount ?? 0} />
-        {children}
+        <MultiplierBadge count={ticketCount} />
+        <RaffleCard raffle={raffle} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} userEntry={userEntry} />
       </div>
     </div>
   );
@@ -189,11 +204,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // --- JOINED RAFFLES PROCESSING ---
   const { active: activeJoined, past: pastJoined } = useMemo(() => {
     const active: any[] = [];
     const past: any[] = [];
-
     if (!data.joined) return { active, past };
 
     data.joined.forEach((r: any) => {
@@ -201,7 +214,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       const sold = Math.max(0, Number(r.sold || 0));
       const percentage = sold > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
       const enriched = { ...r, userEntry: { count: tickets, percentage } };
-
       if (ACTIVE_STATUSES.includes(r.status)) active.push(enriched);
       else past.push(enriched);
     });
@@ -209,7 +221,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return { active, past };
   }, [data.joined]);
 
-  // --- CREATED RAFFLES (active subset for ongoing) ---
   const activeCreated = useMemo(() => {
     const active: any[] = [];
     const arr = data.created ?? [];
@@ -219,17 +230,13 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return active;
   }, [data.created]);
 
-  // ✅ On-going should include BOTH joined-active and created-active (dedup by id)
   const ongoingRaffles = useMemo(() => {
     const byId = new Map<string, any>();
-
-    // keep joined version first so it preserves userEntry where applicable
     for (const r of activeJoined) byId.set(String(r.id), r);
     for (const r of activeCreated) {
       const id = String(r.id);
       if (!byId.has(id)) byId.set(id, r);
     }
-
     return Array.from(byId.values());
   }, [activeJoined, activeCreated]);
 
@@ -240,10 +247,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
 
-  // ✅ Refunds: allow refund button when there's actually claimable USDC, not based on ticketCount
   const getPrimaryMethod = (opts: { isRefund: boolean; hasUsdc: boolean; hasNative: boolean }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative } = opts;
-
     if (isRefund) return hasUsdc ? "claimTicketRefund" : null;
     if (hasUsdc) return "withdrawFunds";
     if (hasNative) return "withdrawNative";
@@ -253,7 +258,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const hasClaims = data.claimables.length > 0;
   const showColdSkeletons = data.isColdLoading && ongoingRaffles.length === 0;
 
-  // --- Fetch Historical Purchases (so canceled/refunded still shows “you bought X”) ---
+  // --- Historical purchases map
   const [purchasedByRaffle, setPurchasedByRaffle] = useState<Map<string, number>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
 
@@ -267,7 +272,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       setPurchasedByRaffle(new Map());
       return;
     }
-
     try {
       abortRef.current?.abort();
     } catch {}
@@ -277,9 +281,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     try {
       const map = await fetchTicketsPurchasedByRaffle(relevantRaffleIdsForPurchased, account, ac.signal);
       if (!ac.signal.aborted) setPurchasedByRaffle(map);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [account, relevantRaffleIdsForPurchased]);
 
   useEffect(() => {
@@ -376,9 +378,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 badgeTitle = "Refund";
                 message =
                   displayTicketCount > 0
-                    ? `Raffle canceled — reclaim the cost of your ${displayTicketCount} ticket${
-                        displayTicketCount !== 1 ? "s" : ""
-                      }.`
+                    ? `Raffle canceled — reclaim the cost of your ${displayTicketCount} ticket${displayTicketCount !== 1 ? "s" : ""}.`
                     : "Raffle canceled — reclaim your refund.";
                 primaryLabel = "Reclaim Refund";
               } else if (iAmWinner) {
@@ -439,7 +439,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                           <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
                             {data.isPending ? "Processing..." : "Claim USDC"}
                           </button>
-
                           <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
                             {data.isPending ? "Processing..." : "Claim Native"}
                           </button>
@@ -500,19 +499,17 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const purchasedEver = getPurchasedEver(r.id);
               const ticketCount = ownedNow > 0 ? ownedNow : purchasedEver;
 
-              // stack is visual only (max 5)
-              const stackLayers = Math.min(5, Math.max(1, ticketCount || 1));
-
               return (
-                <RaffleCardStack key={r.id} layers={stackLayers} badgeCount={ticketCount} isWinner={false}>
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowS * 1000}
-                    userEntry={r.userEntry}
-                  />
-                </RaffleCardStack>
+                <RaffleCardPile
+                  key={r.id}
+                  ticketCount={ticketCount || 1}
+                  isWinner={false}
+                  raffle={r}
+                  onOpenRaffle={onOpenRaffle}
+                  onOpenSafety={onOpenSafety}
+                  nowMs={nowS * 1000}
+                  userEntry={r.userEntry}
+                />
               );
             })}
           </div>
@@ -540,19 +537,17 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const participatedEver = purchasedEver > 0;
               const iLost = completed && participatedEver && !iWon;
 
-              const stackLayers = Math.min(5, Math.max(1, ticketCount || 1));
-
               return (
                 <div key={r.id} className="db-history-card-wrapper">
-                  <RaffleCardStack layers={stackLayers} badgeCount={ticketCount} isWinner={iWon}>
-                    <RaffleCard
-                      raffle={r}
-                      onOpen={onOpenRaffle}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowS * 1000}
-                      userEntry={r.userEntry}
-                    />
-                  </RaffleCardStack>
+                  <RaffleCardPile
+                    ticketCount={ticketCount || 1}
+                    isWinner={iWon}
+                    raffle={r}
+                    onOpenRaffle={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowS * 1000}
+                    userEntry={r.userEntry}
+                  />
 
                   {isRefunded && <div className="db-history-badge refunded">↩ Refunded ({purchasedEver} tix)</div>}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
