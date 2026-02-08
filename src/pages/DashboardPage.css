@@ -465,11 +465,19 @@
 .card-hover-trigger:hover .db-card-shadow-3 { transform: translate(14px,16px) rotate(-0.3deg) scale(0.97); }
 .card-hover-trigger:hover .db-card-shadow-4 { transform: translate(18px,21px) rotate(0.8deg) scale(0.96); }
 
+.db-card-pile-wrapper {
+  position: relative;
+}
+
+.db-card-pile-anchor {
+  position: relative;
+}
+
 .db-mult-badge {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 60;
+  top: -14px;
+  right: -14px;
+  z-index: 80;
   pointer-events: none;
   font-weight: 1000;
   font-size: 30px;
@@ -540,10 +548,6 @@
   transform: translateZ(0) skewX(-20deg);
   mix-blend-mode: screen;
   animation: winner-sheen 3.5s infinite;
-}
-
-.db-card-pile-wrapper {
-  position: relative;
 }
 
 @keyframes winner-sheen {
