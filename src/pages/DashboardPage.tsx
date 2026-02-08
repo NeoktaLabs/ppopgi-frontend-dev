@@ -118,13 +118,12 @@ async function fetchTicketsPurchasedByRaffle(
   return out;
 }
 
-/** * Multiplier Badge (xN) 
+/**
+ * Multiplier Badge (xN)
  * ✅ Hides completely if count is 1
  */
 function MultiplierBadge({ count }: { count: number }) {
   const safe = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
-  
-  // If only 1 ticket, do not show x1 badge
   if (safe <= 1) return null;
 
   const display = safe > 999 ? "999+" : String(safe);
@@ -138,9 +137,8 @@ function MultiplierBadge({ count }: { count: number }) {
 
 /**
  * RaffleCardPile
- * ✅ Displays a stack of solid cards.
- * ✅ If ticketCount is 1 -> 0 shadows -> 1 card shown.
- * ✅ Caps at 5 cards total (1 front + 4 shadows).
+ * ✅ Real stack of real cards (1 front + up to 4 shadows)
+ * ✅ Shadows are visually real, but not clickable
  */
 function RaffleCardPile({
   raffle,
@@ -158,8 +156,6 @@ function RaffleCardPile({
   nowMs: number;
 }) {
   const safeTickets = Number.isFinite(ticketCount) ? Math.max(1, Math.floor(ticketCount)) : 1;
-  
-  // Logic: 1 ticket = 0 shadows. 2 tickets = 1 shadow... Max 4 shadows.
   const shadowCount = Math.min(4, Math.max(0, safeTickets - 1));
 
   const raffleForCard = useMemo(() => {
@@ -173,12 +169,13 @@ function RaffleCardPile({
 
   return (
     <div className={pileClass}>
-      {/* Background Shadows (The solid stack) */}
+      {/* Shadows (render real cards, but we block interaction via CSS overlay) */}
       {shadowCount >= 4 && (
         <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
           <div className="db-card-shadow-inner">
             <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
+          <div className="db-shadow-blocker" aria-hidden="true" />
         </div>
       )}
       {shadowCount >= 3 && (
@@ -186,6 +183,7 @@ function RaffleCardPile({
           <div className="db-card-shadow-inner">
             <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
+          <div className="db-shadow-blocker" aria-hidden="true" />
         </div>
       )}
       {shadowCount >= 2 && (
@@ -193,6 +191,7 @@ function RaffleCardPile({
           <div className="db-card-shadow-inner">
             <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
+          <div className="db-shadow-blocker" aria-hidden="true" />
         </div>
       )}
       {shadowCount >= 1 && (
@@ -200,10 +199,11 @@ function RaffleCardPile({
           <div className="db-card-shadow-inner">
             <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
+          <div className="db-shadow-blocker" aria-hidden="true" />
         </div>
       )}
 
-      {/* The Top Card (Interactable) */}
+      {/* Top Card (clickable) */}
       <div className="db-card-front">
         <MultiplierBadge count={safeTickets} />
         <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
@@ -240,7 +240,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const { active: activeJoined, past: pastJoined } = useMemo(() => {
     const active: any[] = [];
     const past: any[] = [];
-
     if (!data.joined) return { active, past };
 
     data.joined.forEach((r: any) => {
@@ -248,7 +247,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       const sold = Math.max(0, Number(r.sold || 0));
       const percentage = sold > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
       const enriched = { ...r, userEntry: { count: tickets, percentage } };
-
       if (ACTIVE_STATUSES.includes(r.status)) active.push(enriched);
       else past.push(enriched);
     });
@@ -317,13 +315,17 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     try {
       const map = await fetchTicketsPurchasedByRaffle(relevantRaffleIdsForPurchased, account, ac.signal);
       if (!ac.signal.aborted) setPurchasedByRaffle(map);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [account, relevantRaffleIdsForPurchased]);
 
   useEffect(() => {
     void loadPurchased();
     return () => {
-      try { abortRef.current?.abort(); } catch {}
+      try {
+        abortRef.current?.abort();
+      } catch {}
     };
   }, [loadPurchased]);
 
@@ -516,13 +518,22 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       <div className="db-grid-area">
         {tab === "active" && (
           <div className="db-grid">
-            {showColdSkeletons && <><RaffleCardSkeleton /><RaffleCardSkeleton /></>}
-            
+            {showColdSkeletons && (
+              <>
+                <RaffleCardSkeleton />
+                <RaffleCardSkeleton />
+              </>
+            )}
+
             {!data.isColdLoading && ongoingRaffles.length === 0 && (
               <div className="db-empty">
                 <div className="db-empty-icon">🎟️</div>
                 <div>You have no on-going raffles.</div>
-                {onBrowse && <button className="db-btn-browse" onClick={onBrowse}>Browse Raffles</button>}
+                {onBrowse && (
+                  <button className="db-btn-browse" onClick={onBrowse}>
+                    Browse Raffles
+                  </button>
+                )}
               </div>
             )}
 
@@ -549,24 +560,26 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         {tab === "joined" && (
           <div className="db-grid">
             {!data.isColdLoading && pastJoined.length === 0 && (
-               <div className="db-empty">
-                 <div className="db-empty-icon">📂</div>
-                 <div>No joined raffles history found.</div>
-               </div>
+              <div className="db-empty">
+                <div className="db-empty-icon">📂</div>
+                <div>No joined raffles history found.</div>
+              </div>
             )}
 
             {pastJoined.map((r: any) => {
               const acct = norm(account);
               const winner = norm(r.winner);
+
               const ownedNow = Number(r.userEntry?.count ?? 0);
               const purchasedEver = getPurchasedEver(r.id);
               const ticketCount = ownedNow > 0 ? ownedNow : purchasedEver;
+
               const completed = r.status === "COMPLETED";
               const canceled = r.status === "CANCELED";
 
-              // ✅ Strict winner logic
               const iWon = completed && acct && winner === acct;
               const isRefunded = canceled && ownedNow === 0 && purchasedEver > 0;
+
               const participatedEver = purchasedEver > 0;
               const iLost = completed && participatedEver && !iWon;
 
