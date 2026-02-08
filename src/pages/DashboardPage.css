@@ -533,21 +533,7 @@
 
 /* ✅ Inner ring: draws INSIDE the card (fixes “too big on right”) */
 .db-card-pile.is-winner .db-card-front::before {
-  content: "";
-  position: absolute;
-  inset: 2px;            /* key: inside the card */
-  border-radius: 14px;   /* 16 - 2 */
-  padding: 1px;          /* thinner ring */
-  pointer-events: none;
-  z-index: 20;
-
-  background: linear-gradient(
-    135deg,
-    #c5a059 0%,
-    #e6c888 25%,
-    #fff6d6 50%,
-    #e6c888 75%,
-    #c5a059 100%
+  display: none;
   );
 
   /* border-only mask */
