@@ -391,6 +391,7 @@
 
 /* =========================================================
    ✅ REAL RAFFLECARD PILE (Safari-safe)
+   - badge and card are separate elements
    ========================================================= */
 
 .card-hover-trigger {
@@ -404,12 +405,22 @@
   transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-/* ✅ IMPORTANT: never paint white surfaces in pile wrappers */
+/* Front wrapper holds badge + card */
 .db-card-front {
   position: relative;
   z-index: 10;
   border-radius: 16px;
   background: transparent;
+}
+
+/* ✅ The actual front card element (winner border/glow targets this) */
+.db-card-front-card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: transparent;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* IMPORTANT: DO NOT use pointer-events:none here (Safari can stop painting children) */
@@ -427,23 +438,23 @@
   -webkit-backface-visibility: hidden;
 }
 
-/* ✅ Do not paint white here either */
 .db-card-shadow-inner {
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   background: transparent;
   width: 100%;
   height: 100%;
 }
 
-/* Block interaction on shadow cards without breaking paint */
-.db-shadow-blocker {
-  position: absolute;
-  inset: 0;
+/* ✅ Shadow card wrapper (prevents blank “white cards”) */
+.db-card-shadow-card {
+  width: 100%;
+  height: 100%;
   border-radius: 16px;
-  z-index: 2;
+  overflow: hidden;
   background: transparent;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* Solid shadows w/ depth */
@@ -468,39 +479,23 @@
   z-index: 3;
 }
 
-.db-card-shadow-1 .db-card-shadow-inner {
-  filter: brightness(0.96);
-}
-.db-card-shadow-2 .db-card-shadow-inner {
-  filter: brightness(0.92);
-}
-.db-card-shadow-3 .db-card-shadow-inner {
-  filter: brightness(0.88);
-}
-.db-card-shadow-4 .db-card-shadow-inner {
-  filter: brightness(0.84);
-}
+.db-card-shadow-1 .db-card-shadow-inner { filter: brightness(0.96); }
+.db-card-shadow-2 .db-card-shadow-inner { filter: brightness(0.92); }
+.db-card-shadow-3 .db-card-shadow-inner { filter: brightness(0.88); }
+.db-card-shadow-4 .db-card-shadow-inner { filter: brightness(0.84); }
 
-/* hover collapse (desktop only; harmless elsewhere) */
-.card-hover-trigger:hover .db-card-shadow-1 {
-  transform: translate(6px, 6px) rotate(-1deg) scale(0.99);
-}
-.card-hover-trigger:hover .db-card-shadow-2 {
-  transform: translate(10px, 11px) rotate(1.5deg) scale(0.98);
-}
-.card-hover-trigger:hover .db-card-shadow-3 {
-  transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97);
-}
-.card-hover-trigger:hover .db-card-shadow-4 {
-  transform: translate(18px, 21px) rotate(0.8deg) scale(0.96);
-}
+/* hover collapse */
+.card-hover-trigger:hover .db-card-shadow-1 { transform: translate(6px, 6px) rotate(-1deg) scale(0.99); }
+.card-hover-trigger:hover .db-card-shadow-2 { transform: translate(10px, 11px) rotate(1.5deg) scale(0.98); }
+.card-hover-trigger:hover .db-card-shadow-3 { transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97); }
+.card-hover-trigger:hover .db-card-shadow-4 { transform: translate(18px, 21px) rotate(0.8deg) scale(0.96); }
 
-/* Mult badge */
+/* Mult badge (independent, never part of winner outline) */
 .db-mult-badge {
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 50;
+  z-index: 60;
   pointer-events: none;
   font-weight: 1000;
   font-size: 30px;
@@ -513,42 +508,87 @@
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.16);
 }
 
+/* ✅ Tone down x1 without hiding it */
+.db-mult-badge.is-one {
+  opacity: 0.65;
+  transform: scale(0.92);
+}
+
 /* =========================================================
-   ✨ WINNER EFFECT — tighter border (no right spill)
+   ✨ WINNER EFFECT
+   - gold outline around pile AND around front card
+   - glow kept, badge excluded
    ========================================================= */
 
-/* ✅ No pile transform (avoids iOS repaint/blank issues) */
+/* No pile transform (avoids iOS repaint issues) */
 .db-card-pile.is-winner {
   transform: none;
   z-index: 10;
 }
 
-/* ✅ Clip winner visuals to the card so the ring can't bleed right */
-.db-card-pile.is-winner .db-card-front {
-  position: relative;
-  overflow: hidden; /* IMPORTANT */
-  border-radius: 16px;
-  filter: saturate(1.05) contrast(1.02);
-}
+/* ✅ Gold outline around the whole pile */
+.db-card-pile.is-winner::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  padding: 2px;
+  pointer-events: none;
+  z-index: 2;
 
-/* ✅ Inner ring: draws INSIDE the card (fixes “too big on right”) */
-.db-card-pile.is-winner .db-card-front::before {
-  display: none;
+  background: linear-gradient(
+    135deg,
+    #c5a059 0%,
+    #e6c888 25%,
+    #fff6d6 50%,
+    #e6c888 75%,
+    #c5a059 100%
   );
 
-  /* border-only mask */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 
-  /* slightly reduced glow so it doesn’t “push” right */
   box-shadow:
-    0 10px 22px -10px rgba(210, 160, 40, 0.28),
-    0 0 10px rgba(255, 230, 150, 0.16);
+    0 10px 22px -10px rgba(210, 160, 40, 0.22),
+    0 0 10px rgba(255, 230, 150, 0.14);
 }
 
-/* ✅ Sheen sweep stays clipped */
-.db-card-pile.is-winner .db-card-front::after {
+/* ✅ Gold outline + glow around the card only */
+.db-card-pile.is-winner .db-card-front-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 2px;
+  pointer-events: none;
+  z-index: 5;
+
+  background: linear-gradient(
+    135deg,
+    #c5a059 0%,
+    #e6c888 25%,
+    #fff6d6 50%,
+    #e6c888 75%,
+    #c5a059 100%
+  );
+
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+
+  box-shadow:
+    0 12px 26px -12px rgba(210, 160, 40, 0.30),
+    0 0 12px rgba(255, 230, 150, 0.18);
+}
+
+/* Keep the glow (no outline affecting badge) */
+.db-card-pile.is-winner .db-card-front-card {
+  filter: saturate(1.05) contrast(1.02);
+}
+
+/* ✅ Sheen only on the card */
+.db-card-pile.is-winner .db-card-front-card::after {
   content: "";
   position: absolute;
   top: 0;
@@ -557,7 +597,7 @@
   height: 100%;
   border-radius: 16px;
   pointer-events: none;
-  z-index: 21;
+  z-index: 6;
 
   background: linear-gradient(
     105deg,
@@ -575,15 +615,9 @@
 }
 
 @keyframes winner-sheen {
-  0% {
-    left: -150%;
-  }
-  40% {
-    left: 150%;
-  }
-  100% {
-    left: 150%;
-  }
+  0% { left: -150%; }
+  40% { left: 150%; }
+  100% { left: 150%; }
 }
 
 /* =========================================================
@@ -653,7 +687,7 @@
   background: #e2e8f0;
   color: #64748b;
   border: 1px solid #cbd5e1;
-  box-shadow: 0 2px 4px rgba(0,  0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 /* Live green pulse */
@@ -725,7 +759,7 @@
     font-size: 24px;
     padding: 10px 14px;
   }
-  .db-card-pile.is-winner .db-card-front::after {
+  .db-card-pile.is-winner .db-card-front-card::after {
     opacity: 1;
     animation-duration: 2.5s;
   }
