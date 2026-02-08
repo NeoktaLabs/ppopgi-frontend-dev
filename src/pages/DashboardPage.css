@@ -1,5 +1,3 @@
-/* src/pages/DashboardPage.css */
-
 .db-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -457,7 +455,7 @@
 /* =========================================================
    ✅ WINNER FX: centered & clipped to the REAL CARD (no right-side bar)
    - aura + THICKER gold sparkles + gold sheen
-   Apply: .db-card-pile.is-winner
+   - Strictly scoped to .is-winner class
    ========================================================= */
 
 .db-card-pile.is-winner {
@@ -480,7 +478,7 @@
   filter: saturate(1.14) contrast(1.04) drop-shadow(0 10px 24px rgba(255, 170, 25, 0.22));
 }
 
-/* Aura (inside card, soft but visible) */
+/* Aura (inside card, soft but visible) - ONLY on is-winner */
 .db-card-pile.is-winner .db-card-front::before {
   content: "";
   position: absolute;
@@ -497,7 +495,7 @@
   opacity: 0.95;
 }
 
-/* THICKER glitter + sheen (bigger sparkle cores, slightly more blur) */
+/* THICKER glitter + sheen (bigger sparkle cores, slightly more blur) - ONLY on is-winner */
 .db-card-pile.is-winner .db-card-front::after {
   content: "";
   position: absolute;
