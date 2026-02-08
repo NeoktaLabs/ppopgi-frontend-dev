@@ -1,3 +1,5 @@
+/* src/pages/DashboardPage.css */
+
 .db-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -22,7 +24,6 @@
   overflow: hidden;
 }
 
-/* Depth texture for hero */
 .db-hero::before {
   content: "";
   position: absolute;
@@ -95,7 +96,6 @@
   color: #94a3b8;
   margin-top: 4px;
 }
-
 .db-stat.highlight .db-stat-num { color: #db2777; }
 
 /* --- STATUS BANNER --- */
@@ -112,7 +112,6 @@
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 .db-msg-banner.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 .db-msg-banner.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
 
@@ -124,7 +123,6 @@
   gap: 12px;
   margin-bottom: 20px;
 }
-
 .db-section-title {
   font-size: 20px;
   font-weight: 900;
@@ -132,7 +130,6 @@
   color: #ffffff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
-
 .db-pill {
   padding: 4px 10px;
   background: #fee2e2;
@@ -269,6 +266,7 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
+
 .db-empty {
   grid-column: 1 / -1;
   padding: 60px 20px;
@@ -304,7 +302,7 @@
 .db-btn-browse:hover { border-color: #94a3b8; color: #1e293b; }
 
 /* =========================================================
-   ✅ REAL RAFFLECARD PILE (Organic Look)
+   ✅ REAL RAFFLECARD PILE (Safari-safe)
    ========================================================= */
 
 .card-hover-trigger { position: relative; }
@@ -316,53 +314,65 @@
   transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-/* top card layer */
 .db-card-front {
   position: relative;
   z-index: 10;
   border-radius: 16px;
-  background: white; /* default background */
+  background: white;
 }
 
-/* each shadow is a real RaffleCard */
+/* IMPORTANT: DO NOT use pointer-events:none here (Safari can stop painting children) */
 .db-card-shadow {
   position: absolute;
   inset: 0;
-  pointer-events: none;
   transition: transform 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
   border-radius: 16px;
   overflow: hidden;
   z-index: 1;
+
+  /* Help Safari compositing */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
 }
 
 .db-card-shadow-inner {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  background: white; /* ✅ Ensures solid look even if card loads slowly */
+  background: white;
   width: 100%;
   height: 100%;
 }
 
-/* ✅ Shadows are now SOLID (opacity 1) but darkened slightly for depth */
+/* Block interaction on shadow cards without breaking paint */
+.db-shadow-blocker {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  z-index: 2;
+  background: transparent;
+}
+
+/* Solid shadows w/ depth */
 .db-card-shadow-1 { transform: translate(8px, 10px) rotate(-1.5deg) scale(0.99); opacity: 1; z-index: 6; }
 .db-card-shadow-2 { transform: translate(14px, 18px) rotate(2deg) scale(0.98); opacity: 1; z-index: 5; }
 .db-card-shadow-3 { transform: translate(20px, 28px) rotate(-0.5deg) scale(0.97); opacity: 1; z-index: 4; }
 .db-card-shadow-4 { transform: translate(26px, 36px) rotate(1.2deg) scale(0.96); opacity: 1; z-index: 3; }
 
-/* Depth filter for cards further back */
 .db-card-shadow-1 .db-card-shadow-inner { filter: brightness(0.96); }
 .db-card-shadow-2 .db-card-shadow-inner { filter: brightness(0.92); }
 .db-card-shadow-3 .db-card-shadow-inner { filter: brightness(0.88); }
 .db-card-shadow-4 .db-card-shadow-inner { filter: brightness(0.84); }
 
-/* hover collapse */
+/* hover collapse (desktop only; harmless elsewhere) */
 .card-hover-trigger:hover .db-card-shadow-1 { transform: translate(6px, 6px) rotate(-1deg) scale(0.99); }
 .card-hover-trigger:hover .db-card-shadow-2 { transform: translate(10px, 11px) rotate(1.5deg) scale(0.98); }
 .card-hover-trigger:hover .db-card-shadow-3 { transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97); }
 .card-hover-trigger:hover .db-card-shadow-4 { transform: translate(18px, 21px) rotate(0.8deg) scale(0.96); }
 
-/* ✅ Bigger multiplier badge (xN) */
+/* Mult badge */
 .db-mult-badge {
   position: absolute;
   top: 12px;
@@ -381,16 +391,14 @@
 }
 
 /* =========================================================
-   ✨ WINNER EFFECT (Rare Foil Look)
+   ✨ WINNER EFFECT (Rare Foil Look) — front-card only
    ========================================================= */
 
 .db-card-pile.is-winner {
-  /* Lift the pile */
   transform: translateY(-6px);
   z-index: 10;
 }
 
-/* Remove effects from pile wrapper, apply to Front Card only */
 .db-card-pile.is-winner::before,
 .db-card-pile.is-winner::after { content: none !important; }
 
@@ -398,32 +406,28 @@
   position: relative;
   overflow: hidden;
   border-radius: 16px;
-  
-  /* Metallic Gradient Border */
+
   border: 2px solid transparent;
-  background-image: 
-    linear-gradient(white, white), 
+  background-image:
+    linear-gradient(white, white),
     linear-gradient(135deg, #C5A059 0%, #E6C888 25%, #FFF6D6 50%, #E6C888 75%, #C5A059 100%);
   background-origin: border-box;
   background-clip: padding-box, border-box;
 
-  /* Soft Bloom */
-  box-shadow: 
-    0 15px 35px -5px rgba(210, 160, 40, 0.3), 
+  box-shadow:
+    0 15px 35px -5px rgba(210, 160, 40, 0.3),
     0 0 15px rgba(255, 230, 150, 0.2);
-    
+
   filter: saturate(1.05) contrast(1.02);
 }
 
-/* The "Sheen" Sweep */
 .db-card-pile.is-winner .db-card-front::after {
   content: "";
   position: absolute;
-  top: 0; 
-  left: -150%; 
-  width: 100%; 
+  top: 0;
+  left: -150%;
+  width: 100%;
   height: 100%;
-  
   background: linear-gradient(
     105deg,
     transparent 20%,
@@ -431,10 +435,11 @@
     rgba(255, 250, 200, 0.2) 50%,
     transparent 55%
   );
-  
   transform: skewX(-20deg);
   pointer-events: none;
-  mix-blend-mode: overlay; 
+
+  /* more stable than overlay on iOS */
+  mix-blend-mode: screen;
   animation: winner-sheen 3.5s infinite;
 }
 
@@ -445,14 +450,22 @@
 }
 
 /* =========================================================
-   ✅ LOST STATE (De-emphasis)
+   ✅ LOST STATE (no iPhone flicker)
    ========================================================= */
 
+/* Touch devices: do NOT hover-toggle filters */
 .db-history-card-wrapper.is-lost .db-card-pile {
-  filter: grayscale(0.85) opacity(0.85);
+  filter: none; /* keep stable (pink) */
 }
-.db-history-card-wrapper.is-lost:hover .db-card-pile {
-  filter: grayscale(0) opacity(1);
+
+/* Desktop only */
+@media (hover: hover) and (pointer: fine) {
+  .db-history-card-wrapper.is-lost .db-card-pile {
+    filter: grayscale(0.85) opacity(0.85);
+  }
+  .db-history-card-wrapper.is-lost:hover .db-card-pile {
+    filter: grayscale(0) opacity(1);
+  }
 }
 
 /* =========================================================
@@ -493,13 +506,8 @@
 .db-history-badge.won { background: #dcfce7; color: #15803d; border: 1px solid #86efac; box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1); }
 .db-history-badge.lost { background: #e2e8f0; color: #64748b; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-/* ✅ Live green pulse */
-.db-tab-live {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-}
+/* Live green pulse */
+.db-tab-live { display: inline-flex; align-items: center; justify-content: center; gap: 0; }
 .db-live-dot {
   width: 9px;
   height: 9px;
@@ -527,7 +535,6 @@
   .db-tabs-container { overflow-x: auto; padding-bottom: 5px; display: block; }
   .db-tabs { display: flex; width: max-content; }
   .db-mult-badge { font-size: 24px; padding: 10px 14px; }
-  
   .db-card-pile.is-winner .db-card-front::after { opacity: 1; animation-duration: 2.5s; }
   .db-live-dot { width: 8px; height: 8px; margin-right: 7px; }
 }
