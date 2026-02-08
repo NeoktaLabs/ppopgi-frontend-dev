@@ -455,8 +455,8 @@
 }
 
 /* =========================================================
-   ✅ WINNER: GOLD GLITTER (mobile-friendly, NOT snow)
-   - warm gold flakes + star bursts + shimmer band
+   ✅ WINNER: GOLD GLITTER (mobile-friendly, no "studs")
+   - dense tiny glitter + gold aura + gold sheen
    Apply: .db-card-pile.is-winner
    ========================================================= */
 
@@ -464,25 +464,24 @@
   border-radius: 16px;
 }
 
-/* strong gold aura */
+/* Soft aura (no chunky blobs) */
 .db-card-pile.is-winner::before {
   content: "";
   position: absolute;
-  inset: -7px;
-  border-radius: 20px;
+  inset: -8px;
+  border-radius: 22px;
   pointer-events: none;
   z-index: 0;
 
   background:
-    radial-gradient(circle at 18% 12%, rgba(255, 170, 25, 0.95), rgba(255, 170, 25, 0) 60%),
-    radial-gradient(circle at 82% 88%, rgba(255, 120, 10, 0.85), rgba(255, 120, 10, 0) 64%),
-    radial-gradient(circle at 48% 52%, rgba(255, 210, 70, 0.55), rgba(255, 210, 70, 0) 72%);
-
-  filter: blur(16px);
-  opacity: 1;
+    radial-gradient(circle at 22% 14%, rgba(255, 190, 55, 0.75), rgba(255, 190, 55, 0) 60%),
+    radial-gradient(circle at 82% 86%, rgba(255, 130, 25, 0.55), rgba(255, 130, 25, 0) 62%),
+    radial-gradient(circle at 55% 55%, rgba(255, 220, 120, 0.28), rgba(255, 220, 120, 0) 72%);
+  filter: blur(12px);
+  opacity: 0.9;
 }
 
-/* glitter + shimmer (gold only) */
+/* Glitter layer: lots of tiny gold sparkles (NOT snow, NOT big studs) */
 .db-card-pile.is-winner::after {
   content: "";
   position: absolute;
@@ -491,33 +490,33 @@
   pointer-events: none;
   z-index: 30;
 
+  /* Layered tiny sparkles with warm gold hues */
   background:
-    /* --- STAR BURSTS (read as sparkles on mobile) --- */
-    radial-gradient(circle at 16% 22%, rgba(255, 190, 35, 0.95) 0 2px, rgba(255, 190, 35, 0) 8px),
-    radial-gradient(circle at 78% 28%, rgba(255, 150, 18, 0.92) 0 2px, rgba(255, 150, 18, 0) 9px),
-    radial-gradient(circle at 44% 74%, rgba(255, 210, 70, 0.88) 0 2px, rgba(255, 210, 70, 0) 10px),
-    radial-gradient(circle at 86% 66%, rgba(255, 140, 14, 0.9) 0 2px, rgba(255, 140, 14, 0) 9px),
-    radial-gradient(circle at 22% 68%, rgba(255, 195, 45, 0.85) 0 2px, rgba(255, 195, 45, 0) 10px),
+    radial-gradient(circle, rgba(255, 206, 86, 0.95) 0 0.8px, rgba(255, 206, 86, 0) 2px) 0 0 / 60px 60px,
+    radial-gradient(circle, rgba(255, 168, 40, 0.9) 0 0.7px, rgba(255, 168, 40, 0) 1.9px) 10px 18px / 76px 76px,
+    radial-gradient(circle, rgba(255, 232, 160, 0.85) 0 0.6px, rgba(255, 232, 160, 0) 1.8px) 22px 8px / 92px 92px,
+    radial-gradient(circle, rgba(255, 142, 22, 0.85) 0 0.7px, rgba(255, 142, 22, 0) 2px) 44px 36px / 112px 112px,
+    radial-gradient(circle, rgba(255, 214, 102, 0.7) 0 0.6px, rgba(255, 214, 102, 0) 1.7px) 6px 54px / 140px 140px,
 
-    /* --- GOLD FLAKES (bigger, not dot-grid) --- */
-    radial-gradient(closest-side, rgba(255, 165, 20, 0.55), rgba(255, 165, 20, 0) 70%) 12% 18% / 140px 140px,
-    radial-gradient(closest-side, rgba(255, 210, 70, 0.45), rgba(255, 210, 70, 0) 72%) 72% 20% / 160px 160px,
-    radial-gradient(closest-side, rgba(255, 140, 14, 0.42), rgba(255, 140, 14, 0) 74%) 82% 78% / 190px 190px,
-    radial-gradient(closest-side, rgba(255, 190, 35, 0.38), rgba(255, 190, 35, 0) 74%) 28% 86% / 210px 210px,
+    /* A few “spark” bursts (still warm gold, not white) */
+    radial-gradient(circle at 18% 26%, rgba(255, 190, 55, 0.55) 0 2px, rgba(255, 190, 55, 0) 10px),
+    radial-gradient(circle at 76% 22%, rgba(255, 150, 30, 0.5) 0 2px, rgba(255, 150, 30, 0) 11px),
+    radial-gradient(circle at 44% 78%, rgba(255, 214, 102, 0.45) 0 2px, rgba(255, 214, 102, 0) 12px),
 
-    /* --- GOLD SHIMMER BAND (no white wash) --- */
+    /* Gold sheen band (no white wash) */
     linear-gradient(
       120deg,
       rgba(255, 200, 60, 0) 0%,
       rgba(255, 200, 60, 0.06) 35%,
-      rgba(255, 165, 20, 0.18) 50%,
+      rgba(255, 165, 20, 0.16) 50%,
       rgba(255, 200, 60, 0.06) 65%,
       rgba(255, 200, 60, 0) 100%
     );
 
   mix-blend-mode: color-dodge;
   opacity: 0.9;
-  animation: db-gold-scintillate 2.2s ease-in-out infinite;
+  filter: blur(0.15px);
+  animation: db-gold-glitter 2.15s ease-in-out infinite;
 }
 
 /* premium pop */
@@ -525,22 +524,10 @@
   filter: saturate(1.14) contrast(1.04);
 }
 
-@keyframes db-gold-scintillate {
-  0% {
-    transform: translate(0px, 0px);
-    opacity: 0.72;
-    filter: brightness(1.03);
-  }
-  50% {
-    transform: translate(6px, -4px);
-    opacity: 0.98;
-    filter: brightness(1.18);
-  }
-  100% {
-    transform: translate(0px, 0px);
-    opacity: 0.72;
-    filter: brightness(1.03);
-  }
+@keyframes db-gold-glitter {
+  0%   { transform: translate(0px, 0px);   opacity: 0.70; filter: brightness(1.02); }
+  50%  { transform: translate(6px, -4px);  opacity: 0.98; filter: brightness(1.18); }
+  100% { transform: translate(0px, 0px);   opacity: 0.70; filter: brightness(1.02); }
 }
 
 /* =========================================================
@@ -602,6 +589,13 @@
 }
 
 /* ✅ Live green pulse next to On-going */
+.db-tab-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0; /* dot already has margin-right */
+}
+
 .db-live-dot {
   width: 9px;
   height: 9px;
@@ -672,19 +666,26 @@
     padding: 10px 14px;
   }
 
-  /* Make winner effect POP more on mobile (no hover) */
+  /* Make winner effect POP on mobile */
   .db-card-pile.is-winner::after {
     opacity: 0.95;
-    animation-duration: 2.4s;
+    animation-duration: 2.35s;
   }
   .db-card-pile.is-winner::before {
-    opacity: 1;
-    filter: blur(18px);
+    opacity: 0.95;
+    filter: blur(14px);
   }
 
-  /* If you want the pile to look tighter on mobile by default: */
+  /* Tighter pile on mobile by default */
   .db-card-shadow-1 { transform: translate(7px, 9px) rotate(0.7deg) scale(0.988); }
   .db-card-shadow-2 { transform: translate(13px, 18px) rotate(1.2deg) scale(0.976); }
   .db-card-shadow-3 { transform: translate(19px, 27px) rotate(1.8deg) scale(0.964); }
   .db-card-shadow-4 { transform: translate(25px, 36px) rotate(2.4deg) scale(0.952); }
+
+  /* Live dot slightly smaller on tiny screens */
+  .db-live-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 7px;
+  }
 }
