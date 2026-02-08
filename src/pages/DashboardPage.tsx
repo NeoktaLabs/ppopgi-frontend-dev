@@ -522,7 +522,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             <span className="db-tab-live">
               <span className="db-live-dot" aria-hidden="true" />
-              On-going <span className="db-tab-count">({ongoingRaffles.length})</span>
+              Live <span className="db-tab-count">({ongoingRaffles.length})</span>
             </span>
           </button>
           <button className={`db-tab ${tab === "joined" ? "active" : ""}`} onClick={() => setTab("joined")}>
