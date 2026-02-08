@@ -354,7 +354,7 @@
 /* =========================================================
    ✅ REAL RAFFLECARD PILE (up to 5 real cards)
    - top is clickable, shadows are not
-   - hover collapses vertically
+   - hover collapses vertically (desktop)
    ========================================================= */
 
 .card-hover-trigger {
@@ -422,7 +422,7 @@
   opacity: 0.86;
 }
 .card-hover-trigger:hover .db-card-shadow-2 {
-  transform: translate(11px, 13px) rotate(1.0deg) scale(0.976);
+  transform: translate(11px, 13px) rotate(1deg) scale(0.976);
   opacity: 0.74;
 }
 .card-hover-trigger:hover .db-card-shadow-3 {
@@ -443,19 +443,20 @@
   pointer-events: none;
 
   font-weight: 1000;
-  font-size: 30px;          /* ✅ bigger */
+  font-size: 30px;
   letter-spacing: -0.9px;
 
   color: #0f172a;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(15, 23, 42, 0.14);
   border-radius: 999px;
-  padding: 12px 18px;       /* ✅ bigger */
+  padding: 12px 18px;
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.16);
 }
 
 /* =========================================================
-   ✅ WINNER: GOLD SPARKLES (MORE GOLD / MORE VISIBLE)
+   ✅ WINNER: GOLD GLITTER (mobile-friendly, NOT snow)
+   - warm gold flakes + star bursts + shimmer band
    Apply: .db-card-pile.is-winner
    ========================================================= */
 
@@ -463,25 +464,25 @@
   border-radius: 16px;
 }
 
-/* gold aura (stronger) */
+/* strong gold aura */
 .db-card-pile.is-winner::before {
   content: "";
   position: absolute;
-  inset: -6px;
+  inset: -7px;
   border-radius: 20px;
   pointer-events: none;
   z-index: 0;
 
   background:
-    radial-gradient(circle at 18% 12%, rgba(255, 200, 60, 0.95), rgba(255, 200, 60, 0) 58%),
-    radial-gradient(circle at 82% 88%, rgba(255, 150, 35, 0.85), rgba(255, 150, 35, 0) 62%),
-    radial-gradient(circle at 45% 55%, rgba(255, 235, 170, 0.55), rgba(255, 235, 170, 0) 72%);
+    radial-gradient(circle at 18% 12%, rgba(255, 170, 25, 0.95), rgba(255, 170, 25, 0) 60%),
+    radial-gradient(circle at 82% 88%, rgba(255, 120, 10, 0.85), rgba(255, 120, 10, 0) 64%),
+    radial-gradient(circle at 48% 52%, rgba(255, 210, 70, 0.55), rgba(255, 210, 70, 0) 72%);
 
-  filter: blur(14px);
+  filter: blur(16px);
   opacity: 1;
 }
 
-/* sparkles layer (denser + brighter gold) */
+/* glitter + shimmer (gold only) */
 .db-card-pile.is-winner::after {
   content: "";
   position: absolute;
@@ -491,27 +492,55 @@
   z-index: 30;
 
   background:
-    radial-gradient(circle, rgba(255, 214, 102, 1) 0 1px, rgba(255, 214, 102, 0) 3px) 12% 18% / 90px 90px,
-    radial-gradient(circle, rgba(255, 193, 80, 0.98) 0 1px, rgba(255, 193, 80, 0) 3px) 70% 22% / 110px 110px,
-    radial-gradient(circle, rgba(255, 230, 150, 0.9) 0 1px, rgba(255, 230, 150, 0) 4px) 40% 78% / 130px 130px,
-    radial-gradient(circle, rgba(255, 170, 58, 0.98) 0 1px, rgba(255, 170, 58, 0) 4px) 82% 68% / 150px 150px,
-    radial-gradient(circle, rgba(255, 240, 190, 0.85) 0 1px, rgba(255, 240, 190, 0) 5px) 18% 62% / 180px 180px,
-    radial-gradient(circle, rgba(255, 214, 102, 0.95) 0 1px, rgba(255, 214, 102, 0) 4px) 55% 25% / 140px 140px,
-    radial-gradient(circle, rgba(255, 170, 58, 0.92) 0 1px, rgba(255, 170, 58, 0) 5px) 30% 90% / 190px 190px;
+    /* --- STAR BURSTS (read as sparkles on mobile) --- */
+    radial-gradient(circle at 16% 22%, rgba(255, 190, 35, 0.95) 0 2px, rgba(255, 190, 35, 0) 8px),
+    radial-gradient(circle at 78% 28%, rgba(255, 150, 18, 0.92) 0 2px, rgba(255, 150, 18, 0) 9px),
+    radial-gradient(circle at 44% 74%, rgba(255, 210, 70, 0.88) 0 2px, rgba(255, 210, 70, 0) 10px),
+    radial-gradient(circle at 86% 66%, rgba(255, 140, 14, 0.9) 0 2px, rgba(255, 140, 14, 0) 9px),
+    radial-gradient(circle at 22% 68%, rgba(255, 195, 45, 0.85) 0 2px, rgba(255, 195, 45, 0) 10px),
 
-  opacity: 0.95;
-  mix-blend-mode: screen;
-  animation: db-sparkle-drift 2.1s ease-in-out infinite;
+    /* --- GOLD FLAKES (bigger, not dot-grid) --- */
+    radial-gradient(closest-side, rgba(255, 165, 20, 0.55), rgba(255, 165, 20, 0) 70%) 12% 18% / 140px 140px,
+    radial-gradient(closest-side, rgba(255, 210, 70, 0.45), rgba(255, 210, 70, 0) 72%) 72% 20% / 160px 160px,
+    radial-gradient(closest-side, rgba(255, 140, 14, 0.42), rgba(255, 140, 14, 0) 74%) 82% 78% / 190px 190px,
+    radial-gradient(closest-side, rgba(255, 190, 35, 0.38), rgba(255, 190, 35, 0) 74%) 28% 86% / 210px 210px,
+
+    /* --- GOLD SHIMMER BAND (no white wash) --- */
+    linear-gradient(
+      120deg,
+      rgba(255, 200, 60, 0) 0%,
+      rgba(255, 200, 60, 0.06) 35%,
+      rgba(255, 165, 20, 0.18) 50%,
+      rgba(255, 200, 60, 0.06) 65%,
+      rgba(255, 200, 60, 0) 100%
+    );
+
+  mix-blend-mode: color-dodge;
+  opacity: 0.9;
+  animation: db-gold-scintillate 2.2s ease-in-out infinite;
 }
 
+/* premium pop */
 .db-card-pile.is-winner .db-card-front {
-  filter: saturate(1.08) contrast(1.03);
+  filter: saturate(1.14) contrast(1.04);
 }
 
-@keyframes db-sparkle-drift {
-  0%   { transform: translate(0px, 0px);    opacity: 0.65; }
-  50%  { transform: translate(7px, -5px);   opacity: 1; }
-  100% { transform: translate(0px, 0px);    opacity: 0.65; }
+@keyframes db-gold-scintillate {
+  0% {
+    transform: translate(0px, 0px);
+    opacity: 0.72;
+    filter: brightness(1.03);
+  }
+  50% {
+    transform: translate(6px, -4px);
+    opacity: 0.98;
+    filter: brightness(1.18);
+  }
+  100% {
+    transform: translate(0px, 0px);
+    opacity: 0.72;
+    filter: brightness(1.03);
+  }
 }
 
 /* =========================================================
@@ -526,7 +555,6 @@
   position: relative;
 }
 
-/* ✅ Center pills relative to the pile width */
 .db-history-badge {
   display: inline-flex;
   align-items: center;
@@ -609,18 +637,25 @@
     width: max-content;
   }
 
-  /* slightly smaller on small screens */
+  /* badge scale */
   .db-mult-badge {
-    font-size: 22px;
+    font-size: 24px;
     padding: 10px 14px;
   }
 
-  /* keep sparkle but not too aggressive on mobile */
+  /* Make winner effect POP more on mobile (no hover) */
   .db-card-pile.is-winner::after {
-    opacity: 0.65;
-    animation-duration: 2.8s;
+    opacity: 0.95;
+    animation-duration: 2.4s;
   }
   .db-card-pile.is-winner::before {
-    opacity: 0.85;
+    opacity: 1;
+    filter: blur(18px);
   }
+
+  /* If you want the pile to look tighter on mobile by default: */
+  .db-card-shadow-1 { transform: translate(7px, 9px) rotate(0.7deg) scale(0.988); }
+  .db-card-shadow-2 { transform: translate(13px, 18px) rotate(1.2deg) scale(0.976); }
+  .db-card-shadow-3 { transform: translate(19px, 27px) rotate(1.8deg) scale(0.964); }
+  .db-card-shadow-4 { transform: translate(25px, 36px) rotate(2.4deg) scale(0.952); }
 }
