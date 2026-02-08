@@ -1,5 +1,3 @@
-/* src/pages/DashboardPage.css */
-
 .db-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -24,10 +22,11 @@
   overflow: hidden;
 }
 
+/* Depth texture for hero */
 .db-hero::before {
   content: "";
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background: radial-gradient(circle at 100% 0%, rgba(241, 245, 249, 0.6) 0%, transparent 50%);
   pointer-events: none;
 }
@@ -49,7 +48,7 @@
   font-size: 32px;
   display: grid;
   place-items: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.06);
 }
 
 .db-hero-label {
@@ -71,13 +70,8 @@
   transition: opacity 0.2s;
   cursor: pointer;
 }
-.db-hero-addr:hover {
-  opacity: 0.7;
-}
-.db-copy-icon {
-  font-size: 14px;
-  opacity: 0.5;
-}
+.db-hero-addr:hover { opacity: 0.7; }
+.db-copy-icon { font-size: 14px; opacity: 0.5; }
 
 /* Stats */
 .db-hero-stats {
@@ -87,9 +81,7 @@
   z-index: 2;
 }
 
-.db-stat {
-  text-align: center;
-}
+.db-stat { text-align: center; }
 .db-stat-num {
   font-size: 28px;
   font-weight: 900;
@@ -103,9 +95,8 @@
   color: #94a3b8;
   margin-top: 4px;
 }
-.db-stat.highlight .db-stat-num {
-  color: #db2777;
-}
+
+.db-stat.highlight .db-stat-num { color: #db2777; }
 
 /* --- STATUS BANNER --- */
 .db-msg-banner {
@@ -122,21 +113,11 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.db-msg-banner.error {
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-}
-.db-msg-banner.success {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
+.db-msg-banner.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.db-msg-banner.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
 
 /* --- CLAIM SECTION --- */
-.db-section {
-  margin-bottom: 40px;
-}
+.db-section { margin-bottom: 40px; }
 .db-section-header {
   display: flex;
   align-items: center;
@@ -161,9 +142,7 @@
   font-weight: 800;
   text-transform: uppercase;
 }
-.db-pill.pulse {
-  animation: db-pulse 2s infinite;
-}
+.db-pill.pulse { animation: db-pulse 2s infinite; }
 @keyframes db-pulse {
   0% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -193,9 +172,7 @@
   align-items: center;
   position: relative;
 }
-.db-claim-wrapper > * {
-  width: 100%;
-}
+.db-claim-wrapper > * { width: 100%; }
 
 .db-claim-box {
   background: white;
@@ -278,17 +255,11 @@
   transition: all 0.2s ease;
   white-space: nowrap;
 }
-
 .db-tab:hover:not(.active) { background: #f1f5f9; color: #334155; }
 .db-tab.active {
   background: #1e293b;
   color: white;
   box-shadow: 0 4px 10px rgba(30, 41, 59, 0.2);
-}
-
-.db-tab-count {
-  font-weight: 900;
-  opacity: 0.85;
 }
 
 /* --- GRID --- */
@@ -298,7 +269,6 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
-
 .db-empty {
   grid-column: 1 / -1;
   padding: 60px 20px;
@@ -326,18 +296,16 @@
   border: 1px solid #cbd5e1;
   padding: 8px 16px;
   border-radius: 8px;
-  font-weight: 800;
+  font-weight: 700;
   color: #475569;
   cursor: pointer;
   transition: all 0.2s;
 }
-.db-btn-browse:hover {
-  border-color: #94a3b8;
-  color: #1e293b;
-}
+.db-btn-browse:hover { border-color: #94a3b8; color: #1e293b; }
 
 /* =========================================================
    ✅ REAL RAFFLECARD PILE (Organic Look)
+   - Randomized rotations for messy pile effect
    ========================================================= */
 
 .card-hover-trigger { position: relative; }
@@ -346,6 +314,7 @@
   position: relative;
   width: 100%;
   border-radius: 16px;
+  transition: transform 0.3s ease, filter 0.3s ease;
 }
 
 /* top card layer */
@@ -353,6 +322,7 @@
   position: relative;
   z-index: 10;
   border-radius: 16px;
+  background: white; /* default background */
 }
 
 /* each shadow is a real RaffleCard */
@@ -369,10 +339,10 @@
 .db-card-shadow-inner {
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
 
-/* Organic spread */
+/* Organic spread - Rotations are less robotic */
 .db-card-shadow-1 { transform: translate(8px, 10px) rotate(-1.5deg) scale(0.99); opacity: 0.9; z-index: 6; }
 .db-card-shadow-2 { transform: translate(14px, 18px) rotate(2deg) scale(0.98); opacity: 0.8; z-index: 5; }
 .db-card-shadow-3 { transform: translate(20px, 28px) rotate(-0.5deg) scale(0.97); opacity: 0.7; z-index: 4; }
@@ -403,114 +373,90 @@
 }
 
 /* =========================================================
-   ✅ WINNER FX (FIXED): centered & clipped to REAL TOP CARD
-   - prevents “gold bar on right”
-   - thicker sparkles
+   ✨ NEW WINNER EFFECT (The "Rare Foil" Look)
+   - No glitter dots (too noisy)
+   - Uses a smooth diagonal "sheen" animation
+   - Uses a metallic gradient border
    ========================================================= */
 
 .db-card-pile.is-winner {
-  border-radius: 16px;
-  transform: translateY(-4px);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Lift the pile */
+  transform: translateY(-6px);
+  z-index: 10;
 }
 
-/* remove FX on the pile wrapper itself */
+/* Remove effects from pile wrapper, apply to Front Card only */
 .db-card-pile.is-winner::before,
-.db-card-pile.is-winner::after {
-  content: none !important;
-}
+.db-card-pile.is-winner::after { content: none !important; }
 
-/* clip FX to the top card only */
 .db-card-pile.is-winner .db-card-front {
   position: relative;
   overflow: hidden;
   border-radius: 16px;
-
-  /* gold gradient border */
-  border: 3px solid transparent;
-  background-image:
-    linear-gradient(white, white),
-    linear-gradient(135deg, #ffd700 0%, #fdb931 25%, #fff3b0 50%, #fdb931 75%, #ffd700 100%);
+  
+  /* 1. Metallic Gradient Border via double-background trick */
+  border: 2px solid transparent;
+  background-image: 
+    linear-gradient(white, white), /* Inner content bg */
+    linear-gradient(135deg, #C5A059 0%, #E6C888 25%, #FFF6D6 50%, #E6C888 75%, #C5A059 100%); /* The Border Gradient */
   background-origin: border-box;
   background-clip: padding-box, border-box;
 
-  box-shadow: 0 20px 50px -10px rgba(255, 165, 0, 0.45);
-  filter: saturate(1.1) contrast(1.05);
+  /* 2. Soft, warm ambient glow (Bloom) */
+  box-shadow: 
+    0 15px 35px -5px rgba(210, 160, 40, 0.3), /* Deep Gold Shadow */
+    0 0 15px rgba(255, 230, 150, 0.2); /* Highlight Bloom */
+    
+  /* Enhance contrast slightly for that "printed foil" look */
+  filter: saturate(1.05) contrast(1.02);
 }
 
-/* aura */
-.db-card-pile.is-winner .db-card-front::before {
-  content: "";
-  position: absolute;
-  inset: -18px;
-  border-radius: 24px;
-  pointer-events: none;
-  z-index: 20;
-  background:
-    radial-gradient(circle at 22% 14%, rgba(255, 190, 55, 0.78), rgba(255, 190, 55, 0) 60%),
-    radial-gradient(circle at 82% 86%, rgba(255, 130, 25, 0.58), rgba(255, 130, 25, 0) 62%),
-    radial-gradient(circle at 55% 55%, rgba(255, 220, 120, 0.34), rgba(255, 220, 120, 0) 72%);
-  filter: blur(12px);
-  opacity: 0.95;
-}
-
-/* thicker glitter + sheen (no “studs”) */
+/* 3. The "Sheen" - A band of light that sweeps across */
 .db-card-pile.is-winner .db-card-front::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 16px;
+  top: 0; 
+  left: -150%; /* Start far left */
+  width: 100%; 
+  height: 100%;
+  
+  /* A diagonal beam of light with a bright white core and warm edges */
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.4) 45%,
+    rgba(255, 250, 200, 0.2) 50%,
+    transparent 55%
+  );
+  
+  transform: skewX(-20deg);
   pointer-events: none;
-  z-index: 21;
-
-  background:
-    /* thicker sparkle cores */
-    radial-gradient(circle, rgba(255, 206, 86, 0.98) 0 1.35px, rgba(255, 206, 86, 0) 3.6px) 0 0 / 54px 54px,
-    radial-gradient(circle, rgba(255, 168, 40, 0.95) 0 1.25px, rgba(255, 168, 40, 0) 3.4px) 12px 18px / 72px 72px,
-    radial-gradient(circle, rgba(255, 232, 160, 0.88) 0 1.15px, rgba(255, 232, 160, 0) 3.2px) 22px 10px / 92px 92px,
-    radial-gradient(circle, rgba(255, 142, 22, 0.9) 0 1.25px, rgba(255, 142, 22, 0) 3.5px) 44px 34px / 112px 112px,
-
-    /* warm “burst” sparkles */
-    radial-gradient(circle at 18% 26%, rgba(255, 190, 55, 0.55) 0 3px, rgba(255, 190, 55, 0) 14px),
-    radial-gradient(circle at 76% 22%, rgba(255, 150, 30, 0.5) 0 3px, rgba(255, 150, 30, 0) 15px),
-    radial-gradient(circle at 44% 78%, rgba(255, 214, 102, 0.48) 0 3px, rgba(255, 214, 102, 0) 16px),
-
-    /* centered sheen band */
-    linear-gradient(
-      120deg,
-      rgba(255, 200, 60, 0) 0%,
-      rgba(255, 200, 60, 0.10) 35%,
-      rgba(255, 165, 20, 0.26) 50%,
-      rgba(255, 200, 60, 0.10) 65%,
-      rgba(255, 200, 60, 0) 100%
-    );
-
-  mix-blend-mode: screen;
-  opacity: 0.95;
-  filter: blur(0.6px) brightness(1.08);
-  animation: db-gold-glitter 2.05s ease-in-out infinite;
+  
+  /* Overlay blend mode keeps the card text readable but illuminates it */
+  mix-blend-mode: overlay; 
+  
+  animation: winner-sheen 3.5s infinite;
 }
 
-@keyframes db-gold-glitter {
-  0%   { transform: translate(0px, 0px); opacity: 0.78; filter: blur(0.6px) brightness(1.05); }
-  50%  { transform: translate(6px, -4px); opacity: 1;    filter: blur(0.75px) brightness(1.20); }
-  100% { transform: translate(0px, 0px); opacity: 0.78; filter: blur(0.6px) brightness(1.05); }
+@keyframes winner-sheen {
+  0% { left: -150%; }
+  40% { left: 150%; } /* Fast swipe across */
+  100% { left: 150%; } /* Pause before repeating */
 }
 
 /* =========================================================
-   ✅ LOST STATE (Visual De-emphasis)
+   ✅ LOST STATE (De-emphasis)
    ========================================================= */
 
 .db-history-card-wrapper.is-lost .db-card-pile {
   filter: grayscale(0.85) opacity(0.85);
-  transition: all 0.3s ease;
 }
 .db-history-card-wrapper.is-lost:hover .db-card-pile {
   filter: grayscale(0) opacity(1);
 }
 
 /* =========================================================
-   ✅ HISTORY BADGES (centered)
+   ✅ HISTORY BADGES
    ========================================================= */
 
 .db-history-card-wrapper {
@@ -527,7 +473,6 @@
   justify-content: center;
   margin-left: auto;
   margin-right: auto;
-
   text-align: center;
   font-size: 11px;
   font-weight: 800;
@@ -536,7 +481,6 @@
   border-radius: 12px;
   margin-top: -12px;
   z-index: 40;
-
   width: fit-content;
   max-width: 90%;
   box-sizing: border-box;
@@ -545,33 +489,17 @@
   text-overflow: ellipsis;
 }
 
-.db-history-badge.refunded {
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-.db-history-badge.won {
-  background: #dcfce7;
-  color: #15803d;
-  border: 1px solid #86efac;
-  box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1);
-}
-.db-history-badge.lost {
-  background: #e2e8f0;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
+.db-history-badge.refunded { background: #f8fafc; color: #64748b; border: 1px solid #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+.db-history-badge.won { background: #dcfce7; color: #15803d; border: 1px solid #86efac; box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1); }
+.db-history-badge.lost { background: #e2e8f0; color: #64748b; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-/* ✅ Live green pulse next to On-going */
+/* ✅ Live green pulse */
 .db-tab-live {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0;
 }
-
 .db-live-dot {
   width: 9px;
   height: 9px;
@@ -581,17 +509,12 @@
   margin-right: 8px;
   position: relative;
   top: -1px;
-
   box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
   animation: db-live-pulse 1.2s infinite;
-
-  /* make sure it never collapses in flex */
-  flex: 0 0 auto;
 }
-
 @keyframes db-live-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); opacity: 1; }
-  70%  { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); opacity: 1; }
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); opacity: 1; }
+  70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); opacity: 1; }
   100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); opacity: 0.95; }
 }
 
@@ -601,28 +524,11 @@
   .db-hero-content { flex-direction: column; align-items: center; width: 100%; justify-content: center; }
   .db-hero-addr { font-size: 14px; justify-content: center; }
   .db-hero-stats { justify-content: center; width: 100%; }
-
   .db-tabs-container { overflow-x: auto; padding-bottom: 5px; display: block; }
   .db-tabs { display: flex; width: max-content; }
-
   .db-mult-badge { font-size: 24px; padding: 10px 14px; }
-
-  /* Winner POP on mobile */
-  .db-card-pile.is-winner .db-card-front::after {
-    opacity: 1;
-    animation-duration: 2.25s;
-    filter: blur(0.75px) brightness(1.12);
-  }
-  .db-card-pile.is-winner .db-card-front::before {
-    opacity: 1;
-    filter: blur(14px);
-  }
-
-  /* Tighter pile on mobile */
-  .db-card-shadow-1 { transform: translate(7px, 9px) rotate(0.7deg) scale(0.988); }
-  .db-card-shadow-2 { transform: translate(13px, 18px) rotate(1.2deg) scale(0.976); }
-  .db-card-shadow-3 { transform: translate(19px, 27px) rotate(1.8deg) scale(0.964); }
-  .db-card-shadow-4 { transform: translate(25px, 36px) rotate(2.4deg) scale(0.952); }
-
+  
+  /* Make winner effect POP on mobile */
+  .db-card-pile.is-winner .db-card-front::after { opacity: 1; animation-duration: 2.5s; }
   .db-live-dot { width: 8px; height: 8px; margin-right: 7px; }
 }
