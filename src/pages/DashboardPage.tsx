@@ -154,9 +154,11 @@ function RaffleCardPile({
   const safeTickets = Number.isFinite(ticketCount) ? Math.max(1, Math.floor(ticketCount)) : 1;
   const shadowCount = Math.min(4, Math.max(0, safeTickets - 1));
 
+  // Make sure we NEVER forward userEntry into RaffleCard here (removes the yellow "X owned" UI)
   const raffleForCard = useMemo(() => {
     const c = { ...(raffle ?? {}) };
     if ("userEntry" in c) delete (c as any).userEntry;
+    if ("userTicketsOwned" in c) delete (c as any).userTicketsOwned;
     return c;
   }, [raffle]);
 
@@ -502,7 +504,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             <span className="db-tab-live">
               <span className="db-live-dot" aria-hidden="true" />
-              On-going
+              On-going <span className="db-tab-count">({ongoingRaffles.length})</span>
             </span>
           </button>
 
