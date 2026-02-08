@@ -190,7 +190,7 @@
   gap: 12px;
   align-items: center;
 
-  position: relative; /* anchor pile */
+  position: relative;
 }
 
 .db-claim-wrapper > * {
@@ -351,129 +351,131 @@
   font-weight: 600;
 }
 
-/* --- WINNER SHINE (apply on wrapper: className="db-winner-card") --- */
-.db-winner-card {
+/* =========================================================
+   ✅ CARD STACK (RaffleCards shown as a pile in Dashboard)
+   - max 5 layers (TS enforces)
+   - hover collapses vertically
+   ========================================================= */
+
+.card-hover-trigger {
   position: relative;
-  border-radius: 16px;
 }
-.db-winner-card::before {
-  content: "";
+
+/* Whole stack wrapper */
+.db-card-stack {
+  position: relative;
+  width: 100%;
+}
+
+/* Back cards (lightweight blocks behind the real card) */
+.db-card-back {
   position: absolute;
-  inset: -2px;
+  inset: 0;
   border-radius: 18px;
-  background: linear-gradient(90deg, rgba(252, 211, 77, 0) 0%, rgba(252, 211, 77, 0.9) 50%, rgba(252, 211, 77, 0) 100%);
-  filter: blur(10px);
-  opacity: 0.65;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
   pointer-events: none;
-  animation: db-shine 2.2s ease-in-out infinite;
-  z-index: 0;
+  transition: transform 0.25s ease;
 }
-.db-winner-card > * {
+
+/* Default spread (4 backs = up to 5 total cards) */
+.db-card-back.back-0 {
+  transform: translate(10px, 10px);
+}
+.db-card-back.back-1 {
+  transform: translate(8px, 18px);
+}
+.db-card-back.back-2 {
+  transform: translate(6px, 26px);
+}
+.db-card-back.back-3 {
+  transform: translate(4px, 34px);
+}
+
+/* Collapse tighter on hover */
+.card-hover-trigger:hover .db-card-back.back-0 {
+  transform: translate(8px, 8px);
+}
+.card-hover-trigger:hover .db-card-back.back-1 {
+  transform: translate(6px, 12px);
+}
+.card-hover-trigger:hover .db-card-back.back-2 {
+  transform: translate(4px, 16px);
+}
+.card-hover-trigger:hover .db-card-back.back-3 {
+  transform: translate(2px, 20px);
+}
+
+/* Real card sits on top */
+.db-card-front {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
-@keyframes db-shine {
-  0% {
-    transform: translateX(-30%);
-    opacity: 0.45;
-  }
-  50% {
-    transform: translateX(30%);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translateX(-30%);
-    opacity: 0.45;
-  }
-}
-
-/* --- TICKET PILE --- */
-/* NOTE: render max 5 layers in TS (or it will just show 3 if you keep old logic) */
-.ticket-pile-container {
+/* ✅ Bigger multiplier badge (xN) */
+.db-mult-badge {
   position: absolute;
   top: 10px;
-  right: 10px;
-  z-index: 20;
-  pointer-events: none;
-}
-
-.ticket-pile-stack {
-  position: relative;
-  width: 56px; /* bigger */
-  height: 40px; /* bigger */
-}
-
-/* Base ticket layer */
-.ticket-layer {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.14);
-  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* ---- 5-layer stack positions (default is slightly spread) ---- */
-.ticket-layer.layer-0 { bottom: 0px; right: 0px;   z-index: 1; transform: rotate(-9deg) translateY(0px); }
-.ticket-layer.layer-1 { bottom: 3px; right: 3px;   z-index: 2; transform: rotate(7deg)  translateY(0px); }
-.ticket-layer.layer-2 { bottom: 6px; right: 6px;   z-index: 3; transform: rotate(-5deg) translateY(0px); }
-.ticket-layer.layer-3 { bottom: 9px; right: 9px;   z-index: 4; transform: rotate(4deg)  translateY(0px); }
-.ticket-layer.ticket-top {
-  bottom: 12px;
   right: 12px;
   z-index: 5;
-  transform: rotate(-2deg) translateY(0px);
-  display: grid;
-  place-items: center;
-}
+  pointer-events: none;
 
-/* Colors */
-.ticket-pile-container.gold .ticket-layer {
-  background: linear-gradient(135deg, #fef9c3 0%, #fde047 100%);
-  border-color: #fef08a;
-}
-.ticket-pile-container.gold .ticket-count {
-  color: #854d0e;
-}
-
-.ticket-pile-container.silver .ticket-layer {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border-color: #cbd5e1;
-}
-.ticket-pile-container.silver .ticket-count {
-  color: #475569;
-}
-
-.ticket-pile-container.slate .ticket-layer {
-  background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
-  border-color: #94a3b8;
-}
-.ticket-pile-container.slate .ticket-count {
-  color: #334155;
-  opacity: 0.9;
-}
-
-/* Bigger badge */
-.ticket-count {
-  font-size: 14px;
-  font-weight: 950;
+  font-weight: 1000;
+  font-size: 18px;
   letter-spacing: -0.6px;
 
-  padding: 5px 8px;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.14);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+  padding: 8px 12px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
 }
 
-/* Hover: collapse vertically (tight pile) */
-.card-hover-trigger:hover .ticket-layer.layer-0 { transform: translate(0px, 0px) rotate(-10deg); }
-.card-hover-trigger:hover .ticket-layer.layer-1 { transform: translate(0px, -2px) rotate(7deg); }
-.card-hover-trigger:hover .ticket-layer.layer-2 { transform: translate(0px, -4px) rotate(-5deg); }
-.card-hover-trigger:hover .ticket-layer.layer-3 { transform: translate(0px, -6px) rotate(4deg); }
-.card-hover-trigger:hover .ticket-layer.ticket-top { transform: translate(0px, -8px) rotate(0deg) scale(1.05); }
+/* =========================================================
+   ✅ WINNER SHINE (clean sheen overlay, mobile-friendly)
+   wrapper class applied in TS: .db-card-stack.is-winner
+   ========================================================= */
+
+.db-card-stack.is-winner .db-card-front::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: 4;
+
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.42) 35%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  transform: translateX(-70%);
+  animation: db-sheen 2.6s ease-in-out infinite;
+  mix-blend-mode: screen;
+  opacity: 0.75;
+}
+
+@keyframes db-sheen {
+  0% {
+    transform: translateX(-70%);
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(70%);
+    opacity: 0.35;
+  }
+}
+
+/* Small premium feel */
+.db-card-stack.is-winner .db-card-front {
+  filter: saturate(1.03);
+}
 
 /* --- HISTORY CARD BADGES --- */
 .db-history-card-wrapper {
@@ -556,5 +558,16 @@
   .db-tabs {
     display: flex;
     width: max-content;
+  }
+
+  /* Slightly smaller badge on small screens */
+  .db-mult-badge {
+    font-size: 16px;
+    padding: 7px 11px;
+  }
+
+  /* Less intense shine on mobile */
+  .db-card-stack.is-winner .db-card-front::after {
+    opacity: 0.55;
   }
 }
