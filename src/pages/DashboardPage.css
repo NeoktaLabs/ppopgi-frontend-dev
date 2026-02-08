@@ -317,7 +317,7 @@
   display: inline-flex;
   gap: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0,  0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .db-tab {
@@ -468,16 +468,32 @@
   z-index: 3;
 }
 
-.db-card-shadow-1 .db-card-shadow-inner { filter: brightness(0.96); }
-.db-card-shadow-2 .db-card-shadow-inner { filter: brightness(0.92); }
-.db-card-shadow-3 .db-card-shadow-inner { filter: brightness(0.88); }
-.db-card-shadow-4 .db-card-shadow-inner { filter: brightness(0.84); }
+.db-card-shadow-1 .db-card-shadow-inner {
+  filter: brightness(0.96);
+}
+.db-card-shadow-2 .db-card-shadow-inner {
+  filter: brightness(0.92);
+}
+.db-card-shadow-3 .db-card-shadow-inner {
+  filter: brightness(0.88);
+}
+.db-card-shadow-4 .db-card-shadow-inner {
+  filter: brightness(0.84);
+}
 
 /* hover collapse (desktop only; harmless elsewhere) */
-.card-hover-trigger:hover .db-card-shadow-1 { transform: translate(6px, 6px) rotate(-1deg) scale(0.99); }
-.card-hover-trigger:hover .db-card-shadow-2 { transform: translate(10px, 11px) rotate(1.5deg) scale(0.98); }
-.card-hover-trigger:hover .db-card-shadow-3 { transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97); }
-.card-hover-trigger:hover .db-card-shadow-4 { transform: translate(18px, 21px) rotate(0.8deg) scale(0.96); }
+.card-hover-trigger:hover .db-card-shadow-1 {
+  transform: translate(6px, 6px) rotate(-1deg) scale(0.99);
+}
+.card-hover-trigger:hover .db-card-shadow-2 {
+  transform: translate(10px, 11px) rotate(1.5deg) scale(0.98);
+}
+.card-hover-trigger:hover .db-card-shadow-3 {
+  transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97);
+}
+.card-hover-trigger:hover .db-card-shadow-4 {
+  transform: translate(18px, 21px) rotate(0.8deg) scale(0.96);
+}
 
 /* Mult badge */
 .db-mult-badge {
@@ -498,27 +514,30 @@
 }
 
 /* =========================================================
-   ✨ WINNER EFFECT — FIXED (front-card only; no pile transforms)
+   ✨ WINNER EFFECT — tighter border (no right spill)
    ========================================================= */
 
-/* ✅ REMOVE translateY from the pile (this causes iOS repaint/blank issues) */
+/* ✅ No pile transform (avoids iOS repaint/blank issues) */
 .db-card-pile.is-winner {
   transform: none;
   z-index: 10;
 }
 
-/* Gold “foil” border lives on the FRONT only */
+/* ✅ Clip winner visuals to the card so the ring can't bleed right */
 .db-card-pile.is-winner .db-card-front {
-  overflow: visible; /* allow glow/border pseudo elements safely */
+  position: relative;
+  overflow: hidden; /* IMPORTANT */
+  border-radius: 16px;
+  filter: saturate(1.05) contrast(1.02);
 }
 
-/* ✅ Border ring (doesn't require painting the wrapper white) */
+/* ✅ Inner ring: draws INSIDE the card (fixes “too big on right”) */
 .db-card-pile.is-winner .db-card-front::before {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  padding: 2px;
+  inset: 2px;            /* key: inside the card */
+  border-radius: 14px;   /* 16 - 2 */
+  padding: 1px;          /* thinner ring */
   pointer-events: none;
   z-index: 20;
 
@@ -535,19 +554,14 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-}
 
-/* ✅ Soft glow (no layout/stacking issues) */
-.db-card-pile.is-winner .db-card-front {
-  filter: saturate(1.05) contrast(1.02);
-}
-.db-card-pile.is-winner .db-card-front::before {
+  /* slightly reduced glow so it doesn’t “push” right */
   box-shadow:
-    0 15px 35px -5px rgba(210, 160, 40, 0.30),
-    0 0 15px rgba(255, 230, 150, 0.20);
+    0 10px 22px -10px rgba(210, 160, 40, 0.28),
+    0 0 10px rgba(255, 230, 150, 0.16);
 }
 
-/* ✅ Sheen sweep */
+/* ✅ Sheen sweep stays clipped */
 .db-card-pile.is-winner .db-card-front::after {
   content: "";
   position: absolute;
@@ -566,20 +580,24 @@
     rgba(255, 250, 200, 0.18) 50%,
     transparent 55%
   );
-  transform: skewX(-20deg);
+
+  transform: translateZ(0) skewX(-20deg);
+  -webkit-transform: translateZ(0) skewX(-20deg);
 
   mix-blend-mode: screen;
   animation: winner-sheen 3.5s infinite;
-
-  /* help Safari compositing */
-  transform: translateZ(0) skewX(-20deg);
-  -webkit-transform: translateZ(0) skewX(-20deg);
 }
 
 @keyframes winner-sheen {
-  0% { left: -150%; }
-  40% { left: 150%; }
-  100% { left: 150%; }
+  0% {
+    left: -150%;
+  }
+  40% {
+    left: 150%;
+  }
+  100% {
+    left: 150%;
+  }
 }
 
 /* =========================================================
@@ -649,7 +667,7 @@
   background: #e2e8f0;
   color: #64748b;
   border: 1px solid #cbd5e1;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0,  0, 0, 0.05);
 }
 
 /* Live green pulse */
