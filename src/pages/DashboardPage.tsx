@@ -73,11 +73,24 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     if (!data.joined) return { active, past };
 
     data.joined.forEach((r: any) => {
-      const tickets = Number(r.userTicketsOwned || 0);
       const sold = Math.max(0, Number(r.sold || 0));
+
+      // ✅ FIX: for canceled raffles, ticketsOwned can be 0 after refund.
+      // Use userTicketsBought (subgraph history) so UI still shows participation.
+      const isCanceled = r.status === "CANCELED";
+      const owned = Number(r.userTicketsOwned || 0);
+      const bought = Number(r.userTicketsBought ?? 0);
+
+      const tickets = isCanceled ? (bought > 0 ? bought : owned) : owned;
+
       const percentage = sold > 0 ? ((tickets / sold) * 100).toFixed(1) : "0.0";
 
-      const enriched = { ...r, userEntry: { count: tickets, percentage } };
+      const enriched = {
+        ...r,
+        userEntry: { count: tickets, percentage },
+        _ticketsOwnedUi: owned, // ✅ helper for badges
+        _ticketsBoughtUi: bought, // ✅ helper for badges
+      };
 
       if (ACTIVE_STATUSES.includes(r.status)) active.push(enriched);
       else past.push(enriched);
@@ -118,7 +131,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   }, [data.msg]);
 
   // ✅ Refunds: always claimTicketRefund (two-phase refund logic)
-  const getPrimaryMethod = (opts: { isRefund: boolean; hasUsdc: boolean; hasNative: boolean; ticketCount: number }): WithdrawMethod | null => {
+  const getPrimaryMethod = (opts: {
+    isRefund: boolean;
+    hasUsdc: boolean;
+    hasNative: boolean;
+    ticketCount: number;
+  }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative, ticketCount } = opts;
 
     if (isRefund) return ticketCount > 0 ? "claimTicketRefund" : null;
@@ -275,11 +293,19 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     <div className="db-claim-actions">
                       {showDual ? (
                         <>
-                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
+                          <button
+                            className="db-btn primary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                          >
                             {data.isPending ? "Processing..." : "Claim USDC"}
                           </button>
 
-                          <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
+                          <button
+                            className="db-btn secondary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
+                          >
                             {data.isPending ? "Processing..." : "Claim Native"}
                           </button>
                         </>
@@ -313,7 +339,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             On-going
           </button>
 
-          {/* ✅ renamed Past -> Joined */}
           <button className={`db-tab ${tab === "joined" ? "active" : ""}`} onClick={() => setTab("joined")}>
             Joined
           </button>
@@ -365,15 +390,23 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const canceled = r.status === "CANCELED";
               const iWon = completed && acct && winner === acct;
 
-              // NOTE: This is only a UI badge. Actual claimability is handled in claimables.
-              const isRefunded = canceled && Number(r.userEntry?.count || 0) === 0;
+              // ✅ FIX: show refunded badge only if user DID buy tickets historically
+              // and currently owns 0 (after refund).
+              const owned = Number(r._ticketsOwnedUi ?? r.userTicketsOwned ?? 0);
+              const bought = Number(r._ticketsBoughtUi ?? r.userTicketsBought ?? 0);
+              const isRefunded = canceled && bought > 0 && owned === 0;
 
-              // ✅ YOUR RULE: Settled + participated + not winner
               const iLost = completed && participated && !iWon;
 
               return (
                 <div key={r.id} className="db-history-card-wrapper">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} userEntry={r.userEntry} />
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowS * 1000}
+                    userEntry={r.userEntry}
+                  />
                   {isRefunded && <div className="db-history-badge refunded">↩ Ticket Refunded</div>}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
                   {iLost && <div className="db-history-badge lost">Lost - Better luck next time!</div>}
