@@ -317,7 +317,7 @@
   display: inline-flex;
   gap: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0,  0, 0, 0.05);
 }
 
 .db-tab {
@@ -404,12 +404,12 @@
   transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-/* ✅ PATCH: do NOT paint white here (prevents white “cards” in the pile) */
+/* ✅ IMPORTANT: never paint white surfaces in pile wrappers */
 .db-card-front {
   position: relative;
   z-index: 10;
   border-radius: 16px;
-  background: transparent; /* was white */
+  background: transparent;
 }
 
 /* IMPORTANT: DO NOT use pointer-events:none here (Safari can stop painting children) */
@@ -421,19 +421,18 @@
   overflow: hidden;
   z-index: 1;
 
-  /* Help Safari compositing */
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-transform: translateZ(0);
   -webkit-backface-visibility: hidden;
 }
 
-/* ✅ PATCH: do NOT paint white here either */
+/* ✅ Do not paint white here either */
 .db-card-shadow-inner {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  background: transparent; /* was white */
+  background: transparent;
   width: 100%;
   height: 100%;
 }
@@ -469,32 +468,16 @@
   z-index: 3;
 }
 
-.db-card-shadow-1 .db-card-shadow-inner {
-  filter: brightness(0.96);
-}
-.db-card-shadow-2 .db-card-shadow-inner {
-  filter: brightness(0.92);
-}
-.db-card-shadow-3 .db-card-shadow-inner {
-  filter: brightness(0.88);
-}
-.db-card-shadow-4 .db-card-shadow-inner {
-  filter: brightness(0.84);
-}
+.db-card-shadow-1 .db-card-shadow-inner { filter: brightness(0.96); }
+.db-card-shadow-2 .db-card-shadow-inner { filter: brightness(0.92); }
+.db-card-shadow-3 .db-card-shadow-inner { filter: brightness(0.88); }
+.db-card-shadow-4 .db-card-shadow-inner { filter: brightness(0.84); }
 
 /* hover collapse (desktop only; harmless elsewhere) */
-.card-hover-trigger:hover .db-card-shadow-1 {
-  transform: translate(6px, 6px) rotate(-1deg) scale(0.99);
-}
-.card-hover-trigger:hover .db-card-shadow-2 {
-  transform: translate(10px, 11px) rotate(1.5deg) scale(0.98);
-}
-.card-hover-trigger:hover .db-card-shadow-3 {
-  transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97);
-}
-.card-hover-trigger:hover .db-card-shadow-4 {
-  transform: translate(18px, 21px) rotate(0.8deg) scale(0.96);
-}
+.card-hover-trigger:hover .db-card-shadow-1 { transform: translate(6px, 6px) rotate(-1deg) scale(0.99); }
+.card-hover-trigger:hover .db-card-shadow-2 { transform: translate(10px, 11px) rotate(1.5deg) scale(0.98); }
+.card-hover-trigger:hover .db-card-shadow-3 { transform: translate(14px, 16px) rotate(-0.3deg) scale(0.97); }
+.card-hover-trigger:hover .db-card-shadow-4 { transform: translate(18px, 21px) rotate(0.8deg) scale(0.96); }
 
 /* Mult badge */
 .db-mult-badge {
@@ -515,35 +498,56 @@
 }
 
 /* =========================================================
-   ✨ WINNER EFFECT (Rare Foil Look) — front-card only
+   ✨ WINNER EFFECT — FIXED (front-card only; no pile transforms)
    ========================================================= */
 
+/* ✅ REMOVE translateY from the pile (this causes iOS repaint/blank issues) */
 .db-card-pile.is-winner {
-  transform: translateY(-6px);
+  transform: none;
   z-index: 10;
 }
 
-.db-card-pile.is-winner::before,
-.db-card-pile.is-winner::after {
-  content: none !important;
+/* Gold “foil” border lives on the FRONT only */
+.db-card-pile.is-winner .db-card-front {
+  overflow: visible; /* allow glow/border pseudo elements safely */
 }
 
-.db-card-pile.is-winner .db-card-front {
-  position: relative;
-  overflow: hidden;
+/* ✅ Border ring (doesn't require painting the wrapper white) */
+.db-card-pile.is-winner .db-card-front::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   border-radius: 16px;
+  padding: 2px;
+  pointer-events: none;
+  z-index: 20;
 
-  border: 2px solid transparent;
-  background-image: linear-gradient(white, white),
-    linear-gradient(135deg, #c5a059 0%, #e6c888 25%, #fff6d6 50%, #e6c888 75%, #c5a059 100%);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  background: linear-gradient(
+    135deg,
+    #c5a059 0%,
+    #e6c888 25%,
+    #fff6d6 50%,
+    #e6c888 75%,
+    #c5a059 100%
+  );
 
-  box-shadow: 0 15px 35px -5px rgba(210, 160, 40, 0.3), 0 0 15px rgba(255, 230, 150, 0.2);
+  /* border-only mask */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
 
+/* ✅ Soft glow (no layout/stacking issues) */
+.db-card-pile.is-winner .db-card-front {
   filter: saturate(1.05) contrast(1.02);
 }
+.db-card-pile.is-winner .db-card-front::before {
+  box-shadow:
+    0 15px 35px -5px rgba(210, 160, 40, 0.30),
+    0 0 15px rgba(255, 230, 150, 0.20);
+}
 
+/* ✅ Sheen sweep */
 .db-card-pile.is-winner .db-card-front::after {
   content: "";
   position: absolute;
@@ -551,43 +555,41 @@
   left: -150%;
   width: 100%;
   height: 100%;
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 21;
+
   background: linear-gradient(
     105deg,
     transparent 20%,
-    rgba(255, 255, 255, 0.4) 45%,
-    rgba(255, 250, 200, 0.2) 50%,
+    rgba(255, 255, 255, 0.35) 45%,
+    rgba(255, 250, 200, 0.18) 50%,
     transparent 55%
   );
   transform: skewX(-20deg);
-  pointer-events: none;
 
-  /* more stable than overlay on iOS */
   mix-blend-mode: screen;
   animation: winner-sheen 3.5s infinite;
+
+  /* help Safari compositing */
+  transform: translateZ(0) skewX(-20deg);
+  -webkit-transform: translateZ(0) skewX(-20deg);
 }
 
 @keyframes winner-sheen {
-  0% {
-    left: -150%;
-  }
-  40% {
-    left: 150%;
-  }
-  100% {
-    left: 150%;
-  }
+  0% { left: -150%; }
+  40% { left: 150%; }
+  100% { left: 150%; }
 }
 
 /* =========================================================
    ✅ LOST STATE (no iPhone flicker)
    ========================================================= */
 
-/* Touch devices: do NOT hover-toggle filters */
 .db-history-card-wrapper.is-lost .db-card-pile {
   filter: none;
 }
 
-/* Desktop only */
 @media (hover: hover) and (pointer: fine) {
   .db-history-card-wrapper.is-lost .db-card-pile {
     filter: grayscale(0.85) opacity(0.85);
