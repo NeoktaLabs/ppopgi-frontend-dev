@@ -1,3 +1,4 @@
+// src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
@@ -19,6 +20,7 @@ type Props = {
   account: string | null;
   onOpenRaffle: (id: string) => void;
   onOpenSafety: (id: string) => void;
+  onBrowse?: () => void; // Optional: navigate to list
 };
 
 type WithdrawMethod = "withdrawFunds" | "withdrawNative" | "claimTicketRefund";
@@ -116,6 +118,7 @@ async function fetchTicketsPurchasedByRaffle(
       continue;
     }
   }
+
   return out;
 }
 
@@ -151,9 +154,11 @@ function RaffleCardPile({
   nowMs: number;
 }) {
   const safeTickets = Number.isFinite(ticketCount) ? Math.max(1, Math.floor(ticketCount)) : 1;
+
+  // total visible = 1 front + up to 4 shadows = 5 max
   const shadowCount = Math.min(4, Math.max(0, safeTickets - 1));
 
-  // Make sure we NEVER forward userEntry into RaffleCard here (removes the yellow "X owned" UI)
+  // NEVER forward userEntry / userTicketsOwned into RaffleCard here (removes yellow "X owned" UI)
   const raffleForCard = useMemo(() => {
     const c = { ...(raffle ?? {}) };
     if ("userEntry" in c) delete (c as any).userEntry;
@@ -161,7 +166,6 @@ function RaffleCardPile({
     return c;
   }, [raffle]);
 
-  // Only append 'is-winner' if isWinner is strictly true
   const pileClass = `db-card-pile card-hover-trigger${isWinner ? " is-winner" : ""}`;
 
   return (
@@ -203,7 +207,7 @@ function RaffleCardPile({
   );
 }
 
-export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety }: Props) {
+export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety, onBrowse }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Dashboard";
   }, []);
@@ -268,6 +272,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   }, [activeJoined, activeCreated]);
 
   const createdCount = data.created?.length ?? 0;
+
+  // Joined tab renders *pastJoined*, so this count matches the tab’s content.
+  // If you want TOTAL joined (active + past), use: (data.joined?.length ?? 0)
   const joinedCount = pastJoined.length;
 
   const msgIsSuccess = useMemo(() => {
@@ -304,6 +311,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     try {
       abortRef.current?.abort();
     } catch {}
+
     const ac = new AbortController();
     abortRef.current = ac;
 
@@ -354,6 +362,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             <div className="db-stat-num">{createdCount}</div>
             <div className="db-stat-lbl">Created</div>
           </div>
+
           {hasClaims && (
             <div className="db-stat highlight">
               <div className="db-stat-num">{data.claimables.length}</div>
@@ -392,7 +401,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
               const hasNative = BigInt(it.claimableNative || "0") > 0n;
-
               const isRefund = it.type === "REFUND";
 
               const ownedNow = Number(it.userTicketsOwned || 0);
@@ -467,11 +475,19 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     <div className="db-claim-actions">
                       {showDual ? (
                         <>
-                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
+                          <button
+                            className="db-btn primary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                          >
                             {data.isPending ? "Processing..." : "Claim USDC"}
                           </button>
 
-                          <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
+                          <button
+                            className="db-btn secondary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
+                          >
                             {data.isPending ? "Processing..." : "Claim Native"}
                           </button>
                         </>
@@ -529,7 +545,17 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               </>
             )}
 
-            {!data.isColdLoading && ongoingRaffles.length === 0 && <div className="db-empty">You have no on-going raffles.</div>}
+            {!data.isColdLoading && ongoingRaffles.length === 0 && (
+              <div className="db-empty">
+                <div className="db-empty-icon">🎟️</div>
+                <div>You have no on-going raffles.</div>
+                {onBrowse && (
+                  <button className="db-btn-browse" onClick={onBrowse}>
+                    Browse Raffles
+                  </button>
+                )}
+              </div>
+            )}
 
             {ongoingRaffles.map((r: any) => {
               const ownedNow = Number(r.userEntry?.count ?? 0);
@@ -541,7 +567,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                   key={r.id}
                   raffle={r}
                   ticketCount={ticketCount || 1}
-                  isWinner={false} // ✅ Ongoing raffles cannot be winners yet
+                  isWinner={false}
                   onOpenRaffle={onOpenRaffle}
                   onOpenSafety={onOpenSafety}
                   nowMs={nowS * 1000}
@@ -553,7 +579,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "joined" && (
           <div className="db-grid">
-            {!data.isColdLoading && pastJoined.length === 0 && <div className="db-empty">No joined raffles history found.</div>}
+            {!data.isColdLoading && pastJoined.length === 0 && (
+              <div className="db-empty">
+                <div className="db-empty-icon">📂</div>
+                <div>No joined raffles history found.</div>
+              </div>
+            )}
 
             {pastJoined.map((r: any) => {
               const acct = norm(account);
@@ -566,7 +597,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const completed = r.status === "COMPLETED";
               const canceled = r.status === "CANCELED";
 
-              // ✅ Strict winner logic
               const iWon = completed && acct && winner === acct;
               const isRefunded = canceled && ownedNow === 0 && purchasedEver > 0;
 
@@ -574,11 +604,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const iLost = completed && participatedEver && !iWon;
 
               return (
-                <div key={r.id} className="db-history-card-wrapper">
+                <div key={r.id} className={`db-history-card-wrapper ${iLost ? "is-lost" : ""}`}>
                   <RaffleCardPile
                     raffle={r}
                     ticketCount={ticketCount || 1}
-                    isWinner={!!iWon} // ✅ Only true if strictly won
+                    isWinner={!!iWon}
                     onOpenRaffle={onOpenRaffle}
                     onOpenSafety={onOpenSafety}
                     nowMs={nowS * 1000}
@@ -590,7 +620,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     </div>
                   )}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
-                  {iLost && <div className="db-history-badge lost">Lost - Better luck next time!</div>}
+                  {iLost && <div className="db-history-badge lost">Better luck next time</div>}
                 </div>
               );
             })}
@@ -599,7 +629,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "created" && (
           <div className="db-grid">
-            {!data.isColdLoading && data.created.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
+            {!data.isColdLoading && data.created.length === 0 && (
+              <div className="db-empty">
+                <div className="db-empty-icon">✨</div>
+                <div>You haven't hosted any raffles yet.</div>
+              </div>
+            )}
 
             {data.created.map((r: any) => (
               <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
