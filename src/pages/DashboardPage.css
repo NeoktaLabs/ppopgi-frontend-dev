@@ -443,19 +443,19 @@
   pointer-events: none;
 
   font-weight: 1000;
-  font-size: 24px;          /* bigger */
-  letter-spacing: -0.8px;
+  font-size: 30px;          /* ✅ bigger */
+  letter-spacing: -0.9px;
 
   color: #0f172a;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(15, 23, 42, 0.14);
   border-radius: 999px;
-  padding: 10px 14px;       /* bigger */
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.14);
+  padding: 12px 18px;       /* ✅ bigger */
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.16);
 }
 
 /* =========================================================
-   ✅ WINNER: GOLD SPARKLES (no white overlay wash)
+   ✅ WINNER: GOLD SPARKLES (MORE GOLD / MORE VISIBLE)
    Apply: .db-card-pile.is-winner
    ========================================================= */
 
@@ -463,24 +463,25 @@
   border-radius: 16px;
 }
 
-/* gold aura */
+/* gold aura (stronger) */
 .db-card-pile.is-winner::before {
   content: "";
   position: absolute;
-  inset: -4px;
-  border-radius: 18px;
+  inset: -6px;
+  border-radius: 20px;
   pointer-events: none;
   z-index: 0;
 
   background:
-    radial-gradient(circle at 20% 10%, rgba(255, 214, 102, 0.55), rgba(255, 214, 102, 0) 58%),
-    radial-gradient(circle at 80% 90%, rgba(255, 170, 58, 0.45), rgba(255, 170, 58, 0) 62%),
-    radial-gradient(circle at 50% 50%, rgba(255, 220, 120, 0.18), rgba(255, 220, 120, 0) 70%);
-  filter: blur(10px);
-  opacity: 0.95;
+    radial-gradient(circle at 18% 12%, rgba(255, 200, 60, 0.95), rgba(255, 200, 60, 0) 58%),
+    radial-gradient(circle at 82% 88%, rgba(255, 150, 35, 0.85), rgba(255, 150, 35, 0) 62%),
+    radial-gradient(circle at 45% 55%, rgba(255, 235, 170, 0.55), rgba(255, 235, 170, 0) 72%);
+
+  filter: blur(14px);
+  opacity: 1;
 }
 
-/* sparkles layer (gold-only, no white wash) */
+/* sparkles layer (denser + brighter gold) */
 .db-card-pile.is-winner::after {
   content: "";
   position: absolute;
@@ -489,33 +490,32 @@
   pointer-events: none;
   z-index: 30;
 
-  /* many tiny golden sparkles */
   background:
-    radial-gradient(circle, rgba(255, 214, 102, 0.85) 0 1px, rgba(255, 214, 102, 0) 2px) 12% 18% / 120px 120px,
-    radial-gradient(circle, rgba(255, 193, 80, 0.8) 0 1px, rgba(255, 193, 80, 0) 2px) 70% 22% / 140px 140px,
-    radial-gradient(circle, rgba(255, 214, 102, 0.75) 0 1px, rgba(255, 214, 102, 0) 2px) 40% 78% / 160px 160px,
-    radial-gradient(circle, rgba(255, 170, 58, 0.75) 0 1px, rgba(255, 170, 58, 0) 2px) 82% 68% / 180px 180px,
-    radial-gradient(circle, rgba(255, 230, 150, 0.55) 0 1px, rgba(255, 230, 150, 0) 3px) 18% 62% / 220px 220px;
+    radial-gradient(circle, rgba(255, 214, 102, 1) 0 1px, rgba(255, 214, 102, 0) 3px) 12% 18% / 90px 90px,
+    radial-gradient(circle, rgba(255, 193, 80, 0.98) 0 1px, rgba(255, 193, 80, 0) 3px) 70% 22% / 110px 110px,
+    radial-gradient(circle, rgba(255, 230, 150, 0.9) 0 1px, rgba(255, 230, 150, 0) 4px) 40% 78% / 130px 130px,
+    radial-gradient(circle, rgba(255, 170, 58, 0.98) 0 1px, rgba(255, 170, 58, 0) 4px) 82% 68% / 150px 150px,
+    radial-gradient(circle, rgba(255, 240, 190, 0.85) 0 1px, rgba(255, 240, 190, 0) 5px) 18% 62% / 180px 180px,
+    radial-gradient(circle, rgba(255, 214, 102, 0.95) 0 1px, rgba(255, 214, 102, 0) 4px) 55% 25% / 140px 140px,
+    radial-gradient(circle, rgba(255, 170, 58, 0.92) 0 1px, rgba(255, 170, 58, 0) 5px) 30% 90% / 190px 190px;
 
-  opacity: 0.75;
+  opacity: 0.95;
   mix-blend-mode: screen;
-  animation: db-sparkle-drift 2.6s ease-in-out infinite;
+  animation: db-sparkle-drift 2.1s ease-in-out infinite;
 }
 
-/* subtle premium saturation */
 .db-card-pile.is-winner .db-card-front {
-  filter: saturate(1.06) contrast(1.02);
+  filter: saturate(1.08) contrast(1.03);
 }
 
-/* moving sparkle drift */
 @keyframes db-sparkle-drift {
-  0%   { transform: translate(0px, 0px);    opacity: 0.55; }
-  50%  { transform: translate(6px, -4px);   opacity: 0.9; }
-  100% { transform: translate(0px, 0px);    opacity: 0.55; }
+  0%   { transform: translate(0px, 0px);    opacity: 0.65; }
+  50%  { transform: translate(7px, -5px);   opacity: 1; }
+  100% { transform: translate(0px, 0px);    opacity: 0.65; }
 }
 
 /* =========================================================
-   ✅ HISTORY CARD BADGES (centered)
+   ✅ HISTORY CARD BADGES (centered under the cards)
    ========================================================= */
 
 .db-history-card-wrapper {
@@ -526,7 +526,7 @@
   position: relative;
 }
 
-/* ensure pill centered */
+/* ✅ Center pills relative to the pile width */
 .db-history-badge {
   display: inline-flex;
   align-items: center;
@@ -611,16 +611,16 @@
 
   /* slightly smaller on small screens */
   .db-mult-badge {
-    font-size: 20px;
-    padding: 9px 12px;
+    font-size: 22px;
+    padding: 10px 14px;
   }
 
-  /* keep winner sparkle nice but not too strong */
+  /* keep sparkle but not too aggressive on mobile */
   .db-card-pile.is-winner::after {
-    opacity: 0.55;
-    animation-duration: 3.2s;
+    opacity: 0.65;
+    animation-duration: 2.8s;
   }
   .db-card-pile.is-winner::before {
-    opacity: 0.78;
+    opacity: 0.85;
   }
 }
