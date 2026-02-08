@@ -1,6 +1,5 @@
 // src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import type { ReactNode } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
