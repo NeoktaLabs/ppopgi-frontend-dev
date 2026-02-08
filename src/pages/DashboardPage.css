@@ -357,11 +357,11 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 
-  /* ✅ NEW: center cards in grid cells (matches Joined tab look) */
+  /* ✅ center cards in grid cells (matches Joined tab look) */
   justify-items: center;
 }
 
-/* ✅ NEW: keep all grid children consistent width + centered */
+/* ✅ keep all grid children consistent width + centered */
 .db-grid > * {
   width: 100%;
   justify-self: center;
@@ -476,25 +476,23 @@
 
 .db-card-pile-wrapper {
   position: relative;
-  width: 100%; /* ✅ always stretch full width */
-}
-
-.db-card-pile-anchor {
-  position: relative;
-  width: 100%; /* ✅ anchor matches card width in all contexts */
-}
-
-/* ✅ ensure the pile itself always uses full width too */
-.db-card-pile {
   width: 100%;
+  overflow: visible; /* ✅ allow badge outside the card */
 }
 
-/* ✅ multiplier: exterior top-right (won't cover share button) */
-.db-mult-badge {
+/* ✅ NEW: separate overlay layer above the pile */
+.db-mult-badge-layer {
   position: absolute;
   top: -18px;
   right: -18px;
-  z-index: 80;
+  z-index: 200; /* above pile/shadows */
+  pointer-events: none;
+}
+
+/* ✅ badge itself is no longer positioned */
+.db-mult-badge {
+  position: relative;
+  z-index: 1;
   pointer-events: none;
   font-weight: 1000;
   font-size: 30px;
@@ -693,12 +691,15 @@
     width: max-content;
   }
 
-  /* updated mobile badge position */
+  /* ✅ mobile: move the overlay layer */
+  .db-mult-badge-layer {
+    top: -14px;
+    right: -14px;
+  }
+
   .db-mult-badge {
     font-size: 24px;
     padding: 10px 14px;
-    top: -14px;
-    right: -14px;
   }
 
   .db-card-pile.is-winner .db-card-front-card::after {
