@@ -118,9 +118,15 @@ async function fetchTicketsPurchasedByRaffle(
   return out;
 }
 
-/** Multiplier Badge (xN) */
+/** * Multiplier Badge (xN) 
+ * ✅ Hides completely if count is 1
+ */
 function MultiplierBadge({ count }: { count: number }) {
   const safe = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+  
+  // If only 1 ticket, do not show x1 badge
+  if (safe <= 1) return null;
+
   const display = safe > 999 ? "999+" : String(safe);
 
   return (
@@ -132,8 +138,9 @@ function MultiplierBadge({ count }: { count: number }) {
 
 /**
  * RaffleCardPile
- * Displays a stack of tickets. The .is-winner class is applied here
- * if the user won, triggering the CSS gold effects.
+ * ✅ Displays a stack of solid cards.
+ * ✅ If ticketCount is 1 -> 0 shadows -> 1 card shown.
+ * ✅ Caps at 5 cards total (1 front + 4 shadows).
  */
 function RaffleCardPile({
   raffle,
@@ -151,6 +158,8 @@ function RaffleCardPile({
   nowMs: number;
 }) {
   const safeTickets = Number.isFinite(ticketCount) ? Math.max(1, Math.floor(ticketCount)) : 1;
+  
+  // Logic: 1 ticket = 0 shadows. 2 tickets = 1 shadow... Max 4 shadows.
   const shadowCount = Math.min(4, Math.max(0, safeTickets - 1));
 
   const raffleForCard = useMemo(() => {
@@ -164,7 +173,7 @@ function RaffleCardPile({
 
   return (
     <div className={pileClass}>
-      {/* Background Shadows (The stack) */}
+      {/* Background Shadows (The solid stack) */}
       {shadowCount >= 4 && (
         <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
           <div className="db-card-shadow-inner">
