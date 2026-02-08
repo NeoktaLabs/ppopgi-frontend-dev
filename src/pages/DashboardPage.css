@@ -442,6 +442,10 @@
   overflow: hidden;
   background: transparent;
   transform: translateZ(0);
+  
+  /* ✅ FIX 1: Mask image forces browser to cut off any overflow (including sheen) */
+  mask-image: -webkit-radial-gradient(white, black);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
 .db-card-shadow {
@@ -563,12 +567,13 @@
   filter: saturate(1.05) contrast(1.02);
 }
 
+/* ✅ FIX 2: Sheen animation now starts further back and is wider */
 .db-card-pile.is-winner .db-card-front-card::after {
   content: "";
   position: absolute;
   top: 0;
-  left: -150%;
-  width: 100%;
+  left: -200%; 
+  width: 200%;
   height: 100%;
   border-radius: 16px;
   pointer-events: none;
@@ -579,10 +584,12 @@
   animation: winner-sheen 3.5s infinite;
 }
 
+/* ✅ FIX 3: Opacity fades out to prevent ghost lines on the right */
 @keyframes winner-sheen {
-  0% { left: -150%; }
-  40% { left: 150%; }
-  100% { left: 150%; }
+  0% { left: -200%; opacity: 0; }
+  10% { opacity: 1; }
+  50% { left: 200%; opacity: 0; }
+  100% { left: 200%; opacity: 0; }
 }
 
 .db-history-card-wrapper.is-lost .db-card-pile {
