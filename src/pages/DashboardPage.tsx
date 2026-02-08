@@ -1,3 +1,4 @@
+// src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
@@ -512,8 +513,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             <span className="db-tab-live">
               <span className="db-live-dot" aria-hidden="true" />
-              Live{" "}
-              <span className="db-tab-count">({ongoingRaffles.length})</span>
+              Live <span className="db-tab-count">({ongoingRaffles.length})</span>
             </span>
           </button>
 
