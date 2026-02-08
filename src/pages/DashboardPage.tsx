@@ -121,8 +121,6 @@ async function fetchTicketsPurchasedByRaffle(
 
 /**
  * Multiplier Badge (xN)
- * ✅ Shows x1 again, toned down via CSS class
- * ✅ Independent from card outline/painting
  */
 function MultiplierBadge({ count }: { count: number }) {
   const safe = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
@@ -137,9 +135,7 @@ function MultiplierBadge({ count }: { count: number }) {
 
 /**
  * RaffleCardPile
- * ✅ 1 ticket => 0 shadows (ONLY one card rendered)
- * ✅ Badge is a sibling overlay (NOT part of outlined pile)
- * ✅ Winner outline/glow targets pile + card only (never badge)
+ * ✅ Badge is rendered in a separate overlay layer ABOVE the pile
  */
 function RaffleCardPile({
   raffle,
@@ -173,51 +169,53 @@ function RaffleCardPile({
 
   return (
     <div className="db-card-pile-wrapper">
-      <div className="db-card-pile-anchor">
+      {/* ✅ overlay element, separate from pile */}
+      <div className="db-mult-badge-layer" aria-hidden="true">
         <MultiplierBadge count={safeTickets} />
+      </div>
 
-        <div className={pileClass}>
-          {shadowCount >= 4 && (
-            <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
-              <div className="db-card-shadow-inner">
-                <div className="db-card-shadow-card">
-                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                </div>
+      {/* ✅ pile itself */}
+      <div className={pileClass}>
+        {shadowCount >= 4 && (
+          <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
+            <div className="db-card-shadow-inner">
+              <div className="db-card-shadow-card">
+                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
-          )}
-          {shadowCount >= 3 && (
-            <div className="db-card-shadow db-card-shadow-3" aria-hidden="true">
-              <div className="db-card-shadow-inner">
-                <div className="db-card-shadow-card">
-                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                </div>
+          </div>
+        )}
+        {shadowCount >= 3 && (
+          <div className="db-card-shadow db-card-shadow-3" aria-hidden="true">
+            <div className="db-card-shadow-inner">
+              <div className="db-card-shadow-card">
+                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
-          )}
-          {shadowCount >= 2 && (
-            <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
-              <div className="db-card-shadow-inner">
-                <div className="db-card-shadow-card">
-                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                </div>
+          </div>
+        )}
+        {shadowCount >= 2 && (
+          <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
+            <div className="db-card-shadow-inner">
+              <div className="db-card-shadow-card">
+                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
-          )}
-          {shadowCount >= 1 && (
-            <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
-              <div className="db-card-shadow-inner">
-                <div className="db-card-shadow-card">
-                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                </div>
+          </div>
+        )}
+        {shadowCount >= 1 && (
+          <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
+            <div className="db-card-shadow-inner">
+              <div className="db-card-shadow-card">
+                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          <div className="db-card-front">
-            <div className="db-card-front-card">
-              <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-            </div>
+        <div className="db-card-front">
+          <div className="db-card-front-card">
+            <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
         </div>
       </div>
