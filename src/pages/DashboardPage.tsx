@@ -1,4 +1,3 @@
-// src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
@@ -162,6 +161,7 @@ function RaffleCardPile({
     return c;
   }, [raffle]);
 
+  // Only append 'is-winner' if isWinner is strictly true
   const pileClass = `db-card-pile card-hover-trigger${isWinner ? " is-winner" : ""}`;
 
   return (
@@ -541,7 +541,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                   key={r.id}
                   raffle={r}
                   ticketCount={ticketCount || 1}
-                  isWinner={false}
+                  isWinner={false} // ✅ Ongoing raffles cannot be winners yet
                   onOpenRaffle={onOpenRaffle}
                   onOpenSafety={onOpenSafety}
                   nowMs={nowS * 1000}
@@ -566,6 +566,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const completed = r.status === "COMPLETED";
               const canceled = r.status === "CANCELED";
 
+              // ✅ Strict winner logic
               const iWon = completed && acct && winner === acct;
               const isRefunded = canceled && ownedNow === 0 && purchasedEver > 0;
 
@@ -577,7 +578,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                   <RaffleCardPile
                     raffle={r}
                     ticketCount={ticketCount || 1}
-                    isWinner={!!iWon}
+                    isWinner={!!iWon} // ✅ Only true if strictly won
                     onOpenRaffle={onOpenRaffle}
                     onOpenSafety={onOpenSafety}
                     nowMs={nowS * 1000}
