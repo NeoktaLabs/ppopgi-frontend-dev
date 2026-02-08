@@ -305,7 +305,6 @@
 
 /* =========================================================
    ✅ REAL RAFFLECARD PILE (Organic Look)
-   - Randomized rotations for messy pile effect
    ========================================================= */
 
 .card-hover-trigger { position: relative; }
@@ -340,13 +339,22 @@
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  background: white; /* ✅ Ensures solid look even if card loads slowly */
+  width: 100%;
+  height: 100%;
 }
 
-/* Organic spread - Rotations are less robotic */
-.db-card-shadow-1 { transform: translate(8px, 10px) rotate(-1.5deg) scale(0.99); opacity: 0.9; z-index: 6; }
-.db-card-shadow-2 { transform: translate(14px, 18px) rotate(2deg) scale(0.98); opacity: 0.8; z-index: 5; }
-.db-card-shadow-3 { transform: translate(20px, 28px) rotate(-0.5deg) scale(0.97); opacity: 0.7; z-index: 4; }
-.db-card-shadow-4 { transform: translate(26px, 36px) rotate(1.2deg) scale(0.96); opacity: 0.6; z-index: 3; }
+/* ✅ Shadows are now SOLID (opacity 1) but darkened slightly for depth */
+.db-card-shadow-1 { transform: translate(8px, 10px) rotate(-1.5deg) scale(0.99); opacity: 1; z-index: 6; }
+.db-card-shadow-2 { transform: translate(14px, 18px) rotate(2deg) scale(0.98); opacity: 1; z-index: 5; }
+.db-card-shadow-3 { transform: translate(20px, 28px) rotate(-0.5deg) scale(0.97); opacity: 1; z-index: 4; }
+.db-card-shadow-4 { transform: translate(26px, 36px) rotate(1.2deg) scale(0.96); opacity: 1; z-index: 3; }
+
+/* Depth filter for cards further back */
+.db-card-shadow-1 .db-card-shadow-inner { filter: brightness(0.96); }
+.db-card-shadow-2 .db-card-shadow-inner { filter: brightness(0.92); }
+.db-card-shadow-3 .db-card-shadow-inner { filter: brightness(0.88); }
+.db-card-shadow-4 .db-card-shadow-inner { filter: brightness(0.84); }
 
 /* hover collapse */
 .card-hover-trigger:hover .db-card-shadow-1 { transform: translate(6px, 6px) rotate(-1deg) scale(0.99); }
@@ -373,10 +381,7 @@
 }
 
 /* =========================================================
-   ✨ NEW WINNER EFFECT (The "Rare Foil" Look)
-   - No glitter dots (too noisy)
-   - Uses a smooth diagonal "sheen" animation
-   - Uses a metallic gradient border
+   ✨ WINNER EFFECT (Rare Foil Look)
    ========================================================= */
 
 .db-card-pile.is-winner {
@@ -394,33 +399,31 @@
   overflow: hidden;
   border-radius: 16px;
   
-  /* 1. Metallic Gradient Border via double-background trick */
+  /* Metallic Gradient Border */
   border: 2px solid transparent;
   background-image: 
-    linear-gradient(white, white), /* Inner content bg */
-    linear-gradient(135deg, #C5A059 0%, #E6C888 25%, #FFF6D6 50%, #E6C888 75%, #C5A059 100%); /* The Border Gradient */
+    linear-gradient(white, white), 
+    linear-gradient(135deg, #C5A059 0%, #E6C888 25%, #FFF6D6 50%, #E6C888 75%, #C5A059 100%);
   background-origin: border-box;
   background-clip: padding-box, border-box;
 
-  /* 2. Soft, warm ambient glow (Bloom) */
+  /* Soft Bloom */
   box-shadow: 
-    0 15px 35px -5px rgba(210, 160, 40, 0.3), /* Deep Gold Shadow */
-    0 0 15px rgba(255, 230, 150, 0.2); /* Highlight Bloom */
+    0 15px 35px -5px rgba(210, 160, 40, 0.3), 
+    0 0 15px rgba(255, 230, 150, 0.2);
     
-  /* Enhance contrast slightly for that "printed foil" look */
   filter: saturate(1.05) contrast(1.02);
 }
 
-/* 3. The "Sheen" - A band of light that sweeps across */
+/* The "Sheen" Sweep */
 .db-card-pile.is-winner .db-card-front::after {
   content: "";
   position: absolute;
   top: 0; 
-  left: -150%; /* Start far left */
+  left: -150%; 
   width: 100%; 
   height: 100%;
   
-  /* A diagonal beam of light with a bright white core and warm edges */
   background: linear-gradient(
     105deg,
     transparent 20%,
@@ -431,17 +434,14 @@
   
   transform: skewX(-20deg);
   pointer-events: none;
-  
-  /* Overlay blend mode keeps the card text readable but illuminates it */
   mix-blend-mode: overlay; 
-  
   animation: winner-sheen 3.5s infinite;
 }
 
 @keyframes winner-sheen {
   0% { left: -150%; }
-  40% { left: 150%; } /* Fast swipe across */
-  100% { left: 150%; } /* Pause before repeating */
+  40% { left: 150%; }
+  100% { left: 150%; }
 }
 
 /* =========================================================
@@ -528,7 +528,6 @@
   .db-tabs { display: flex; width: max-content; }
   .db-mult-badge { font-size: 24px; padding: 10px 14px; }
   
-  /* Make winner effect POP on mobile */
   .db-card-pile.is-winner .db-card-front::after { opacity: 1; animation-duration: 2.5s; }
   .db-live-dot { width: 8px; height: 8px; margin-right: 7px; }
 }
