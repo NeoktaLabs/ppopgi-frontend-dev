@@ -137,7 +137,7 @@ function MultiplierBadge({ count }: { count: number }) {
 /**
  * RaffleCardPile
  * ✅ 1 ticket => 0 shadows (ONLY one card rendered)
- * ✅ Multiplier is a sibling overlay (not part of outlined pile)
+ * ✅ Badge is a sibling overlay (NOT part of outlined pile)
  * ✅ Winner outline/glow targets pile + card only (never badge)
  */
 function RaffleCardPile({
@@ -215,9 +215,11 @@ function RaffleCardPile({
           </div>
         )}
 
-        {/* Front Card (the real card element) */}
-        <div className="db-card-front-card">
-          <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+        {/* Front wrapper + real card element */}
+        <div className="db-card-front">
+          <div className="db-card-front-card">
+            <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+          </div>
         </div>
       </div>
     </div>
@@ -385,7 +387,152 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       {/* STATUS BANNER */}
       {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
-      {/* ... rest of file unchanged ... */}
+      {/* CLAIMABLES */}
+      <div className="db-section claim-section">
+        <div className="db-section-header">
+          <div className="db-section-title">Claimables</div>
+          {hasClaims && <span className="db-pill pulse">Action Required</span>}
+        </div>
+
+        {!hasClaims ? (
+          <div className="db-empty-claims">
+            <div style={{ fontSize: 24, marginBottom: 8 }}>🎉</div>
+            <div>You’ve already claimed everything!</div>
+          </div>
+        ) : (
+          <div className="db-grid">
+            {data.claimables.map((it: any) => {
+              const r = it.raffle;
+              const acct = norm(account);
+              const winner = norm(r.winner);
+              const creator = norm(r.creator);
+
+              const iAmWinner = !!acct && acct === winner;
+              const iAmCreator = !!acct && acct === creator;
+
+              const hasUsdc = BigInt(it.claimableUsdc || "0") > 0n;
+              const hasNative = BigInt(it.claimableNative || "0") > 0n;
+              const isRefund = it.type === "REFUND";
+
+              const ownedNow = Number(it.userTicketsOwned || 0);
+              const purchasedEver = getPurchasedEver(r.id);
+              const displayTicketCount = ownedNow > 0 ? ownedNow : purchasedEver;
+
+              const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative });
+
+              let badgeTitle = "Claim Available";
+              let message = "Funds available to claim.";
+              let primaryLabel = "Claim";
+
+              if (isRefund) {
+                badgeTitle = "Refund";
+                message =
+                  displayTicketCount > 0
+                    ? `Raffle canceled — reclaim the cost of your ${displayTicketCount} ${pluralTickets(displayTicketCount)}.`
+                    : "Raffle canceled — reclaim your refund.";
+                primaryLabel = "Reclaim Refund";
+              } else if (iAmWinner) {
+                badgeTitle = "Winner";
+                message = "You won 🎉 Claim your prize now.";
+                primaryLabel = "Claim Prize";
+              } else if (iAmCreator) {
+                badgeTitle = "Creator";
+                message = "Ticket sales are settled — withdraw revenue.";
+                primaryLabel = "Withdraw Revenue";
+              } else {
+                badgeTitle = "Claim";
+                message = "Funds available to withdraw.";
+                primaryLabel = hasUsdc ? "Claim USDC" : hasNative ? "Claim Native" : "Claim";
+              }
+
+              const showDual = !isRefund && hasUsdc && hasNative;
+
+              return (
+                <div key={r.id} className="db-claim-wrapper">
+                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+
+                  <div className="db-claim-box">
+                    <div className="db-claim-header">
+                      <span className={`db-claim-badge ${isRefund ? "refund" : "win"}`}>{badgeTitle}</span>
+                    </div>
+
+                    <div className="db-claim-text">
+                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10, color: "#334155" }}>{message}</div>
+
+                      {isRefund ? (
+                        <div className="db-refund-layout">
+                          {hasUsdc && (
+                            <div className="db-refund-sub">
+                              Expected: <b>{fmt(it.claimableUsdc, 6)} USDC</b>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="db-win-layout">
+                          <div className="db-win-label">Available:</div>
+                          <div className="db-win-val">
+                            {hasUsdc && <span>{fmt(it.claimableUsdc, 6)} USDC</span>}
+                            {hasNative && (
+                              <span>
+                                {hasUsdc ? " + " : ""}
+                                {fmt(it.claimableNative, 18)} Native
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="db-claim-actions">
+                      {showDual ? (
+                        <>
+                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
+                            {data.isPending ? "Processing..." : "Claim USDC"}
+                          </button>
+                          <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
+                            {data.isPending ? "Processing..." : "Claim Native"}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className={`db-btn ${isRefund ? "secondary" : "primary"}`}
+                          disabled={data.isPending || !primaryMethod}
+                          onClick={() => primaryMethod && actions.withdraw(r.id, primaryMethod)}
+                        >
+                          {data.isPending ? "Processing..." : primaryLabel}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* MY RAFFLES TITLE */}
+      <div className="db-section-header">
+        <div className="db-section-title">My Raffles</div>
+      </div>
+
+      {/* TABS */}
+      <div className="db-tabs-container">
+        <div className="db-tabs">
+          <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
+            <span className="db-tab-live">
+              <span className="db-live-dot" aria-hidden="true" />
+              On-going <span className="db-tab-count">({ongoingRaffles.length})</span>
+            </span>
+          </button>
+          <button className={`db-tab ${tab === "joined" ? "active" : ""}`} onClick={() => setTab("joined")}>
+            Joined <span className="db-tab-count">({joinedCount})</span>
+          </button>
+          <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
+            Created <span className="db-tab-count">({createdCount})</span>
+          </button>
+        </div>
+      </div>
 
       {/* CONTENT */}
       <div className="db-grid-area">
