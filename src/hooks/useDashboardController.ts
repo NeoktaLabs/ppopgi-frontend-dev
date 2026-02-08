@@ -8,6 +8,7 @@ import {
   fetchMyJoinedRaffleIds,
   fetchMyJoinedRaffleIdsFromEvents,
   fetchRafflesByIds,
+  fetchRaffleParticipants, // ✅ NEW
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -41,7 +42,8 @@ const RAFFLE_DASH_ABI = [
 ] as const;
 
 type JoinedRaffleItem = RaffleListItem & {
-  userTicketsOwned: string; // bigint string
+  userTicketsOwned: string; // bigint string (on-chain current balance)
+  userTicketsBought?: string; // ✅ NEW: historical purchased count (subgraph)
 };
 
 type ClaimableItem = {
@@ -141,11 +143,15 @@ export function useDashboardController() {
 
   const runIdRef = useRef(0);
 
+  // ✅ NEW: cache for "tickets bought" lookups (per page load)
+  const boughtCacheRef = useRef<Map<string, string>>(new Map());
+
   // Reset on wallet change
   useEffect(() => {
     lastJoinedIdsRef.current = null;
     joinedIdsPromiseRef.current = null;
     joinedBackoffMsRef.current = 0;
+    boughtCacheRef.current = new Map(); // ✅ NEW
     setHiddenClaimables({});
     setMsg(null);
     setCreated([]);
@@ -282,7 +288,7 @@ export function useDashboardController() {
           } catch {}
         }
 
-        // Enrich ticketsOwned
+        // Enrich ticketsOwned (current on-chain balance)
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
@@ -304,10 +310,58 @@ export function useDashboardController() {
 
         if (runId !== runIdRef.current) return;
 
-        const nextJoined: JoinedRaffleItem[] = joinedBase.map((r) => ({
-          ...r,
-          userTicketsOwned: ownedByRaffleId.get(normId(r.id)) ?? "0",
-        }));
+        // ✅ NEW: compute "tickets bought" only for canceled raffles that show 0 owned,
+        // so dashboard can still display historical participation after refunds.
+        const boughtByRaffleId = new Map<string, string>();
+        const boughtCache = boughtCacheRef.current;
+
+        const canceledNeedingBought = joinedBase.filter((r) => {
+          if (r.status !== "CANCELED") return false;
+          const rid = normId(r.id);
+          const owned = ownedByRaffleId.get(rid) ?? "0";
+          // Only if joined + owned is 0 (typical after refund)
+          return joinedIds.has(rid) && owned === "0";
+        });
+
+        // Hard cap to protect indexer
+        const canceledToFetch = canceledNeedingBought.slice(0, 40);
+
+        // Fill from cache first
+        canceledToFetch.forEach((r) => {
+          const rid = normId(r.id);
+          const cachedBought = boughtCache.get(rid);
+          if (cachedBought != null) boughtByRaffleId.set(rid, cachedBought);
+        });
+
+        // Fetch missing ones
+        const toFetch = canceledToFetch.filter((r) => !boughtByRaffleId.has(normId(r.id)));
+
+        await mapPool(toFetch, 6, async (r) => {
+          const rid = normId(r.id);
+          try {
+            // fetch top participants (default 50) and find me
+            const rows = await fetchRaffleParticipants(rid);
+            const mine = rows.find((p) => String(p.buyer || "").toLowerCase() === myAddr);
+            const bought = BigInt(mine?.ticketsPurchased || "0");
+            const boughtStr = bought.toString();
+            boughtByRaffleId.set(rid, boughtStr);
+            boughtCache.set(rid, boughtStr);
+          } catch {
+            boughtByRaffleId.set(rid, "0");
+            boughtCache.set(rid, "0");
+          }
+        });
+
+        if (runId !== runIdRef.current) return;
+
+        const nextJoined: JoinedRaffleItem[] = joinedBase.map((r) => {
+          const rid = normId(r.id);
+          return {
+            ...r,
+            userTicketsOwned: ownedByRaffleId.get(rid) ?? "0",
+            userTicketsBought: boughtByRaffleId.get(rid), // ✅ NEW (undefined unless computed)
+          };
+        });
 
         // ✅ Only update joined if it actually changed (prevents tiny “refresh” feeling)
         setJoined((prev) => {
@@ -315,6 +369,9 @@ export function useDashboardController() {
           for (let i = 0; i < prev.length; i++) {
             if (normId(prev[i].id) !== normId(nextJoined[i].id)) return nextJoined;
             if (String(prev[i].userTicketsOwned) !== String(nextJoined[i].userTicketsOwned)) return nextJoined;
+
+            // ✅ NEW: compare bought too
+            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? "")) return nextJoined;
           }
           return prev;
         });
