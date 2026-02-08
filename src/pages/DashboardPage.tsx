@@ -365,7 +365,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         <div className="db-hero-stats">
           <div className="db-stat">
             <div className="db-stat-num">{ongoingRaffles.length}</div>
-            <div className="db-stat-lbl">On-going</div>
+            <div className="db-stat-lbl">Live</div>
           </div>
           <div className="db-stat">
             <div className="db-stat-num">{pastJoined.length}</div>
