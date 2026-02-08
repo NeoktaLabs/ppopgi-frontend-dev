@@ -172,53 +172,51 @@ function RaffleCardPile({
 
   return (
     <div className="db-card-pile-wrapper">
-      {/* ✅ Badge is OUTSIDE pile outline */}
-      <MultiplierBadge count={safeTickets} />
+      <div className="db-card-pile-anchor">
+        <MultiplierBadge count={safeTickets} />
 
-      {/* ✅ Only this block gets pile + card outline */}
-      <div className={pileClass}>
-        {/* Background Shadows (stack) */}
-        {shadowCount >= 4 && (
-          <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
-            <div className="db-card-shadow-inner">
-              <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+        <div className={pileClass}>
+          {shadowCount >= 4 && (
+            <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
+              <div className="db-card-shadow-inner">
+                <div className="db-card-shadow-card">
+                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {shadowCount >= 3 && (
-          <div className="db-card-shadow db-card-shadow-3" aria-hidden="true">
-            <div className="db-card-shadow-inner">
-              <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+          )}
+          {shadowCount >= 3 && (
+            <div className="db-card-shadow db-card-shadow-3" aria-hidden="true">
+              <div className="db-card-shadow-inner">
+                <div className="db-card-shadow-card">
+                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {shadowCount >= 2 && (
-          <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
-            <div className="db-card-shadow-inner">
-              <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+          )}
+          {shadowCount >= 2 && (
+            <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
+              <div className="db-card-shadow-inner">
+                <div className="db-card-shadow-card">
+                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
-        {shadowCount >= 1 && (
-          <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
-            <div className="db-card-shadow-inner">
-              <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+          )}
+          {shadowCount >= 1 && (
+            <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
+              <div className="db-card-shadow-inner">
+                <div className="db-card-shadow-card">
+                  <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Front wrapper + real card element */}
-        <div className="db-card-front">
-          <div className="db-card-front-card">
-            <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+          <div className="db-card-front">
+            <div className="db-card-front-card">
+              <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+            </div>
           </div>
         </div>
       </div>
@@ -250,7 +248,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // --- JOINED RAFFLES PROCESSING ---
   const { active: activeJoined, past: pastJoined } = useMemo(() => {
     const active: any[] = [];
     const past: any[] = [];
@@ -270,7 +267,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return { active, past };
   }, [data.joined]);
 
-  // --- CREATED RAFFLES ---
   const activeCreated = useMemo(() => {
     const active: any[] = [];
     const arr = data.created ?? [];
@@ -309,7 +305,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const hasClaims = data.claimables.length > 0;
   const showColdSkeletons = data.isColdLoading && ongoingRaffles.length === 0;
 
-  // --- Fetch Historical Purchases ---
   const [purchasedByRaffle, setPurchasedByRaffle] = useState<Map<string, number>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
 
@@ -349,7 +344,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
   return (
     <div className="db-container">
-      {/* HERO */}
       <div className="db-hero">
         <div className="db-hero-content">
           <div className="db-avatar-circle">👤</div>
@@ -384,10 +378,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         </div>
       </div>
 
-      {/* STATUS BANNER */}
       {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
-      {/* CLAIMABLES */}
       <div className="db-section claim-section">
         <div className="db-section-header">
           <div className="db-section-title">Claimables</div>
@@ -511,30 +503,30 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         )}
       </div>
 
-      {/* MY RAFFLES TITLE */}
       <div className="db-section-header">
         <div className="db-section-title">My Raffles</div>
       </div>
 
-      {/* TABS */}
       <div className="db-tabs-container">
         <div className="db-tabs">
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             <span className="db-tab-live">
               <span className="db-live-dot" aria-hidden="true" />
-              Live <span className="db-tab-count">({ongoingRaffles.length})</span>
+              Live{" "}
+              <span className="db-tab-count">({ongoingRaffles.length})</span>
             </span>
           </button>
+
           <button className={`db-tab ${tab === "joined" ? "active" : ""}`} onClick={() => setTab("joined")}>
             Joined <span className="db-tab-count">({joinedCount})</span>
           </button>
+
           <button className={`db-tab ${tab === "created" ? "active" : ""}`} onClick={() => setTab("created")}>
             Created <span className="db-tab-count">({createdCount})</span>
           </button>
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="db-grid-area">
         {tab === "active" && (
           <div className="db-grid">
