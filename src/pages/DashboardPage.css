@@ -542,6 +542,10 @@
   animation: winner-sheen 3.5s infinite;
 }
 
+.db-card-pile-wrapper {
+  position: relative;
+}
+
 @keyframes winner-sheen {
   0% { left: -150%; }
   40% { left: 150%; }
