@@ -12,52 +12,85 @@
   background: white;
   border-radius: 24px;
   padding: 32px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 24px;
   margin-bottom: 40px;
-  border: 1px solid rgba(0,0,0,0.05);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .db-hero-content {
-  display: flex; align-items: center; gap: 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 .db-avatar-circle {
-  width: 64px; height: 64px;
+  width: 64px;
+  height: 64px;
   background: #f1f5f9;
   border-radius: 50%;
   font-size: 32px;
-  display: grid; place-items: center;
+  display: grid;
+  place-items: center;
 }
 
 .db-hero-label {
-  font-size: 13px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
 }
 
 .db-hero-addr {
-  font-size: 20px; font-weight: 800; color: #1e293b;
+  font-size: 20px;
+  font-weight: 800;
+  color: #1e293b;
   font-family: monospace;
-  display: flex; align-items: center; gap: 8px;
-  transition: opacity 0.2s; cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.2s;
+  cursor: pointer;
 }
-.db-hero-addr:hover { opacity: 0.7; }
-.db-copy-icon { font-size: 14px; opacity: 0.5; }
+.db-hero-addr:hover {
+  opacity: 0.7;
+}
+.db-copy-icon {
+  font-size: 14px;
+  opacity: 0.5;
+}
 
 /* Stats */
 .db-hero-stats {
-  display: flex; gap: 32px;
+  display: flex;
+  gap: 32px;
 }
 
-.db-stat { text-align: center; }
-.db-stat-num { font-size: 28px; font-weight: 900; line-height: 1; color: #1e293b; }
-.db-stat-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-top: 4px; }
+.db-stat {
+  text-align: center;
+}
+.db-stat-num {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  color: #1e293b;
+}
+.db-stat-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-top: 4px;
+}
 
-.db-stat.highlight .db-stat-num { color: #db2777; }
-
+.db-stat.highlight .db-stat-num {
+  color: #db2777;
+}
 
 /* --- STATUS BANNER --- */
 .db-msg-banner {
@@ -69,31 +102,71 @@
   font-size: 14px;
   animation: db-slide-down 0.3s ease-out;
 }
-@keyframes db-slide-down { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes db-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-.db-msg-banner.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-.db-msg-banner.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-
+.db-msg-banner.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+.db-msg-banner.success {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
 
 /* --- CLAIM SECTION --- */
-.db-section { margin-bottom: 40px; }
-.db-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.db-section {
+  margin-bottom: 40px;
+}
+.db-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
 
 /* ✅ FIXED: White color for visibility on dark backgrounds */
-.db-section-title { 
-  font-size: 20px; 
-  font-weight: 1000; 
+.db-section-title {
+  font-size: 20px;
+  font-weight: 900; /* was 1000 */
   letter-spacing: -0.5px;
-  color: #ffffff; 
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .db-pill {
-  padding: 4px 10px; background: #fee2e2; color: #991b1b;
-  border-radius: 99px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+  padding: 4px 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
-.db-pill.pulse { animation: db-pulse 2s infinite; }
-@keyframes db-pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+.db-pill.pulse {
+  animation: db-pulse 2s infinite;
+}
+@keyframes db-pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
 
 .db-empty-claims {
   background: #f8fafc;
@@ -108,7 +181,7 @@
 
 /* Claim Card Wrapper */
 .db-claim-wrapper {
-  background: #fff0f5; 
+  background: #fff0f5;
   padding: 12px;
   border-radius: 16px;
   border: 1px dashed #f9a8d4;
@@ -117,50 +190,114 @@
   flex-direction: column;
   gap: 12px;
 
-  /* ✅ NEW: ensure the card + claim box are centered and aligned */
+  /* ✅ ensure the card + claim box are centered and aligned */
   align-items: center;
+
+  /* ✅ IMPORTANT: anchor ticket pile inside claimables */
+  position: relative;
 }
 
-/* ✅ NEW: force child blocks to fill wrapper width so they align perfectly */
+/* ✅ force child blocks to fill wrapper width so they align perfectly */
 .db-claim-wrapper > * {
   width: 100%;
 }
 
 .db-claim-box {
-  background: white; padding: 16px; border-radius: 12px;
-  text-align: center; border: 1px solid rgba(0,0,0,0.05);
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.db-claim-header { margin-bottom: 8px; }
-.db-claim-badge { 
-  font-size: 11px; font-weight: 900; text-transform: uppercase; padding: 4px 8px; border-radius: 6px;
+.db-claim-header {
+  margin-bottom: 8px;
 }
-.db-claim-badge.win { background: #dcfce7; color: #166534; }
-.db-claim-badge.refund { background: #fee2e2; color: #991b1b; }
+.db-claim-badge {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.db-claim-badge.win {
+  background: #dcfce7;
+  color: #166534;
+}
+.db-claim-badge.refund {
+  background: #fee2e2;
+  color: #991b1b;
+}
 
 .db-claim-text {
-  font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 12px;
 }
 
-.db-refund-layout { display: flex; flex-direction: column; gap: 4px; }
-.db-refund-val { font-size: 20px; font-weight: 900; color: #1e293b; }
-.db-refund-sub { font-size: 12px; color: #64748b; }
-.db-refund-sub b { color: #0f172a; }
+.db-refund-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.db-refund-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #1e293b;
+}
+.db-refund-sub {
+  font-size: 12px;
+  color: #64748b;
+}
+.db-refund-sub b {
+  color: #0f172a;
+}
 
-.db-win-layout { display: flex; flex-direction: column; gap: 2px; }
-.db-win-label { font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; }
-.db-win-val { font-size: 20px; font-weight: 1000; color: #14532d; }
+.db-win-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.db-win-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #166534;
+  text-transform: uppercase;
+}
+.db-win-val {
+  font-size: 20px;
+  font-weight: 900; /* was 1000 */
+  color: #14532d;
+}
 
 .db-btn {
-  width: 100%; padding: 10px; border-radius: 8px; border: none;
-  font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 12px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 800;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 12px;
   transition: transform 0.1s;
 }
-.db-btn:active { transform: scale(0.98); }
-.db-btn.primary { background: #1e293b; color: white; }
-.db-btn.secondary { background: white; border: 2px solid #e2e8f0; color: #334155; }
-.db-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
+.db-btn:active {
+  transform: scale(0.98);
+}
+.db-btn.primary {
+  background: #1e293b;
+  color: white;
+}
+.db-btn.secondary {
+  background: white;
+  border: 2px solid #e2e8f0;
+  color: #334155;
+}
+.db-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* --- TABS --- */
 .db-tabs-container {
@@ -177,8 +314,8 @@
   border-radius: 16px;
   display: inline-flex;
   gap: 4px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  border: 1px solid rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .db-tab {
@@ -205,9 +342,10 @@
   box-shadow: 0 4px 10px rgba(30, 41, 59, 0.2);
 }
 
-
 /* --- GRID --- */
-.db-grid-area { min-height: 200px; }
+.db-grid-area {
+  min-height: 200px;
+}
 .db-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -223,13 +361,108 @@
   font-weight: 600;
 }
 
+/* ✅ NEW: wrapper for cards in the ongoing tab (anchors ticket pile) */
+.db-card-wrap {
+  position: relative;
+}
+
+/* --- TICKET PILE (Dashboard only) --- */
+.ticket-pile-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  pointer-events: none; /* Let clicks pass through to the card */
+}
+
+.ticket-pile-stack {
+  position: relative;
+  width: 44px;
+  height: 30px;
+}
+
+.ticket-layer {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Stacking and Rotation */
+.ticket-layer.layer-0 {
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+  transform: rotate(-6deg);
+}
+.ticket-layer.layer-1 {
+  bottom: 2px;
+  right: 2px;
+  z-index: 2;
+  transform: rotate(4deg);
+}
+.ticket-layer.ticket-top {
+  bottom: 4px;
+  right: 4px;
+  z-index: 3;
+  transform: rotate(-2deg);
+  display: grid;
+  place-items: center;
+}
+
+/* Colors */
+.ticket-pile-container.gold .ticket-layer {
+  background: linear-gradient(135deg, #fef9c3 0%, #fde047 100%);
+  border-color: #fef08a;
+}
+.ticket-pile-container.gold .ticket-count {
+  color: #854d0e;
+}
+
+.ticket-pile-container.silver .ticket-layer {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-color: #cbd5e1;
+}
+.ticket-pile-container.silver .ticket-count {
+  color: #475569;
+}
+
+.ticket-pile-container.slate .ticket-layer {
+  background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
+  border-color: #94a3b8;
+}
+.ticket-pile-container.slate .ticket-count {
+  color: #334155;
+  opacity: 0.85;
+}
+
+/* The Number */
+.ticket-count {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+/* Hover Animation: Fan out */
+.card-hover-trigger:hover .ticket-layer.layer-0 {
+  transform: translate(-4px, 4px) rotate(-12deg);
+}
+.card-hover-trigger:hover .ticket-layer.layer-1 {
+  transform: translate(-2px, 2px) rotate(8deg);
+}
+.card-hover-trigger:hover .ticket-layer.ticket-top {
+  transform: rotate(0deg) scale(1.05);
+}
 
 /* --- HISTORY CARD BADGES --- */
 .db-history-card-wrapper {
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  width: 100%; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
   position: relative;
 }
 
@@ -240,7 +473,7 @@
   text-transform: uppercase;
   padding: 8px 16px;
   border-radius: 12px;
-  margin-top: -12px; 
+  margin-top: -12px;
   z-index: 5;
   width: auto;
   max-width: 90%;
@@ -251,12 +484,16 @@
 }
 
 .db-history-badge.refunded {
-  background: #f8fafc; color: #64748b; border: 1px solid #cbd5e1;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .db-history-badge.won {
-  background: #dcfce7; color: #15803d; border: 1px solid #86efac;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
   box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.1);
 }
 
@@ -264,35 +501,35 @@
   background: #475569;
   color: #f1f5f9;
   border: 1px solid #334155;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
 /* Mobile adjustments */
 @media (max-width: 600px) {
-  .db-hero { 
-    flex-direction: column; 
-    text-align: center; 
-    gap: 32px; 
+  .db-hero {
+    flex-direction: column;
+    text-align: center;
+    gap: 32px;
     align-items: center;
   }
-  
-  .db-hero-content { 
-    flex-direction: column; 
-    align-items: center; 
+
+  .db-hero-content {
+    flex-direction: column;
+    align-items: center;
     width: 100%;
     justify-content: center;
   }
-  
-  .db-hero-addr { 
-    font-size: 14px; 
-    justify-content: center; 
+
+  .db-hero-addr {
+    font-size: 14px;
+    justify-content: center;
   }
-  
+
   .db-hero-stats {
     justify-content: center;
     width: 100%;
   }
-  
+
   .db-tabs-container {
     overflow-x: auto;
     padding-bottom: 5px;
