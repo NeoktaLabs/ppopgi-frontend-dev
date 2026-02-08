@@ -1,12 +1,12 @@
 // src/components/TopNav.tsx
-import { useState, useEffect, memo } from "react";
+// src/components/TopNav.tsx
+import { useState, useEffect, memo, useRef } from "react";
 import { useWalletBalance } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 import "./TopNav.css";
 
-// ✅ include pages that can be navigated to via footer (even if TopNav has no buttons for them)
 type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 
 type Props = {
@@ -48,28 +48,49 @@ export const TopNav = memo(function TopNav({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  /**
-   * ✅ Auto-close burger menu on ANY page change
-   * This covers:
-   * - clicking TopNav buttons
-   * - clicking Footer links (About/FAQ)
-   * - any programmatic navigation in App.tsx
-   */
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const burgerRef = useRef<HTMLButtonElement | null>(null);
+
   useEffect(() => {
     setMenuOpen(false);
   }, [page]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      const clickedInsideMenu = !!menuRef.current?.contains(target);
+      const clickedBurger = !!burgerRef.current?.contains(target);
+
+      if (!clickedInsideMenu && !clickedBurger) {
+        setMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, { capture: true });
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, { capture: true } as any);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
   const closeMenu = () => setMenuOpen(false);
 
-  // Wrapper for actions (optionally also navigates)
   const handleNav = (action: () => void, targetPage?: Page) => {
     if (targetPage) onNavigate(targetPage);
     action();
     closeMenu();
   };
 
-  // --- Balances (only meaningful when connected) ---
-  // Native balance (XTZ on Etherlink as native token)
   const xtzBal = useWalletBalance(
     {
       client: thirdwebClient,
@@ -82,13 +103,12 @@ export const TopNav = memo(function TopNav({
     } as any
   );
 
-  // USDC (ERC20)
   const usdcBal = useWalletBalance(
     {
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN as any,
       address: account ?? undefined,
-      tokenAddress: (ADDRESSES as any).USDC, // <- rename if your constant differs
+      tokenAddress: (ADDRESSES as any).USDC,
     },
     {
       enabled: !!account,
@@ -102,24 +122,18 @@ export const TopNav = memo(function TopNav({
   const usdcText = fmtBal(usdcBal.data?.displayValue, 2);
   const usdcSym = usdcBal.data?.symbol || "USDC";
 
-  const balancesLoading =
-    !!account && (xtzBal.isLoading || usdcBal.isLoading) && !xtzBal.data && !usdcBal.data;
+  const balancesLoading = !!account && (xtzBal.isLoading || usdcBal.isLoading) && !xtzBal.data && !usdcBal.data;
 
   return (
     <div className="topnav-wrapper">
       <div className="topnav-pill">
-        {/* --- LEFT: Brand --- */}
         <div className="topnav-brand" onClick={() => handleNav(() => {}, "home")}>
           <img className="topnav-logo" src="/ppopgi-logo.png" alt="Ppopgi logo" draggable={false} />
           <span className="brand-text">Ppopgi</span>
         </div>
 
-        {/* --- CENTER: Desktop Links --- */}
         <nav className="topnav-desktop-links">
-          <button
-            className={`nav-link ${page === "explore" ? "active" : ""}`}
-            onClick={() => handleNav(onOpenExplore, "explore")}
-          >
+          <button className={`nav-link ${page === "explore" ? "active" : ""}`} onClick={() => handleNav(onOpenExplore, "explore")}>
             Explore
           </button>
 
@@ -137,18 +151,10 @@ export const TopNav = memo(function TopNav({
           </button>
         </nav>
 
-        {/* --- RIGHT: Account & Mobile Toggle --- */}
         <div className="topnav-right">
-          {/* Desktop Only Actions */}
           <div className="desktop-actions">
-            {/* ✅ Balances pill (click opens cashier) */}
             {account && (
-              <button
-                className="balances-pill"
-                onClick={() => handleNav(onOpenCashier)}
-                title="Open Cashier"
-                type="button"
-              >
+              <button className="balances-pill" onClick={() => handleNav(onOpenCashier)} title="Open Cashier" type="button">
                 <div className="balances-title">{balancesLoading ? "Loading…" : "Balances"}</div>
 
                 <div className="balances-rows">
@@ -180,11 +186,12 @@ export const TopNav = memo(function TopNav({
             )}
           </div>
 
-          {/* Mobile Toggle */}
           <button
+            ref={burgerRef}
             className={`mobile-burger ${menuOpen ? "open" : ""}`}
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Toggle menu"
+            aria-expanded={menuOpen}
           >
             <span />
             <span />
@@ -192,8 +199,7 @@ export const TopNav = memo(function TopNav({
         </div>
       </div>
 
-      {/* --- MOBILE DROPDOWN --- */}
-      <div className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
+      <div ref={menuRef} className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
         <div className="mobile-menu-inner">
           {account && (
             <div className="mobile-balances" onClick={() => handleNav(onOpenCashier)}>
@@ -212,7 +218,6 @@ export const TopNav = memo(function TopNav({
           )}
 
           <button onClick={() => handleNav(onOpenExplore, "explore")}>🌍 Explore</button>
-
           {account && <button onClick={() => handleNav(onOpenDashboard, "dashboard")}>👤 Dashboard</button>}
 
           <button className="highlight" onClick={() => handleNav(onOpenCreate)}>
@@ -234,9 +239,6 @@ export const TopNav = memo(function TopNav({
           )}
         </div>
       </div>
-
-      {/* Overlay to close menu when clicking outside */}
-      {menuOpen && <div className="mobile-overlay" onMouseDown={closeMenu} />}
     </div>
   );
 });
