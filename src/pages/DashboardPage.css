@@ -467,16 +467,24 @@
 
 .db-card-pile-wrapper {
   position: relative;
+  width: 100%; /* ✅ NEW: always stretch full width */
 }
 
 .db-card-pile-anchor {
   position: relative;
+  width: 100%; /* ✅ NEW: anchor matches card width in all contexts */
 }
 
+/* ✅ NEW: ensure the pile itself always uses full width too */
+.db-card-pile {
+  width: 100%;
+}
+
+/* ✅ UPDATED: moved further outside so it doesn't cover share button */
 .db-mult-badge {
   position: absolute;
-  top: -14px;
-  right: -14px;
+  top: -18px;   /* was -14px */
+  right: -18px; /* was -14px */
   z-index: 80;
   pointer-events: none;
   font-weight: 1000;
@@ -675,10 +683,15 @@
     display: flex;
     width: max-content;
   }
+
+  /* ✅ UPDATED mobile badge position */
   .db-mult-badge {
     font-size: 24px;
     padding: 10px 14px;
+    top: -14px;
+    right: -14px;
   }
+
   .db-card-pile.is-winner .db-card-front-card::after {
     opacity: 1;
     animation-duration: 2.5s;
