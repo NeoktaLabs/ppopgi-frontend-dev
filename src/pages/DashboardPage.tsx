@@ -1,5 +1,6 @@
 // src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import type { ReactNode } from "react";
 import { formatUnits } from "ethers";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
@@ -144,7 +145,7 @@ function RaffleCardStack({
   layers: number; // how many cards in the stack (visual), max 5
   isWinner?: boolean;
   badgeCount?: number; // actual tickets count to display as xN
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const safeLayers = Math.max(1, Math.min(5, Math.floor(layers || 1)));
 
@@ -240,11 +241,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   }, [data.msg]);
 
   // ✅ Refunds: allow refund button when there's actually claimable USDC, not based on ticketCount
-  const getPrimaryMethod = (opts: {
-    isRefund: boolean;
-    hasUsdc: boolean;
-    hasNative: boolean;
-  }): WithdrawMethod | null => {
+  const getPrimaryMethod = (opts: { isRefund: boolean; hasUsdc: boolean; hasNative: boolean }): WithdrawMethod | null => {
     const { isRefund, hasUsdc, hasNative } = opts;
 
     if (isRefund) return hasUsdc ? "claimTicketRefund" : null;
@@ -336,7 +333,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       {/* STATUS BANNER */}
       {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
-      {/* CLAIMABLES (unchanged UI; stack request was only for ongoing/joined tabs) */}
+      {/* CLAIMABLES (kept as-is) */}
       <div className="db-section claim-section">
         <div className="db-section-header">
           <div className="db-section-title">Claimables</div>
@@ -439,19 +436,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     <div className="db-claim-actions">
                       {showDual ? (
                         <>
-                          <button
-                            className="db-btn primary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
-                          >
+                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
                             {data.isPending ? "Processing..." : "Claim USDC"}
                           </button>
 
-                          <button
-                            className="db-btn secondary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
-                          >
+                          <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
                             {data.isPending ? "Processing..." : "Claim Native"}
                           </button>
                         </>
@@ -544,7 +533,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const completed = r.status === "COMPLETED";
               const canceled = r.status === "CANCELED";
 
-              const iWon = completed && acct && winner === acct;
+              const iWon = completed && !!acct && winner === acct;
 
               const isRefunded = canceled && ownedNow === 0 && purchasedEver > 0;
 
@@ -576,9 +565,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         {tab === "created" && (
           <div className="db-grid">
-            {!data.isColdLoading && data.created.length === 0 && (
-              <div className="db-empty">You haven't hosted any raffles yet.</div>
-            )}
+            {!data.isColdLoading && data.created.length === 0 && <div className="db-empty">You haven't hosted any raffles yet.</div>}
 
             {data.created.map((r: any) => (
               <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
