@@ -356,6 +356,15 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
+
+  /* ✅ NEW: center cards in grid cells (matches Joined tab look) */
+  justify-items: center;
+}
+
+/* ✅ NEW: keep all grid children consistent width + centered */
+.db-grid > * {
+  width: 100%;
+  justify-self: center;
 }
 
 .db-empty {
@@ -467,24 +476,24 @@
 
 .db-card-pile-wrapper {
   position: relative;
-  width: 100%; /* ✅ NEW: always stretch full width */
+  width: 100%; /* ✅ always stretch full width */
 }
 
 .db-card-pile-anchor {
   position: relative;
-  width: 100%; /* ✅ NEW: anchor matches card width in all contexts */
+  width: 100%; /* ✅ anchor matches card width in all contexts */
 }
 
-/* ✅ NEW: ensure the pile itself always uses full width too */
+/* ✅ ensure the pile itself always uses full width too */
 .db-card-pile {
   width: 100%;
 }
 
-/* ✅ UPDATED: moved further outside so it doesn't cover share button */
+/* ✅ multiplier: exterior top-right (won't cover share button) */
 .db-mult-badge {
   position: absolute;
-  top: -18px;   /* was -14px */
-  right: -18px; /* was -14px */
+  top: -18px;
+  right: -18px;
   z-index: 80;
   pointer-events: none;
   font-weight: 1000;
@@ -684,7 +693,7 @@
     width: max-content;
   }
 
-  /* ✅ UPDATED mobile badge position */
+  /* updated mobile badge position */
   .db-mult-badge {
     font-size: 24px;
     padding: 10px 14px;
