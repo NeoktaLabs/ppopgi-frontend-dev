@@ -7,12 +7,10 @@
   backdrop-filter: blur(8px);
   z-index: 2000;
 
-  /* start from top so TopNav never overlaps */
   display: flex;
   justify-content: center;
   align-items: flex-start;
 
-  /* Space under TopNav */
   padding-top: 120px;
   padding-bottom: 40px;
   padding-left: 20px;
@@ -38,7 +36,6 @@
   flex-direction: column;
   overflow: hidden;
 
-  /* prevents card from going offscreen */
   max-height: calc(100vh - 160px);
 
   animation: cm-scale-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -85,7 +82,6 @@
 }
 .cm-close-btn:hover { background: #f1f5f9; color: #1e293b; }
 
-/* card content can scroll if needed */
 .cm-body {
   padding: 24px;
   overflow-y: auto;
@@ -222,106 +218,128 @@
 }
 
 /* =========================
-   ✅ Tabs
+   ✅ 3 Tabs
 ========================= */
 
-.cm-tabs {
+.cm-tabs3 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 4px;
   gap: 4px;
-  margin: 8px 0 10px;
+  margin: 8px 0 12px;
 }
 
-.cm-tab {
+.cm-tab3 {
   border: none;
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 10px 10px;
   cursor: pointer;
-  font-weight: 900;
+  font-weight: 950;
   color: #64748b;
   background: transparent;
   transition: all 0.2s ease;
 }
 
-.cm-tab:hover {
+.cm-tab3:hover {
   background: rgba(0,0,0,0.03);
   color: #334155;
 }
 
-.cm-tab.active {
+.cm-tab3.active {
   background: #fff0f5;
   color: #4A0F2B;
   box-shadow: inset 0 0 0 1px rgba(190, 24, 93, 0.18);
 }
 
-.cm-subtabs {
-  display: flex;
-  gap: 8px;
-  margin: 0 0 12px;
-  justify-content: center;
-}
-
-.cm-subtab {
-  border: 1px solid rgba(190, 24, 93, 0.18);
-  background: #fff;
-  color: #4A0F2B;
-  font-weight: 900;
-  padding: 8px 14px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.cm-subtab:hover {
-  background: #fff0f5;
-}
-
-.cm-subtab.active {
-  background: linear-gradient(135deg, #ffe4ec, #ffd1df);
-  border-color: rgba(190, 24, 93, 0.25);
-  box-shadow: 0 6px 16px rgba(190, 24, 93, 0.18);
-}
-
 /* =========================
-   ✅ Widget Centering Shell
+   ✅ Widget Centering
 ========================= */
 
 .cm-widget-shell {
   display: flex;
   justify-content: center;
   width: 100%;
-  margin-top: 6px;
 }
 
 .cm-widget-wrap {
   width: 100%;
-  max-width: 360px; /* ✅ keeps it visually centered */
+  max-width: 360px;
   margin: 0 auto;
-}
 
-/* Optional: give widget area a subtle frame */
-.cm-widget-wrap {
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   overflow: hidden;
 }
 
-/* Footer note */
-.cm-footer-note {
+/* =========================
+   ✅ Bridge box (Swap tab)
+========================= */
+
+.cm-bridge-box {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.cm-bridge-title {
+  font-size: 14px;
+  font-weight: 1000;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.cm-bridge-text {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.cm-bridge-btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
   margin-top: 12px;
-  text-align: center;
+  text-decoration: none;
+
+  background: linear-gradient(135deg, #ffe4ec, #ffd1df);
+  color: #4A0F2B;
+  font-weight: 950;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(190, 24, 93, 0.25);
+  box-shadow:
+    0 4px 12px rgba(190, 24, 93, 0.25),
+    inset 0 0 0 1px rgba(255,255,255,0.6);
+  transition: all 0.2s ease;
+}
+
+.cm-bridge-btn:hover {
+  background: linear-gradient(135deg, #ffd1df, #ffbcd0);
+  color: #3b0a21;
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 18px rgba(190, 24, 93, 0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.7);
+}
+
+.cm-bridge-footnote {
+  margin-top: 10px;
   font-size: 11px;
-  font-weight: 700;
   color: #94a3b8;
+  font-weight: 700;
+  text-align: center;
 }
 
 /* =========================
-   ✅ thirdweb BuyWidget CTA overrides
-   Fixes: hover turning white + unreadable
+   ✅ thirdweb BuyWidget button hover fix
 ========================= */
 
 .cm-widget-wrap .tw-button-primary {
@@ -362,10 +380,11 @@
   }
 
   .cm-balance-grid {
-    grid-template-columns: 1fr; /* stacks cards for small screens */
+    grid-template-columns: 1fr;
   }
 
-  .cm-widget-wrap {
+  .cm-widget-wrap,
+  .cm-bridge-box {
     max-width: 100%;
   }
 }
