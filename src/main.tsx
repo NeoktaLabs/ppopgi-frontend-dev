@@ -14,7 +14,7 @@ import { ThirdwebProvider } from "thirdweb/react";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThirdwebProvider autoConnect={false}>
+    <ThirdwebProvider>
       <App />
     </ThirdwebProvider>
   </StrictMode>
