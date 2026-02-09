@@ -1,16 +1,17 @@
 // src/components/SignInModal.tsx
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "../state/useSession";
 import {
   ConnectEmbed,
   useActiveAccount,
   useActiveWallet,
+  useConnect,
   useDisconnect,
 } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { getLedgerUsbWallet } from "../hooks/ledgerUsbWallet";
+import { useLedgerUsbWallet } from "../hooks/ledgerUsbWallet";
 import "./SignInModal.css";
 
 type Props = {
@@ -23,19 +24,16 @@ export function SignInModal({ open, onClose }: Props) {
   const account = useActiveAccount();
   const wallet = useActiveWallet();
   const { disconnect } = useDisconnect();
+  const { connect, isConnecting } = useConnect();
 
-  // ✅ Chromium-only support check for WebHID
-  const supportsWebHID = typeof window !== "undefined" && typeof (navigator as any)?.hid !== "undefined";
+  const { connectLedgerUsb, isSupported, isConnecting: isLedgerConnecting, error: ledgerError } =
+    useLedgerUsbWallet();
 
-  // ✅ Wallet list (Ledger first when supported)
-  const wallets = useMemo(() => {
-    const base = [
-      createWallet("io.metamask"),
-      createWallet("walletConnect"),
-      createWallet("com.coinbase.wallet"),
-    ];
-    return supportsWebHID ? [getLedgerUsbWallet(), ...base] : base;
-  }, [supportsWebHID]);
+  const [localError, setLocalError] = useState<string>("");
+
+  const combinedError = useMemo(() => {
+    return localError || ledgerError || "";
+  }, [localError, ledgerError]);
 
   // Sync Session & Auto-Close on Connect
   useEffect(() => {
@@ -47,12 +45,33 @@ export function SignInModal({ open, onClose }: Props) {
       connector: "thirdweb",
     });
 
-    // Short delay for visual feedback before closing
     const t = setTimeout(() => {
       onClose();
     }, 500);
     return () => clearTimeout(t);
   }, [account?.address, open, onClose, setSession]);
+
+  // Clear transient error when reopening
+  useEffect(() => {
+    if (open) setLocalError("");
+  }, [open]);
+
+  const onConnectLedgerUsb = async () => {
+    setLocalError("");
+    try {
+      // connectLedgerUsb() should do the WebHID flow + return an EIP-1193 provider (or a thirdweb wallet)
+      // We wrap it into thirdweb connection via useConnect so the rest of your app works normally.
+      await connect(async () => {
+        const ledgerWallet = await connectLedgerUsb({
+          client: thirdwebClient,
+          chain: ETHERLINK_CHAIN,
+        });
+        return ledgerWallet;
+      });
+    } catch (e: any) {
+      setLocalError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
+    }
+  };
 
   if (!open) return null;
 
@@ -64,13 +83,6 @@ export function SignInModal({ open, onClose }: Props) {
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
             <div className="sim-subtitle">Connect your wallet to start playing</div>
-
-            {/* ✅ Friendly hint when not supported */}
-            {!supportsWebHID && (
-              <div className="sim-subtitle sim-hint">
-                Ledger USB works on Chromium browsers (Chrome / Edge / Brave).
-              </div>
-            )}
           </div>
           <button className="sim-close-btn" onClick={onClose}>
             ✕
@@ -79,7 +91,32 @@ export function SignInModal({ open, onClose }: Props) {
 
         {/* Body */}
         <div className="sim-body">
-          {/* Thirdweb Embed - Configured to match the theme */}
+          {/* Ledger USB (WebHID) - Separate from thirdweb wallet list */}
+          <div className="sim-ledger-section">
+            <button
+              className="sim-ledger-btn"
+              onClick={onConnectLedgerUsb}
+              disabled={!isSupported || isConnecting || isLedgerConnecting}
+              title={!isSupported ? "Ledger USB requires Chromium (Chrome/Brave/Edge) + WebHID enabled." : ""}
+            >
+              {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
+              <span className="sim-ledger-badge">Chromium</span>
+            </button>
+
+            {!isSupported && (
+              <div className="sim-ledger-hint">
+                Ledger USB needs a Chromium browser (Chrome/Brave/Edge). On Ledger, open the Ethereum app.
+              </div>
+            )}
+
+            {combinedError && <div className="sim-error">{combinedError}</div>}
+          </div>
+
+          <div className="sim-divider">
+            <span>or</span>
+          </div>
+
+          {/* Thirdweb Embed - only registered wallet IDs here */}
           <div className="sim-embed-wrapper">
             <ConnectEmbed
               client={thirdwebClient}
@@ -88,7 +125,13 @@ export function SignInModal({ open, onClose }: Props) {
               theme="light"
               modalSize="compact"
               showThirdwebBranding={false}
-              wallets={wallets}
+              wallets={[
+                createWallet("io.metamask"),
+                createWallet("walletConnect"),
+                createWallet("com.coinbase.wallet"),
+                // Optional: if you ALSO want Ledger Live (not USB WebHID), you can add:
+                // createWallet("com.ledger"),
+              ]}
             />
           </div>
 
@@ -97,15 +140,8 @@ export function SignInModal({ open, onClose }: Props) {
               By connecting, you agree to the rules of the raffle.
               <br />
               Always check the URL before signing.
-              {supportsWebHID && (
-                <>
-                  <br />
-                  <span className="sim-note-tip">Tip: If Ledger USB fails, close Ledger Live and retry.</span>
-                </>
-              )}
             </div>
 
-            {/* Optional Sign Out (Only if wallet state is lingering) */}
             {wallet && (
               <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
                 Disconnect current session
@@ -117,3 +153,5 @@ export function SignInModal({ open, onClose }: Props) {
     </div>
   );
 }
+
+export default SignInModal;
