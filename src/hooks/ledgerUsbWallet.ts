@@ -28,7 +28,7 @@ function pickRpcUrl(chain: Chain): string {
 
 function asHexQuantity(v: any): string | undefined {
   if (v == null) return undefined;
-  if (typeof v === "string") return v;
+  if (typeof v === "string") return v; // assume already 0x...
   try {
     const bi = typeof v === "bigint" ? v : BigInt(v);
     return "0x" + bi.toString(16);
@@ -37,27 +37,50 @@ function asHexQuantity(v: any): string | undefined {
   }
 }
 
+function isZeroQuantity(q?: string) {
+  if (!q) return true;
+  try {
+    return BigInt(q) === 0n;
+  } catch {
+    return false;
+  }
+}
+
+type LedgerService = {
+  resolveTransaction: (rawTxHex: string, loadConfig: any, opts?: any) => Promise<any>;
+};
+
 type LedgerSession = {
   transport: any;
   eth: any;
+  ledgerService: LedgerService;
   address: string;
   path: string;
 };
 
 async function openLedgerSession(): Promise<LedgerSession> {
   // ✅ Dynamic import: only loads when user clicks connect
-  const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
+  const [transportMod, ethMod] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
     import("@ledgerhq/hw-app-eth"),
   ]);
 
+  const TransportWebHID = (transportMod as any).default;
+  const Eth = (ethMod as any).default;
+  const ledgerService: LedgerService = (ethMod as any).ledgerService;
+
+  if (!TransportWebHID || !Eth || !ledgerService?.resolveTransaction) {
+    throw new Error("Ledger libraries not loaded correctly (Transport/Eth/ledgerService missing).");
+  }
+
   const transport = await TransportWebHID.create();
   const eth = new Eth(transport);
 
+  // default derivation path
   const path = "44'/60'/0'/0/0";
   const { address } = await eth.getAddress(path, false, true);
 
-  return { transport, eth, address, path };
+  return { transport, eth, ledgerService, address, path };
 }
 
 async function createLedgerEip1193Provider(opts: {
@@ -101,6 +124,7 @@ async function createLedgerEip1193Provider(opts: {
 
           const s = await getSession();
 
+          // Validate from
           const from = String(tx.from || "").toLowerCase();
           if (!from) throw new Error("Transaction missing from.");
           if (from !== s.address.toLowerCase()) {
@@ -109,30 +133,38 @@ async function createLedgerEip1193Provider(opts: {
 
           const to = tx.to ? String(tx.to) : undefined;
           const data = tx.data ? String(tx.data) : "0x";
-          const value = tx.value != null ? BigInt(tx.value) : 0n;
+          const valueHex = asHexQuantity(tx.value) ?? "0x0";
 
-          const nonceHex =
-            tx.nonce != null
-              ? asHexQuantity(tx.nonce)
-              : await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
+          // Nonce: if provided and non-zero use it, otherwise ask RPC
+          let nonceHex = asHexQuantity(tx.nonce);
+          if (isZeroQuantity(nonceHex)) {
+            nonceHex = await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
+          }
 
-          const gasHex =
-            tx.gas != null || tx.gasLimit != null
-              ? asHexQuantity(tx.gas ?? tx.gasLimit)
-              : await rpcRequest(rpcUrl, "eth_estimateGas", [{ from: tx.from, to, data, value: tx.value ?? "0x0" }]);
+          // Gas: if provided but 0, IGNORE and estimate
+          let gasHex = asHexQuantity(tx.gas ?? tx.gasLimit);
+          if (isZeroQuantity(gasHex)) {
+            gasHex = await rpcRequest(rpcUrl, "eth_estimateGas", [
+              { from: s.address, to, data, value: valueHex },
+            ]);
+          }
 
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
           if (!gasHex) throw new Error("Failed to resolve gas.");
 
+          // Fees
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
           let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
           let gasPriceHex = asHexQuantity(tx.gasPrice);
 
-          if (!maxFeePerGasHex && !gasPriceHex) {
+          // If nothing provided, fetch gasPrice as fallback
+          if (isZeroQuantity(maxFeePerGasHex) && isZeroQuantity(gasPriceHex)) {
             gasPriceHex = await rpcRequest(rpcUrl, "eth_gasPrice", []);
           }
 
-          const is1559 = !!(maxFeePerGasHex || maxPriorityFeePerGasHex);
+          // Decide 1559 if either 1559 field is present AND non-zero
+          const is1559 =
+            !isZeroQuantity(maxFeePerGasHex) || !isZeroQuantity(maxPriorityFeePerGasHex);
 
           const unsignedTx = Transaction.from({
             type: is1559 ? 2 : 0,
@@ -141,22 +173,34 @@ async function createLedgerEip1193Provider(opts: {
             nonce: Number(BigInt(nonceHex)),
             gasLimit: BigInt(gasHex),
             data,
-            value,
+            value: BigInt(valueHex),
             ...(is1559
               ? {
                   maxFeePerGas: BigInt(maxFeePerGasHex ?? gasPriceHex ?? "0x0"),
-                  maxPriorityFeePerGas: BigInt(maxPriorityFeePerGasHex ?? "0x3b9aca00"),
+                  maxPriorityFeePerGas: BigInt(
+                    maxPriorityFeePerGasHex ?? "0x3b9aca00" // 1 gwei fallback
+                  ),
                 }
               : {
                   gasPrice: BigInt(gasPriceHex ?? "0x0"),
                 }),
           });
 
-          const payloadHex = unsignedTx.unsignedSerialized.startsWith("0x")
+          // Ledger expects raw tx hex without 0x
+          const rawTxHex = unsignedTx.unsignedSerialized.startsWith("0x")
             ? unsignedTx.unsignedSerialized.slice(2)
             : unsignedTx.unsignedSerialized;
 
-          const sig = await s.eth.signTransaction(s.path, payloadHex);
+          // ✅ REQUIRED now: provide resolution as the 3rd parameter.
+          // ✅ Avoid plugin downloads (your ethereum.json 404) by disabling externalPlugins.
+          // This will generally fall back to “blind signing” when needed (user must enable it on device if prompted).
+          const resolution = await s.ledgerService.resolveTransaction(rawTxHex, s.eth.loadConfig, {
+            externalPlugins: false,
+            erc20: false,
+            nft: false,
+          });
+
+          const sig = await s.eth.signTransaction(s.path, rawTxHex, resolution);
 
           const v = BigInt("0x" + sig.v);
           const r = "0x" + sig.r;
@@ -211,7 +255,7 @@ export function useLedgerUsbWallet() {
         const rpcUrl = pickRpcUrl(opts.chain);
 
         const wallet = EIP1193.fromProvider({
-          // use a known id so thirdweb doesn’t crash trying to look up metadata
+          // known id so thirdweb doesn’t crash trying to look up metadata
           walletId: "io.metamask",
           provider: async () =>
             createLedgerEip1193Provider({
