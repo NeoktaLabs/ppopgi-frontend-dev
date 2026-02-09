@@ -68,7 +68,6 @@ async function openLedgerSession(): Promise<LedgerSession> {
 
 /**
  * Create an EIP-1193 provider backed by Ledger WebHID
- * - Supports: accounts, chainId, sendTransaction (sign+send), basic signing hooks
  */
 async function createLedgerEip1193Provider(opts: {
   chainId: number;
@@ -107,8 +106,7 @@ async function createLedgerEip1193Provider(opts: {
         }
 
         /**
-         * ✅ SIGN + SEND
-         * thirdweb contract calls rely on this.
+         * ✅ SIGN + SEND (needed for contract calls)
          */
         case "eth_sendTransaction": {
           const [tx] = (params ?? []) as any[];
@@ -116,83 +114,81 @@ async function createLedgerEip1193Provider(opts: {
 
           const s = await getSession();
 
+          // Validate from, but DO NOT pass it to ethers Transaction.from (ethers v6 forbids from on unsigned tx)
           const from = String(tx.from || "").toLowerCase();
           if (!from) throw new Error("Transaction missing from.");
           if (from !== s.address.toLowerCase()) {
             throw new Error(`Ledger USB: tx.from must be the Ledger address (${s.address}).`);
           }
 
-          // Fill nonce if missing
-          const nonce =
+          const to = tx.to ? String(tx.to) : undefined;
+          const data = tx.data ? String(tx.data) : "0x";
+          const value = tx.value != null ? BigInt(tx.value) : 0n;
+
+          const nonceHex =
             tx.nonce != null
               ? asHexQuantity(tx.nonce)
               : await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
 
-          // Fill gas if missing
-          const gas =
+          const gasHex =
             tx.gas != null || tx.gasLimit != null
               ? asHexQuantity(tx.gas ?? tx.gasLimit)
               : await rpcRequest(rpcUrl, "eth_estimateGas", [
-                  {
-                    from: tx.from,
-                    to: tx.to,
-                    data: tx.data,
-                    value: tx.value ?? "0x0",
-                  },
+                  { from: tx.from, to, data, value: tx.value ?? "0x0" },
                 ]);
 
-          // Fees: support both legacy and EIP-1559 (prefer 1559)
-          let maxFeePerGas = asHexQuantity(tx.maxFeePerGas);
-          let maxPriorityFeePerGas = asHexQuantity(tx.maxPriorityFeePerGas);
-          let gasPrice = asHexQuantity(tx.gasPrice);
+          if (!nonceHex) throw new Error("Failed to resolve nonce.");
+          if (!gasHex) throw new Error("Failed to resolve gas.");
 
-          if (!maxFeePerGas && !gasPrice) {
-            // simple fallback
-            gasPrice = await rpcRequest(rpcUrl, "eth_gasPrice", []);
+          // Fees (prefer 1559 if provided; otherwise fall back)
+          let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
+          let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
+          let gasPriceHex = asHexQuantity(tx.gasPrice);
+
+          if (!maxFeePerGasHex && !gasPriceHex) {
+            gasPriceHex = await rpcRequest(rpcUrl, "eth_gasPrice", []);
           }
 
-          // Build ethers Transaction (v6)
-          const t = Transaction.from({
-            type: maxFeePerGas || maxPriorityFeePerGas ? 2 : 0,
+          const is1559 = !!(maxFeePerGasHex || maxPriorityFeePerGasHex);
+
+          // ✅ IMPORTANT: do NOT include `from` here
+          const unsignedTx = Transaction.from({
+            type: is1559 ? 2 : 0,
             chainId,
-            from: tx.from,
-            to: tx.to,
-            nonce: Number(BigInt(nonce)),
-            gasLimit: BigInt(gas),
-            data: tx.data ?? "0x",
-            value: tx.value != null ? BigInt(tx.value) : 0n,
-            ...(maxFeePerGas || maxPriorityFeePerGas
+            to,
+            nonce: Number(BigInt(nonceHex)),
+            gasLimit: BigInt(gasHex),
+            data,
+            value,
+            ...(is1559
               ? {
-                  maxFeePerGas: BigInt(maxFeePerGas ?? gasPrice ?? "0x0"),
-                  maxPriorityFeePerGas: BigInt(maxPriorityFeePerGas ?? "0x3b9aca00" /* 1 gwei */),
+                  maxFeePerGas: BigInt(maxFeePerGasHex ?? gasPriceHex ?? "0x0"),
+                  maxPriorityFeePerGas: BigInt(maxPriorityFeePerGasHex ?? "0x3b9aca00"), // 1 gwei fallback
                 }
-              : { gasPrice: BigInt(gasPrice ?? "0x0") }),
+              : {
+                  gasPrice: BigInt(gasPriceHex ?? "0x0"),
+                }),
           });
 
-          const unsigned = t.unsignedSerialized; // 0x...
-          const unsignedHex = unsigned.startsWith("0x") ? unsigned.slice(2) : unsigned;
+          const unsignedSerialized = unsignedTx.unsignedSerialized; // 0x...
+          const payloadHex = unsignedSerialized.startsWith("0x") ? unsignedSerialized.slice(2) : unsignedSerialized;
 
-          // Ledger signs the RLP payload (for type-2 tx, ethers encodes correctly in unsignedSerialized)
-          const sig = await s.eth.signTransaction(s.path, unsignedHex);
+          const sig = await s.eth.signTransaction(s.path, payloadHex);
 
-          // Build signature
           const v = BigInt("0x" + sig.v);
           const r = "0x" + sig.r;
           const sSig = "0x" + sig.s;
 
           const signature = Signature.from({ v, r, s: sSig });
 
-          // Attach signature and serialize
-          const signedTx = Transaction.from({ ...t, signature }).serialized;
+          const signedTx = Transaction.from({ ...unsignedTx, signature }).serialized;
 
-          // Broadcast
           const txHash = await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
           return txHash;
         }
 
         /**
-         * Optional: basic personal_sign support (many dapps need this for auth)
-         * Ledger expects hex bytes; we will sign the raw message hash via Ledger's "signPersonalMessage".
+         * Optional: personal_sign for auth flows
          */
         case "personal_sign": {
           const s = await getSession();
@@ -203,15 +199,14 @@ async function createLedgerEip1193Provider(opts: {
             throw new Error("Ledger USB: personal_sign address mismatch.");
           }
 
-          // message can be hex or plain string
           const bytes =
             typeof message === "string" && message.startsWith("0x")
               ? getBytes(message)
               : new TextEncoder().encode(String(message ?? ""));
 
           const res = await s.eth.signPersonalMessage(s.path, hexlify(bytes).slice(2));
-          const sig = "0x" + res.r + res.s + res.v.toString(16).padStart(2, "0");
-          return sig;
+          const sigHex = "0x" + res.r + res.s + res.v.toString(16).padStart(2, "0");
+          return sigHex;
         }
 
         default:
@@ -229,7 +224,7 @@ export function useLedgerUsbWallet() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState("");
 
-  // Keep a single session alive (so you don't re-prompt HID constantly)
+  // Keep a single session alive (avoid repeated HID prompts)
   const sessionRef = useRef<LedgerSession | null>(null);
 
   const connectLedgerUsb = useCallback(
@@ -242,8 +237,7 @@ export function useLedgerUsbWallet() {
         const rpcUrl = pickRpcUrl(opts.chain);
 
         const wallet = EIP1193.fromProvider({
-          // ✅ MUST be a known thirdweb id to avoid "wallet id not found"
-          // (we're only borrowing its metadata; the provider is Ledger)
+          // ✅ MUST be a known thirdweb wallet id to avoid metadata lookup crash
           walletId: "io.metamask",
           provider: async () =>
             createLedgerEip1193Provider({
@@ -253,7 +247,6 @@ export function useLedgerUsbWallet() {
             }),
         });
 
-        // ✅ Connect so thirdweb has an active account (fixes "Cannot set a wallet without an account as active")
         await wallet.connect({
           client: opts.client,
           chain: opts.chain,
