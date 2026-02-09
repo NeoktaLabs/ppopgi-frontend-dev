@@ -13,13 +13,11 @@ type Props = {
   onClose: () => void;
 };
 
-// ✅ UX CHANGE: Renamed 'swap' to 'bridge' for clarity
 type Tab = "buy_usdc" | "buy_xtz" | "bridge";
 
 export function CashierModal({ open, onClose }: Props) {
   const { state, actions, display } = useCashierData(open);
   const [copied, setCopied] = useState(false);
-
   const [tab, setTab] = useState<Tab>("buy_xtz");
 
   const handleCopy = () => {
@@ -107,7 +105,7 @@ export function CashierModal({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* ✅ 3 Tabs (Updated Labels) */}
+          {/* Tabs */}
           <div className="cm-tabs3">
             <button className={`cm-tab3 ${tab === "buy_usdc" ? "active" : ""}`} onClick={() => setTab("buy_usdc")}>
               Buy USDC
@@ -123,7 +121,7 @@ export function CashierModal({ open, onClose }: Props) {
           {/* Content Area */}
           <div className="cm-widget-shell">
             {tab === "buy_usdc" && (
-              <div className="cm-widget-wrap">
+              <div className="cm-widget-wrap cm-tw-scope">
                 <BuyWidget
                   key="buy_usdc"
                   client={thirdwebClient}
@@ -141,7 +139,7 @@ export function CashierModal({ open, onClose }: Props) {
             )}
 
             {tab === "buy_xtz" && (
-              <div className="cm-widget-wrap">
+              <div className="cm-widget-wrap cm-tw-scope">
                 <BuyWidget
                   key="buy_xtz"
                   client={thirdwebClient}
@@ -165,19 +163,18 @@ export function CashierModal({ open, onClose }: Props) {
                   <span className="cm-bridge-arrow">➝</span>
                   <span className="cm-bridge-route highlight">Etherlink L2</span>
                 </div>
-                
+
                 <div className="cm-bridge-title">Deposit Funds</div>
                 <div className="cm-bridge-text">
-                  Already have funds on Ethereum Mainnet? Use the official bridge to move <b>USDC</b> or <b>XTZ</b> over to Etherlink.
+                  Already have funds on Ethereum Mainnet? Use the official bridge to move <b>USDC</b> or <b>XTZ</b> over to
+                  Etherlink.
                 </div>
 
                 <a className="cm-bridge-btn" href={ETHERLINK_BRIDGE_URL} target="_blank" rel="noreferrer">
                   Open Official Bridge ↗
                 </a>
 
-                <div className="cm-bridge-footnote">
-                  Bridging typically takes ~15-20 minutes.
-                </div>
+                <div className="cm-bridge-footnote">Bridging typically takes ~15-20 minutes.</div>
               </div>
             )}
           </div>
