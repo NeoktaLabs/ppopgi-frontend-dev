@@ -8,7 +8,7 @@
   overflow-x: hidden;
 }
 
-/* ✅ Activity Board Positioning */
+/* Activity Board Positioning */
 .hp-board-section {
   max-width: 1400px;
   margin: 20px auto 20px auto !important; 
@@ -189,7 +189,7 @@
   margin-top: 2px;
 }
 
-/* --- TOP ACTIVE (Ranked Spotlight & Animations) --- */
+/* --- TOP ACTIVE (Projector Light Style) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -209,24 +209,10 @@
 .pp-silver-wrapper,
 .pp-bronze-wrapper {
   position: relative;
-  /* Transition for hover scaling */
-  transition: all 0.3s ease;
-}
-
-/* ✅ NEW: Floating Animations (Ambient Motion) */
-@keyframes float-gold {
-  0%, 100% { transform: scale(1.1) translateY(0); }
-  50% { transform: scale(1.1) translateY(-10px); } /* Bobs up */
-}
-@keyframes float-standard {
-  0%, 100% { transform: scale(0.95) translateY(0); }
-  50% { transform: scale(0.95) translateY(-8px); } /* Bobs up */
-}
-
-/* ✅ NEW: Gold Background Pulse */
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.3; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.05); }
+  transition: transform 0.2s ease;
+  border-radius: 16px;
+  
+  /* The "Projector" effect comes from box-shadow below */
 }
 
 /* --- BADGES (#1, #2, #3) --- */
@@ -237,11 +223,14 @@
   top: -24px;
   left: 50%;
   transform: translateX(-50%);
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   font-family: 'Inter', system-ui, sans-serif;
   font-weight: 1000;
+  font-size: 26px; 
   line-height: 1;
   color: white;
   z-index: 20;
@@ -250,80 +239,61 @@
 }
 
 /* --- GOLD (#1) --- */
+/* Warm Gold Uplight */
 .pp-gold-wrapper {
   z-index: 10;
-  /* Apply floating animation */
-  animation: float-gold 4s ease-in-out infinite;
+  transform: scale(1.1); 
+  /* Colored Shadow at BOTTOM */
+  box-shadow: 0 35px 60px -15px rgba(251, 191, 36, 0.6);
+  border-bottom: 2px solid rgba(251, 191, 36, 0.6);
 }
 
-/* Larger Badge for #1 */
 .pp-gold-wrapper::before {
-  content: "#1"; 
-  width: 60px; /* Bigger */
-  height: 60px;
-  font-size: 30px;
+  content: "1"; 
   background: linear-gradient(135deg, #fbbf24, #d97706);
   text-shadow: 0 2px 0 rgba(180, 83, 9, 0.2);
-  top: -30px; /* Shift up more due to size */
-}
-
-/* Pulsing Holy Light */
-.pp-gold-wrapper::after {
-  content: "";
-  position: absolute;
-  inset: -25px;
-  background: radial-gradient(circle, rgba(251, 191, 36, 0.4) 0%, transparent 70%);
-  z-index: -1;
-  pointer-events: none;
-  animation: glow-pulse 3s ease-in-out infinite;
 }
 
 /* --- SILVER (#2) --- */
+/* Cool Silver/Blue Uplight */
 .pp-silver-wrapper {
   z-index: 5;
-  opacity: 0.95;
-  /* Float with delay so they don't move in sync */
-  animation: float-standard 4.5s ease-in-out infinite;
-  animation-delay: 0.5s;
+  transform: scale(0.95);
+  box-shadow: 0 35px 60px -15px rgba(148, 163, 184, 0.5);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.5);
 }
 
 .pp-silver-wrapper::before {
-  content: "#2";
-  width: 48px;
-  height: 48px;
-  font-size: 24px;
+  content: "2";
   background: linear-gradient(135deg, #94a3b8, #475569);
   text-shadow: 0 2px 0 rgba(51, 65, 85, 0.2);
 }
 
 /* --- BRONZE (#3) --- */
+/* Warm Bronze/Orange Uplight */
 .pp-bronze-wrapper {
   z-index: 5;
-  opacity: 0.95;
-  /* Float with different delay */
-  animation: float-standard 4.2s ease-in-out infinite;
-  animation-delay: 1s;
+  transform: scale(0.95);
+  box-shadow: 0 35px 60px -15px rgba(217, 119, 6, 0.4);
+  border-bottom: 2px solid rgba(217, 119, 6, 0.4);
 }
 
 .pp-bronze-wrapper::before {
-  content: "#3";
-  width: 48px;
-  height: 48px;
-  font-size: 24px;
+  content: "3";
   background: linear-gradient(135deg, #d6d3d1, #a8a29e);
   color: #78350f; 
   text-shadow: 0 1px 0 rgba(255,255,255,0.3);
 }
 
-/* Hover: Pause animation so it's easier to click */
+/* Hover: Simple lift */
 .pp-silver-wrapper:hover,
 .pp-bronze-wrapper:hover,
 .pp-gold-wrapper:hover {
-  animation-play-state: paused; 
-  transform: scale(1.02) translateY(-5px); /* Gentle lift */
+  transform: scale(1.02) translateY(-5px); 
   z-index: 30;
   cursor: pointer;
 }
+
 
 /* --- STRIP --- */
 .hp-strip-wrap {
@@ -446,26 +416,24 @@
   .pp-gold-wrapper,
   .pp-silver-wrapper,
   .pp-bronze-wrapper {
-    /* Disable complex float on mobile to save battery/layout shifts */
-    animation: none;
-    transform: none;
     width: 100%;
     max-width: 320px;
     opacity: 1;
+    /* Reset Scale for mobile list */
+    transform: none; 
   }
   
   .pp-gold-wrapper {
     order: -1; 
     margin-bottom: 15px;
-    transform: scale(1.02); /* Keep gold slightly bigger even on mobile */
+    transform: scale(1.02); /* Keep gold slightly prominent */
   }
-  
-  /* Disable Lift on touch */
+
+  /* Disable hover lift on mobile */
   .pp-silver-wrapper:hover,
   .pp-bronze-wrapper:hover,
   .pp-gold-wrapper:hover {
     transform: none;
-    animation-play-state: running;
   }
 
   .hp-strip {
