@@ -6,14 +6,6 @@ import "./ActivityBoard.css";
 
 const short = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
 
-const timeAgo = (ts: string) => {
-  const diff = Math.floor(Date.now() / 1000) - Number(ts);
-  if (diff < 0) return "0s";
-  if (diff < 60) return `${diff}s`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  return `${Math.floor(diff / 3600)}h`;
-};
-
 function isHidden() {
   try {
     return typeof document !== "undefined" && document.hidden;
@@ -43,11 +35,28 @@ function isFresh(ts: string, seconds = 10) {
   return now - t <= seconds;
 }
 
+function timeAgoFrom(nowSec: number, ts: string) {
+  const diff = nowSec - Number(ts);
+  if (!Number.isFinite(diff)) return "—";
+  if (diff < 0) return "0s";
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  return `${Math.floor(diff / 3600)}h`;
+}
+
 export function ActivityBoard() {
   const [items, setItems] = useState<GlobalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Track which events are "newly seen" to play enter animation
+  // ✅ 1s ticker (UI-only) so "time ago" updates without hammering the indexer
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // ✅ Track which events have been seen to play enter animation once
+  // Use txHash as stable identity (order can change between polls)
   const seenRef = useRef<Set<string>>(new Set());
 
   // ---- polling controls ----
@@ -69,8 +78,15 @@ export function ActivityBoard() {
     }, ms);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * ✅ Network polling (cheap):
+   * - Foreground normal: 20s
+   * - Background/hidden: 60s
+   * - Rate limit: exponential backoff up to 180s
+   */
   const load = useCallback(
     async (isBackground = false) => {
+      // Slow down aggressively when hidden
       if (isBackground && isHidden()) {
         scheduleNext(60_000);
         return;
@@ -79,17 +95,20 @@ export function ActivityBoard() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
 
+      // Only show loader on cold start
       if (!isBackground && items.length === 0) setLoading(true);
 
       try {
         const data = await fetchGlobalActivity({ first: 10 });
-
-        // mark new IDs before state update
         const next = data ?? [];
+
         setItems(next);
         setLoading(false);
 
+        // success: reset backoff
         backoffStepRef.current = 0;
+
+        // normal cadence
         scheduleNext(isBackground ? 45_000 : 20_000);
       } catch (e) {
         console.error("[ActivityBoard] load failed", e);
@@ -128,16 +147,20 @@ export function ActivityBoard() {
     };
   }, [load]);
 
-  // Compute which rows should play "enter" (first time we see them)
+  // ✅ Compute enter animation flags (only first time txHash appears)
   const rowsWithFlags = useMemo(() => {
-    const out = items.map((it, idx) => {
-      const key = `${it.txHash}-${idx}`;
-      const already = seenRef.current.has(key);
-      const enter = !already;
-      if (!already) seenRef.current.add(key);
-      return { it, key, enter };
+    return (items ?? []).map((it) => {
+      const stableKey = String(it.txHash || "");
+      const already = stableKey ? seenRef.current.has(stableKey) : false;
+      const enter = stableKey ? !already : false;
+
+      if (stableKey && !already) seenRef.current.add(stableKey);
+
+      // key must be unique even if txHash missing (should be rare)
+      const reactKey = stableKey || `${it.type}-${it.raffleId}-${it.timestamp}-${it.subject}`;
+
+      return { it, key: reactKey, enter };
     });
-    return out;
   }, [items]);
 
   if (loading && items.length === 0) {
@@ -179,7 +202,6 @@ export function ActivityBoard() {
             iconClass = "cancel";
           }
 
-          // ✅ Fresh highlight for the first 10 seconds after creation on-chain
           const fresh = isFresh(item.timestamp, 10);
 
           const rowClass = [
@@ -237,7 +259,7 @@ export function ActivityBoard() {
 
                 <div className="ab-meta">
                   <span className="ab-time">
-                    {timeAgo(item.timestamp)}
+                    {timeAgoFrom(nowSec, item.timestamp)}
                     {fresh && <span className="ab-new-pill">NEW</span>}
                   </span>
 
