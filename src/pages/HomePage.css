@@ -8,14 +8,33 @@
   overflow-x: hidden;
 }
 
+/* ✅ NEW: Positioning the Activity Board closer to TopNav */
+.hp-board-section {
+  max-width: 1400px;
+  margin: 110px auto 20px auto; /* 110px clears the TopNav */
+  padding: 0 20px;
+}
+
 /* --- HERO --- */
 .hp-hero {
   text-align: center;
   padding: 80px 20px 120px 20px;
   margin-bottom: -80px;
+  
+  /* Breathing Gradient */
   background: linear-gradient(-45deg, rgba(255,255,255,0.9), #fff0f5, #fce7f3, #ffffff);
   background-size: 400% 400%;
   animation: hp-breathing 15s ease infinite;
+
+  /* ✅ CHANGED: Increased border-radius to match Explore/FAQ sheets */
+  border-radius: 32px; 
+  
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  position: relative;
+  overflow: hidden;
+  
+  /* Ensure it has a margin to separate from Board */
+  margin-top: 0; 
 }
 
 @keyframes hp-breathing {
