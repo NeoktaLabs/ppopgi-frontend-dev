@@ -2,12 +2,18 @@
 
 .faq-page {
   max-width: 900px;
-  margin: 0 auto;
   
-  /* ✅ VISUAL: Breathing Background & Spacing */
-  padding: 120px 20px 80px 20px;
+  /* ✅ CHANGED: Margin pushes the entire colored block down */
+  margin: 120px auto 0 auto;
+  
+  /* ✅ CHANGED: Reduced padding */
+  padding: 40px 20px 80px 20px;
+  
+  /* ✅ ADDED: Rounded top */
+  border-radius: 32px 32px 0 0;
+  
   color: #4A0F2B;
-  min-height: 100vh;
+  min-height: calc(100vh - 120px);
   
   background: linear-gradient(-45deg, rgba(255,255,255,0.9), #fff0f5, #fce7f3, #ffffff);
   background-size: 400% 400%;
@@ -258,7 +264,9 @@
 /* Mobile Adjustments */
 @media (max-width: 720px) {
   .faq-page {
-    padding: 100px 16px 50px;
+    padding: 24px 16px 50px; /* Reset padding for mobile if needed, or keep high margin */
+    /* Mobile usually has smaller nav, but let's keep consistent margin for now */
+    margin-top: 90px;
   }
 
   .faq-h1 {
