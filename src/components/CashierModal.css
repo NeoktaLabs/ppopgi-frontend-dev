@@ -7,20 +7,16 @@
   backdrop-filter: blur(8px);
   z-index: 2000;
 
-  /* ✅ IMPORTANT: start from top so TopNav never overlaps */
   display: flex;
   justify-content: center;
   align-items: flex-start;
 
-  /* ✅ Space under TopNav */
   padding-top: 120px;
   padding-bottom: 40px;
   padding-left: 20px;
   padding-right: 20px;
 
-  /* ✅ Allows scrolling if screen is short */
   overflow-y: auto;
-
   animation: cm-fade-in 0.2s ease-out;
 }
 
@@ -31,7 +27,7 @@
 
 .cm-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 520px;
   background: #ffffff;
   border-radius: 24px;
   box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.2);
@@ -40,7 +36,6 @@
   flex-direction: column;
   overflow: hidden;
 
-  /* ✅ prevents card from going offscreen */
   max-height: calc(100vh - 160px);
 
   animation: cm-scale-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -55,15 +50,20 @@
 .cm-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
+  align-items: flex-start;
+  padding: 20px 24px 14px 24px;
   border-bottom: 1px solid rgba(0,0,0,0.04);
 
-  /* ✅ keeps header visible if content scrolls */
   position: sticky;
   top: 0;
   background: #fff;
-  z-index: 2;
+  z-index: 3;
+}
+
+.cm-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .cm-title {
@@ -71,6 +71,12 @@
   font-weight: 1000;
   margin: 0;
   color: #1e293b;
+}
+
+.cm-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .cm-close-btn {
@@ -88,9 +94,50 @@
 }
 .cm-close-btn:hover { background: #f1f5f9; color: #1e293b; }
 
+/* --- Tabs (NEW) --- */
+.cm-tabs {
+  position: sticky;
+  top: 68px; /* sits under header */
+  z-index: 2;
+  background: #fff;
+
+  padding: 10px 24px 12px 24px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.cm-tab {
+  border: 1px solid rgba(190, 24, 93, 0.18);
+  background: #fff0f5;
+  color: #4A0F2B;
+  font-weight: 900;
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cm-tab:hover {
+  background: linear-gradient(135deg, #ffd1df, #ffbcd0);
+  color: #3b0a21;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(190, 24, 93, 0.25);
+}
+
+.cm-tab.active {
+  background: linear-gradient(135deg, #ffe4ec, #ffd1df);
+  border: 1px solid rgba(190, 24, 93, 0.25);
+  box-shadow:
+    0 6px 18px rgba(190, 24, 93, 0.25),
+    inset 0 0 0 1px rgba(255,255,255,0.6);
+}
+
 /* ✅ card content can scroll if needed */
 .cm-body {
-  padding: 24px;
+  padding: 20px 24px 24px 24px;
   overflow-y: auto;
 }
 
@@ -190,6 +237,7 @@
   color: white;
   box-shadow: 0 10px 20px -5px rgba(30, 41, 59, 0.3);
 }
+
 .cm-asset-card.secondary {
   background: white;
   border: 1px solid #e2e8f0;
@@ -245,15 +293,46 @@
 
 .cm-guide-btn {
   font-size: 11px;
-  font-weight: 800;
-  background: #e2e8f0;
-  color: #475569;
-  padding: 6px 12px;
-  border-radius: 6px;
-  text-decoration: none;
-}
-.cm-guide-btn:hover { background: #cbd5e1; }
+  font-weight: 900;
+  color: #4A0F2B;
 
+  background: linear-gradient(135deg, #ffe4ec, #ffd1df);
+  border: 1px solid rgba(190, 24, 93, 0.22);
+
+  padding: 6px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cm-guide-btn:hover {
+  background: linear-gradient(135deg, #ffd1df, #ffbcd0);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(190, 24, 93, 0.22);
+}
+
+/* --- Widgets (NEW) --- */
+.cm-widget-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.cm-widget-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.cm-widget-note {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* Alerts */
 .cm-alert {
   padding: 10px;
   margin-bottom: 16px;
@@ -275,6 +354,18 @@
   }
 
   .cm-balance-grid {
-    grid-template-columns: 1fr; /* stacks cards for small screens */
+    grid-template-columns: 1fr;
+  }
+
+  .cm-tabs {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .cm-body {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
