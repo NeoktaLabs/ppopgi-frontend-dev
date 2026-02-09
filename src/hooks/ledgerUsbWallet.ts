@@ -8,7 +8,7 @@ import type { Chain } from "thirdweb/chains";
 
 /**
  * Minimal EIP-1193 provider backed by Ledger (USB / WebHID).
- * Note: This currently supports account + chain id. (No signing yet.)
+ * NOTE: account + chain id supported. Signing can be added later.
  */
 async function createLedgerEip1193Provider(chainId: number) {
   const transport = await TransportWebHID.create();
@@ -16,6 +16,8 @@ async function createLedgerEip1193Provider(chainId: number) {
 
   const derivationPath = "44'/60'/0'/0/0";
   const { address } = await eth.getAddress(derivationPath, false, true);
+
+  const hexChainId = `0x${chainId.toString(16)}`;
 
   return {
     async request({ method, params }: { method: string; params?: any[] }) {
@@ -25,13 +27,12 @@ async function createLedgerEip1193Provider(chainId: number) {
           return [address];
 
         case "eth_chainId":
-          return `0x${chainId.toString(16)}`;
+          return hexChainId;
 
         case "wallet_switchEthereumChain": {
           const [{ chainId: requested }] = params ?? [];
-          const expected = `0x${chainId.toString(16)}`;
-          if (requested !== expected) {
-            throw new Error("Ledger USB: unsupported chain in this app");
+          if (requested && requested !== hexChainId) {
+            throw new Error("Ledger USB: requested chain not supported here.");
           }
           return null;
         }
@@ -40,7 +41,7 @@ async function createLedgerEip1193Provider(chainId: number) {
         case "eth_sendTransaction":
         case "personal_sign":
         case "eth_signTypedData_v4":
-          throw new Error("Ledger USB signing not enabled yet. Use MetaMask + Ledger to sign.");
+          throw new Error("Ledger USB signing not enabled yet. Use MetaMask+Ledger to sign.");
 
         default:
           throw new Error(`Unsupported method: ${method}`);
@@ -49,10 +50,6 @@ async function createLedgerEip1193Provider(chainId: number) {
   };
 }
 
-/**
- * Hook used by SignInModal
- * Returns a thirdweb-compatible wallet instance (EIP1193.fromProvider)
- */
 export function useLedgerUsbWallet() {
   const isSupported = useMemo(() => {
     return typeof window !== "undefined" && typeof (navigator as any)?.hid !== "undefined";
@@ -64,26 +61,31 @@ export function useLedgerUsbWallet() {
   const connectLedgerUsb = useCallback(
     async (opts: { client: ThirdwebClient; chain: Chain }) => {
       setError("");
-      if (!isSupported) throw new Error("WebHID not supported (use Chrome/Edge/Brave).");
-
-      const wallet = EIP1193.fromProvider({
-        // ✅ Use a known ID to avoid thirdweb wallet registry lookups
-        // Since we are NOT displaying this in ConnectEmbed list anymore, ID is mostly internal.
-        walletId: "injected",
-        provider: async () => createLedgerEip1193Provider(opts.chain.id),
-      });
+      if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
 
       setIsConnecting(true);
       try {
-        // Ensure provider is created now (user gesture)
-        await (await (wallet as any).getProvider?.())?.request?.({ method: "eth_requestAccounts" });
-      } catch {
-        // If the wrapper doesn't expose getProvider(), it's okay — connect() will trigger provider later.
+        // Create a thirdweb wallet wrapper around our EIP-1193 provider
+        const wallet = EIP1193.fromProvider({
+          // use a known id to avoid any registry lookups
+          walletId: "injected",
+          provider: async () => createLedgerEip1193Provider(opts.chain.id),
+        });
+
+        // ✅ IMPORTANT: actually connect the wallet so it has an active account
+        await wallet.connect({
+          client: opts.client,
+          chain: opts.chain,
+        });
+
+        return wallet;
+      } catch (e: any) {
+        const msg = e?.message ? String(e.message) : "Failed to connect Ledger via USB.";
+        setError(msg);
+        throw e;
       } finally {
         setIsConnecting(false);
       }
-
-      return wallet;
     },
     [isSupported]
   );
