@@ -8,12 +8,17 @@
   overflow-x: hidden;
 }
 
-/* ✅ UPDATED: Activity Board Positioning (Reduced Gap) */
-/* Reduced from 100px to 60px. Adjust this if it overlaps your TopNav. */
+/* ✅ UPDATED: Force Activity Board Position */
 .hp-board-section {
   max-width: 1400px;
-  margin: 60px auto 20px auto; 
+  /* Use !important to override any cached/collapsing margins */
+  margin: 20px auto 20px auto !important; 
   padding: 0 20px;
+}
+
+/* Ensure the ActivityBoard inside doesn't push itself down */
+.hp-board-section > * {
+  margin-top: 0;
 }
 
 /* --- HERO (Enhanced) --- */
@@ -68,7 +73,7 @@
   color: #4A0F2B;
 }
 
-/* --- ACTION BUTTONS (Solid/Pro Style) --- */
+/* --- ACTION BUTTONS --- */
 .hp-hero-actions {
   display: flex;
   justify-content: center;
@@ -88,7 +93,7 @@
   justify-content: center;
 }
 
-/* Primary: Solid Brand Color */
+/* Primary */
 .hp-action-btn.primary {
   background: #4A0F2B;
   color: #ffffff;
@@ -102,7 +107,7 @@
   box-shadow: 0 15px 30px -8px rgba(74, 15, 43, 0.4);
 }
 
-/* Secondary: White/Outline */
+/* Secondary */
 .hp-action-btn.secondary {
   background: #ffffff;
   color: #4A0F2B;
