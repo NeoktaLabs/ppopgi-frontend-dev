@@ -14,8 +14,7 @@ async function rpcRequest(rpcUrl: string, method: string, params: any[] = []) {
 
   const json = await res.json().catch(() => null);
   if (!res.ok || json?.error) {
-    const msg = json?.error?.message || `RPC_ERROR_${res.status}`;
-    throw new Error(`${method}: ${msg}`);
+    throw new Error(json?.error?.message || `RPC_ERROR_${res.status}`);
   }
   return json.result;
 }
@@ -29,7 +28,7 @@ function pickRpcUrl(chain: Chain): string {
 
 function asHexQuantity(v: any): string | undefined {
   if (v == null) return undefined;
-  if (typeof v === "string") return v;
+  if (typeof v === "string") return v; // assume already 0x...
   try {
     const bi = typeof v === "bigint" ? v : BigInt(v);
     return "0x" + bi.toString(16);
@@ -38,49 +37,19 @@ function asHexQuantity(v: any): string | undefined {
   }
 }
 
-function toBigIntLoose(v: any): bigint | null {
-  if (v == null) return null;
-  try {
-    return BigInt(v);
-  } catch {
-    return null;
-  }
-}
-
-function isZeroHex(v?: string) {
-  const bi = toBigIntLoose(v);
-  return bi != null && bi === 0n;
-}
-
-function addGasBuffer(gas: bigint): bigint {
-  return (gas * 120n) / 100n + 10_000n; // +20% + 10k
-}
-
-type LedgerService = {
-  resolveTransaction: (rawTxHex: string, loadConfig: any, opts?: any) => Promise<any>;
-};
-
 type LedgerSession = {
   transport: any;
   eth: any;
-  ledgerService: LedgerService;
   address: string;
   path: string;
 };
 
 async function openLedgerSession(): Promise<LedgerSession> {
-  const [transportMod, ethMod] = await Promise.all([
+  // dynamic import => keeps bundle smaller + avoids running Ledger libs until needed
+  const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
     import("@ledgerhq/hw-app-eth"),
   ]);
-
-  const TransportWebHID = (transportMod as any).default;
-  const Eth = (ethMod as any).default;
-  const ledgerService: LedgerService = (ethMod as any).ledgerService;
-
-  if (!TransportWebHID || !Eth || !ledgerService?.resolveTransaction) {
-    throw new Error("Ledger libs missing (TransportWebHID / Eth / ledgerService).");
-  }
 
   const transport = await TransportWebHID.create();
   const eth = new Eth(transport);
@@ -88,14 +57,23 @@ async function openLedgerSession(): Promise<LedgerSession> {
   const path = "44'/60'/0'/0/0";
   const { address } = await eth.getAddress(path, false, true);
 
-  return { transport, eth, ledgerService, address, path };
+  return { transport, eth, address, path };
 }
+
+type Eip1193RequestArgs = { method: string; params?: any[] };
+
+// Minimal EIP-1193 provider shape that thirdweb expects (includes on/removeListener)
+type MinimalEip1193Provider = {
+  request: (args: Eip1193RequestArgs) => Promise<any>;
+  on: (event: string, listener: (...args: any[]) => void) => any;
+  removeListener: (event: string, listener: (...args: any[]) => void) => any;
+};
 
 async function createLedgerEip1193Provider(opts: {
   chainId: number;
   rpcUrl: string;
   sessionRef: { current: LedgerSession | null };
-}) {
+}): Promise<MinimalEip1193Provider> {
   const { chainId, rpcUrl, sessionRef } = opts;
   const hexChainId = `0x${chainId.toString(16)}`;
 
@@ -106,38 +84,19 @@ async function createLedgerEip1193Provider(opts: {
     return s;
   }
 
-  async function resolveGasHex(s: LedgerSession, tx: any): Promise<string> {
-    // 1) honor provided gas/gasLimit if > 0
-    const provided = asHexQuantity(tx.gas ?? tx.gasLimit);
-    const providedBi = toBigIntLoose(provided);
-    if (providedBi != null && providedBi > 0n) {
-      const buffered = addGasBuffer(providedBi);
-      return "0x" + buffered.toString(16);
-    }
-
-    // 2) estimate gas
-    const to = tx.to ? String(tx.to) : undefined;
-    const data = tx.data ? String(tx.data) : "0x";
-    const valueHex = asHexQuantity(tx.value) ?? "0x0";
-
-    const est = await rpcRequest(rpcUrl, "eth_estimateGas", [
-      { from: s.address, to, data, value: valueHex },
-      "pending",
-    ]);
-
-    const estBi = toBigIntLoose(est);
-    if (estBi == null || estBi === 0n) {
-      throw new Error(
-        "eth_estimateGas returned 0; RPC cannot estimate this tx. Try another RPC or provide gasLimit."
-      );
-    }
-
-    const buffered = addGasBuffer(estBi);
-    return "0x" + buffered.toString(16);
-  }
+  // no-op event methods (thirdweb checks they exist)
+  const on: MinimalEip1193Provider["on"] = () => {
+    return undefined;
+  };
+  const removeListener: MinimalEip1193Provider["removeListener"] = () => {
+    return undefined;
+  };
 
   return {
-    async request({ method, params }: { method: string; params?: any[] }) {
+    on,
+    removeListener,
+
+    async request({ method, params }: Eip1193RequestArgs) {
       switch (method) {
         case "eth_requestAccounts":
         case "eth_accounts": {
@@ -170,95 +129,72 @@ async function createLedgerEip1193Provider(opts: {
 
           const to = tx.to ? String(tx.to) : undefined;
           const data = tx.data ? String(tx.data) : "0x";
-          const valueHex = asHexQuantity(tx.value) ?? "0x0";
+          const value = tx.value != null ? BigInt(tx.value) : 0n;
 
-          // nonce
-          let nonceHex = asHexQuantity(tx.nonce);
-          if (!nonceHex || isZeroHex(nonceHex)) {
-            nonceHex = await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
-          }
+          const nonceHex =
+            tx.nonce != null
+              ? asHexQuantity(tx.nonce)
+              : await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
 
-          // gas
-          const gasHex = await resolveGasHex(s, tx);
-          const gasBi = toBigIntLoose(gasHex);
-          if (gasBi == null || gasBi <= 0n) {
-            throw new Error(`BUG: resolved gas is 0 (gasHex=${String(gasHex)}).`);
-          }
+          const gasHex =
+            tx.gas != null || tx.gasLimit != null
+              ? asHexQuantity(tx.gas ?? tx.gasLimit)
+              : await rpcRequest(rpcUrl, "eth_estimateGas", [{ from: tx.from, to, data, value: tx.value ?? "0x0" }]);
 
-          // fees
+          if (!nonceHex) throw new Error("Failed to resolve nonce.");
+          if (!gasHex) throw new Error("Failed to resolve gas.");
+
+          // Fees
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
           let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
           let gasPriceHex = asHexQuantity(tx.gasPrice);
 
-          if ((!maxFeePerGasHex || isZeroHex(maxFeePerGasHex)) && (!gasPriceHex || isZeroHex(gasPriceHex))) {
+          if (!maxFeePerGasHex && !gasPriceHex) {
             gasPriceHex = await rpcRequest(rpcUrl, "eth_gasPrice", []);
           }
 
-          const is1559 =
-            (maxFeePerGasHex && !isZeroHex(maxFeePerGasHex)) ||
-            (maxPriorityFeePerGasHex && !isZeroHex(maxPriorityFeePerGasHex));
+          const is1559 = !!(maxFeePerGasHex || maxPriorityFeePerGasHex);
 
-          // ✅ Keep plain tx data object
-          const txData: any = {
-            type: is1559 ? 2 : 0,
+          // ✅ Force definite strings before BigInt (Cloudflare TS is stricter)
+          const gasPriceHexResolved = gasPriceHex ?? "0x0";
+          const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
+          const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei fallback
+
+          // ✅ Do NOT set `type` here (avoids TS complaining about 2)
+          // ethers will infer type=2 when maxFeePerGas/maxPriorityFeePerGas exist.
+          const unsignedTx = Transaction.from({
             chainId,
             to,
             nonce: Number(BigInt(nonceHex)),
             gasLimit: BigInt(gasHex),
             data,
-            value: BigInt(valueHex),
+            value,
             ...(is1559
               ? {
-                  maxFeePerGas: BigInt(maxFeePerGasHex ?? gasPriceHex ?? "0x0"),
-                  maxPriorityFeePerGas: BigInt(maxPriorityFeePerGasHex ?? "0x3b9aca00"),
+                  maxFeePerGas: BigInt(maxFeeHexResolved),
+                  maxPriorityFeePerGas: BigInt(maxPrioHexResolved),
                 }
               : {
-                  gasPrice: BigInt(gasPriceHex ?? "0x0"),
+                  gasPrice: BigInt(gasPriceHexResolved),
                 }),
-          };
+          });
 
-          // Hard stop before signing
-          if (!txData.gasLimit || txData.gasLimit === 0n) {
-            throw new Error("BUG: txData.gasLimit is 0 before signing.");
-          }
-
-          const unsignedTx = Transaction.from(txData);
-
-          const rawTxHex = unsignedTx.unsignedSerialized.startsWith("0x")
+          const payloadHex = unsignedTx.unsignedSerialized.startsWith("0x")
             ? unsignedTx.unsignedSerialized.slice(2)
             : unsignedTx.unsignedSerialized;
 
-          // Ledger resolution (required by newer ledgerjs)
-          const resolution = await s.ledgerService.resolveTransaction(rawTxHex, s.eth.loadConfig, {
-            externalPlugins: false,
-            erc20: false,
-            nft: false,
-          });
+          // Ledger signature
+          const sig = await s.eth.signTransaction(s.path, payloadHex);
 
-          // ✅ SIGN
-          const sig = await s.eth.signTransaction(s.path, rawTxHex, resolution);
-
-          // ✅ FIX: typed txs want yParity (0/1). Ledger may return v in other forms.
-          const vNum = Number(BigInt("0x" + sig.v));
-          const yParity = vNum === 0 || vNum === 1 ? vNum : vNum % 2;
-
+          const v = BigInt("0x" + sig.v);
           const r = "0x" + sig.r;
           const sSig = "0x" + sig.s;
 
-          const signature = Signature.from({ r, s: sSig, yParity });
+          const signature = Signature.from({ v, r, s: sSig });
+          const signedTx = Transaction.from({ ...unsignedTx, signature }).serialized;
 
-          // ✅ Build signed tx from txData + signature
-          const signedTx = Transaction.from({ ...txData, signature }).serialized;
-
-          // Decode and verify
-          const decoded = Transaction.from(signedTx);
-          if (!decoded.gasLimit || decoded.gasLimit === 0n) {
-            throw new Error(
-              `BUG: signed tx gasLimit is 0. Refusing to broadcast. (txData.gasLimit=${txData.gasLimit.toString()})`
-            );
-          }
-
-          return await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
+          const txHash = await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
+          return txHash;
         }
 
         case "personal_sign": {
@@ -291,7 +227,6 @@ export function useLedgerUsbWallet() {
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState("");
-
   const sessionRef = useRef<LedgerSession | null>(null);
 
   const connectLedgerUsb = useCallback(
@@ -305,12 +240,14 @@ export function useLedgerUsbWallet() {
 
         const wallet = EIP1193.fromProvider({
           walletId: "io.metamask",
-          provider: async () =>
-            createLedgerEip1193Provider({
+          // ✅ provider must accept optional params, and must return an EIP1193Provider with on/removeListener
+          provider: async (_params?: { chainId?: number }) => {
+            return await createLedgerEip1193Provider({
               chainId: opts.chain.id,
               rpcUrl,
               sessionRef,
-            }),
+            });
+          },
         });
 
         await wallet.connect({ client: opts.client, chain: opts.chain });
