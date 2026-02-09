@@ -8,25 +8,28 @@
   overflow-x: hidden;
 }
 
-/* --- HERO --- */
+/* --- HERO (Enhanced: Breathing Animation) --- */
 .hp-hero {
   text-align: center;
   padding: 80px 20px 120px 20px;
   margin-bottom: -80px;
-  background: radial-gradient(
-    circle at 50% 30%,
-    rgba(255, 255, 255, 0.8) 0%,
-    rgba(255, 235, 246, 0.3) 60%,
-    transparent 100%
-  );
+  
+  /* ✅ VISUAL IMPROVEMENT: Breathing Mesh Gradient */
+  background: linear-gradient(-45deg, rgba(255,255,255,0.9), #fff0f5, #fce7f3, #ffffff);
+  background-size: 400% 400%;
+  animation: hp-breathing 15s ease infinite;
+}
+
+@keyframes hp-breathing {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .hp-hero-title {
   font-size: 64px;
   font-weight: 1000;
   margin: 0;
-
-  /* ✅ FIX CROPPING */
   line-height: 1.08;
   padding-bottom: 6px;
   display: inline-block;
@@ -57,11 +60,11 @@
   gap: 32px;
   margin-top: 48px;
   padding: 16px 40px;
-  background: white;
+  background: rgba(255, 255, 255, 0.75); /* Slight transparency */
   border-radius: 24px;
   box-shadow: 0 20px 60px -10px rgba(180, 70, 120, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px); /* Glassmorphism */
 }
 
 .hp-stat-item { text-align: center; }
@@ -95,7 +98,7 @@
   background: #e2e8f0;
 }
 
-/* --- SECTIONS --- */
+/* --- SECTIONS (Enhanced: Glass Headers) --- */
 .hp-section-header {
   display: flex;
   align-items: center;
@@ -110,11 +113,15 @@
   font-weight: 1000;
   letter-spacing: -0.5px;
   color: #4A0F2B;
-  background: #ffffff;
+  
+  /* ✅ VISUAL IMPROVEMENT: Glassmorphism Consistency */
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(12px);
+  
   padding: 12px 24px;
   border-radius: 99px;
   box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .hp-section-line {
@@ -125,7 +132,7 @@
   margin-top: 2px;
 }
 
-/* --- PODIUM (RESTORED) --- */
+/* --- PODIUM (Enhanced: Depth & Shimmer) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -141,38 +148,66 @@
   perspective: 1000px;
 }
 
+/* Base style for wrappers */
+.pp-gold-wrapper,
+.pp-silver-wrapper,
+.pp-bronze-wrapper {
+  position: relative;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy transition */
+}
+
+/* ✅ GOLD: Added Shimmer + Ground Shadow */
 .pp-gold-wrapper {
   z-index: 10;
   transform: scale(1.15) translateY(-20px);
-  position: relative;
-  box-shadow: 0 50px 100px -30px rgba(255, 180, 50, 0.35);
   border-radius: 14px;
+  /* Stronger shadow for "floating" effect */
+  box-shadow: 0 30px 60px -15px rgba(255, 180, 50, 0.4);
 }
 
+/* The subtle gold shimmer animation */
+.pp-gold-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -150%; width: 150%; height: 100%;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.4) 50%, transparent 80%);
+  transform: skewX(-20deg);
+  pointer-events: none;
+  border-radius: 14px;
+  animation: gold-shimmer 6s infinite;
+}
+
+@keyframes gold-shimmer {
+  0%, 90% { left: -150%; } /* Rest for most of the time */
+  100% { left: 150%; } /* Quick swipe */
+}
+
+/* ✅ SILVER: Added Hover Lift */
 .pp-silver-wrapper {
   z-index: 5;
   transform: scale(0.9) translateX(30px) rotateY(15deg);
   opacity: 0.95;
   filter: brightness(0.98);
-  transition: all 0.3s;
 }
 .pp-silver-wrapper:hover {
-  transform: scale(0.95) translateX(10px) rotateY(5deg);
+  transform: scale(0.95) translateX(15px) rotateY(5deg);
   z-index: 11;
   filter: brightness(1);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
 }
 
+/* ✅ BRONZE: Added Hover Lift */
 .pp-bronze-wrapper {
   z-index: 5;
   transform: scale(0.9) translateX(-30px) rotateY(-15deg);
   opacity: 0.95;
   filter: brightness(0.98);
-  transition: all 0.3s;
 }
 .pp-bronze-wrapper:hover {
-  transform: scale(0.95) translateX(-10px) rotateY(-5deg);
+  transform: scale(0.95) translateX(-15px) rotateY(-5deg);
   z-index: 11;
   filter: brightness(1);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
 }
 
 @media (max-width: 850px) {
@@ -192,9 +227,13 @@
     transform: none;
     opacity: 1;
   }
+  .pp-silver-wrapper:hover,
+  .pp-bronze-wrapper:hover {
+    transform: translateY(-5px);
+  }
 }
 
-/* --- STRIP --- */
+/* --- STRIP (Enhanced: Interactive Lift) --- */
 .hp-strip-wrap {
   position: relative;
 }
@@ -203,22 +242,28 @@
   display: flex;
   gap: 24px;
   overflow-x: auto;
-  padding: 10px 32px 60px 32px;
+  padding: 20px 32px 60px 32px; /* Extra top padding for hover lift */
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-
-  /* smoother when using arrows */
   scroll-behavior: smooth;
 }
 .hp-strip::-webkit-scrollbar { display: none; }
 
 .hp-strip-item {
-  scroll-snap-align: start; /* ✅ shows left-most item first */
+  scroll-snap-align: start;
   flex: 0 0 auto;
   width: 320px;
+  
+  /* ✅ VISUAL IMPROVEMENT: Tactile Lift */
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.hp-strip-item:hover {
+  transform: translateY(-8px);
+}
+
+/* --- EMPTY STATES (Enhanced: Emotive) --- */
 .hp-empty-msg {
   margin: 0 32px;
   padding: 60px;
@@ -226,12 +271,25 @@
   border-radius: 24px;
   text-align: center;
   font-weight: 700;
-  opacity: 0.6;
+  opacity: 0.8;
   color: #64748b;
   min-width: 320px;
+  
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  border: 1px dashed #cbd5e1;
 }
 
-/* ✅ SLIDER ARROWS (auto-hide via React render) */
+/* ✅ New Icon Style */
+.hp-empty-icon {
+  font-size: 40px;
+  filter: grayscale(0.5);
+  opacity: 0.8;
+}
+
+/* ✅ SLIDER ARROWS */
 .hp-strip-arrow {
   position: absolute;
   top: 50%;
@@ -261,7 +319,7 @@
 .hp-strip-arrow.left { left: 10px; }
 .hp-strip-arrow.right { right: 10px; }
 
-/* ✅ Edge fade hints (also auto-hide) */
+/* ✅ Edge fade hints */
 .hp-strip-fade {
   position: absolute;
   top: 0;
@@ -299,7 +357,6 @@
     height: 1px;
   }
 
-  /* tighter strip on mobile */
   .hp-strip {
     padding: 10px 18px 50px 18px;
     gap: 16px;
