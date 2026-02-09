@@ -1,6 +1,5 @@
 /* src/pages/DashboardPage.css */
 
-/* --- Layout & Typography --- */
 .db-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -8,9 +7,13 @@
   color: #1e293b;
 }
 
-/* --- Hero Section --- */
+/* --- Hero Section (Updated with Animation) --- */
 .db-hero {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  /* ✅ NEW: Animated Gradient Background */
+  background: linear-gradient(-45deg, #ffffff, #f8fafc, #f1f5f9, #ffffff);
+  background-size: 400% 400%;
+  animation: hero-breathing 15s ease infinite;
+  
   border-radius: 24px;
   padding: 32px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
@@ -23,6 +26,13 @@
   border: 1px solid rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
+}
+
+/* The slow background movement */
+@keyframes hero-breathing {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .db-hero::before {
@@ -91,6 +101,13 @@
 
 .db-stat {
   text-align: center;
+  transition: transform 0.2s;
+  cursor: default;
+}
+
+/* Subtle hover pop on stats */
+.db-stat:hover {
+  transform: translateY(-2px);
 }
 
 .db-stat-num {
@@ -299,11 +316,11 @@
 .db-btn.primary {
   background: #1e293b;
   color: white;
-  position: relative; /* For liquid sheen effect */
+  position: relative;
   overflow: hidden;
 }
 
-/* UX Boost: Liquid Sheen on Primary Button */
+/* Liquid Sheen on Primary Button */
 .db-btn.primary::after {
   content: "";
   position: absolute;
@@ -381,7 +398,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px; /* Fixed spacing */
+  
+  /* ✅ CHANGED: Reduced space from 10px to 5px */
+  gap: 5px; 
 }
 
 /* Green Text Pulse on Live Tab */
@@ -418,22 +437,21 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
   justify-items: center;
-  justify-content: center; /* Center the grid blocks */
+  justify-content: center;
 }
 
-/* UX Boost: Staggered Entrance Animation */
+/* Staggered Entrance Animation */
 @keyframes db-fade-up {
   from { opacity: 0; transform: translateY(15px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .db-grid > * {
-  width: auto; /* Allow wrappers to shrink-wrap */
+  width: auto;
   justify-self: center;
   animation: db-fade-up 0.5s ease-out backwards;
 }
 
-/* Stagger delay for first few items */
 .db-grid > *:nth-child(1) { animation-delay: 0.05s; }
 .db-grid > *:nth-child(2) { animation-delay: 0.1s; }
 .db-grid > *:nth-child(3) { animation-delay: 0.15s; }
@@ -481,7 +499,7 @@
   color: #1e293b;
 }
 
-/* --- Card Pile Wrappers & Logic --- */
+/* --- Card Pile Wrappers --- */
 .card-hover-trigger {
   position: relative;
 }
@@ -489,7 +507,7 @@
 .db-card-pile-wrapper,
 .db-history-card-wrapper {
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  width: fit-content; /* Fix for Golden Border sizing */
+  width: fit-content;
   margin-left: auto;
   margin-right: auto;
   position: relative;
@@ -501,7 +519,7 @@
 
 .db-card-pile-wrapper:hover,
 .db-history-card-wrapper:hover {
-  transform: translateY(-8px); /* Lift effect */
+  transform: translateY(-8px);
 }
 
 /* --- Card Visuals --- */
@@ -535,7 +553,6 @@
 .db-card-shadow {
   position: absolute;
   inset: 0;
-  /* Bouncy transition for "Fan Out" effect */
   transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.22s ease, filter 0.22s ease;
   border-radius: 16px;
   overflow: hidden;
@@ -561,7 +578,6 @@
   transform: translateZ(0);
 }
 
-/* Default Shadow Positions */
 .db-card-shadow-1 { transform: translate(8px,10px) rotate(-1.5deg) scale(0.99); z-index: 6; }
 .db-card-shadow-2 { transform: translate(14px,18px) rotate(2deg) scale(0.98); z-index: 5; }
 .db-card-shadow-3 { transform: translate(20px,28px) rotate(-0.5deg) scale(0.97); z-index: 4; }
@@ -572,7 +588,7 @@
 .db-card-shadow-3 .db-card-shadow-inner { filter: brightness(0.88); }
 .db-card-shadow-4 .db-card-shadow-inner { filter: brightness(0.84); }
 
-/* UX Boost: "Fan Out" Effect on Hover */
+/* Fan Out on Hover */
 .card-hover-trigger:hover .db-card-shadow-1 { transform: translate(12px, 5px) rotate(-3deg) scale(0.99); }
 .card-hover-trigger:hover .db-card-shadow-2 { transform: translate(24px, 10px) rotate(-6deg) scale(0.98); }
 .card-hover-trigger:hover .db-card-shadow-3 { transform: translate(36px, 15px) rotate(-9deg) scale(0.97); }
@@ -582,7 +598,7 @@
 .db-mult-badge-layer {
   position: absolute;
   top: -18px;
-  left: -18px; /* Correctly positioned Top-Left */
+  left: -18px;
   right: auto;
   z-index: 200;
   pointer-events: none;
@@ -614,7 +630,6 @@
   z-index: 10;
 }
 
-/* The Golden Outline */
 .db-card-pile.is-winner::before {
   content: "";
   position: absolute;
@@ -649,7 +664,7 @@
   filter: saturate(1.05) contrast(1.02);
 }
 
-/* Sheen Animation */
+/* Winner Sheen */
 .db-card-pile.is-winner .db-card-front-card::after {
   content: "";
   position: absolute;
@@ -673,7 +688,7 @@
   100% { left: 200%; opacity: 0; }
 }
 
-/* --- History States (Lost/Won/Refunded) --- */
+/* --- History States --- */
 .db-history-card-wrapper.is-lost .db-card-pile {
   filter: none;
 }
@@ -736,7 +751,7 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* --- Mobile Responsiveness --- */
+/* --- Mobile --- */
 @media (max-width: 600px) {
   .db-hero {
     flex-direction: column;
@@ -779,5 +794,10 @@
   .db-card-pile.is-winner .db-card-front-card::after {
     opacity: 1;
     animation-duration: 2.5s;
+  }
+  .db-live-dot {
+    width: 8px;
+    height: 8px;
+    /* On mobile, we might want even less gap if screen is tiny, but 5px is safe */
   }
 }
