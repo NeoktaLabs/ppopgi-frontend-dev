@@ -1,24 +1,35 @@
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { resolve } from "path";
+import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
+import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill";
 
 export default defineConfig({
   plugins: [react()],
 
-  // Some ledger deps reference `global`
   define: {
     global: "globalThis",
   },
 
-  // Make sure Buffer is injected during dependency pre-bundling
+  resolve: {
+    alias: {
+      buffer: "buffer",
+      process: "process/browser",
+    },
+  },
+
   optimizeDeps: {
-    include: ["buffer", "@ledgerhq/hw-transport-webhid", "@ledgerhq/hw-app-eth"],
     esbuildOptions: {
       define: {
         global: "globalThis",
       },
-      inject: [resolve("node_modules/buffer/index.js")],
+      plugins: [
+        NodeGlobalsPolyfillPlugin({
+          buffer: true,
+          process: true,
+        }),
+        NodeModulesPolyfillPlugin(),
+      ],
     },
   },
 });
