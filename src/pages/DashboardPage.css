@@ -356,32 +356,31 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
-
-  /* ✅ center cards in grid cells */
   justify-items: center;
-  /* ✅ center the whole grid content if not enough cards to fill row */
   justify-content: center;
 }
 
-/* ✅ keep all grid children consistent width + centered */
+/* ✅ FIX: Relax the 100% width rule for wrappers so they can fit-content */
 .db-grid > * {
-  width: 100%;
+  /* width: 100%; <- Removed/Modified to allow wrappers to shrink */
+  width: auto;
   justify-self: center;
 }
 
 .db-empty {
   grid-column: 1 / -1;
-  padding: 80px 20px; /* Increased padding */
+  padding: 80px 20px;
   text-align: center;
-  background: linear-gradient(180deg, #f8fafc 0%, rgba(248, 250, 252, 0) 100%); /* Softer background */
+  background: linear-gradient(180deg, #f8fafc 0%, rgba(248, 250, 252, 0) 100%);
   border-radius: 16px;
   color: #94a3b8;
   font-weight: 600;
-  border: none; /* Removed dashed border */
+  border: none;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  width: 100%; /* Ensure empty state still fills full width */
 }
 
 .db-empty-icon {
@@ -411,10 +410,19 @@
   position: relative;
 }
 
-/* Lift Effect on Hover */
 .db-card-pile-wrapper,
 .db-history-card-wrapper {
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* ✅ FIX: Forces the container to shrink to the size of the card */
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+}
+
+.db-card-pile-wrapper {
+    overflow: visible;
 }
 
 .db-card-pile-wrapper:hover,
@@ -424,7 +432,7 @@
 
 .db-card-pile {
   position: relative;
-  width: 100%;
+  width: 100%; /* Fills the fitted wrapper */
   border-radius: 16px;
   transition: transform 0.3s ease, filter 0.3s ease;
 }
@@ -443,7 +451,7 @@
   background: transparent;
   transform: translateZ(0);
   
-  /* ✅ FIX 1: Mask image forces browser to cut off any overflow (including sheen) */
+  /* Masking to clip sheen animation */
   mask-image: -webkit-radial-gradient(white, black);
   -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
@@ -491,23 +499,16 @@
 .card-hover-trigger:hover .db-card-shadow-3 { transform: translate(14px,16px) rotate(-0.3deg) scale(0.97); }
 .card-hover-trigger:hover .db-card-shadow-4 { transform: translate(18px,21px) rotate(0.8deg) scale(0.96); }
 
-.db-card-pile-wrapper {
-  position: relative;
-  width: 100%;
-  overflow: visible; /* ✅ allow badge outside the card */
-}
-
-/* ✅ NEW: separate overlay layer above the pile */
+/* Overlay Badge Layer */
 .db-mult-badge-layer {
   position: absolute;
   top: -18px;
-  left: -18px; /* ✅ Moved to LEFT */
+  left: -18px;
   right: auto;
-  z-index: 200; /* above pile/shadows */
+  z-index: 200;
   pointer-events: none;
 }
 
-/* ✅ badge itself is no longer positioned */
 .db-mult-badge {
   position: relative;
   z-index: 1;
@@ -533,6 +534,7 @@
   z-index: 10;
 }
 
+/* The Golden Outline */
 .db-card-pile.is-winner::before {
   content: "";
   position: absolute;
@@ -567,7 +569,7 @@
   filter: saturate(1.05) contrast(1.02);
 }
 
-/* ✅ FIX 2: Sheen animation now starts further back and is wider */
+/* Sheen Animation */
 .db-card-pile.is-winner .db-card-front-card::after {
   content: "";
   position: absolute;
@@ -584,7 +586,6 @@
   animation: winner-sheen 3.5s infinite;
 }
 
-/* ✅ FIX 3: Opacity fades out to prevent ghost lines on the right */
 @keyframes winner-sheen {
   0% { left: -200%; opacity: 0; }
   10% { opacity: 1; }
@@ -609,8 +610,6 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100%;
-  position: relative;
 }
 
 .db-history-badge {
@@ -660,10 +659,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px; /* ✅ Added Spacing */
+  gap: 10px;
 }
 
-/* Green text when active */
 .db-tab.active .db-tab-live {
   color: #22c55e;
   text-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
@@ -675,7 +673,7 @@
   border-radius: 999px;
   background: #22c55e;
   display: inline-block;
-  margin-right: 0; /* ✅ Removed margin (gap handles it now) */
+  margin-right: 0;
   position: relative;
   top: -1px;
   box-shadow: 0 0 0 0 rgba(34,197,94,0.55);
@@ -718,19 +716,15 @@
     display: flex;
     width: max-content;
   }
-
-  /* ✅ mobile: move the overlay layer to LEFT */
   .db-mult-badge-layer {
     top: -14px;
     left: -14px;
     right: auto;
   }
-
   .db-mult-badge {
     font-size: 24px;
     padding: 10px 14px;
   }
-
   .db-card-pile.is-winner .db-card-front-card::after {
     opacity: 1;
     animation-duration: 2.5s;
@@ -738,6 +732,6 @@
   .db-live-dot {
     width: 8px;
     height: 8px;
-    margin-right: 0; /* ✅ Removed margin */
+    margin-right: 0;
   }
 }
