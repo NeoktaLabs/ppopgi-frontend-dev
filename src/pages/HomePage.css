@@ -189,7 +189,7 @@
   margin-top: 2px;
 }
 
-/* --- TOP ACTIVE (Projector Light Style) --- */
+/* --- TOP ACTIVE (Strong Projector Light) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -204,18 +204,16 @@
   padding-top: 50px;
 }
 
-/* Wrapper Base */
+/* Wrapper Base - No animations, just static strength */
 .pp-gold-wrapper,
 .pp-silver-wrapper,
 .pp-bronze-wrapper {
   position: relative;
   transition: transform 0.2s ease;
   border-radius: 16px;
-  
-  /* The "Projector" effect comes from box-shadow below */
 }
 
-/* --- BADGES (#1, #2, #3) --- */
+/* --- BADGES --- */
 .pp-gold-wrapper::before,
 .pp-silver-wrapper::before,
 .pp-bronze-wrapper::before {
@@ -239,13 +237,16 @@
 }
 
 /* --- GOLD (#1) --- */
-/* Warm Gold Uplight */
 .pp-gold-wrapper {
   z-index: 10;
   transform: scale(1.1); 
-  /* Colored Shadow at BOTTOM */
-  box-shadow: 0 35px 60px -15px rgba(251, 191, 36, 0.6);
-  border-bottom: 2px solid rgba(251, 191, 36, 0.6);
+  
+  /* ✅ VISIBLE LIGHT: Thick bottom border + Deep Glow */
+  border-bottom: 6px solid #fbbf24;
+  box-shadow: 0 30px 80px -10px rgba(251, 191, 36, 0.8);
+  
+  /* ✅ UPLIGHT EFFECT: Gradient on card itself */
+  background: linear-gradient(to top, rgba(251, 191, 36, 0.2) 0%, rgba(255,255,255,0) 35%);
 }
 
 .pp-gold-wrapper::before {
@@ -255,12 +256,16 @@
 }
 
 /* --- SILVER (#2) --- */
-/* Cool Silver/Blue Uplight */
 .pp-silver-wrapper {
   z-index: 5;
   transform: scale(0.95);
-  box-shadow: 0 35px 60px -15px rgba(148, 163, 184, 0.5);
-  border-bottom: 2px solid rgba(148, 163, 184, 0.5);
+  
+  /* Silver Light */
+  border-bottom: 6px solid #94a3b8;
+  box-shadow: 0 30px 80px -10px rgba(148, 163, 184, 0.7);
+  
+  /* Silver Uplight */
+  background: linear-gradient(to top, rgba(148, 163, 184, 0.2) 0%, rgba(255,255,255,0) 35%);
 }
 
 .pp-silver-wrapper::before {
@@ -270,12 +275,16 @@
 }
 
 /* --- BRONZE (#3) --- */
-/* Warm Bronze/Orange Uplight */
 .pp-bronze-wrapper {
   z-index: 5;
   transform: scale(0.95);
-  box-shadow: 0 35px 60px -15px rgba(217, 119, 6, 0.4);
-  border-bottom: 2px solid rgba(217, 119, 6, 0.4);
+  
+  /* Bronze Light */
+  border-bottom: 6px solid #d97706;
+  box-shadow: 0 30px 80px -10px rgba(217, 119, 6, 0.6);
+  
+  /* Bronze Uplight */
+  background: linear-gradient(to top, rgba(217, 119, 6, 0.15) 0%, rgba(255,255,255,0) 35%);
 }
 
 .pp-bronze-wrapper::before {
@@ -285,7 +294,7 @@
   text-shadow: 0 1px 0 rgba(255,255,255,0.3);
 }
 
-/* Hover: Simple lift */
+/* Simple Hover Lift */
 .pp-silver-wrapper:hover,
 .pp-bronze-wrapper:hover,
 .pp-gold-wrapper:hover {
@@ -416,17 +425,16 @@
   .pp-gold-wrapper,
   .pp-silver-wrapper,
   .pp-bronze-wrapper {
+    transform: none;
     width: 100%;
     max-width: 320px;
     opacity: 1;
-    /* Reset Scale for mobile list */
-    transform: none; 
   }
   
   .pp-gold-wrapper {
     order: -1; 
     margin-bottom: 15px;
-    transform: scale(1.02); /* Keep gold slightly prominent */
+    transform: scale(1.02); /* Keep gold slightly bigger */
   }
 
   /* Disable hover lift on mobile */
