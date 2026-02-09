@@ -340,6 +340,8 @@
 .cm-bridge-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(74, 15, 43, 0.35);
+  /* Ensure hover stays distinct */
+  background: linear-gradient(135deg, #6D1641, #9A2A58);
 }
 
 .cm-bridge-footnote {
@@ -355,17 +357,15 @@
 
 /* 1. Force the Widget Background to Light Pink */
 .cm-widget-wrap > div {
-  /* This targets the thirdweb internal container */
   background: linear-gradient(180deg, #fff0f5 0%, #ffffff 100%) !important;
   --tw-modal-bg: #fff0f5 !important;
   --tw-accent-bg: #fff0f5 !important;
 }
 
-/* 2. Force the Buy Button to Ppopgi Pink (Deep Brand Color) */
+/* 2. Force the Buy Button to Ppopgi Pink */
 .cm-widget-wrap button[data-variant="primary"],
 .cm-widget-wrap button[type="submit"],
 .cm-widget-wrap .tw-button-primary,
-/* Catch generic thirdweb buttons */
 div[class*="BuyButton"] button {
   background: linear-gradient(135deg, #4A0F2B, #701a40) !important;
   color: white !important;
@@ -375,15 +375,19 @@ div[class*="BuyButton"] button {
   box-shadow: 0 4px 10px rgba(74, 15, 43, 0.3) !important;
 }
 
-/* Hover state for button */
+/* ✅ FIX: Force Hover State colors to prevent "White Hover" */
 .cm-widget-wrap button[data-variant="primary"]:hover,
-.cm-widget-wrap .tw-button-primary:hover {
-  opacity: 0.9 !important;
+.cm-widget-wrap .tw-button-primary:hover,
+div[class*="BuyButton"] button:hover {
+  /* Override thirdweb default that makes it white */
+  background: linear-gradient(135deg, #6D1641, #9A2A58) !important; 
+  color: white !important;
+  opacity: 1 !important;
   transform: translateY(-1px) !important;
   box-shadow: 0 6px 14px rgba(74, 15, 43, 0.4) !important;
 }
 
-/* 3. Style Inputs to pop against the pink background */
+/* 3. Style Inputs */
 .cm-widget-wrap input {
   background: #ffffff !important;
   border: 1px solid rgba(74, 15, 43, 0.1) !important;
@@ -391,10 +395,10 @@ div[class*="BuyButton"] button {
   font-weight: 700 !important;
 }
 
-/* 4. Secondary text color adjustment */
+/* 4. Text Color */
 .cm-widget-wrap p, 
 .cm-widget-wrap span {
-  color: #4A0F2B !important; /* Force text to match brand */
+  color: #4A0F2B !important;
   opacity: 0.8;
 }
 
