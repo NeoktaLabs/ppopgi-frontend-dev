@@ -8,7 +8,7 @@ import {
   fetchMyJoinedRaffleIds,
   fetchMyJoinedRaffleIdsFromEvents,
   fetchRafflesByIds,
-  fetchRaffleParticipants, // ✅ NEW
+  fetchRaffleParticipants,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -43,7 +43,7 @@ const RAFFLE_DASH_ABI = [
 
 type JoinedRaffleItem = RaffleListItem & {
   userTicketsOwned: string; // bigint string (on-chain current balance)
-  userTicketsBought?: string; // ✅ NEW: historical purchased count (subgraph)
+  userTicketsBought?: string; // historical purchased count (subgraph lookup)
 };
 
 type ClaimableItem = {
@@ -51,7 +51,7 @@ type ClaimableItem = {
   claimableUsdc: string; // bigint string
   claimableNative: string; // bigint string
   type: "WIN" | "REFUND" | "OTHER";
-  roles: { participated?: boolean; created?: boolean };
+  roles: { participated?: boolean; created?: boolean; feeRecipient?: boolean };
   userTicketsOwned?: string;
 };
 
@@ -143,7 +143,7 @@ export function useDashboardController() {
 
   const runIdRef = useRef(0);
 
-  // ✅ NEW: cache for "tickets bought" lookups (per page load)
+  // cache for "tickets bought" lookups (per page load)
   const boughtCacheRef = useRef<Map<string, string>>(new Map());
 
   // Reset on wallet change
@@ -151,7 +151,7 @@ export function useDashboardController() {
     lastJoinedIdsRef.current = null;
     joinedIdsPromiseRef.current = null;
     joinedBackoffMsRef.current = 0;
-    boughtCacheRef.current = new Map(); // ✅ NEW
+    boughtCacheRef.current = new Map();
     setHiddenClaimables({});
     setMsg(null);
     setCreated([]);
@@ -160,9 +160,8 @@ export function useDashboardController() {
   }, [account]);
 
   /**
-   * ✅ Everyone awaits the SAME in-flight promise.
-   * ✅ Participants first; events only if participants returns empty.
-   * ✅ No maxPages param (avoids TS errors).
+   * Everyone awaits the SAME in-flight promise.
+   * Participants first; events only if participants returns empty.
    */
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
     if (!account) return new Set<string>();
@@ -260,6 +259,9 @@ export function useDashboardController() {
 
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
+        // ✅ NEW: raffles where I am feeRecipient (platform fees)
+        const myFeeRaffles = allRaffles.filter((r) => r.feeRecipient?.toLowerCase() === myAddr);
+
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
@@ -268,11 +270,10 @@ export function useDashboardController() {
         const joinedBaseFromStore =
           joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
-        // ✅ Always update created (cheap / no flicker)
+        // Always update created
         setCreated(myCreated);
 
-        // ✅ IMPORTANT: Don't "paint 0 tickets" on background refresh.
-        // Only do this on a true cold load where we have no joined yet.
+        // Don't paint 0 tickets on background refresh. Only do on cold load.
         const hasJoinedAlready = joined.length > 0;
         if (!hasJoinedAlready) {
           setJoined(joinedBaseFromStore.map((r) => ({ ...r, userTicketsOwned: "0" })));
@@ -310,8 +311,7 @@ export function useDashboardController() {
 
         if (runId !== runIdRef.current) return;
 
-        // ✅ NEW: compute "tickets bought" only for canceled raffles that show 0 owned,
-        // so dashboard can still display historical participation after refunds.
+        // compute "tickets bought" only for canceled raffles that show 0 owned
         const boughtByRaffleId = new Map<string, string>();
         const boughtCache = boughtCacheRef.current;
 
@@ -319,11 +319,9 @@ export function useDashboardController() {
           if (r.status !== "CANCELED") return false;
           const rid = normId(r.id);
           const owned = ownedByRaffleId.get(rid) ?? "0";
-          // Only if joined + owned is 0 (typical after refund)
           return joinedIds.has(rid) && owned === "0";
         });
 
-        // Hard cap to protect indexer
         const canceledToFetch = canceledNeedingBought.slice(0, 40);
 
         // Fill from cache first
@@ -339,7 +337,6 @@ export function useDashboardController() {
         await mapPool(toFetch, 6, async (r) => {
           const rid = normId(r.id);
           try {
-            // fetch top participants (default 50) and find me
             const rows = await fetchRaffleParticipants(rid);
             const mine = rows.find((p) => String(p.buyer || "").toLowerCase() === myAddr);
             const bought = BigInt(mine?.ticketsPurchased || "0");
@@ -359,27 +356,25 @@ export function useDashboardController() {
           return {
             ...r,
             userTicketsOwned: ownedByRaffleId.get(rid) ?? "0",
-            userTicketsBought: boughtByRaffleId.get(rid), // ✅ NEW (undefined unless computed)
+            userTicketsBought: boughtByRaffleId.get(rid),
           };
         });
 
-        // ✅ Only update joined if it actually changed (prevents tiny “refresh” feeling)
         setJoined((prev) => {
           if (prev.length !== nextJoined.length) return nextJoined;
           for (let i = 0; i < prev.length; i++) {
             if (normId(prev[i].id) !== normId(nextJoined[i].id)) return nextJoined;
             if (String(prev[i].userTicketsOwned) !== String(nextJoined[i].userTicketsOwned)) return nextJoined;
-
-            // ✅ NEW: compare bought too
             if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? "")) return nextJoined;
           }
           return prev;
         });
 
-        // Claimables: only real actions
+        // ✅ Claimables: include feeRecipient raffles too
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
+        myFeeRaffles.forEach((r) => candidateById.set(normId(r.id), r)); // ✅ NEW
 
         const uniqueCandidates = Array.from(candidateById.values());
         uniqueCandidates.sort((a, b) => {
@@ -389,7 +384,7 @@ export function useDashboardController() {
           return Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0");
         });
 
-        const candidates = uniqueCandidates.slice(0, 400);
+        const candidates = uniqueCandidates.slice(0, 600); // slightly higher, since feeRecipient adds more
         const newClaimables: ClaimableItem[] = [];
 
         await mapPool(candidates, 10, async (r) => {
@@ -417,6 +412,7 @@ export function useDashboardController() {
           const roles = {
             created: r.creator?.toLowerCase() === myAddr,
             participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
+            feeRecipient: r.feeRecipient?.toLowerCase() === myAddr, // ✅ NEW
           };
 
           const isWinnerEligible =
@@ -569,7 +565,6 @@ export function useDashboardController() {
     await recompute(false);
   };
 
-  // Optional UI flags (do not break existing callers)
   const hasBootstrapped = !!store.items;
   const isColdLoading = !hasBootstrapped && (localPending || store.isLoading);
   const isRefreshing = hasBootstrapped && store.isLoading;
