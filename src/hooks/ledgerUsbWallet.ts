@@ -181,7 +181,9 @@ async function createLedgerEip1193Provider(opts: {
           // gas
           const gasHex = await resolveGasHex(s, tx);
           const gasBi = toBigIntLoose(gasHex);
-          if (gasBi == null || gasBi <= 0n) throw new Error("Internal error: resolved gas is 0.");
+          if (gasBi == null || gasBi <= 0n) {
+            throw new Error(`BUG: resolved gas is 0 (gasHex=${String(gasHex)}).`);
+          }
 
           // fees
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
@@ -196,7 +198,7 @@ async function createLedgerEip1193Provider(opts: {
             (maxFeePerGasHex && !isZeroHex(maxFeePerGasHex)) ||
             (maxPriorityFeePerGasHex && !isZeroHex(maxPriorityFeePerGasHex));
 
-          // ✅ KEEP PLAIN TX DATA OBJECT (don’t spread a Transaction instance)
+          // ✅ Keep plain tx data object
           const txData: any = {
             type: is1559 ? 2 : 0,
             chainId,
@@ -215,6 +217,11 @@ async function createLedgerEip1193Provider(opts: {
                 }),
           };
 
+          // Hard stop before signing
+          if (!txData.gasLimit || txData.gasLimit === 0n) {
+            throw new Error("BUG: txData.gasLimit is 0 before signing.");
+          }
+
           const unsignedTx = Transaction.from(txData);
 
           const rawTxHex = unsignedTx.unsignedSerialized.startsWith("0x")
@@ -228,20 +235,27 @@ async function createLedgerEip1193Provider(opts: {
             nft: false,
           });
 
+          // ✅ SIGN
           const sig = await s.eth.signTransaction(s.path, rawTxHex, resolution);
 
-          const v = BigInt("0x" + sig.v);
+          // ✅ FIX: typed txs want yParity (0/1). Ledger may return v in other forms.
+          const vNum = Number(BigInt("0x" + sig.v));
+          const yParity = vNum === 0 || vNum === 1 ? vNum : vNum % 2;
+
           const r = "0x" + sig.r;
           const sSig = "0x" + sig.s;
 
-          const signature = Signature.from({ v, r, s: sSig });
+          const signature = Signature.from({ r, s: sSig, yParity });
 
-          // ✅ Build signed tx from txData + signature (NOT from spreading unsignedTx)
+          // ✅ Build signed tx from txData + signature
           const signedTx = Transaction.from({ ...txData, signature }).serialized;
 
+          // Decode and verify
           const decoded = Transaction.from(signedTx);
           if (!decoded.gasLimit || decoded.gasLimit === 0n) {
-            throw new Error("BUG: signed tx gasLimit is 0. Refusing to broadcast.");
+            throw new Error(
+              `BUG: signed tx gasLimit is 0. Refusing to broadcast. (txData.gasLimit=${txData.gasLimit.toString()})`
+            );
           }
 
           return await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
