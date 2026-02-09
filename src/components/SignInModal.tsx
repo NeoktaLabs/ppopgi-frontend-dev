@@ -26,13 +26,23 @@ export function SignInModal({ open, onClose }: Props) {
   const { disconnect } = useDisconnect();
   const { connect, isConnecting } = useConnect();
 
-  const { connectLedgerUsb, isSupported, isConnecting: isLedgerConnecting, error: ledgerError } =
-    useLedgerUsbWallet();
+  const {
+    connectLedgerUsb,
+    isSupported: isLedgerSupported,
+    isConnecting: isLedgerConnecting,
+    error: ledgerError,
+  } = useLedgerUsbWallet();
 
   const [localError, setLocalError] = useState("");
 
-  const combinedError = useMemo(() => localError || ledgerError || "", [localError, ledgerError]);
+  const errorMessage = useMemo(
+    () => localError || ledgerError || "",
+    [localError, ledgerError]
+  );
 
+  /**
+   * Sync session + auto-close after successful connection
+   */
   useEffect(() => {
     if (!open) return;
     if (!account?.address) return;
@@ -50,12 +60,17 @@ export function SignInModal({ open, onClose }: Props) {
     if (open) setLocalError("");
   }, [open]);
 
+  /**
+   * Ledger USB connect (WebHID)
+   */
   const onConnectLedgerUsb = async () => {
     setLocalError("");
     try {
       await connect(async () => {
-        const w = await connectLedgerUsb({ client: thirdwebClient, chain: ETHERLINK_CHAIN });
-        return w;
+        return await connectLedgerUsb({
+          client: thirdwebClient,
+          chain: ETHERLINK_CHAIN,
+        });
       });
     } catch (e: any) {
       setLocalError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
@@ -67,6 +82,7 @@ export function SignInModal({ open, onClose }: Props) {
   return (
     <div className="sim-overlay" onMouseDown={onClose}>
       <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="sim-header">
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
@@ -77,31 +93,47 @@ export function SignInModal({ open, onClose }: Props) {
           </button>
         </div>
 
+        {/* Body */}
         <div className="sim-body">
+          {/* Ledger USB section */}
           <div className="sim-ledger-section">
             <button
               className="sim-ledger-btn"
               onClick={onConnectLedgerUsb}
-              disabled={!isSupported || isConnecting || isLedgerConnecting}
-              title={!isSupported ? "Ledger USB requires Chrome/Edge/Brave (WebHID)." : ""}
+              disabled={
+                !isLedgerSupported ||
+                isConnecting ||
+                isLedgerConnecting
+              }
+              title={
+                !isLedgerSupported
+                  ? "Ledger USB requires Chrome, Edge, or Brave (WebHID)"
+                  : ""
+              }
             >
               {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
               <span className="sim-ledger-badge">Chromium</span>
             </button>
 
-            {!isSupported && (
+            {!isLedgerSupported && (
               <div className="sim-ledger-hint">
-                Ledger USB needs Chrome/Edge/Brave. Plug your Ledger, open the Ethereum app, then retry.
+                Ledger USB requires Chrome, Edge, or Brave.
+                <br />
+                Plug in your Ledger, unlock it, and open the Ethereum app.
               </div>
             )}
 
-            {combinedError && <div className="sim-error">{combinedError}</div>}
+            {errorMessage && (
+              <div className="sim-error">{errorMessage}</div>
+            )}
           </div>
 
+          {/* Divider */}
           <div className="sim-divider">
             <span>or</span>
           </div>
 
+          {/* Thirdweb embed */}
           <div className="sim-embed-wrapper">
             <ConnectEmbed
               client={thirdwebClient}
@@ -118,6 +150,7 @@ export function SignInModal({ open, onClose }: Props) {
             />
           </div>
 
+          {/* Footer */}
           <div className="sim-footer">
             <div className="sim-note">
               By connecting, you agree to the rules of the raffle.
@@ -126,7 +159,10 @@ export function SignInModal({ open, onClose }: Props) {
             </div>
 
             {wallet && (
-              <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
+              <button
+                className="sim-disconnect-btn"
+                onClick={() => disconnect(wallet)}
+              >
                 Disconnect current session
               </button>
             )}
