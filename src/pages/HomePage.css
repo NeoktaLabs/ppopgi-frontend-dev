@@ -12,7 +12,7 @@
 /* Reduced from 100px to 60px. Adjust this if it overlaps your TopNav. */
 .hp-board-section {
   max-width: 1400px;
-  margin: 60px auto 20px auto; 
+  margin: 20px auto 20px auto; 
   padding: 0 20px;
 }
 
