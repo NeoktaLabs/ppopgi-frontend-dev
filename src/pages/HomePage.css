@@ -8,32 +8,33 @@
   overflow-x: hidden;
 }
 
-/* ✅ NEW: Positioning the Activity Board closer to TopNav */
+/* ✅ UPDATED: Activity Board Positioning */
+/* 100px Top Margin = ~80px Header Height + 20px Gap */
 .hp-board-section {
   max-width: 1400px;
-  margin: 110px auto 20px auto; /* 110px clears the TopNav */
+  margin: 100px auto 20px auto; 
   padding: 0 20px;
 }
 
-/* --- HERO --- */
+/* --- HERO (Enhanced) --- */
 .hp-hero {
   text-align: center;
   padding: 80px 20px 120px 20px;
   margin-bottom: -80px;
   
-  /* Breathing Gradient */
+  /* Breathing Gradient Background */
   background: linear-gradient(-45deg, rgba(255,255,255,0.9), #fff0f5, #fce7f3, #ffffff);
   background-size: 400% 400%;
   animation: hp-breathing 15s ease infinite;
 
-  /* ✅ CHANGED: Increased border-radius to match Explore/FAQ sheets */
+  /* ✅ UPDATED: Rounded Corners (Matches Explore/FAQ) */
   border-radius: 32px; 
   
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
   position: relative;
   overflow: hidden;
   
-  /* Ensure it has a margin to separate from Board */
+  /* Reset top margin since Board handles the spacing now */
   margin-top: 0; 
 }
 
@@ -68,7 +69,7 @@
   color: #4A0F2B;
 }
 
-/* ✅ PROFESSIONAL ACTION BUTTONS */
+/* --- ACTION BUTTONS (Solid/Pro Style) --- */
 .hp-hero-actions {
   display: flex;
   justify-content: center;
