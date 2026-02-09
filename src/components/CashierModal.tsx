@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { useCashierData } from "../hooks/useCashierData";
 import "./CashierModal.css";
 
-// ✅ thirdweb widget
 import { BuyWidget } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
@@ -44,7 +43,6 @@ export function CashierModal({ open, onClose }: Props) {
   return (
     <div className="cm-overlay" onMouseDown={onClose}>
       <div className="cm-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="cm-header">
           <h3 className="cm-title">Cashier</h3>
           <button className="cm-close-btn" onClick={onClose}>
@@ -53,7 +51,6 @@ export function CashierModal({ open, onClose }: Props) {
         </div>
 
         <div className="cm-body">
-          {/* Address Pill */}
           <div className="cm-address-row">
             <div
               className="cm-avatar-circle"
@@ -80,7 +77,6 @@ export function CashierModal({ open, onClose }: Props) {
 
           {state.note && <div className="cm-alert">⚠️ {state.note}</div>}
 
-          {/* Balance Cards */}
           <div className="cm-balance-section">
             <div className="cm-section-label">Assets on Etherlink</div>
 
@@ -105,7 +101,6 @@ export function CashierModal({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="cm-tabs3">
             <button className={`cm-tab3 ${tab === "buy_usdc" ? "active" : ""}`} onClick={() => setTab("buy_usdc")}>
               Buy USDC
@@ -118,10 +113,9 @@ export function CashierModal({ open, onClose }: Props) {
             </button>
           </div>
 
-          {/* Content Area */}
           <div className="cm-widget-shell">
             {tab === "buy_usdc" && (
-              <div className="cm-widget-wrap cm-tw-scope">
+              <div className="cm-widget-wrap">
                 <BuyWidget
                   key="buy_usdc"
                   client={thirdwebClient}
@@ -139,7 +133,7 @@ export function CashierModal({ open, onClose }: Props) {
             )}
 
             {tab === "buy_xtz" && (
-              <div className="cm-widget-wrap cm-tw-scope">
+              <div className="cm-widget-wrap">
                 <BuyWidget
                   key="buy_xtz"
                   client={thirdwebClient}
