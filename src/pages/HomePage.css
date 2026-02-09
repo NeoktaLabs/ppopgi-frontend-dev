@@ -3,22 +3,24 @@
 .hp-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 0;
+  /* ✅ CHANGED: Removed top padding to control gap via margins */
+  padding: 0 0 20px 0;
   color: #4A0F2B;
   overflow-x: hidden;
 }
 
-/* ✅ UPDATED: Force Activity Board Position */
+/* ✅ UPDATED: Activity Board Positioning */
 .hp-board-section {
   max-width: 1400px;
-  /* Use !important to override any cached/collapsing margins */
+  /* 20px top (optional depending on nav), 20px bottom exactly */
   margin: 20px auto 20px auto !important; 
   padding: 0 20px;
 }
 
-/* Ensure the ActivityBoard inside doesn't push itself down */
+/* Ensure inner content doesn't add extra space */
 .hp-board-section > * {
   margin-top: 0;
+  margin-bottom: 0;
 }
 
 /* --- HERO (Enhanced) --- */
@@ -73,7 +75,7 @@
   color: #4A0F2B;
 }
 
-/* --- ACTION BUTTONS --- */
+/* --- ACTION BUTTONS (Solid/Pro Style) --- */
 .hp-hero-actions {
   display: flex;
   justify-content: center;
@@ -198,7 +200,7 @@
   margin-top: 2px;
 }
 
-/* --- PODIUM --- */
+/* --- PODIUM (FLAT & CLEAN VERSION) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -208,66 +210,46 @@
 .hp-podium {
   display: flex;
   justify-content: center;
-  align-items: flex-end;
-  gap: 0px;
+  align-items: flex-end; /* Align bottoms */
+  gap: 24px; /* Standard spacing */
   padding-top: 40px;
-  perspective: 1000px;
+  /* Removed perspective/3D */
 }
 
+/* Common Styles for Podium Cards */
 .pp-gold-wrapper,
 .pp-silver-wrapper,
 .pp-bronze-wrapper {
   position: relative;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); 
+  transition: transform 0.3s ease;
+  /* No more 3D rotation */
 }
 
+/* Gold: Slightly larger, centered */
 .pp-gold-wrapper {
   z-index: 10;
-  transform: scale(1.15) translateY(-20px);
+  transform: scale(1.05); /* Just a size bump */
   border-radius: 14px;
-  box-shadow: 0 30px 60px -15px rgba(255, 180, 50, 0.4);
-}
-.pp-gold-wrapper::after {
-  content: "";
-  position: absolute;
-  top: 0; left: -150%; width: 150%; height: 100%;
-  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.4) 50%, transparent 80%);
-  transform: skewX(-20deg);
-  pointer-events: none;
-  border-radius: 14px;
-  animation: gold-shimmer 6s infinite;
-}
-@keyframes gold-shimmer {
-  0%, 90% { left: -150%; } 
-  100% { left: 150%; } 
+  box-shadow: 0 20px 50px -10px rgba(255, 180, 50, 0.3); /* Golden glow */
 }
 
-.pp-silver-wrapper {
-  z-index: 5;
-  transform: scale(0.9) translateX(30px) rotateY(15deg);
-  opacity: 0.95;
-  filter: brightness(0.98);
-}
-.pp-silver-wrapper:hover {
-  transform: scale(0.95) translateX(15px) rotateY(5deg);
-  z-index: 11;
-  filter: brightness(1);
-  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
-}
-
+/* Silver & Bronze: Standard size */
+.pp-silver-wrapper,
 .pp-bronze-wrapper {
   z-index: 5;
-  transform: scale(0.9) translateX(-30px) rotateY(-15deg);
+  transform: scale(0.95);
   opacity: 0.95;
-  filter: brightness(0.98);
-}
-.pp-bronze-wrapper:hover {
-  transform: scale(0.95) translateX(-15px) rotateY(-5deg);
-  z-index: 11;
-  filter: brightness(1);
-  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
 }
 
+/* Slight lift on hover (optional, much more subtle now) */
+.pp-silver-wrapper:hover,
+.pp-bronze-wrapper:hover,
+.pp-gold-wrapper:hover {
+  transform: translateY(-5px) scale(1);
+  z-index: 12;
+}
+
+/* Mobile: Stack them */
 @media (max-width: 850px) {
   .hp-podium {
     flex-direction: column;
@@ -275,18 +257,25 @@
     gap: 30px;
     margin-top: 40px;
   }
-  .pp-gold-wrapper {
-    transform: scale(1.1);
-    order: -1;
-    margin-bottom: 20px;
-  }
+  
+  /* Reset scaling for mobile list view */
+  .pp-gold-wrapper,
   .pp-silver-wrapper,
   .pp-bronze-wrapper {
     transform: none;
-    opacity: 1;
+    width: 100%;
+    max-width: 320px;
   }
+  
+  .pp-gold-wrapper {
+    order: -1; /* Gold first */
+    margin-bottom: 10px;
+    box-shadow: 0 10px 30px -5px rgba(255, 180, 50, 0.25);
+  }
+  
   .pp-silver-wrapper:hover,
-  .pp-bronze-wrapper:hover {
+  .pp-bronze-wrapper:hover,
+  .pp-gold-wrapper:hover {
     transform: translateY(-5px);
   }
 }
