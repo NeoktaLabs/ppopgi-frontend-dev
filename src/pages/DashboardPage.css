@@ -7,9 +7,8 @@
   color: #1e293b;
 }
 
-/* --- Hero Section (Updated with Animation) --- */
+/* --- Hero Section (Animated) --- */
 .db-hero {
-  /* ✅ NEW: Animated Gradient Background */
   background: linear-gradient(-45deg, #ffffff, #f8fafc, #f1f5f9, #ffffff);
   background-size: 400% 400%;
   animation: hero-breathing 15s ease infinite;
@@ -28,7 +27,6 @@
   overflow: hidden;
 }
 
-/* The slow background movement */
 @keyframes hero-breathing {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -105,7 +103,6 @@
   cursor: default;
 }
 
-/* Subtle hover pop on stats */
 .db-stat:hover {
   transform: translateY(-2px);
 }
@@ -320,7 +317,7 @@
   overflow: hidden;
 }
 
-/* Liquid Sheen on Primary Button */
+/* Liquid Sheen */
 .db-btn.primary::after {
   content: "";
   position: absolute;
@@ -398,12 +395,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  
-  /* ✅ CHANGED: Reduced space from 10px to 5px */
+  /* Reduced gap */
   gap: 5px; 
 }
 
-/* Green Text Pulse on Live Tab */
 .db-tab.active .db-tab-live {
   color: #22c55e;
   text-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
@@ -435,12 +430,16 @@
 .db-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  
+  /* ✅ CHANGED: Increased gap to accommodate Ticket Stubs */
   gap: 20px;
+  row-gap: 40px;
+  
   justify-items: center;
   justify-content: center;
 }
 
-/* Staggered Entrance Animation */
+/* Staggered Entrance */
 @keyframes db-fade-up {
   from { opacity: 0; transform: translateY(15px); }
   to { opacity: 1; transform: translateY(0); }
@@ -544,12 +543,11 @@
   background: transparent;
   transform: translateZ(0);
   
-  /* Masking forces browser to clip sheen animation */
   mask-image: -webkit-radial-gradient(white, black);
   -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
-/* --- Shadows & Fan Out Effect --- */
+/* --- Shadows & Fan Out --- */
 .db-card-shadow {
   position: absolute;
   inset: 0;
@@ -594,34 +592,40 @@
 .card-hover-trigger:hover .db-card-shadow-3 { transform: translate(36px, 15px) rotate(-9deg) scale(0.97); }
 .card-hover-trigger:hover .db-card-shadow-4 { transform: translate(48px, 20px) rotate(-12deg) scale(0.96); }
 
-/* --- Badge Overlay --- */
+/* --- Badge Overlay (Ticket Stub) --- */
 .db-mult-badge-layer {
   position: absolute;
-  top: -18px;
-  left: -18px;
-  right: auto;
-  z-index: 200;
+  /* ✅ CHANGED: Move to Top Right & Stick Out */
+  top: -26px; 
+  right: 16px; 
+  left: auto; 
+  z-index: 5;
   pointer-events: none;
+  transform: rotate(2deg);
 }
 
 .db-mult-badge {
   position: relative;
   z-index: 1;
   pointer-events: none;
-  font-weight: 1000;
-  font-size: 30px;
-  letter-spacing: -0.9px;
-  color: #0f172a;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  border-radius: 999px;
-  padding: 12px 18px;
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.16);
-}
-
-.db-mult-badge.is-one {
-  opacity: 0.65;
-  transform: scale(0.92);
+  
+  /* Ticket Stub Styling */
+  color: #78350f;
+  font-family: "Courier New", monospace;
+  font-weight: 800;
+  text-transform: uppercase;
+  line-height: 1;
+  
+  background: #fef3c7;
+  border: 1px solid #d97706;
+  border-bottom: 2px dashed #d97706; /* Perforation */
+  
+  padding: 6px 10px 4px 10px;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+  
+  display: flex;
+  align-items: baseline;
 }
 
 /* --- Winner / Golden Ticket Styles --- */
@@ -664,7 +668,6 @@
   filter: saturate(1.05) contrast(1.02);
 }
 
-/* Winner Sheen */
 .db-card-pile.is-winner .db-card-front-card::after {
   content: "";
   position: absolute;
@@ -782,14 +785,14 @@
     display: flex;
     width: max-content;
   }
+  /* Adjusted mobile position for Ticket Stub */
   .db-mult-badge-layer {
-    top: -14px;
-    left: -14px;
-    right: auto;
+    top: -22px;
+    right: 12px;
   }
   .db-mult-badge {
-    font-size: 24px;
-    padding: 10px 14px;
+    padding: 5px 8px 3px 8px;
+    font-size: 11px;
   }
   .db-card-pile.is-winner .db-card-front-card::after {
     opacity: 1;
@@ -798,6 +801,5 @@
   .db-live-dot {
     width: 8px;
     height: 8px;
-    /* On mobile, we might want even less gap if screen is tiny, but 5px is safe */
   }
 }
