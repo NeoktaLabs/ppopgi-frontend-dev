@@ -8,16 +8,24 @@
   overflow-x: hidden;
 }
 
-/* Activity Board Positioning */
+/* ✅ UPDATED: Activity Board Positioning & Centering */
 .hp-board-section {
   max-width: 1400px;
   margin: 20px auto 20px auto !important; 
   padding: 0 20px;
+  
+  /* ✅ FIX: Flexbox forces the board to be perfectly centered */
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hp-board-section > * {
   margin-top: 0;
   margin-bottom: 0;
+  /* Ensure the board itself doesn't overflow or stay fixed */
+  max-width: 100%;
 }
 
 /* --- HERO --- */
@@ -189,7 +197,7 @@
   margin-top: 2px;
 }
 
-/* --- TOP ACTIVE (Strong Projector Light) --- */
+/* --- TOP ACTIVE (Projector Light Style) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -204,7 +212,7 @@
   padding-top: 50px;
 }
 
-/* Wrapper Base - No animations, just static strength */
+/* Wrapper Base */
 .pp-gold-wrapper,
 .pp-silver-wrapper,
 .pp-bronze-wrapper {
@@ -240,12 +248,8 @@
 .pp-gold-wrapper {
   z-index: 10;
   transform: scale(1.1); 
-  
-  /* ✅ VISIBLE LIGHT: Thick bottom border + Deep Glow */
   border-bottom: 6px solid #fbbf24;
   box-shadow: 0 30px 80px -10px rgba(251, 191, 36, 0.8);
-  
-  /* ✅ UPLIGHT EFFECT: Gradient on card itself */
   background: linear-gradient(to top, rgba(251, 191, 36, 0.2) 0%, rgba(255,255,255,0) 35%);
 }
 
@@ -259,12 +263,8 @@
 .pp-silver-wrapper {
   z-index: 5;
   transform: scale(0.95);
-  
-  /* Silver Light */
   border-bottom: 6px solid #94a3b8;
   box-shadow: 0 30px 80px -10px rgba(148, 163, 184, 0.7);
-  
-  /* Silver Uplight */
   background: linear-gradient(to top, rgba(148, 163, 184, 0.2) 0%, rgba(255,255,255,0) 35%);
 }
 
@@ -278,12 +278,8 @@
 .pp-bronze-wrapper {
   z-index: 5;
   transform: scale(0.95);
-  
-  /* Bronze Light */
   border-bottom: 6px solid #d97706;
   box-shadow: 0 30px 80px -10px rgba(217, 119, 6, 0.6);
-  
-  /* Bronze Uplight */
   background: linear-gradient(to top, rgba(217, 119, 6, 0.15) 0%, rgba(255,255,255,0) 35%);
 }
 
@@ -294,7 +290,7 @@
   text-shadow: 0 1px 0 rgba(255,255,255,0.3);
 }
 
-/* Simple Hover Lift */
+/* Hover Lift */
 .pp-silver-wrapper:hover,
 .pp-bronze-wrapper:hover,
 .pp-gold-wrapper:hover {
@@ -302,7 +298,6 @@
   z-index: 30;
   cursor: pointer;
 }
-
 
 /* --- STRIP --- */
 .hp-strip-wrap {
@@ -385,6 +380,11 @@
 
 /* --- MOBILE --- */
 @media (max-width: 850px) {
+  /* ✅ Fix Board Spacing on Mobile */
+  .hp-board-section {
+    padding: 0 10px;
+  }
+
   .hp-hero-title {
     font-size: 42px;
     line-height: 1.12;
@@ -425,19 +425,18 @@
   .pp-gold-wrapper,
   .pp-silver-wrapper,
   .pp-bronze-wrapper {
-    transform: none;
     width: 100%;
     max-width: 320px;
     opacity: 1;
+    transform: none; 
   }
   
   .pp-gold-wrapper {
     order: -1; 
     margin-bottom: 15px;
-    transform: scale(1.02); /* Keep gold slightly bigger */
+    transform: scale(1.02);
   }
 
-  /* Disable hover lift on mobile */
   .pp-silver-wrapper:hover,
   .pp-bronze-wrapper:hover,
   .pp-gold-wrapper:hover {
