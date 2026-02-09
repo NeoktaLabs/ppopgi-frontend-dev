@@ -7,17 +7,18 @@
   backdrop-filter: blur(8px);
   z-index: 2000;
 
+  /* start from top so TopNav never overlaps */
   display: flex;
   justify-content: center;
   align-items: flex-start;
 
+  /* Space under TopNav */
   padding-top: 120px;
   padding-bottom: 40px;
   padding-left: 20px;
   padding-right: 20px;
 
   overflow-y: auto;
-
   animation: cm-fade-in 0.2s ease-out;
 }
 
@@ -37,6 +38,7 @@
   flex-direction: column;
   overflow: hidden;
 
+  /* prevents card from going offscreen */
   max-height: calc(100vh - 160px);
 
   animation: cm-scale-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -83,7 +85,7 @@
 }
 .cm-close-btn:hover { background: #f1f5f9; color: #1e293b; }
 
-/* ✅ card content can scroll if needed */
+/* card content can scroll if needed */
 .cm-body {
   padding: 24px;
   overflow-y: auto;
@@ -166,7 +168,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .cm-asset-card {
@@ -219,85 +221,135 @@
   font-weight: 700;
 }
 
-/* --- Widgets --- */
-.cm-widgets {
-  border-top: 1px dashed #e2e8f0;
-  padding-top: 18px;
-}
+/* =========================
+   ✅ Tabs
+========================= */
 
 .cm-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 4px;
+  gap: 4px;
+  margin: 8px 0 10px;
 }
 
 .cm-tab {
-  border: 1px solid rgba(190, 24, 93, 0.25);
-  background: #fff;
-  color: #4A0F2B;
-  border-radius: 999px;
+  border: none;
+  border-radius: 12px;
   padding: 10px 12px;
-  font-weight: 900;
   cursor: pointer;
+  font-weight: 900;
+  color: #64748b;
+  background: transparent;
   transition: all 0.2s ease;
 }
 
 .cm-tab:hover {
-  background: #fff0f5;
-  transform: translateY(-1px);
+  background: rgba(0,0,0,0.03);
+  color: #334155;
 }
 
 .cm-tab.active {
-  background: linear-gradient(135deg, #ffd1df, #ffbcd0);
-  box-shadow: 0 6px 16px rgba(190, 24, 93, 0.25);
+  background: #fff0f5;
+  color: #4A0F2B;
+  box-shadow: inset 0 0 0 1px rgba(190, 24, 93, 0.18);
 }
 
-.cm-mini-toggle {
+.cm-subtabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin: 0 0 12px;
+  justify-content: center;
 }
 
-.cm-mini-btn {
-  flex: 1;
-  border: 1px solid rgba(190, 24, 93, 0.2);
+.cm-subtab {
+  border: 1px solid rgba(190, 24, 93, 0.18);
   background: #fff;
-  border-radius: 12px;
-  padding: 8px 10px;
-  font-weight: 900;
   color: #4A0F2B;
+  font-weight: 900;
+  padding: 8px 14px;
+  border-radius: 999px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.cm-mini-btn:hover {
+.cm-subtab:hover {
   background: #fff0f5;
 }
 
-.cm-mini-btn.active {
+.cm-subtab.active {
   background: linear-gradient(135deg, #ffe4ec, #ffd1df);
-  box-shadow: 0 4px 12px rgba(190, 24, 93, 0.18);
+  border-color: rgba(190, 24, 93, 0.25);
+  box-shadow: 0 6px 16px rgba(190, 24, 93, 0.18);
+}
+
+/* =========================
+   ✅ Widget Centering Shell
+========================= */
+
+.cm-widget-shell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 6px;
 }
 
 .cm-widget-wrap {
-  /* ✅ centers the thirdweb widget inside the modal */
-  display: flex;
-  justify-content: center;
-}
-
-.cm-widget-wrap > * {
   width: 100%;
-  max-width: 360px; /* keeps it nicely centered and not edge-to-edge */
+  max-width: 360px; /* ✅ keeps it visually centered */
   margin: 0 auto;
 }
 
-.cm-widget-hint {
-  margin-top: 10px;
-  font-size: 11px;
-  color: #94a3b8;
-  line-height: 1.35;
+/* Optional: give widget area a subtle frame */
+.cm-widget-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Footer note */
+.cm-footer-note {
+  margin-top: 12px;
   text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+/* =========================
+   ✅ thirdweb BuyWidget CTA overrides
+   Fixes: hover turning white + unreadable
+========================= */
+
+.cm-widget-wrap .tw-button-primary {
+  background: linear-gradient(135deg, #ffe4ec, #ffd1df) !important;
+  color: #4A0F2B !important;
+  font-weight: 900 !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(190, 24, 93, 0.25) !important;
+  box-shadow:
+    0 4px 12px rgba(190, 24, 93, 0.25),
+    inset 0 0 0 1px rgba(255,255,255,0.6) !important;
+  transition: all 0.2s ease !important;
+}
+
+.cm-widget-wrap .tw-button-primary:hover,
+.cm-widget-wrap .tw-button-primary:focus-visible {
+  background: linear-gradient(135deg, #ffd1df, #ffbcd0) !important;
+  color: #3b0a21 !important;
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 18px rgba(190, 24, 93, 0.35),
+    inset 0 0 0 1px rgba(255,255,255,0.7) !important;
+}
+
+.cm-widget-wrap .tw-button-primary:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 /* ✅ Mobile fine-tuning */
@@ -310,10 +362,10 @@
   }
 
   .cm-balance-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr; /* stacks cards for small screens */
   }
 
-  .cm-widget-wrap > * {
+  .cm-widget-wrap {
     max-width: 100%;
   }
 }
