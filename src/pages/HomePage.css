@@ -3,16 +3,16 @@
 .hp-container {
   max-width: 1400px;
   margin: 0 auto;
-  /* ✅ CHANGED: Removed top padding to control gap via margins */
+  /* ✅ No top padding, we control spacing via margins now */
   padding: 0 0 20px 0;
   color: #4A0F2B;
   overflow-x: hidden;
 }
 
 /* ✅ UPDATED: Activity Board Positioning */
+/* 20px Top (from Nav), 20px Bottom (to Hero) */
 .hp-board-section {
   max-width: 1400px;
-  /* 20px top (optional depending on nav), 20px bottom exactly */
   margin: 20px auto 20px auto !important; 
   padding: 0 20px;
 }
@@ -200,7 +200,7 @@
   margin-top: 2px;
 }
 
-/* --- PODIUM (FLAT & CLEAN VERSION) --- */
+/* --- TOP ACTIVE (Ranked Spotlight) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -210,74 +210,98 @@
 .hp-podium {
   display: flex;
   justify-content: center;
-  align-items: flex-end; /* Align bottoms */
-  gap: 24px; /* Standard spacing */
-  padding-top: 40px;
-  /* Removed perspective/3D */
+  align-items: center; /* Align centers, not bottom steps */
+  gap: 32px; /* Breathing room */
+  padding-top: 50px; /* Space for the badges sticking out */
 }
 
-/* Common Styles for Podium Cards */
+/* Common Card Wrapper Styles */
 .pp-gold-wrapper,
 .pp-silver-wrapper,
 .pp-bronze-wrapper {
   position: relative;
   transition: transform 0.3s ease;
-  /* No more 3D rotation */
+  /* Ensure rank badges can be positioned relative to this */
 }
 
-/* Gold: Slightly larger, centered */
+/* --- BADGES (The Rank Indicators) --- */
+/* This adds the 1, 2, 3 circles without changing React code */
+.pp-gold-wrapper::before,
+.pp-silver-wrapper::before,
+.pp-bronze-wrapper::before {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 18px;
+  color: white;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border: 3px solid white;
+}
+
+/* --- GOLD (#1) --- */
 .pp-gold-wrapper {
   z-index: 10;
-  transform: scale(1.05); /* Just a size bump */
-  border-radius: 14px;
-  box-shadow: 0 20px 50px -10px rgba(255, 180, 50, 0.3); /* Golden glow */
+  transform: scale(1.1); /* 10% larger */
 }
 
-/* Silver & Bronze: Standard size */
-.pp-silver-wrapper,
+.pp-gold-wrapper::before {
+  content: "👑"; /* Crown Icon */
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  font-size: 20px;
+}
+
+/* Add a "Holy Light" Glow behind Gold */
+.pp-gold-wrapper::after {
+  content: "";
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.2) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* --- SILVER (#2) --- */
+.pp-silver-wrapper {
+  z-index: 5;
+  transform: scale(0.95);
+  opacity: 0.9; /* Slight fade to focus on gold */
+}
+
+.pp-silver-wrapper::before {
+  content: "2";
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+}
+
+/* --- BRONZE (#3) --- */
 .pp-bronze-wrapper {
   z-index: 5;
   transform: scale(0.95);
-  opacity: 0.95;
+  opacity: 0.9;
 }
 
-/* Slight lift on hover (optional, much more subtle now) */
+.pp-bronze-wrapper::before {
+  content: "3";
+  background: linear-gradient(135deg, #d6d3d1, #a8a29e); /* Bronze-ish grey */
+  color: #78350f; /* Dark brown text for contrast */
+}
+
+/* Hover Effects */
 .pp-silver-wrapper:hover,
-.pp-bronze-wrapper:hover,
-.pp-gold-wrapper:hover {
-  transform: translateY(-5px) scale(1);
-  z-index: 12;
+.pp-bronze-wrapper:hover {
+  transform: scale(1);
+  opacity: 1;
+  z-index: 15;
 }
-
-/* Mobile: Stack them */
-@media (max-width: 850px) {
-  .hp-podium {
-    flex-direction: column;
-    align-items: center;
-    gap: 30px;
-    margin-top: 40px;
-  }
-  
-  /* Reset scaling for mobile list view */
-  .pp-gold-wrapper,
-  .pp-silver-wrapper,
-  .pp-bronze-wrapper {
-    transform: none;
-    width: 100%;
-    max-width: 320px;
-  }
-  
-  .pp-gold-wrapper {
-    order: -1; /* Gold first */
-    margin-bottom: 10px;
-    box-shadow: 0 10px 30px -5px rgba(255, 180, 50, 0.25);
-  }
-  
-  .pp-silver-wrapper:hover,
-  .pp-bronze-wrapper:hover,
-  .pp-gold-wrapper:hover {
-    transform: translateY(-5px);
-  }
+.pp-gold-wrapper:hover {
+  transform: scale(1.12);
 }
 
 /* --- STRIP --- */
@@ -360,7 +384,7 @@
 .hp-strip-arrow.right { right: 10px; }
 
 /* --- MOBILE --- */
-@media (max-width: 600px) {
+@media (max-width: 850px) {
   .hp-hero-title {
     font-size: 42px;
     line-height: 1.12;
@@ -388,6 +412,35 @@
   .hp-action-btn {
     width: 100%; /* Full width buttons on mobile */
     max-width: 200px;
+  }
+
+  /* Podium Mobile Stack */
+  .hp-podium {
+    flex-direction: column;
+    align-items: center;
+    gap: 50px;
+    margin-top: 20px;
+  }
+  
+  .pp-gold-wrapper,
+  .pp-silver-wrapper,
+  .pp-bronze-wrapper {
+    transform: none;
+    width: 100%;
+    max-width: 320px;
+    opacity: 1;
+  }
+  
+  .pp-gold-wrapper {
+    order: -1; 
+    margin-bottom: 10px;
+  }
+  
+  /* Disable Lift on touch to avoid sticky hover states */
+  .pp-silver-wrapper:hover,
+  .pp-bronze-wrapper:hover,
+  .pp-gold-wrapper:hover {
+    transform: none;
   }
 
   .hp-strip {
