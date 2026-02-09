@@ -199,7 +199,10 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             )}
 
             {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
-              <div className="hp-empty-msg">No active raffles to display.</div>
+              <div className="hp-empty-msg">
+                <div className="hp-empty-icon">🍃</div>
+                <div>No active raffles to display.</div>
+              </div>
             )}
           </div>
         </div>
@@ -242,7 +245,12 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                   </div>
                 ))}
 
-              {!isLoading && endingSoonSorted.length === 0 && <div className="hp-empty-msg">No raffles ending soon.</div>}
+              {!isLoading && endingSoonSorted.length === 0 && (
+                <div className="hp-empty-msg">
+                   <div className="hp-empty-icon">😴</div>
+                   <div>No raffles ending soon.</div>
+                </div>
+              )}
             </div>
 
             {!endingEdges.atLeft && <div className="hp-strip-fade left" />}
@@ -289,7 +297,10 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                 ))}
 
               {!isLoading && recentlySettledSorted.length === 0 && (
-                <div className="hp-empty-msg">No recently settled raffles yet.</div>
+                <div className="hp-empty-msg">
+                  <div className="hp-empty-icon">📂</div>
+                  <div>No recently settled raffles yet.</div>
+                </div>
               )}
             </div>
 
