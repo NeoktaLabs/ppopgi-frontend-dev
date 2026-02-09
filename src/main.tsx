@@ -1,12 +1,13 @@
 // src/main.tsx
+import * as buffer from "buffer";
 
-import { Buffer } from "buffer";
-
-// ✅ Ledger + ethers expect these globals (Vite doesn't polyfill them by default)
-const g: any = globalThis as any;
-
-if (!g.Buffer) g.Buffer = Buffer;
-if (!g.global) g.global = g;
+// ✅ Ledger + ethers expect these globals
+if (!(window as any).Buffer) {
+  (window as any).Buffer = buffer.Buffer;
+}
+if (!(window as any).global) {
+  (window as any).global = window;
+}
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -14,7 +15,7 @@ import "./index.css";
 import App from "./App";
 import { ThirdwebProvider } from "thirdweb/react";
 
-// ✅ Prevent thirdweb auto-restore issues (optional, but fine)
+// ✅ Prevent thirdweb auto-restore issues
 try {
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const k = localStorage.key(i);
