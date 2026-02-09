@@ -11,7 +11,7 @@
   justify-content: center;
   align-items: flex-start;
 
-  padding-top: 80px; /* Reduced top padding slightly */
+  padding-top: 80px; 
   padding-bottom: 40px;
   padding-left: 20px;
   padding-right: 20px;
@@ -36,7 +36,6 @@
   flex-direction: column;
   overflow: hidden;
 
-  /* Ensure card doesn't get cut off on small screens */
   max-height: calc(100vh - 100px); 
   
   animation: cm-scale-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -215,10 +214,7 @@
   font-weight: 700;
 }
 
-/* =========================
-   ✅ 3 Tabs
-========================= */
-
+/* --- Tabs --- */
 .cm-tabs3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -253,15 +249,11 @@
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
-/* =========================
-   ✅ Widget Centering & Stability
-========================= */
-
+/* --- Widget Wrapper --- */
 .cm-widget-shell {
   display: flex;
   justify-content: center;
   width: 100%;
-  /* ✅ UX IMPROVEMENT: Min-height prevents jumping when switching tabs */
   min-height: 480px; 
   align-items: flex-start;
 }
@@ -275,10 +267,7 @@
   overflow: hidden;
 }
 
-/* =========================
-   ✅ Bridge box (Updated)
-========================= */
-
+/* --- Bridge box --- */
 .cm-bridge-box {
   width: 100%;
   max-width: 360px;
@@ -290,7 +279,6 @@
   text-align: center;
 }
 
-/* New visual route header */
 .cm-bridge-header {
   display: flex;
   align-items: center;
@@ -340,7 +328,6 @@
   align-items: center;
   width: 100%;
   text-decoration: none;
-
   background: linear-gradient(135deg, #4A0F2B, #701a40);
   color: #ffffff;
   font-weight: 800;
@@ -362,23 +349,53 @@
   font-weight: 600;
 }
 
-/* =========================
-   ✅ thirdweb BuyWidget Override
-   (Matches your brand pink/crimson)
-========================= */
+/* =========================================
+   ✅ Thirdweb Widget Styling (Brand Overrides)
+   ========================================= */
 
-.cm-widget-wrap .tw-button-primary {
+/* 1. Force the Widget Background to Light Pink */
+.cm-widget-wrap > div {
+  /* This targets the thirdweb internal container */
+  background: linear-gradient(180deg, #fff0f5 0%, #ffffff 100%) !important;
+  --tw-modal-bg: #fff0f5 !important;
+  --tw-accent-bg: #fff0f5 !important;
+}
+
+/* 2. Force the Buy Button to Ppopgi Pink (Deep Brand Color) */
+.cm-widget-wrap button[data-variant="primary"],
+.cm-widget-wrap button[type="submit"],
+.cm-widget-wrap .tw-button-primary,
+/* Catch generic thirdweb buttons */
+div[class*="BuyButton"] button {
   background: linear-gradient(135deg, #4A0F2B, #701a40) !important;
   color: white !important;
   font-weight: 800 !important;
   border-radius: 999px !important;
   border: none !important;
+  box-shadow: 0 4px 10px rgba(74, 15, 43, 0.3) !important;
 }
 
-.cm-widget-wrap .tw-button-primary:hover,
-.cm-widget-wrap .tw-button-primary:focus-visible {
+/* Hover state for button */
+.cm-widget-wrap button[data-variant="primary"]:hover,
+.cm-widget-wrap .tw-button-primary:hover {
   opacity: 0.9 !important;
-  transform: translateY(-1px);
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 14px rgba(74, 15, 43, 0.4) !important;
+}
+
+/* 3. Style Inputs to pop against the pink background */
+.cm-widget-wrap input {
+  background: #ffffff !important;
+  border: 1px solid rgba(74, 15, 43, 0.1) !important;
+  color: #4A0F2B !important;
+  font-weight: 700 !important;
+}
+
+/* 4. Secondary text color adjustment */
+.cm-widget-wrap p, 
+.cm-widget-wrap span {
+  color: #4A0F2B !important; /* Force text to match brand */
+  opacity: 0.8;
 }
 
 /* Mobile fine-tuning */
