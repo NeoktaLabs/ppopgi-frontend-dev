@@ -8,7 +8,7 @@
   overflow-x: hidden;
 }
 
-/* --- HERO (Enhanced: Breathing Animation) --- */
+/* --- HERO --- */
 .hp-hero {
   text-align: center;
   padding: 80px 20px 120px 20px;
@@ -49,32 +49,53 @@
   color: #4A0F2B;
 }
 
-/* ✅ NEW: Hero Buttons (Testimonials / FAQ) */
+/* ✅ PROFESSIONAL ACTION BUTTONS */
 .hp-hero-actions {
   display: flex;
   justify-content: center;
   gap: 16px;
-  margin-top: 28px;
+  margin-top: 32px;
 }
 
 .hp-action-btn {
   text-decoration: none;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  color: #9A2A58;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(154, 42, 88, 0.2);
-  padding: 8px 20px;
+  padding: 12px 28px;
   border-radius: 99px;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.hp-action-btn:hover {
+/* Primary: Solid Brand Color */
+.hp-action-btn.primary {
+  background: #4A0F2B;
+  color: #ffffff;
+  border: 1px solid transparent;
+  box-shadow: 0 10px 20px -5px rgba(74, 15, 43, 0.3);
+}
+
+.hp-action-btn.primary:hover {
+  background: #6D1641;
+  transform: translateY(-3px);
+  box-shadow: 0 15px 30px -8px rgba(74, 15, 43, 0.4);
+}
+
+/* Secondary: White/Outline */
+.hp-action-btn.secondary {
   background: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(154, 42, 88, 0.15);
-  border-color: rgba(154, 42, 88, 0.4);
+  color: #4A0F2B;
+  border: 1px solid rgba(74, 15, 43, 0.1);
+  box-shadow: 0 4px 12px -2px rgba(0,0,0,0.05);
+}
+
+.hp-action-btn.secondary:hover {
+  border-color: rgba(74, 15, 43, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px -5px rgba(0,0,0,0.08);
+  background: #fffafa;
 }
 
 /* --- STATS BAR --- */
@@ -122,7 +143,7 @@
   background: #e2e8f0;
 }
 
-/* --- SECTIONS (Glass Headers) --- */
+/* --- SECTIONS --- */
 .hp-section-header {
   display: flex;
   align-items: center;
@@ -153,7 +174,7 @@
   margin-top: 2px;
 }
 
-/* --- PODIUM (Depth & Shimmer) --- */
+/* --- PODIUM --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -169,7 +190,6 @@
   perspective: 1000px;
 }
 
-/* Base style for wrappers */
 .pp-gold-wrapper,
 .pp-silver-wrapper,
 .pp-bronze-wrapper {
@@ -177,7 +197,6 @@
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); 
 }
 
-/* GOLD */
 .pp-gold-wrapper {
   z-index: 10;
   transform: scale(1.15) translateY(-20px);
@@ -199,7 +218,6 @@
   100% { left: 150%; } 
 }
 
-/* SILVER */
 .pp-silver-wrapper {
   z-index: 5;
   transform: scale(0.9) translateX(30px) rotateY(15deg);
@@ -213,7 +231,6 @@
   box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
 }
 
-/* BRONZE */
 .pp-bronze-wrapper {
   z-index: 5;
   transform: scale(0.9) translateX(-30px) rotateY(-15deg);
@@ -329,8 +346,6 @@
 .hp-strip-arrow.left { left: 10px; }
 .hp-strip-arrow.right { right: 10px; }
 
-/* ❌ DELETED: .hp-strip-fade classes */
-
 /* --- MOBILE --- */
 @media (max-width: 600px) {
   .hp-hero-title {
@@ -351,10 +366,15 @@
     height: 1px;
   }
 
-  /* ✅ Mobile Stack for Buttons */
+  /* Buttons on Mobile */
   .hp-hero-actions {
     flex-direction: row;
     flex-wrap: wrap;
+  }
+  
+  .hp-action-btn {
+    width: 100%; /* Full width buttons on mobile */
+    max-width: 200px;
   }
 
   .hp-strip {
