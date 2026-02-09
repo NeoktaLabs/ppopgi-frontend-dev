@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
 import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill";
 
+// If TS complains about these imports, ensure:
+//   npm i -D @types/node
 export default defineConfig({
   plugins: [react()],
 
@@ -11,9 +13,9 @@ export default defineConfig({
     global: "globalThis",
   },
 
+  // ✅ Do NOT alias "buffer" (can trigger default-export issues)
   resolve: {
     alias: {
-      buffer: "buffer",
       process: "process/browser",
     },
   },
