@@ -1,4 +1,3 @@
-// src/components/SignInModal.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "../state/useSession";
 import {
@@ -24,7 +23,9 @@ export function SignInModal({ open, onClose }: Props) {
   const account = useActiveAccount();
   const wallet = useActiveWallet();
   const { disconnect } = useDisconnect();
-  const { connect, isConnecting } = useConnect();
+
+  // ✅ IMPORTANT: pass client (thirdweb v5)
+  const { connect, isConnecting, error: connectError } = useConnect({ client: thirdwebClient });
 
   const {
     connectLedgerUsb,
@@ -35,14 +36,11 @@ export function SignInModal({ open, onClose }: Props) {
 
   const [localError, setLocalError] = useState("");
 
-  const errorMessage = useMemo(
-    () => localError || ledgerError || "",
-    [localError, ledgerError]
-  );
+  const errorMessage = useMemo(() => {
+    return localError || ledgerError || (connectError ? String(connectError.message || connectError) : "") || "";
+  }, [localError, ledgerError, connectError]);
 
-  /**
-   * Sync session + auto-close after successful connection
-   */
+  // Sync Session & Auto-Close on Connect
   useEffect(() => {
     if (!open) return;
     if (!account?.address) return;
@@ -60,17 +58,17 @@ export function SignInModal({ open, onClose }: Props) {
     if (open) setLocalError("");
   }, [open]);
 
-  /**
-   * Ledger USB connect (WebHID)
-   */
   const onConnectLedgerUsb = async () => {
     setLocalError("");
+
     try {
       await connect(async () => {
-        return await connectLedgerUsb({
+        // connectLedgerUsb returns a CONNECTED wallet (your hook calls wallet.connect)
+        const w = await connectLedgerUsb({
           client: thirdwebClient,
           chain: ETHERLINK_CHAIN,
         });
+        return w;
       });
     } catch (e: any) {
       setLocalError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
@@ -100,32 +98,22 @@ export function SignInModal({ open, onClose }: Props) {
             <button
               className="sim-ledger-btn"
               onClick={onConnectLedgerUsb}
-              disabled={
-                !isLedgerSupported ||
-                isConnecting ||
-                isLedgerConnecting
-              }
-              title={
-                !isLedgerSupported
-                  ? "Ledger USB requires Chrome, Edge, or Brave (WebHID)"
-                  : ""
-              }
+              disabled={!isLedgerSupported || isConnecting || isLedgerConnecting}
+              title={!isLedgerSupported ? "Ledger USB requires Chrome/Edge/Brave (WebHID)" : ""}
             >
-              {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
+              <span className="sim-ledger-btn-text">
+                {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
+              </span>
               <span className="sim-ledger-badge">Chromium</span>
             </button>
 
-            {!isLedgerSupported && (
-              <div className="sim-ledger-hint">
-                Ledger USB requires Chrome, Edge, or Brave.
-                <br />
-                Plug in your Ledger, unlock it, and open the Ethereum app.
-              </div>
-            )}
+            <div className="sim-ledger-hint">
+              Plug in your Ledger, unlock it, and open the <b>Ethereum</b> app.
+              <br />
+              (Works on Chrome / Edge / Brave via WebHID)
+            </div>
 
-            {errorMessage && (
-              <div className="sim-error">{errorMessage}</div>
-            )}
+            {errorMessage && <div className="sim-error">{errorMessage}</div>}
           </div>
 
           {/* Divider */}
@@ -159,10 +147,7 @@ export function SignInModal({ open, onClose }: Props) {
             </div>
 
             {wallet && (
-              <button
-                className="sim-disconnect-btn"
-                onClick={() => disconnect(wallet)}
-              >
+              <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
                 Disconnect current session
               </button>
             )}
