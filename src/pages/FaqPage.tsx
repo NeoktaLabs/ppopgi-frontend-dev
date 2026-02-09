@@ -1,5 +1,5 @@
 // src/pages/FaqPage.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import "./FaqPage.css";
 
@@ -12,16 +12,16 @@ type FaqItem = {
   tags?: string[];
 };
 
-// ✅ STYLISH MERMAID CONFIGURATION
+// ✅ UPDATED: Mermaid Theme matches Brand (Pink/Crimson)
 const RAFFLE_FLOW = `
 %%{
   init: {
     'theme': 'base',
     'themeVariables': {
       'primaryColor': '#ffffff',
-      'primaryTextColor': '#1e293b',
-      'primaryBorderColor': '#e2e8f0',
-      'lineColor': '#94a3b8',
+      'primaryTextColor': '#4A0F2B',
+      'primaryBorderColor': '#fce7f3',
+      'lineColor': '#be185d',
       'fontFamily': 'ui-sans-serif, system-ui, -apple-system, sans-serif',
       'fontSize': '14px'
     },
@@ -35,10 +35,10 @@ const RAFFLE_FLOW = `
 
 flowchart TD
   classDef brand fill:#fdf2f8,stroke:#db2777,stroke-width:2px,color:#be185d,rx:12,ry:12;
-  classDef decision fill:#ffffff,stroke:#64748b,stroke-width:2px,color:#1e293b,rx:6,ry:6,stroke-dasharray: 5 5;
+  classDef decision fill:#ffffff,stroke:#9d174d,stroke-width:2px,color:#4A0F2B,rx:6,ry:6,stroke-dasharray: 5 5;
   classDef success fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d,rx:12,ry:12;
-  classDef fail fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#991b1b,rx:12,ry:12;
-  classDef tech fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0369a1,rx:12,ry:12;
+  classDef fail fill:#fff1f2,stroke:#e11d48,stroke-width:2px,color:#9f1239,rx:12,ry:12;
+  classDef tech fill:#fff,stroke:#4A0F2B,stroke-width:2px,color:#4A0F2B,rx:4,ry:4,stroke-dasharray: 2 2;
 
   A[Creator Launches]:::brand
   B[Prize Pot Funded]:::brand
@@ -81,10 +81,9 @@ flowchart TD
   H --> I --> J
   J --> K & L
 
-  linkStyle default stroke:#94a3b8,stroke-width:2px,fill:none;
+  linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
 `;
 
-// ✅ More complete answers (closer to the “long” version)
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "what-is",
@@ -408,6 +407,10 @@ function SectionTitle({ children }: { children: ReactNode }) {
 }
 
 export function FaqPage() {
+  useEffect(() => {
+    document.title = "Ppopgi 뽑기 — FAQ";
+  }, []);
+
   const [openId, setOpenId] = useState<string | null>("what-is");
   const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
 
@@ -415,12 +418,12 @@ export function FaqPage() {
     <div className="faq-page">
       {/* Hero Section */}
       <div className="faq-hero-card">
-        <h1 className="faq-h1">FAQ</h1>
+        <h1 className="faq-h1">FAQ & Rules</h1>
         <p className="faq-sub">Everything you need to know about trust, fees, and how Ppopgi works.</p>
       </div>
 
       {/* Mermaid Lifecycle */}
-      <SectionTitle>Raffle Lifecycle (All States)</SectionTitle>
+      <SectionTitle>How a Raffle Works</SectionTitle>
       <div className="faq-mermaid">
         <div className="faq-diagram-title">System State Flow</div>
         <MermaidDiagram code={RAFFLE_FLOW} id="ppopgi-raffle-lifecycle" />
