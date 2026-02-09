@@ -120,15 +120,18 @@ async function fetchTicketsPurchasedByRaffle(
 }
 
 /**
- * Multiplier Badge (xN)
+ * Multiplier Badge (Ticket Stub Style)
+ * ✅ Updated to render separate number and label
  */
 function MultiplierBadge({ count }: { count: number }) {
   const safe = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
   const display = safe > 999 ? "999+" : String(safe);
+  const label = safe === 1 ? "Ticket" : "Tickets";
 
   return (
-    <div className={`db-mult-badge ${safe === 1 ? "is-one" : ""}`} aria-label={`${safe} tickets`}>
-      x{display}
+    <div className="db-mult-badge" aria-label={`${safe} tickets`}>
+      <span style={{ fontSize: "1.25em", marginRight: "4px" }}>{display}</span>
+      <span style={{ fontSize: "0.7em", opacity: 0.85, fontWeight: 700, textTransform: "uppercase" }}>{label}</span>
     </div>
   );
 }
