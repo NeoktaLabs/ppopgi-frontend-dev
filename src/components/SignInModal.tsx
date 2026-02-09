@@ -1,5 +1,5 @@
 // src/components/SignInModal.tsx
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useSession } from "../state/useSession";
 import {
   ConnectEmbed,
@@ -10,6 +10,7 @@ import {
 import { createWallet } from "thirdweb/wallets";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
+import { getLedgerUsbWallet } from "../hooks/ledgerUsbWallet";
 import "./SignInModal.css";
 
 type Props = {
@@ -22,6 +23,19 @@ export function SignInModal({ open, onClose }: Props) {
   const account = useActiveAccount();
   const wallet = useActiveWallet();
   const { disconnect } = useDisconnect();
+
+  // ✅ Chromium-only support check for WebHID
+  const supportsWebHID = typeof window !== "undefined" && typeof (navigator as any)?.hid !== "undefined";
+
+  // ✅ Wallet list (Ledger first when supported)
+  const wallets = useMemo(() => {
+    const base = [
+      createWallet("io.metamask"),
+      createWallet("walletConnect"),
+      createWallet("com.coinbase.wallet"),
+    ];
+    return supportsWebHID ? [getLedgerUsbWallet(), ...base] : base;
+  }, [supportsWebHID]);
 
   // Sync Session & Auto-Close on Connect
   useEffect(() => {
@@ -45,53 +59,59 @@ export function SignInModal({ open, onClose }: Props) {
   return (
     <div className="sim-overlay" onMouseDown={onClose}>
       <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
-        
         {/* Header */}
         <div className="sim-header">
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
             <div className="sim-subtitle">Connect your wallet to start playing</div>
+
+            {/* ✅ Friendly hint when not supported */}
+            {!supportsWebHID && (
+              <div className="sim-subtitle sim-hint">
+                Ledger USB works on Chromium browsers (Chrome / Edge / Brave).
+              </div>
+            )}
           </div>
-          <button className="sim-close-btn" onClick={onClose}>✕</button>
+          <button className="sim-close-btn" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         {/* Body */}
         <div className="sim-body">
-          
           {/* Thirdweb Embed - Configured to match the theme */}
           <div className="sim-embed-wrapper">
             <ConnectEmbed
               client={thirdwebClient}
               chain={ETHERLINK_CHAIN}
               autoConnect={false}
-              theme="light" // ✅ Matches the white card
+              theme="light"
               modalSize="compact"
               showThirdwebBranding={false}
-              wallets={[
-                createWallet("io.metamask"),
-                createWallet("walletConnect"),
-                createWallet("com.coinbase.wallet"),
-              ]}
+              wallets={wallets}
             />
           </div>
 
           <div className="sim-footer">
             <div className="sim-note">
-              By connecting, you agree to the rules of the raffle. 
-              <br/>Always check the URL before signing.
+              By connecting, you agree to the rules of the raffle.
+              <br />
+              Always check the URL before signing.
+              {supportsWebHID && (
+                <>
+                  <br />
+                  <span className="sim-note-tip">Tip: If Ledger USB fails, close Ledger Live and retry.</span>
+                </>
+              )}
             </div>
 
             {/* Optional Sign Out (Only if wallet state is lingering) */}
             {wallet && (
-              <button 
-                className="sim-disconnect-btn"
-                onClick={() => disconnect(wallet)}
-              >
+              <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
                 Disconnect current session
               </button>
             )}
           </div>
-
         </div>
       </div>
     </div>
