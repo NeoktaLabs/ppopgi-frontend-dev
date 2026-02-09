@@ -121,7 +121,6 @@ async function fetchTicketsPurchasedByRaffle(
 
 /**
  * Multiplier Badge (Ticket Stub Style)
- * ✅ Updated to render separate number and label
  */
 function MultiplierBadge({ count }: { count: number }) {
   const safe = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
@@ -138,7 +137,7 @@ function MultiplierBadge({ count }: { count: number }) {
 
 /**
  * RaffleCardPile
- * ✅ Badge is rendered in a separate overlay layer ABOVE the pile
+ * ✅ UPDATED: Hides badge if count is 0
  */
 function RaffleCardPile({
   raffle,
@@ -155,10 +154,14 @@ function RaffleCardPile({
   onOpenSafety: (id: string) => void;
   nowMs: number;
 }) {
-  const safeTickets = Number.isFinite(ticketCount) ? Math.max(1, Math.floor(ticketCount)) : 1;
+  // ✅ FIX: Allow 0 tickets (don't default to 1)
+  const safeTickets = Number.isFinite(ticketCount) ? Math.max(0, Math.floor(ticketCount)) : 0;
+  
+  // ✅ FIX: Only show badge if > 0
+  const showBadge = safeTickets > 0;
 
-  // 1 ticket = 0 shadows. 2 tickets = 1 shadow... Max 4 shadows.
-  const shadowCount = Math.min(4, Math.max(0, safeTickets - 1));
+  // Shadow Logic: 0 or 1 ticket = 0 shadows. 2 tickets = 1 shadow.
+  const shadowCount = safeTickets > 1 ? Math.min(4, safeTickets - 1) : 0;
   const hasShadows = shadowCount > 0;
 
   const raffleForCard = useMemo(() => {
@@ -172,12 +175,14 @@ function RaffleCardPile({
 
   return (
     <div className="db-card-pile-wrapper">
-      {/* ✅ overlay element, separate from pile */}
-      <div className="db-mult-badge-layer" aria-hidden="true">
-        <MultiplierBadge count={safeTickets} />
-      </div>
+      {/* ✅ Only render badge layer if user actually has tickets */}
+      {showBadge && (
+        <div className="db-mult-badge-layer" aria-hidden="true">
+          <MultiplierBadge count={safeTickets} />
+        </div>
+      )}
 
-      {/* ✅ pile itself */}
+      {/* Pile itself */}
       <div className={pileClass}>
         {shadowCount >= 4 && (
           <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
@@ -559,7 +564,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 <RaffleCardPile
                   key={r.id}
                   raffle={r}
-                  ticketCount={ticketCount || 1}
+                  // ✅ FIX: No longer forcing || 1. Passing exact count (0 if creator/new).
+                  ticketCount={ticketCount}
                   isWinner={false}
                   onOpenRaffle={onOpenRaffle}
                   onOpenSafety={onOpenSafety}
