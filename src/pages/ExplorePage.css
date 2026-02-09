@@ -5,7 +5,7 @@
   max-width: 1400px;
   
   /* ✅ CHANGED: Margin creates the physical gap from the top */
-  margin: 120px auto 0 auto;
+  margin: 20px auto 0 auto;
   
   /* ✅ CHANGED: Reduced padding since we now have external margin */
   padding: 40px 20px 80px 20px;
