@@ -1,17 +1,5 @@
 /* src/components/CashierModal.css */
 
-/* =========================================
-   ✅ Ppopgi brand tokens (single source)
-   ========================================= */
-:root {
-  --pp-pink-900: #4A0F2B;
-  --pp-pink-800: #701a40;
-  --pp-pink-700: #9A2A58;
-  --pp-pink-100: #fff0f5;
-  --pp-pink-050: #fff7fa;
-}
-
-/* Overlay */
 .cm-overlay {
   position: fixed;
   inset: 0;
@@ -58,7 +46,7 @@
   to { transform: scale(1); opacity: 1; }
 }
 
-/* Header */
+/* --- Header --- */
 .cm-header {
   display: flex;
   justify-content: space-between;
@@ -96,7 +84,7 @@
   overflow-y: auto;
 }
 
-/* Address Row */
+/* --- Address Row --- */
 .cm-address-row {
   display: flex;
   align-items: center;
@@ -159,7 +147,7 @@
 }
 .cm-refresh-btn:active { transform: rotate(180deg); }
 
-/* Balances */
+/* --- Balances --- */
 .cm-section-label {
   font-size: 12px;
   font-weight: 800;
@@ -226,7 +214,7 @@
   font-weight: 700;
 }
 
-/* Tabs */
+/* --- Tabs --- */
 .cm-tabs3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -256,12 +244,12 @@
 }
 
 .cm-tab3.active {
-  background: var(--pp-pink-100);
-  color: var(--pp-pink-900);
-  box-shadow: inset 0 0 0 1px rgba(190, 24, 93, 0.18);
+  background: #fff;
+  color: #4A0F2B;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
-/* Widget Wrapper */
+/* --- Widget Wrapper --- */
 .cm-widget-shell {
   display: flex;
   justify-content: center;
@@ -279,7 +267,7 @@
   overflow: hidden;
 }
 
-/* Bridge */
+/* --- Bridge box --- */
 .cm-bridge-box {
   width: 100%;
   max-width: 360px;
@@ -311,7 +299,7 @@
 }
 
 .cm-bridge-route.highlight {
-  background: var(--pp-pink-100);
+  background: #fff0f5;
   color: #be185d;
 }
 
@@ -340,10 +328,9 @@
   align-items: center;
   width: 100%;
   text-decoration: none;
-
-  background: linear-gradient(135deg, var(--pp-pink-900), var(--pp-pink-800));
+  background: linear-gradient(135deg, #4A0F2B, #701a40);
   color: #ffffff;
-  font-weight: 900;
+  font-weight: 800;
   padding: 12px 14px;
   border-radius: 999px;
   box-shadow: 0 4px 12px rgba(74, 15, 43, 0.25);
@@ -361,121 +348,6 @@
   font-size: 11px;
   color: #94a3b8;
   font-weight: 600;
-}
-
-/* =========================================
-   ✅ Thirdweb Widget: Ppopgi Pink Theme + Button Hover Fix
-   Scoped to .cm-tw-scope so it doesn't affect your app.
-   ========================================= */
-
-.cm-tw-scope {
-  /* background behind the widget */
-  background: linear-gradient(180deg, var(--pp-pink-050) 0%, #ffffff 55%) !important;
-
-  /* best-effort CSS variables used by thirdweb components (var names differ by version) */
-  --tw-color-primary: var(--pp-pink-900) !important;
-  --tw-color-primary-text: #ffffff !important;
-  --tw-accent-color: var(--pp-pink-900) !important;
-
-  --tw-border-color: rgba(74, 15, 43, 0.12) !important;
-  --tw-bg: var(--pp-pink-050) !important;
-}
-
-/* Some thirdweb builds render a root div inside your wrapper */
-.cm-tw-scope > div {
-  background: transparent !important;
-}
-
-/* ✅ Buttons: cover ALL likely selectors */
-.cm-tw-scope button,
-.cm-tw-scope [role="button"] {
-  border-radius: 999px !important;
-}
-
-/* Primary action button (buy/continue/pay) */
-.cm-tw-scope button[type="submit"],
-.cm-tw-scope button[data-variant="primary"],
-.cm-tw-scope .tw-button-primary,
-.cm-tw-scope [class*="primary"],
-.cm-tw-scope [class*="Primary"] button,
-.cm-tw-scope [class*="BuyButton"] button {
-  background: linear-gradient(135deg, var(--pp-pink-900), var(--pp-pink-800)) !important;
-  color: #ffffff !important;
-  font-weight: 900 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
-  box-shadow: 0 6px 16px rgba(74, 15, 43, 0.22) !important;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease !important;
-}
-
-/* ✅ FIX: hover turning white -> force dark pink hover + white text */
-.cm-tw-scope button[type="submit"]:hover,
-.cm-tw-scope button[data-variant="primary"]:hover,
-.cm-tw-scope .tw-button-primary:hover,
-.cm-tw-scope [class*="primary"]:hover,
-.cm-tw-scope [class*="BuyButton"] button:hover,
-.cm-tw-scope button[type="submit"]:focus-visible,
-.cm-tw-scope button[data-variant="primary"]:focus-visible {
-  background: linear-gradient(135deg, #6D1641, #9A2A58) !important;
-  color: #ffffff !important;
-  opacity: 1 !important;
-  filter: none !important;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 10px 24px rgba(74, 15, 43, 0.28) !important;
-}
-
-/* Disabled should stay readable */
-.cm-tw-scope button:disabled,
-.cm-tw-scope button[disabled] {
-  opacity: 0.6 !important;
-  cursor: not-allowed !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-
-/* Inputs */
-.cm-tw-scope input,
-.cm-tw-scope select,
-.cm-tw-scope textarea {
-  background: #ffffff !important;
-  border: 1px solid rgba(74, 15, 43, 0.14) !important;
-  color: var(--pp-pink-900) !important;
-  font-weight: 800 !important;
-  border-radius: 12px !important;
-}
-
-/* Focus ring */
-.cm-tw-scope input:focus,
-.cm-tw-scope select:focus,
-.cm-tw-scope textarea:focus {
-  outline: none !important;
-  box-shadow: 0 0 0 3px rgba(190, 24, 93, 0.18) !important;
-  border-color: rgba(190, 24, 93, 0.35) !important;
-}
-
-/* Text + labels */
-.cm-tw-scope p,
-.cm-tw-scope span,
-.cm-tw-scope label,
-.cm-tw-scope h1,
-.cm-tw-scope h2,
-.cm-tw-scope h3,
-.cm-tw-scope h4 {
-  color: #334155 !important;
-}
-
-/* Make headings slightly more “Ppopgi” */
-.cm-tw-scope h3,
-.cm-tw-scope [class*="Title"] {
-  color: var(--pp-pink-900) !important;
-  font-weight: 1000 !important;
-}
-
-/* Cards / panels inside widget */
-.cm-tw-scope [class*="Card"],
-.cm-tw-scope [class*="Panel"],
-.cm-tw-scope [class*="container"],
-.cm-tw-scope [class*="Container"] {
-  border-color: rgba(74, 15, 43, 0.12) !important;
 }
 
 /* Mobile */
