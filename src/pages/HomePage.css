@@ -8,11 +8,11 @@
   overflow-x: hidden;
 }
 
-/* ✅ UPDATED: Activity Board Positioning */
-/* 100px Top Margin = ~80px Header Height + 20px Gap */
+/* ✅ UPDATED: Activity Board Positioning (Reduced Gap) */
+/* Reduced from 100px to 60px. Adjust this if it overlaps your TopNav. */
 .hp-board-section {
   max-width: 1400px;
-  margin: 100px auto 20px auto; 
+  margin: 60px auto 20px auto; 
   padding: 0 20px;
 }
 
@@ -27,14 +27,13 @@
   background-size: 400% 400%;
   animation: hp-breathing 15s ease infinite;
 
-  /* ✅ UPDATED: Rounded Corners (Matches Explore/FAQ) */
+  /* Rounded Corners */
   border-radius: 32px; 
   
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
   position: relative;
   overflow: hidden;
   
-  /* Reset top margin since Board handles the spacing now */
   margin-top: 0; 
 }
 
