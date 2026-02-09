@@ -29,13 +29,10 @@ export function SignInModal({ open, onClose }: Props) {
   const { connectLedgerUsb, isSupported, isConnecting: isLedgerConnecting, error: ledgerError } =
     useLedgerUsbWallet();
 
-  const [localError, setLocalError] = useState<string>("");
+  const [localError, setLocalError] = useState("");
 
-  const combinedError = useMemo(() => {
-    return localError || ledgerError || "";
-  }, [localError, ledgerError]);
+  const combinedError = useMemo(() => localError || ledgerError || "", [localError, ledgerError]);
 
-  // Sync Session & Auto-Close on Connect
   useEffect(() => {
     if (!open) return;
     if (!account?.address) return;
@@ -45,13 +42,10 @@ export function SignInModal({ open, onClose }: Props) {
       connector: "thirdweb",
     });
 
-    const t = setTimeout(() => {
-      onClose();
-    }, 500);
+    const t = setTimeout(() => onClose(), 500);
     return () => clearTimeout(t);
   }, [account?.address, open, onClose, setSession]);
 
-  // Clear transient error when reopening
   useEffect(() => {
     if (open) setLocalError("");
   }, [open]);
@@ -59,14 +53,9 @@ export function SignInModal({ open, onClose }: Props) {
   const onConnectLedgerUsb = async () => {
     setLocalError("");
     try {
-      // connectLedgerUsb() should do the WebHID flow + return an EIP-1193 provider (or a thirdweb wallet)
-      // We wrap it into thirdweb connection via useConnect so the rest of your app works normally.
       await connect(async () => {
-        const ledgerWallet = await connectLedgerUsb({
-          client: thirdwebClient,
-          chain: ETHERLINK_CHAIN,
-        });
-        return ledgerWallet;
+        const w = await connectLedgerUsb({ client: thirdwebClient, chain: ETHERLINK_CHAIN });
+        return w;
       });
     } catch (e: any) {
       setLocalError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
@@ -78,7 +67,6 @@ export function SignInModal({ open, onClose }: Props) {
   return (
     <div className="sim-overlay" onMouseDown={onClose}>
       <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="sim-header">
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
@@ -89,15 +77,13 @@ export function SignInModal({ open, onClose }: Props) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="sim-body">
-          {/* Ledger USB (WebHID) - Separate from thirdweb wallet list */}
           <div className="sim-ledger-section">
             <button
               className="sim-ledger-btn"
               onClick={onConnectLedgerUsb}
               disabled={!isSupported || isConnecting || isLedgerConnecting}
-              title={!isSupported ? "Ledger USB requires Chromium (Chrome/Brave/Edge) + WebHID enabled." : ""}
+              title={!isSupported ? "Ledger USB requires Chrome/Edge/Brave (WebHID)." : ""}
             >
               {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
               <span className="sim-ledger-badge">Chromium</span>
@@ -105,7 +91,7 @@ export function SignInModal({ open, onClose }: Props) {
 
             {!isSupported && (
               <div className="sim-ledger-hint">
-                Ledger USB needs a Chromium browser (Chrome/Brave/Edge). On Ledger, open the Ethereum app.
+                Ledger USB needs Chrome/Edge/Brave. Plug your Ledger, open the Ethereum app, then retry.
               </div>
             )}
 
@@ -116,7 +102,6 @@ export function SignInModal({ open, onClose }: Props) {
             <span>or</span>
           </div>
 
-          {/* Thirdweb Embed - only registered wallet IDs here */}
           <div className="sim-embed-wrapper">
             <ConnectEmbed
               client={thirdwebClient}
@@ -129,8 +114,6 @@ export function SignInModal({ open, onClose }: Props) {
                 createWallet("io.metamask"),
                 createWallet("walletConnect"),
                 createWallet("com.coinbase.wallet"),
-                // Optional: if you ALSO want Ledger Live (not USB WebHID), you can add:
-                // createWallet("com.ledger"),
               ]}
             />
           </div>
