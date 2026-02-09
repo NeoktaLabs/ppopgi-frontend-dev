@@ -13,13 +13,13 @@ type Props = {
   onClose: () => void;
 };
 
-type Tab = "buy_usdc" | "buy_xtz" | "swap";
+// ✅ UX CHANGE: Renamed 'swap' to 'bridge' for clarity
+type Tab = "buy_usdc" | "buy_xtz" | "bridge";
 
 export function CashierModal({ open, onClose }: Props) {
   const { state, actions, display } = useCashierData(open);
   const [copied, setCopied] = useState(false);
 
-  // ✅ 3 tabs
   const [tab, setTab] = useState<Tab>("buy_xtz");
 
   const handleCopy = () => {
@@ -30,18 +30,15 @@ export function CashierModal({ open, onClose }: Props) {
     }
   };
 
-  // ✅ Etherlink USDC address (replace if yours differs)
   const USDC_ADDRESS = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
 
-  // Best-effort token restriction list (depends on widget version)
   const supportedTokens = useMemo(() => {
     return [
-      { chainId: ETHERLINK_CHAIN.id, tokenAddress: "native" }, // XTZ native
+      { chainId: ETHERLINK_CHAIN.id, tokenAddress: "native" },
       { chainId: ETHERLINK_CHAIN.id, tokenAddress: USDC_ADDRESS },
     ];
   }, []);
 
-  // ✅ Bridge link (Swap tab)
   const ETHERLINK_BRIDGE_URL = "https://bridge.etherlink.com/";
 
   if (!open) return null;
@@ -51,14 +48,14 @@ export function CashierModal({ open, onClose }: Props) {
       <div className="cm-card" onMouseDown={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="cm-header">
-          <h3 className="cm-title">My Wallet</h3>
+          <h3 className="cm-title">Cashier</h3>
           <button className="cm-close-btn" onClick={onClose}>
             ✕
           </button>
         </div>
 
         <div className="cm-body">
-          {/* Address Pill (Click to Copy) */}
+          {/* Address Pill */}
           <div className="cm-address-row">
             <div
               className="cm-avatar-circle"
@@ -105,12 +102,12 @@ export function CashierModal({ open, onClose }: Props) {
                   <div className="cm-asset-amount">{display.xtz}</div>
                   <div className="cm-asset-name">Tezos (XTZ)</div>
                 </div>
-                <div className="cm-asset-tag">Network Fees</div>
+                <div className="cm-asset-tag">Gas</div>
               </div>
             </div>
           </div>
 
-          {/* ✅ 3 Tabs */}
+          {/* ✅ 3 Tabs (Updated Labels) */}
           <div className="cm-tabs3">
             <button className={`cm-tab3 ${tab === "buy_usdc" ? "active" : ""}`} onClick={() => setTab("buy_usdc")}>
               Buy USDC
@@ -118,22 +115,21 @@ export function CashierModal({ open, onClose }: Props) {
             <button className={`cm-tab3 ${tab === "buy_xtz" ? "active" : ""}`} onClick={() => setTab("buy_xtz")}>
               Buy XTZ
             </button>
-            <button className={`cm-tab3 ${tab === "swap" ? "active" : ""}`} onClick={() => setTab("swap")}>
-              Swap
+            <button className={`cm-tab3 ${tab === "bridge" ? "active" : ""}`} onClick={() => setTab("bridge")}>
+              Bridge
             </button>
           </div>
 
-          {/* ✅ Content Area */}
+          {/* Content Area */}
           <div className="cm-widget-shell">
             {tab === "buy_usdc" && (
               <div className="cm-widget-wrap">
                 <BuyWidget
-                  // ✅ force reset so it never “sticks” to previous token
                   key="buy_usdc"
                   client={thirdwebClient}
                   chain={ETHERLINK_CHAIN}
                   theme="light"
-                  title="Buy USDC (Etherlink)"
+                  title="Buy USDC"
                   tokenAddress={USDC_ADDRESS as any}
                   tokenEditable={false}
                   amountEditable={true}
@@ -151,8 +147,8 @@ export function CashierModal({ open, onClose }: Props) {
                   client={thirdwebClient}
                   chain={ETHERLINK_CHAIN}
                   theme="light"
-                  title="Buy XTZ (Etherlink)"
-                  tokenAddress={undefined as any} // native
+                  title="Buy XTZ"
+                  tokenAddress={undefined as any}
                   tokenEditable={false}
                   amountEditable={true}
                   supportedTokens={supportedTokens as any}
@@ -162,20 +158,25 @@ export function CashierModal({ open, onClose }: Props) {
               </div>
             )}
 
-            {tab === "swap" && (
+            {tab === "bridge" && (
               <div className="cm-bridge-box">
-                <div className="cm-bridge-title">Bridge USDC from Ethereum → Etherlink</div>
+                <div className="cm-bridge-header">
+                  <span className="cm-bridge-route">Ethereum L1</span>
+                  <span className="cm-bridge-arrow">➝</span>
+                  <span className="cm-bridge-route highlight">Etherlink L2</span>
+                </div>
+                
+                <div className="cm-bridge-title">Deposit Funds</div>
                 <div className="cm-bridge-text">
-                  To use the raffles, you can bridge <b>USDC</b> from <b>Ethereum</b> to <b>Etherlink</b> using the official
-                  Etherlink Bridge.
+                  Already have funds on Ethereum Mainnet? Use the official bridge to move <b>USDC</b> or <b>XTZ</b> over to Etherlink.
                 </div>
 
                 <a className="cm-bridge-btn" href={ETHERLINK_BRIDGE_URL} target="_blank" rel="noreferrer">
-                  Open Etherlink Bridge
+                  Open Official Bridge ↗
                 </a>
 
                 <div className="cm-bridge-footnote">
-                  Tip: Keep a little XTZ on Etherlink for gas fees.
+                  Bridging typically takes ~15-20 minutes.
                 </div>
               </div>
             )}
