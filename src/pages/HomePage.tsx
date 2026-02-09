@@ -134,13 +134,13 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             Where fun meets fairness. Experience the thrill of fully transparent, on-chain raffles. No tricks — just luck.
           </div>
 
-          {/* ✅ NEW: Trust Buttons */}
+          {/* ✅ UPDATED: Professional Action Buttons */}
           <div className="hp-hero-actions">
-            <a href="/testimonials" className="hp-action-btn">
-              ⭐️ Testimonials
+            <a href="/testimonials" className="hp-action-btn primary">
+              Testimonials
             </a>
-            <a href="/faq" className="hp-action-btn">
-              ❓ FAQ
+            <a href="/faq" className="hp-action-btn secondary">
+              FAQ
             </a>
           </div>
 
@@ -260,7 +260,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                 </div>
               )}
             </div>
-            {/* ❌ REMOVED WHITE FADES */}
           </div>
         </div>
 
@@ -309,7 +308,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                 </div>
               )}
             </div>
-            {/* ❌ REMOVED WHITE FADES */}
           </div>
         </div>
       </div>
