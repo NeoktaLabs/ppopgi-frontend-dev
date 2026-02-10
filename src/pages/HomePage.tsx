@@ -51,17 +51,18 @@ function computeEdges(el: HTMLDivElement | null) {
   };
 }
 
-// ✅ helper to fire global “open cashier” without threading props everywhere
+// ✅ helper to open Cashier without prop drilling
 function openCashierFromHome() {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:open-cashier"));
   } catch {}
 }
 
-// ✅ helper to fire global “open dashboard”
-function openDashboardFromHome() {
+// ✅ helper to navigate via your internal App routing (no hard refresh)
+type Page = "home" | "explore" | "dashboard" | "about" | "faq";
+function navigateFromHome(page: Page) {
   try {
-    window.location.href = "/dashboard";
+    window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page } }));
   } catch {}
 }
 
@@ -124,65 +125,51 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   /**
    * ✅ Banner items
-   * - Some navigate
-   * - Some trigger app actions (open cashier)
+   * Use buttons (not <a href>) so we don't hard refresh and break SPA routing.
    */
   const BannerItem = ({
     children,
-    href,
     onClick,
     title,
   }: {
     children: React.ReactNode;
-    href?: string;
-    onClick?: () => void;
+    onClick: () => void;
     title?: string;
   }) => {
-    if (href) {
-      return (
-        <a href={href} className="hp-announcement-text" title={title}>
-          {children}
-        </a>
-      );
-    }
     return (
-      <button type="button" className="hp-announcement-btn" onClick={onClick} title={title}>
+      <button type="button" className="hp-announcement-item" onClick={onClick} title={title}>
         {children}
       </button>
     );
   };
 
-  // ✅ Marquee Content Component (Duplicated for seamless loop)
   const MarqueeContent = () => (
     <>
-      <BannerItem
-        onClick={openCashierFromHome}
-        title="Open Cashier"
-      >
+      <BannerItem onClick={openCashierFromHome} title="Open Cashier">
         💡 Pro tip: Visit the Cashier to buy more XTZ or USDC
       </BannerItem>
 
       <span className="hp-announcement-sep">|</span>
 
-      <BannerItem href="/explore" title="Explore all raffles">
+      <BannerItem onClick={() => navigateFromHome("explore")} title="Explore all raffles">
         🔎 Discover all raffles from the Explore page
       </BannerItem>
 
       <span className="hp-announcement-sep">|</span>
 
-      <BannerItem href="/dashboard" title="Open Dashboard">
+      <BannerItem onClick={() => navigateFromHome("dashboard")} title="Open Dashboard">
         🎁 Visit your dashboard to reclaim prizes or ticket reclaims
       </BannerItem>
 
       <span className="hp-announcement-sep">|</span>
 
-      <BannerItem href="/about" title="The story behind Ppopgi">
+      <BannerItem onClick={() => navigateFromHome("about")} title="The story behind Ppopgi">
         📖 The story behind Ppopgi
       </BannerItem>
 
       <span className="hp-announcement-sep">|</span>
 
-      <BannerItem href="/faq" title="How Ppopgi works">
+      <BannerItem onClick={() => navigateFromHome("faq")} title="How Ppopgi works">
         ❓ How Ppopgi works (FAQ)
       </BannerItem>
 
