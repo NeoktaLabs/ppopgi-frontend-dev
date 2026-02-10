@@ -102,7 +102,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
   const MarqueeContent = () => (
     <>
       <a href="/testimonials" className="hp-announcement-text">
-        READ THE TESTIMONIALS
+        THE STORY BEHIND PPOPGI!
       </a>
       <span className="hp-announcement-sep">|</span>
       <a href="/faq" className="hp-announcement-text">
