@@ -9,74 +9,83 @@
 }
 
 /* =========================================================
-   ✅ PREMIUM LINK BANNER
+   ✅ FULL-WIDTH ANNOUNCEMENT BAR (Sales Style)
    ========================================================= */
 
-.hp-link-banner-wrap {
-  max-width: 1400px;
-  /* Top Margin: 100px (approx 80px Nav + 20px Gap) */
-  /* Bottom Margin: 20px (gap before ActivityBoard) */
-  margin: 100px auto 20px auto; 
-  padding: 0 20px;
+.hp-announcement-bar {
+  /* Break out of parent container to hit full screen width */
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+
+  /* Spacing: 100px Top (Nav+Gap) | 20px Bottom (Gap to Board) */
+  margin-top: 100px; 
+  margin-bottom: 20px;
+
+  /* Visual Style: High Contrast "Sale" Look */
+  background: linear-gradient(90deg, #4A0F2B 0%, #701a40 50%, #4A0F2B 100%);
+  color: white;
+  padding: 12px 0;
+  
+  box-shadow: 0 4px 20px rgba(74, 15, 43, 0.15);
   display: flex;
   justify-content: center;
-}
-
-.hp-link-banner {
-  /* Fits content tightly for that premium badge look */
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-
-  padding: 8px 20px; /* Slimmer height */
-  border-radius: 999px;
-
-  /* Glassmorphism */
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(74, 15, 43, 0.08);
-  box-shadow: 0 4px 15px -3px rgba(74, 15, 43, 0.06);
-
-  /* Force one line */
-  white-space: nowrap;
+  
+  /* Prevent scrollbar if width calc is slightly off */
+  box-sizing: border-box;
 }
 
-.hp-link-banner-link {
-  font-family: system-ui, -apple-system, sans-serif;
-  font-size: 11px; /* Smaller for "one line" premium look */
-  font-weight: 800;
+.hp-announcement-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1400px;
+  padding: 0 20px;
+}
+
+.hp-announcement-tag {
+  background: #ffffff;
+  color: #4A0F2B;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #64748b;
+}
+
+.hp-announcement-text {
+  color: #ffffff;
   text-decoration: none;
-  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: opacity 0.2s;
 }
 
-.hp-link-banner-link:hover {
-  color: #4A0F2B; /* Brand Pink on hover */
-  text-shadow: 0 0 20px rgba(190, 24, 93, 0.4);
+.hp-announcement-text:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
-.hp-link-banner-sep {
-  color: #e2e8f0;
-  font-size: 8px; /* Tiny separator */
-  vertical-align: middle;
+.hp-announcement-arrow {
+  font-weight: 400;
+  opacity: 0.7;
 }
 
-/* Mobile Fallback: If screen is tiny, allow wrap so it doesn't break layout */
-@media (max-width: 450px) {
-  .hp-link-banner-wrap {
-    margin-top: 90px;
-    margin-bottom: 15px;
+/* Mobile Tweak: Stack nicely */
+@media (max-width: 600px) {
+  .hp-announcement-bar {
+    padding: 10px 0;
   }
-  .hp-link-banner {
-    flex-wrap: wrap;
-    justify-content: center;
-    border-radius: 16px;
-    padding: 10px;
+  .hp-announcement-text {
+    font-size: 11px;
   }
-  .hp-link-banner-sep { display: none; }
 }
 
 /* =========================================================
@@ -85,7 +94,7 @@
 
 .hp-board-section {
   max-width: 1400px;
-  /* Top margin is 0 because the banner above handles the 20px gap */
+  /* Top margin 0 because banner handles the gap */
   margin: 0 auto 20px auto !important;
   padding: 0 20px;
 
@@ -94,7 +103,6 @@
   width: 100%;
 }
 
-/* Ensure the inner board doesn't add extra margin */
 .hp-board-section .ab-board {
   margin: 0 auto !important;
 }
