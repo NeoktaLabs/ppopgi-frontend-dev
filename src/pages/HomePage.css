@@ -13,6 +13,7 @@
    ========================================================= */
 
 .hp-announcement-bar {
+  /* Full Screen Width */
   width: 100vw;
   position: relative;
   left: 50%;
@@ -20,6 +21,7 @@
   margin-left: -50vw;
   margin-right: -50vw;
 
+  /* Spacing */
   margin-top: 20px;
   margin-bottom: 20px;
 
@@ -28,16 +30,18 @@
   padding: 10px 0;
 
   box-shadow: 0 4px 20px rgba(74, 15, 43, 0.15);
-  overflow: hidden;
+  overflow: hidden; /* Hide the scrolling text that goes off-screen */
 }
 
+/* The inner container that matches main content width */
 .hp-announcement-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
-  overflow: hidden;
+  overflow: hidden; /* Mask the marquee at the container edges */
   position: relative;
 
+  /* Optional: Fade edges slightly */
   mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
 }
@@ -45,12 +49,13 @@
 .hp-marquee-track {
   display: flex;
   white-space: nowrap;
-  width: max-content;
+  width: max-content; /* Allow it to be as wide as needed */
 
-  /* ✅ SLOWER: 40s -> 70s */
-  animation: hp-scroll 150s linear infinite;
+  /* ✅ SLOWER */
+  animation: hp-scroll 90s linear infinite;
 }
 
+/* Pause scroll when user hovers to make clicking links easier */
 .hp-marquee-track:hover {
   animation-play-state: paused;
 }
@@ -58,23 +63,40 @@
 .hp-marquee-content {
   display: flex;
   align-items: center;
-  padding-right: 20px;
+  padding-right: 20px; /* Space between the duplicated blocks */
 }
 
 @keyframes hp-scroll {
   from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+  to { transform: translateX(-50%); } /* Move half width (since we duplicated content) */
 }
 
-/* ✅ Shared style: banner “items” (buttons that look like links) */
-.hp-announcement-item {
+.hp-announcement-text {
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+  margin: 0 16px; /* Spacing around items */
+}
+
+.hp-announcement-text:hover {
+  opacity: 0.7;
+  text-decoration: underline;
+}
+
+/* ✅ Make banner buttons look EXACTLY like banner links (white + uppercase, no background) */
+.hp-announcement-btn {
   appearance: none;
   border: none;
   background: transparent;
   padding: 0;
-  margin: 0 14px;
+  margin: 0 16px;
 
-  color: rgba(255, 255, 255, 0.98);
+  color: #ffffff;
   text-decoration: none;
   font-size: 11px;
   font-weight: 800;
@@ -83,32 +105,22 @@
   white-space: nowrap;
 
   cursor: pointer;
-  transition: opacity 0.2s, text-decoration-color 0.2s, transform 0.2s;
+  transition: opacity 0.2s;
 }
 
-.hp-announcement-item:hover {
-  opacity: 0.78;
+.hp-announcement-btn:hover {
+  opacity: 0.7;
   text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.hp-announcement-item:active {
-  transform: translateY(1px);
-}
-
-.hp-announcement-item:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.85);
-  outline-offset: 3px;
-  border-radius: 6px;
 }
 
 .hp-announcement-sep {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 11px;
   font-weight: 300;
   margin: 0 4px;
 }
 
+/* Mobile Tweak: Ensure padding is safe */
 @media (max-width: 600px) {
   .hp-announcement-bar {
     padding: 12px 0;

@@ -51,16 +51,15 @@ function computeEdges(el: HTMLDivElement | null) {
   };
 }
 
-// ✅ helper to open Cashier without prop drilling
+// ✅ fire global “open cashier”
 function openCashierFromHome() {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:open-cashier"));
   } catch {}
 }
 
-// ✅ helper to navigate via your internal App routing (no hard refresh)
-type Page = "home" | "explore" | "dashboard" | "about" | "faq";
-function navigateFromHome(page: Page) {
+// ✅ fire global “navigate page” (App.tsx should listen)
+function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "faq") {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page } }));
   } catch {}
@@ -123,10 +122,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     };
   }, [isLoading, endingSoonSorted.length, recentlySettledSorted.length, updateEndingEdges, updateSettledEdges]);
 
-  /**
-   * ✅ Banner items
-   * Use buttons (not <a href>) so we don't hard refresh and break SPA routing.
-   */
+  // ✅ Banner item: button (so we don’t rely on URL routing)
   const BannerItem = ({
     children,
     onClick,
@@ -137,7 +133,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     title?: string;
   }) => {
     return (
-      <button type="button" className="hp-announcement-item" onClick={onClick} title={title}>
+      <button type="button" className="hp-announcement-btn" onClick={onClick} title={title}>
         {children}
       </button>
     );
@@ -191,7 +187,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               <MarqueeContent />
               <MarqueeContent />
             </div>
-
             <div className="hp-marquee-content">
               <MarqueeContent />
               <MarqueeContent />
@@ -370,5 +365,3 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     </>
   );
 }
-
-export default HomePage;
