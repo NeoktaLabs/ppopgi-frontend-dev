@@ -120,20 +120,20 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   return (
     <>
-      {/* ✅ Thin Banner (between menu and activity board) */}
+      {/* ✅ Premium Banner (Activity Board sits below this) */}
       <div className="hp-link-banner-wrap">
         <div className="hp-link-banner">
           <a href="/testimonials" className="hp-link-banner-link">
-            Read the testimonials here
+            User Testimonials
           </a>
-          <span className="hp-link-banner-sep">|</span>
+          <span className="hp-link-banner-sep">◆</span>
           <a href="/faq" className="hp-link-banner-link">
-            Read the FAQ to learn more about how Ppopgi works
+            How Ppopgi Works (FAQ)
           </a>
         </div>
       </div>
 
-      {/* BOARD SECTION */}
+      {/* ✅ Activity Board (20px gap above and below) */}
       <div className="hp-board-section">
         <ActivityBoard />
       </div>
