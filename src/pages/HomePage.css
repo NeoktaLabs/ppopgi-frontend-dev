@@ -48,7 +48,7 @@
   width: max-content;
 
   /* ✅ SLOWER: 40s -> 70s */
-  animation: hp-scroll 70s linear infinite;
+  animation: hp-scroll 150s linear infinite;
 }
 
 .hp-marquee-track:hover {
