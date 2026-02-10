@@ -9,11 +9,11 @@
 }
 
 /* =========================================================
-   ✅ FULL-WIDTH ANNOUNCEMENT BAR (Sales Style)
+   ✅ SCROLLING ANNOUNCEMENT BAR (MARQUEE)
    ========================================================= */
 
 .hp-announcement-bar {
-  /* Break out of parent container to hit full screen width */
+  /* Full Screen Width */
   width: 100vw;
   position: relative;
   left: 50%;
@@ -21,70 +21,82 @@
   margin-left: -50vw;
   margin-right: -50vw;
 
-  /* Spacing: 100px Top (Nav+Gap) | 20px Bottom (Gap to Board) */
-  margin-top: 100px; 
+  /* Spacing: 80px Top (60px Nav + 20px Gap) */
+  margin-top: 80px; 
   margin-bottom: 20px;
 
-  /* Visual Style: High Contrast "Sale" Look */
   background: linear-gradient(90deg, #4A0F2B 0%, #701a40 50%, #4A0F2B 100%);
   color: white;
-  padding: 12px 0;
+  padding: 10px 0;
   
   box-shadow: 0 4px 20px rgba(74, 15, 43, 0.15);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  
-  /* Prevent scrollbar if width calc is slightly off */
-  box-sizing: border-box;
+  overflow: hidden; /* Hide the scrolling text that goes off-screen */
 }
 
-.hp-announcement-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* The inner container that matches main content width */
+.hp-announcement-container {
   max-width: 1400px;
+  margin: 0 auto;
   padding: 0 20px;
+  overflow: hidden; /* Mask the marquee at the container edges */
+  position: relative;
+  
+  /* Optional: Fade edges slightly */
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
 }
 
-.hp-announcement-tag {
-  background: #ffffff;
-  color: #4A0F2B;
-  font-size: 10px;
-  font-weight: 900;
-  padding: 2px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.hp-marquee-track {
+  display: flex;
+  white-space: nowrap;
+  width: max-content; /* Allow it to be as wide as needed */
+  animation: hp-scroll 40s linear infinite; /* Smooth slow scroll */
+}
+
+/* Pause scroll when user hovers to make clicking links easier */
+.hp-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.hp-marquee-content {
+  display: flex;
+  align-items: center;
+  padding-right: 20px; /* Space between the duplicated blocks */
+}
+
+@keyframes hp-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); } /* Move half width (since we duplicated content) */
 }
 
 .hp-announcement-text {
   color: #ffffff;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1px;
   transition: opacity 0.2s;
+  white-space: nowrap;
+  margin: 0 16px; /* Spacing around items */
 }
 
 .hp-announcement-text:hover {
-  opacity: 0.8;
+  opacity: 0.7;
   text-decoration: underline;
 }
 
-.hp-announcement-arrow {
-  font-weight: 400;
-  opacity: 0.7;
+.hp-announcement-sep {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-weight: 300;
+  margin: 0 4px;
 }
 
-/* Mobile Tweak: Stack nicely */
+/* Mobile Tweak: Ensure padding is safe */
 @media (max-width: 600px) {
   .hp-announcement-bar {
-    padding: 10px 0;
-  }
-  .hp-announcement-text {
-    font-size: 11px;
+    padding: 12px 0;
   }
 }
 
@@ -94,7 +106,6 @@
 
 .hp-board-section {
   max-width: 1400px;
-  /* Top margin 0 because banner handles the gap */
   margin: 0 auto 20px auto !important;
   padding: 0 20px;
 
