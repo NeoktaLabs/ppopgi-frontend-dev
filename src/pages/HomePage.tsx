@@ -44,7 +44,7 @@ function computeEdges(el: HTMLDivElement | null) {
   if (!el) return { atLeft: true, atRight: true };
   const left = el.scrollLeft;
   const maxLeft = el.scrollWidth - el.clientWidth;
-  const eps = 2; // small tolerance for fractional pixels
+  const eps = 2;
   return {
     atLeft: left <= eps,
     atRight: left >= maxLeft - eps,
@@ -97,12 +97,11 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     return [...endingSoon].sort((a, b) => num(a.deadline) - num(b.deadline));
   }, [endingSoon]);
 
-  // Recently Settled (already sorted in hook, but keep stable + ensure max 5)
+  // Recently Settled
   const recentlySettledSorted = useMemo(() => {
     return (recentlyFinalized ?? []).slice(0, 5);
   }, [recentlyFinalized]);
 
-  // Initialize / refresh arrow visibility when lists load or resize
   useEffect(() => {
     const tick = () => {
       updateEndingEdges();
@@ -121,6 +120,19 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   return (
     <>
+      {/* ✅ Thin Banner (between menu and activity board) */}
+      <div className="hp-link-banner-wrap">
+        <div className="hp-link-banner">
+          <a href="/testimonials" className="hp-link-banner-link">
+            Read the testimonials here
+          </a>
+          <span className="hp-link-banner-sep">|</span>
+          <a href="/faq" className="hp-link-banner-link">
+            Read the FAQ to learn more about how Ppopgi works
+          </a>
+        </div>
+      </div>
+
       {/* BOARD SECTION */}
       <div className="hp-board-section">
         <ActivityBoard />
@@ -132,16 +144,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
           <h1 className="hp-hero-title">Welcome to Ppopgi (뽑기)</h1>
           <div className="hp-hero-sub">
             Where fun meets fairness. Experience the thrill of fully transparent, on-chain raffles. No tricks — just luck.
-          </div>
-
-          {/* ✅ UPDATED: Professional Action Buttons */}
-          <div className="hp-hero-actions">
-            <a href="/testimonials" className="hp-action-btn primary">
-              Testimonials
-            </a>
-            <a href="/faq" className="hp-action-btn secondary">
-              FAQ
-            </a>
           </div>
 
           {/* STATS BAR */}
@@ -234,11 +236,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               </button>
             )}
 
-            <div
-              className="hp-strip"
-              ref={endingRef}
-              onScroll={updateEndingEdges}
-            >
+            <div className="hp-strip" ref={endingRef} onScroll={updateEndingEdges}>
               {isLoading &&
                 Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="hp-strip-item">
@@ -255,8 +253,8 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
               {!isLoading && endingSoonSorted.length === 0 && (
                 <div className="hp-empty-msg">
-                   <div className="hp-empty-icon">😴</div>
-                   <div>No raffles ending soon.</div>
+                  <div className="hp-empty-icon">😴</div>
+                  <div>No raffles ending soon.</div>
                 </div>
               )}
             </div>
@@ -282,11 +280,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               </button>
             )}
 
-            <div
-              className="hp-strip"
-              ref={settledRef}
-              onScroll={updateSettledEdges}
-            >
+            <div className="hp-strip" ref={settledRef} onScroll={updateSettledEdges}>
               {isLoading &&
                 Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="hp-strip-item">
