@@ -11,7 +11,7 @@ import { HomePage } from "./pages/HomePage";
 import { ExplorePage } from "./pages/ExplorePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AboutPage } from "./pages/AboutPage";
-import { FaqPage } from "./pages/FaqPage"; // ✅ add
+import { FaqPage } from "./pages/FaqPage";
 
 // --- Components (Modals) ---
 import { SignInModal } from "./components/SignInModal";
@@ -26,7 +26,16 @@ import { useSession } from "./state/useSession";
 import { useAppRouting } from "./hooks/useAppRouting";
 import { useRaffleDetails } from "./hooks/useRaffleDetails";
 
-type Page = "home" | "explore" | "dashboard" | "about" | "faq"; // ✅ add faq
+type Page = "home" | "explore" | "dashboard" | "about" | "faq";
+
+function pageFromPath(pathname: string): Page {
+  const p = (pathname || "/").toLowerCase();
+  if (p.startsWith("/explore")) return "explore";
+  if (p.startsWith("/dashboard")) return "dashboard";
+  if (p.startsWith("/about")) return "about";
+  if (p.startsWith("/faq")) return "faq";
+  return "home";
+}
 
 export default function App() {
   // 1. Thirdweb Config
@@ -40,7 +49,7 @@ export default function App() {
   const activeWallet = useActiveWallet();
 
   // 3. Routing & Navigation
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>(() => pageFromPath(window.location.pathname));
   const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting();
 
   // 4. Modal States
@@ -72,6 +81,59 @@ export default function App() {
     setShowGate(false);
   };
 
+  // ✅ Listen for HomePage banner actions (open cashier / navigate)
+  useEffect(() => {
+    const onOpenCashier = () => {
+      if (account) setCashierOpen(true);
+      else setSignInOpen(true);
+    };
+
+    const onNavigate = (evt: Event) => {
+      const e = evt as CustomEvent<{ page?: Page }>;
+      const next = e?.detail?.page;
+      if (!next) return;
+
+      // dashboard requires account
+      if (next === "dashboard" && !account) {
+        setSignInOpen(true);
+        return;
+      }
+
+      setPage(next);
+
+      // Optional: keep URL in sync without a router
+      const path =
+        next === "home"
+          ? "/"
+          : next === "explore"
+          ? "/explore"
+          : next === "dashboard"
+          ? "/dashboard"
+          : next === "about"
+          ? "/about"
+          : "/faq";
+
+      try {
+        window.history.pushState({}, "", path);
+      } catch {}
+    };
+
+    // Handle back/forward buttons if URL changes
+    const onPopState = () => {
+      setPage(pageFromPath(window.location.pathname));
+    };
+
+    window.addEventListener("ppopgi:open-cashier", onOpenCashier as any);
+    window.addEventListener("ppopgi:navigate", onNavigate as any);
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("ppopgi:open-cashier", onOpenCashier as any);
+      window.removeEventListener("ppopgi:navigate", onNavigate as any);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [account]);
+
   // Sync Session
   useEffect(() => {
     setSession({ account, connector: account ? "thirdweb" : null });
@@ -101,23 +163,18 @@ export default function App() {
         account={account}
         onOpenSignIn={() => setSignInOpen(true)}
         onOpenCreate={() => (account ? setCreateOpen(true) : setSignInOpen(true))}
-        onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))} // ✅ already updated
+        onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))}
         onSignOut={handleSignOut}
       >
         {/* --- Page Routing --- */}
-        {page === "home" && (
-          <HomePage nowMs={nowMs} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />
-        )}
+        {page === "home" && <HomePage nowMs={nowMs} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
 
         {page === "explore" && <ExplorePage onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
 
-        {page === "dashboard" && (
-          <DashboardPage account={account} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />
-        )}
+        {page === "dashboard" && <DashboardPage account={account} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
 
         {page === "about" && <AboutPage />}
 
-        {/* ✅ NEW FAQ PAGE */}
         {page === "faq" && <FaqPage />}
 
         {/* --- Global Modals --- */}
@@ -135,9 +192,7 @@ export default function App() {
 
         <RaffleDetailsModal open={!!selectedRaffleId} raffleId={selectedRaffleId} onClose={closeRaffle} />
 
-        {safetyId && safetyData && (
-          <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} raffle={safetyData} />
-        )}
+        {safetyId && safetyData && <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} raffle={safetyData} />}
       </MainLayout>
     </>
   );
