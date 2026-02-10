@@ -13,7 +13,7 @@ type Props = {
   onOpenSafety: (id: string) => void;
 };
 
-// ... (Helper functions: fmtUsd, num, scrollStrip, computeEdges remain the same) ...
+// Helpers
 const fmtUsd = (val: bigint) => {
   try {
     const s = formatUnits(val, 6);
@@ -72,7 +72,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     setSettledEdges(computeEdges(settledRef.current));
   }, []);
 
-  // ... (Podium, EndingSoon, RecentlySettled logic remains the same) ...
+  // Podium Logic
   const podium = useMemo(() => {
     if (!bigPrizes || bigPrizes.length === 0) return { gold: null, silver: null, bronze: null };
     const sorted = [...bigPrizes].sort((a, b) => {
@@ -98,20 +98,48 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     return () => { window.clearTimeout(t); window.removeEventListener("resize", onResize); };
   }, [isLoading, endingSoonSorted.length, recentlySettledSorted.length, updateEndingEdges, updateSettledEdges]);
 
+  // ✅ Marquee Content Component (Duplicated for seamless loop)
+  const MarqueeContent = () => (
+    <>
+      <a href="/testimonials" className="hp-announcement-text">
+        READ THE TESTIMONIALS
+      </a>
+      <span className="hp-announcement-sep">|</span>
+      <a href="/faq" className="hp-announcement-text">
+        HOW PPOPGI WORKS (FAQ)
+      </a>
+      <span className="hp-announcement-sep" style={{ opacity: 0.3 }}>
+        ◆
+      </span>
+    </>
+  );
+
   return (
     <>
-      {/* ✅ FULL WIDTH ANNOUNCEMENT BANNER */}
+      {/* ✅ SCROLLING BANNER */}
       <div className="hp-announcement-bar">
-        <div className="hp-announcement-content">
-          <span className="hp-announcement-tag">NEW</span>
-          <a href="/faq" className="hp-announcement-text">
-            HOW PPOPGI WORKS: READ THE FAQ & TESTIMONIALS
-          </a>
-          <span className="hp-announcement-arrow">→</span>
+        {/* Container limits width to 1400px but allows overflow hidden for marquee */}
+        <div className="hp-announcement-container">
+          <div className="hp-marquee-track">
+            {/* Repeat content enough times to fill wide screens + buffer */}
+            <div className="hp-marquee-content">
+              <MarqueeContent />
+              <MarqueeContent />
+              <MarqueeContent />
+              <MarqueeContent />
+            </div>
+            {/* Second copy for seamless CSS loop */}
+            <div className="hp-marquee-content">
+              <MarqueeContent />
+              <MarqueeContent />
+              <MarqueeContent />
+              <MarqueeContent />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ✅ Activity Board (20px gap above is handled by CSS margins) */}
+      {/* Activity Board */}
       <div className="hp-board-section">
         <ActivityBoard />
       </div>
