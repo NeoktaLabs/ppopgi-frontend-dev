@@ -9,104 +9,96 @@
 }
 
 /* =========================================================
-   ✅ Thin Link Banner (between TopNav and ActivityBoard)
+   ✅ PREMIUM LINK BANNER
    ========================================================= */
 
 .hp-link-banner-wrap {
   max-width: 1400px;
-  margin: 92px auto 10px auto; /* space under TopNav */
+  /* Top Margin: 100px (approx 80px Nav + 20px Gap) */
+  /* Bottom Margin: 20px (gap before ActivityBoard) */
+  margin: 100px auto 20px auto; 
   padding: 0 20px;
   display: flex;
   justify-content: center;
 }
 
 .hp-link-banner {
-  width: 100%;
-  max-width: 680px;
-  display: flex;
+  /* Fits content tightly for that premium badge look */
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
 
-  padding: 10px 14px;
+  padding: 8px 20px; /* Slimmer height */
   border-radius: 999px;
 
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Glassmorphism */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(74, 15, 43, 0.08);
+  box-shadow: 0 4px 15px -3px rgba(74, 15, 43, 0.06);
 
-  border: 1px solid rgba(190, 24, 93, 0.16);
-  box-shadow: 0 10px 30px -12px rgba(190, 24, 93, 0.25);
+  /* Force one line */
+  white-space: nowrap;
 }
 
 .hp-link-banner-link {
-  font-size: 12px;
-  font-weight: 900;
-  color: #4A0F2B;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 11px; /* Smaller for "one line" premium look */
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
   text-decoration: none;
-  white-space: nowrap;
-  border-bottom: 1px dotted rgba(74, 15, 43, 0.25);
-  transition: all 0.18s ease;
+  transition: all 0.2s ease;
 }
 
 .hp-link-banner-link:hover {
-  color: #be185d;
-  border-bottom-color: rgba(190, 24, 93, 0.5);
+  color: #4A0F2B; /* Brand Pink on hover */
+  text-shadow: 0 0 20px rgba(190, 24, 93, 0.4);
 }
 
 .hp-link-banner-sep {
-  color: #cbd5e1;
-  font-weight: 900;
-  font-size: 12px;
-  user-select: none;
+  color: #e2e8f0;
+  font-size: 8px; /* Tiny separator */
+  vertical-align: middle;
 }
 
-/* ✅ Mobile: wrap instead of overflowing */
-@media (max-width: 520px) {
+/* Mobile Fallback: If screen is tiny, allow wrap so it doesn't break layout */
+@media (max-width: 450px) {
   .hp-link-banner-wrap {
-    margin-top: 84px;
-    padding: 0 12px;
+    margin-top: 90px;
+    margin-bottom: 15px;
   }
-
   .hp-link-banner {
-    max-width: 100%;
     flex-wrap: wrap;
-    row-gap: 6px;
-    text-align: center;
-    padding: 10px 12px;
+    justify-content: center;
+    border-radius: 16px;
+    padding: 10px;
   }
-
-  .hp-link-banner-link {
-    white-space: normal;
-    line-height: 1.25;
-  }
-
-  .hp-link-banner-sep {
-    display: none;
-  }
+  .hp-link-banner-sep { display: none; }
 }
 
 /* =========================================================
-   ✅ Activity Board wrapper (centered, no double margins)
+   ✅ ACTIVITY BOARD WRAPPER
    ========================================================= */
 
 .hp-board-section {
   max-width: 1400px;
-  margin: 10px auto 20px auto !important;
+  /* Top margin is 0 because the banner above handles the 20px gap */
+  margin: 0 auto 20px auto !important;
   padding: 0 20px;
 
   display: flex;
   justify-content: center;
   width: 100%;
-  box-sizing: border-box;
 }
 
-/* ✅ CRITICAL FIX:
-   ActivityBoard.css sets .ab-board margin: 90px auto 40px.
-   On the homepage we override it so it doesn’t “break” layout. */
+/* Ensure the inner board doesn't add extra margin */
 .hp-board-section .ab-board {
   margin: 0 auto !important;
 }
+
 
 /* --- HERO --- */
 .hp-hero {
