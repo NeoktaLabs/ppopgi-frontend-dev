@@ -13,7 +13,7 @@ type Props = {
   onOpenSafety: (id: string) => void;
 };
 
-// Formatting Helper (Compact USD)
+// ... (Helper functions: fmtUsd, num, scrollStrip, computeEdges remain the same) ...
 const fmtUsd = (val: bigint) => {
   try {
     const s = formatUnits(val, 6);
@@ -72,68 +72,46 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     setSettledEdges(computeEdges(settledRef.current));
   }, []);
 
-  // Podium Logic
+  // ... (Podium, EndingSoon, RecentlySettled logic remains the same) ...
   const podium = useMemo(() => {
     if (!bigPrizes || bigPrizes.length === 0) return { gold: null, silver: null, bronze: null };
-
     const sorted = [...bigPrizes].sort((a, b) => {
-      try {
-        return BigInt(a.winningPot || "0") < BigInt(b.winningPot || "0") ? 1 : -1;
-      } catch {
-        return 0;
-      }
+      try { return BigInt(a.winningPot || "0") < BigInt(b.winningPot || "0") ? 1 : -1; } catch { return 0; }
     });
-
-    return {
-      gold: sorted[0] || null,
-      silver: sorted[1] || null,
-      bronze: sorted[2] || null,
-    };
+    return { gold: sorted[0] || null, silver: sorted[1] || null, bronze: sorted[2] || null };
   }, [bigPrizes]);
 
-  // Ending Soon Logic
   const endingSoonSorted = useMemo(() => {
     if (!endingSoon) return [];
     return [...endingSoon].sort((a, b) => num(a.deadline) - num(b.deadline));
   }, [endingSoon]);
 
-  // Recently Settled
   const recentlySettledSorted = useMemo(() => {
     return (recentlyFinalized ?? []).slice(0, 5);
   }, [recentlyFinalized]);
 
   useEffect(() => {
-    const tick = () => {
-      updateEndingEdges();
-      updateSettledEdges();
-    };
-
+    const tick = () => { updateEndingEdges(); updateSettledEdges(); };
     const t = window.setTimeout(tick, 0);
     const onResize = () => tick();
     window.addEventListener("resize", onResize);
-
-    return () => {
-      window.clearTimeout(t);
-      window.removeEventListener("resize", onResize);
-    };
+    return () => { window.clearTimeout(t); window.removeEventListener("resize", onResize); };
   }, [isLoading, endingSoonSorted.length, recentlySettledSorted.length, updateEndingEdges, updateSettledEdges]);
 
   return (
     <>
-      {/* ✅ Premium Banner (Activity Board sits below this) */}
-      <div className="hp-link-banner-wrap">
-        <div className="hp-link-banner">
-          <a href="/testimonials" className="hp-link-banner-link">
-            User Testimonials
+      {/* ✅ FULL WIDTH ANNOUNCEMENT BANNER */}
+      <div className="hp-announcement-bar">
+        <div className="hp-announcement-content">
+          <span className="hp-announcement-tag">NEW</span>
+          <a href="/faq" className="hp-announcement-text">
+            HOW PPOPGI WORKS: READ THE FAQ & TESTIMONIALS
           </a>
-          <span className="hp-link-banner-sep">◆</span>
-          <a href="/faq" className="hp-link-banner-link">
-            How Ppopgi Works (FAQ)
-          </a>
+          <span className="hp-announcement-arrow">→</span>
         </div>
       </div>
 
-      {/* ✅ Activity Board (20px gap above and below) */}
+      {/* ✅ Activity Board (20px gap above is handled by CSS margins) */}
       <div className="hp-board-section">
         <ActivityBoard />
       </div>
@@ -152,16 +130,12 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               <div className="hp-stat-val">{isLoading ? "..." : stats.totalRaffles}</div>
               <div className="hp-stat-lbl">Raffles Created</div>
             </div>
-
             <div className="hp-stat-sep" />
-
             <div className="hp-stat-item">
               <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.settledVolume)}</div>
               <div className="hp-stat-lbl">Prizes Settled</div>
             </div>
-
             <div className="hp-stat-sep" />
-
             <div className="hp-stat-item highlight">
               <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.activeVolume)}</div>
               <div className="hp-stat-lbl">Total Active Volume</div>
@@ -178,15 +152,9 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
           <div className="hp-podium">
             {isLoading && (
               <>
-                <div className="pp-silver-wrapper">
-                  <RaffleCardSkeleton />
-                </div>
-                <div className="pp-gold-wrapper">
-                  <RaffleCardSkeleton />
-                </div>
-                <div className="pp-bronze-wrapper">
-                  <RaffleCardSkeleton />
-                </div>
+                <div className="pp-silver-wrapper"><RaffleCardSkeleton /></div>
+                <div className="pp-gold-wrapper"><RaffleCardSkeleton /></div>
+                <div className="pp-bronze-wrapper"><RaffleCardSkeleton /></div>
               </>
             )}
 
@@ -195,19 +163,16 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                 <RaffleCard raffle={podium.silver} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="silver" nowMs={nowMs} />
               </div>
             )}
-
             {!isLoading && podium.gold && (
               <div className="pp-gold-wrapper">
                 <RaffleCard raffle={podium.gold} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="gold" nowMs={nowMs} />
               </div>
             )}
-
             {!isLoading && podium.bronze && (
               <div className="pp-bronze-wrapper">
                 <RaffleCard raffle={podium.bronze} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="bronze" nowMs={nowMs} />
               </div>
             )}
-
             {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
               <div className="hp-empty-msg">
                 <div className="hp-empty-icon">🍃</div>
@@ -223,40 +188,17 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             <div className="hp-section-title">⏳ Ending Soon</div>
             <div className="hp-section-line" />
           </div>
-
           <div className="hp-strip-wrap">
             {!endingEdges.atLeft && (
-              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")} aria-label="Scroll left">
-                ‹
-              </button>
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")}>‹</button>
             )}
             {!endingEdges.atRight && (
-              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")} aria-label="Scroll right">
-                ›
-              </button>
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")}>›</button>
             )}
-
             <div className="hp-strip" ref={endingRef} onScroll={updateEndingEdges}>
-              {isLoading &&
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="hp-strip-item">
-                    <RaffleCardSkeleton />
-                  </div>
-                ))}
-
-              {!isLoading &&
-                endingSoonSorted.map((r) => (
-                  <div key={r.id} className="hp-strip-item">
-                    <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                  </div>
-                ))}
-
-              {!isLoading && endingSoonSorted.length === 0 && (
-                <div className="hp-empty-msg">
-                  <div className="hp-empty-icon">😴</div>
-                  <div>No raffles ending soon.</div>
-                </div>
-              )}
+              {isLoading && Array.from({ length: 4 }).map((_, i) => <div key={i} className="hp-strip-item"><RaffleCardSkeleton /></div>)}
+              {!isLoading && endingSoonSorted.map((r) => <div key={r.id} className="hp-strip-item"><RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} /></div>)}
+              {!isLoading && endingSoonSorted.length === 0 && <div className="hp-empty-msg"><div className="hp-empty-icon">😴</div><div>No raffles ending soon.</div></div>}
             </div>
           </div>
         </div>
@@ -267,40 +209,17 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             <div className="hp-section-title">✅ Recently Settled</div>
             <div className="hp-section-line" />
           </div>
-
           <div className="hp-strip-wrap">
             {!settledEdges.atLeft && (
-              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")} aria-label="Scroll left">
-                ‹
-              </button>
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")}>‹</button>
             )}
             {!settledEdges.atRight && (
-              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")} aria-label="Scroll right">
-                ›
-              </button>
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")}>›</button>
             )}
-
             <div className="hp-strip" ref={settledRef} onScroll={updateSettledEdges}>
-              {isLoading &&
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="hp-strip-item">
-                    <RaffleCardSkeleton />
-                  </div>
-                ))}
-
-              {!isLoading &&
-                recentlySettledSorted.map((r) => (
-                  <div key={r.id} className="hp-strip-item">
-                    <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
-                  </div>
-                ))}
-
-              {!isLoading && recentlySettledSorted.length === 0 && (
-                <div className="hp-empty-msg">
-                  <div className="hp-empty-icon">📂</div>
-                  <div>No recently settled raffles yet.</div>
-                </div>
-              )}
+              {isLoading && Array.from({ length: 5 }).map((_, i) => <div key={i} className="hp-strip-item"><RaffleCardSkeleton /></div>)}
+              {!isLoading && recentlySettledSorted.map((r) => <div key={r.id} className="hp-strip-item"><RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} /></div>)}
+              {!isLoading && recentlySettledSorted.length === 0 && <div className="hp-empty-msg"><div className="hp-empty-icon">📂</div><div>No recently settled raffles yet.</div></div>}
             </div>
           </div>
         </div>
