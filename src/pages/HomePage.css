@@ -33,6 +33,29 @@
   overflow: hidden; /* Hide the scrolling text that goes off-screen */
 }
 
+/* Make banner buttons look exactly like banner links */
+.hp-announcement-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+
+  font-size: 12px;
+  font-weight: 900;
+  color: #4A0F2B;
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 1px dotted rgba(74, 15, 43, 0.25);
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+
+.hp-announcement-btn:hover {
+  color: #be185d;
+  border-bottom-color: rgba(190, 24, 93, 0.5);
+}
+
 /* The inner container that matches main content width */
 .hp-announcement-container {
   max-width: 1400px;
