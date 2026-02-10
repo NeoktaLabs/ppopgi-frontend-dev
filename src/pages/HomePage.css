@@ -9,12 +9,12 @@
 }
 
 /* =========================================================
-   ✅ NEW: Thin Link Banner (between TopNav and ActivityBoard)
+   ✅ Thin Link Banner (between TopNav and ActivityBoard)
    ========================================================= */
 
 .hp-link-banner-wrap {
   max-width: 1400px;
-  margin: 92px auto 10px auto; /* leaves room under your sticky TopNav */
+  margin: 92px auto 10px auto; /* leaves room under sticky TopNav */
   padding: 0 20px;
   display: flex;
   justify-content: center;
@@ -226,7 +226,7 @@
   margin-top: 2px;
 }
 
-/* --- TOP ACTIVE --- */
+/* --- TOP ACTIVE (Projector Light Style) --- */
 .hp-podium-section {
   position: relative;
   z-index: 10;
@@ -431,6 +431,7 @@
     height: 1px;
   }
 
+  /* Podium Mobile Stack */
   .hp-podium {
     flex-direction: column;
     align-items: center;
