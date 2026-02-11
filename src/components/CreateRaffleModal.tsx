@@ -1,5 +1,5 @@
 // src/components/CreateRaffleModal.tsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { useActiveAccount } from "thirdweb/react";
 import { ADDRESSES } from "../config/contracts";
@@ -71,6 +71,34 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  // ✅ redirect timer after success
+  const successTimerRef = useRef<number | null>(null);
+
+  const clearSuccessTimer = () => {
+    if (successTimerRef.current != null) {
+      window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
+    }
+  };
+
+  const goHome = useCallback(() => {
+    // keep your existing behavior
+    if (window.location.pathname !== "/") window.location.href = "/";
+    else window.location.reload();
+  }, []);
+
+  const handleFinalClose = useCallback(() => {
+    clearSuccessTimer();
+
+    // notify parent if needed
+    if (onCreated && createdAddr) onCreated(createdAddr);
+
+    onClose();
+
+    // ✅ always return to homepage when closing modal
+    goHome();
+  }, [onClose, onCreated, createdAddr, goHome]);
+
   const handleSuccess = (addr?: string) => {
     fireConfetti();
     if (addr) {
@@ -79,24 +107,35 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     }
   };
 
-  const handleFinalClose = () => {
-    if (onCreated && createdAddr) onCreated(createdAddr);
-    onClose();
-    if (window.location.pathname !== "/") window.location.href = "/";
-  };
-
   const { form, validation, derived, status, helpers } = useCreateRaffleForm(open, handleSuccess);
 
   // Reset internal state if modal is re-opened
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       setStep("form");
       setCreatedAddr(null);
       setCopied(false);
       setSubmitAttempted(false);
       setAdvancedOpen(false);
+      clearSuccessTimer();
     }
   }, [open]);
+
+  // ✅ when success page shows, auto-close + go home after 10s
+  useEffect(() => {
+    clearSuccessTimer();
+
+    if (!open) return;
+    if (step !== "success") return;
+
+    successTimerRef.current = window.setTimeout(() => {
+      handleFinalClose();
+    }, 10_000);
+
+    return () => {
+      clearSuccessTimer();
+    };
+  }, [open, step, handleFinalClose]);
 
   // ---------------------------------------------
   // ✅ Min/Max safeguard (UI auto-bump)
@@ -270,7 +309,13 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
           <div className="crm-success-view">
             <div className="crm-success-icon">✓</div>
             <div className="crm-success-title">Raffle Created!</div>
-            <div className="crm-success-sub">Your contract is live. Share the link below to start selling tickets.</div>
+            <div className="crm-success-sub">
+              Your contract is live. Share the link below to start selling tickets.
+              <br />
+              <span style={{ display: "inline-block", marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
+                Redirecting to home in ~10s…
+              </span>
+            </div>
 
             <div className="crm-share-box">
               <label className="crm-label" style={{ textAlign: "left" }}>
@@ -292,6 +337,11 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
+
+              {/* ✅ click to close + go home */}
+              <button type="button" className="crm-done-btn" onClick={handleFinalClose} style={{ marginTop: 10 }}>
+                Close & go to Home →
+              </button>
             </div>
 
             <div className="crm-social-row">
@@ -302,10 +352,6 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                 Telegram
               </a>
             </div>
-
-            <button className="crm-done-btn" onClick={handleFinalClose}>
-              Skip and view dashboard →
-            </button>
           </div>
         ) : (
           /* FORM */
