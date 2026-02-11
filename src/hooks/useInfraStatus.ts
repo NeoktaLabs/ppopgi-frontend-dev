@@ -1,5 +1,6 @@
 // src/hooks/useInfraStatus.ts
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRevalidateTick } from "../lib/revalidate";
 
 type IndexerLevel = "healthy" | "degraded" | "late" | "down";
 type RpcLevel = "healthy" | "degraded" | "slow" | "down";
@@ -216,10 +217,22 @@ async function fetchBotStatus(statusUrl: string, timeoutMs: number) {
   return json;
 }
 
+function isHidden() {
+  try {
+    return typeof document !== "undefined" && document.hidden;
+  } catch {
+    return false;
+  }
+}
+
 export function useInfraStatus() {
   const subgraphUrl = useMemo(() => mustEnv("VITE_SUBGRAPH_URL"), []);
   const rpcUrl = useMemo(() => mustEnv("VITE_ETHERLINK_RPC_URL"), []);
   const botUrl = useMemo(() => env("VITE_FINALIZER_STATUS_URL"), []);
+
+  // ✅ revalidate tick (your app can "poke" infra refresh after actions)
+  const rvTick = useRevalidateTick();
+  const lastRvAtRef = useRef<number>(0);
 
   const pollMs = useMemo(() => {
     const v = env("VITE_INFRA_POLL_MS");
@@ -439,6 +452,21 @@ export function useInfraStatus() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollMs, rpcUrl, subgraphUrl, botUrl, finalizerEverySec]);
+
+  // ✅ revalidate-driven "poke" (throttled; does NOT change your cadence)
+  useEffect(() => {
+    if (!rvTick) return;
+
+    // don’t spam when tab is hidden
+    if (isHidden()) return;
+
+    const now = Date.now();
+    if (now - lastRvAtRef.current < 3_000) return; // throttle bursts
+    lastRvAtRef.current = now;
+
+    void runOnce();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rvTick]);
 
   // every second: recompute live countdowns + force refresh at 0s
   useEffect(() => {
