@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
+import { useRevalidateTick } from "../lib/revalidate";
 import "./ActivityBoard.css";
 
 const short = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
@@ -47,6 +48,10 @@ function timeAgoFrom(nowSec: number, ts: string) {
 export function ActivityBoard() {
   const [items, setItems] = useState<GlobalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ✅ Revalidate tick (fires when you emit "create/buy/finalize/claim" events from your app)
+  const rvTick = useRevalidateTick();
+  const lastRvAtRef = useRef<number>(0);
 
   // ✅ 1s ticker (UI-only) so "time ago" updates without hammering the indexer
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
@@ -147,6 +152,22 @@ export function ActivityBoard() {
     };
   }, [load]);
 
+  // ✅ Revalidate-driven refresh (WITHOUT hammering the indexer)
+  // - On events (create/buy/finalize/etc), we attempt ONE background refresh.
+  // - Throttled to at most once every ~3s, and it still respects inFlight/backoff logic.
+  useEffect(() => {
+    if (!rvTick) return;
+
+    const now = Date.now();
+    if (now - lastRvAtRef.current < 3_000) return; // throttle bursty events
+    lastRvAtRef.current = now;
+
+    // Don’t force if tab hidden; your normal hidden cadence already handles it
+    if (isHidden()) return;
+
+    void load(true);
+  }, [rvTick, load]);
+
   // ✅ Compute enter animation flags (only first time txHash appears)
   const rowsWithFlags = useMemo(() => {
     return (items ?? []).map((it) => {
@@ -204,11 +225,7 @@ export function ActivityBoard() {
 
           const fresh = isFresh(item.timestamp, 10);
 
-          const rowClass = [
-            "ab-row",
-            enter ? "ab-enter" : "",
-            fresh ? `ab-fresh ab-fresh-${iconClass}` : "",
-          ]
+          const rowClass = ["ab-row", enter ? "ab-enter" : "", fresh ? `ab-fresh ab-fresh-${iconClass}` : ""]
             .filter(Boolean)
             .join(" ");
 
