@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
-import { useRevalidateTick } from "../hooks/useRevalidateTick";
+import { useRevalidate } from "../hooks/useRevalidateTick";
 import "./ActivityBoard.css";
 
 const short = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
@@ -50,7 +50,7 @@ export function ActivityBoard() {
   const [loading, setLoading] = useState(true);
 
   // ✅ Revalidate tick (fires when you emit "create/buy/finalize/claim" events from your app)
-  const rvTick = useRevalidateTick();
+  const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
 
   // ✅ 1s ticker (UI-only) so "time ago" updates without hammering the indexer

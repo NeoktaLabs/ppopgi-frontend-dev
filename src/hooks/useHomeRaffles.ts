@@ -4,7 +4,7 @@ import type { RaffleListItem } from "../indexer/subgraph";
 import { fetchRafflesOnChainFallback } from "../onchain/fallbackRaffles";
 
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
-import { useRevalidateTick } from "../hooks/useRevalidateTick";
+import { useRevalidate } from "../hooks/useRevalidateTick";
 
 type Mode = "indexer" | "live";
 
@@ -40,7 +40,7 @@ export function useHomeRaffles() {
   const store = useRaffleStore("home", 20_000);
 
   // ✅ Revalidate tick (event-based refresh)
-  const rvTick = useRevalidateTick();
+  const rvTick = useRevalidate();
 
   // Local override (live fallback)
   const [mode, setMode] = useState<Mode>("indexer");

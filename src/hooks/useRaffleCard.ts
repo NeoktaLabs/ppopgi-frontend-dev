@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { formatUnits } from "ethers";
 import type { RaffleListItem } from "../indexer/subgraph";
-import { useRevalidateTick } from "../hooks/useRevalidateTick";
+import { useRevalidate } from "../hooks/useRevalidateTick";
 
 // --- Helpers ---
 const toNum = (v: any) => {
@@ -63,7 +63,7 @@ function normalizeMaxTickets(maxTickets: any) {
 export function useRaffleCard(raffle: RaffleListItem, nowMs: number) {
   // ✅ Revalidate tick: forces a rerender on relevant events.
   // This helps in cases where upstream data might be updated in-place.
-  const rvTick = useRevalidateTick();
+  const rvTick = useRevalidate();
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const clearMsgTimerRef = useRef<number | null>(null);

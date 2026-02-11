@@ -1,6 +1,6 @@
 // src/hooks/useInfraStatus.ts
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRevalidateTick } from "../hooks/useRevalidateTick";
+import { useRevalidate } from "../hooks/useRevalidateTick";
 
 type IndexerLevel = "healthy" | "degraded" | "late" | "down";
 type RpcLevel = "healthy" | "degraded" | "slow" | "down";
@@ -231,7 +231,7 @@ export function useInfraStatus() {
   const botUrl = useMemo(() => env("VITE_FINALIZER_STATUS_URL"), []);
 
   // ✅ revalidate tick (your app can "poke" infra refresh after actions)
-  const rvTick = useRevalidateTick();
+  const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
 
   const pollMs = useMemo(() => {
