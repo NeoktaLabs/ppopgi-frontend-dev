@@ -1,5 +1,5 @@
 // src/components/RaffleDetailsModal.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
@@ -128,11 +128,32 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
+  // ✅ NEW: auto-close after successful buy
+  const buyCloseTimerRef = useRef<number | null>(null);
+  const clearBuyTimer = () => {
+    if (buyCloseTimerRef.current != null) {
+      window.clearTimeout(buyCloseTimerRef.current);
+      buyCloseTimerRef.current = null;
+    }
+  };
+
+  const goHome = useCallback(() => {
+    if (window.location.pathname !== "/") window.location.href = "/";
+    else window.location.reload();
+  }, []);
+
+  const handleFinalClose = useCallback(() => {
+    clearBuyTimer();
+    onClose();
+    goHome();
+  }, [onClose, goHome]);
+
   useEffect(() => {
     if (!raffleId || !open) {
       setMetadata(null);
       setEvents(null);
       setTab("receipt");
+      clearBuyTimer();
       return;
     }
 
@@ -294,8 +315,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, raffleId, maxBuy]);
 
-  if (!open) return null;
-
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
@@ -305,8 +324,37 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   // ✅ NEW: show clear balance warning when connected + allowance ok + not enough balance
   const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
+  // ✅ NEW: detect a successful buy and auto-close in 3s
+  // We treat a "success" as: not pending anymore AND we have a tx hash AND no error message.
+  const buyTxHash = (state as any).buyTxHash ?? (state as any).txHash ?? null;
+  const buyMsg = String((state as any).buyMsg ?? "");
+  const isPending = !!state.isPending;
+  const looksLikeError =
+    buyMsg.toLowerCase().includes("fail") ||
+    buyMsg.toLowerCase().includes("error") ||
+    buyMsg.toLowerCase().includes("revert") ||
+    buyMsg.toLowerCase().includes("denied");
+
+  useEffect(() => {
+    clearBuyTimer();
+
+    if (!open) return;
+    if (!buyTxHash) return;
+    if (isPending) return;
+    if (looksLikeError) return;
+
+    buyCloseTimerRef.current = window.setTimeout(() => {
+      handleFinalClose();
+    }, 3000);
+
+    return () => clearBuyTimer();
+  }, [open, buyTxHash, isPending, looksLikeError, handleFinalClose]);
+
+  // ✅ AFTER hooks
+  if (!open) return null;
+
   return (
-    <div className="rdm-overlay" onMouseDown={onClose}>
+    <div className="rdm-overlay" onMouseDown={handleFinalClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="rdm-header">
           <div style={{ display: "flex", gap: 8 }}>
@@ -317,7 +365,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div style={{ fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
             TICKET #{raffleId?.slice(2, 8).toUpperCase()}
           </div>
-          <button className="rdm-close-btn" onClick={onClose}>
+          <button className="rdm-close-btn" onClick={handleFinalClose}>
             ✕
           </button>
         </div>
@@ -332,10 +380,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div className="rdm-hero-meta">
             <div className="rdm-host">
               <span>Created by</span>
-              <ExplorerLink
-                addr={String(displayData?.creator || "")}
-                label={math.short(String(displayData?.creator || ""))}
-              />
+              <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
             </div>
             <div className="rdm-createdon">
               <span>Created on</span>
@@ -440,7 +485,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             </div>
           ) : (
             <div style={{ position: "relative" }}>
-              {/* ✅ Blur the interactive block if not connected */}
               <div
                 style={{
                   filter: blurBuy ? "blur(3px)" : undefined,
@@ -460,7 +504,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   </div>
                 )}
 
-                {/* ✅ Balance warning */}
                 {showBalanceWarn && (
                   <div
                     style={{
@@ -531,9 +574,15 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     {state.buyMsg}
                   </div>
                 )}
+
+                {/* ✅ small helper once tx exists */}
+                {buyTxHash && !isPending && !looksLikeError && (
+                  <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, fontWeight: 900, opacity: 0.8 }}>
+                    Purchase confirmed — returning to Home in ~3s…
+                  </div>
+                )}
               </div>
 
-              {/* ✅ Overlay message (not blurred) */}
               {blurBuy && (
                 <div
                   style={{
