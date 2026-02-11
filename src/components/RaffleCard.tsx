@@ -2,7 +2,6 @@
 import React, { useMemo } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { useRaffleCard } from "../hooks/useRaffleCard";
-import { useInfraStatus } from "../hooks/useInfraStatus";
 import "./RaffleCard.css";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
@@ -22,6 +21,12 @@ export type UserEntryStats = {
   percentage: string;
 };
 
+type FinalizerInfo = {
+  running: boolean;
+  secondsToNextRun: number | null;
+  tsMs: number; // changes when infra refresh completes
+};
+
 type Props = {
   raffle: RaffleListItem;
   onOpen: (id: string) => void;
@@ -30,6 +35,12 @@ type Props = {
   nowMs?: number;
   hatch?: HatchUI | null;
   userEntry?: UserEntryStats;
+
+  /**
+   * ✅ Pass this from ONE place (App/Home/Dashboard) that calls useInfraStatus()
+   * to avoid polling infra per-card.
+   */
+  finalizer?: FinalizerInfo | null;
 };
 
 const short = (addr: string) => (addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown");
@@ -49,9 +60,17 @@ function fmtMinSec(sec: number): string {
   return `${m}m ${r}s`;
 }
 
-export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch, userEntry }: Props) {
+export function RaffleCard({
+  raffle,
+  onOpen,
+  onOpenSafety,
+  ribbon,
+  nowMs = Date.now(),
+  hatch,
+  userEntry,
+  finalizer,
+}: Props) {
   const { ui, actions } = useRaffleCard(raffle, nowMs);
-  const infra = useInfraStatus();
 
   // -----------------------------
   // Finalizing rules (card-level)
@@ -70,25 +89,19 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
   const shouldFinalizing = isOpenStatus && (maxReached || deadlinePassed);
 
-  // ✅ Freeze at 0 once it hits 0, until refreshed
-  // We approximate "refreshed" by when infra.tsMs changes (the last poll completion time).
-  // If your bot hook triggers a refresh at 0, infra.tsMs will update and this will reset properly.
+  // ✅ Freeze at 0 once it hits 0, until refreshed (tsMs changes)
   const finalizingSec = useMemo(() => {
-    const to = infra.bot?.secondsToNextRun ?? null;
+    const to = finalizer?.secondsToNextRun ?? null;
     if (to === null) return null;
 
-    // clamp to >=0 always
     const sec = Math.max(0, Math.floor(to));
-
-    // once it hits 0, keep showing 0 until next infra refresh (tsMs changes)
-    // (because this memo re-runs when infra.tsMs changes)
     return sec === 0 ? 0 : sec;
-  }, [infra.bot?.secondsToNextRun, infra.tsMs]);
+  }, [finalizer?.secondsToNextRun, finalizer?.tsMs]);
 
   const finalizingChipNode = useMemo(() => {
     if (!shouldFinalizing) return null;
 
-    if (infra.bot?.running) {
+    if (finalizer?.running) {
       return (
         <>
           Finalizing
@@ -115,7 +128,7 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
         ~ {fmtMinSec(finalizingSec)}
       </>
     );
-  }, [shouldFinalizing, infra.bot?.running, finalizingSec]);
+  }, [shouldFinalizing, finalizer?.running, finalizingSec]);
 
   const displayStatus = shouldFinalizing ? "Finalizing" : ui.displayStatus;
 
