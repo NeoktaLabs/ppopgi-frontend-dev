@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { useHomeRaffles } from "../hooks/useHomeRaffles";
+import { useInfraStatus } from "../hooks/useInfraStatus";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard";
@@ -70,8 +71,21 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
 
+  // ✅ ONE infra poll for the entire homepage (do NOT call useInfraStatus in each card)
+  const infra = useInfraStatus();
+
   // ✅ pull refetch so we can refresh in background on “revalidate” events
   const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading, refetch } = useHomeRaffles();
+
+  // ✅ Create ONE stable payload for all cards
+  const finalizerForCards = useMemo(
+    () => ({
+      running: !!infra.bot?.running,
+      secondsToNextRun: infra.bot?.secondsToNextRun ?? null,
+      tsMs: infra.tsMs,
+    }),
+    [infra.bot?.running, infra.bot?.secondsToNextRun, infra.tsMs]
+  );
 
   // ✅ Listen to global revalidate events and refresh home lists (debounced)
   const revalTimerRef = useRef<number | null>(null);
@@ -275,17 +289,38 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
             {!isLoading && podium.silver && (
               <div className="pp-silver-wrapper">
-                <RaffleCard raffle={podium.silver} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="silver" nowMs={nowMs} />
+                <RaffleCard
+                  raffle={podium.silver}
+                  onOpen={onOpenRaffle}
+                  onOpenSafety={onOpenSafety}
+                  ribbon="silver"
+                  nowMs={nowMs}
+                  finalizer={finalizerForCards}
+                />
               </div>
             )}
             {!isLoading && podium.gold && (
               <div className="pp-gold-wrapper">
-                <RaffleCard raffle={podium.gold} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="gold" nowMs={nowMs} />
+                <RaffleCard
+                  raffle={podium.gold}
+                  onOpen={onOpenRaffle}
+                  onOpenSafety={onOpenSafety}
+                  ribbon="gold"
+                  nowMs={nowMs}
+                  finalizer={finalizerForCards}
+                />
               </div>
             )}
             {!isLoading && podium.bronze && (
               <div className="pp-bronze-wrapper">
-                <RaffleCard raffle={podium.bronze} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} ribbon="bronze" nowMs={nowMs} />
+                <RaffleCard
+                  raffle={podium.bronze}
+                  onOpen={onOpenRaffle}
+                  onOpenSafety={onOpenSafety}
+                  ribbon="bronze"
+                  nowMs={nowMs}
+                  finalizer={finalizerForCards}
+                />
               </div>
             )}
             {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
@@ -327,7 +362,13 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               {!isLoading &&
                 endingSoonSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
-                    <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                    <RaffleCard
+                      raffle={r}
+                      onOpen={onOpenRaffle}
+                      onOpenSafety={onOpenSafety}
+                      nowMs={nowMs}
+                      finalizer={finalizerForCards}
+                    />
                   </div>
                 ))}
 
@@ -371,7 +412,13 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               {!isLoading &&
                 recentlySettledSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
-                    <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                    <RaffleCard
+                      raffle={r}
+                      onOpen={onOpenRaffle}
+                      onOpenSafety={onOpenSafety}
+                      nowMs={nowMs}
+                      finalizer={finalizerForCards}
+                    />
                   </div>
                 ))}
 
