@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { formatUnits } from "ethers";
 import type { RaffleListItem } from "../indexer/subgraph";
-import { useRevalidateTick } from "../lib/revalidate";
+import { useRevalidateTick } from "../hooks/useRevalidateTick";
 
 // --- Helpers ---
 const toNum = (v: any) => {

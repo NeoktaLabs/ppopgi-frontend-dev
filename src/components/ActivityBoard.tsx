@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
-import { useRevalidateTick } from "../lib/revalidate";
+import { useRevalidateTick } from "../hooks/useRevalidateTick";
 import "./ActivityBoard.css";
 
 const short = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");

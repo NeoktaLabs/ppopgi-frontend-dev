@@ -1,6 +1,6 @@
 // src/hooks/useInfraStatus.ts
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRevalidateTick } from "../lib/revalidate";
+import { useRevalidateTick } from "../hooks/useRevalidateTick";
 
 type IndexerLevel = "healthy" | "degraded" | "late" | "down";
 type RpcLevel = "healthy" | "degraded" | "slow" | "down";

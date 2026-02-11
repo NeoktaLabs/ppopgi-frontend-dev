@@ -4,7 +4,7 @@ import type { RaffleListItem } from "../indexer/subgraph";
 import { fetchRafflesOnChainFallback } from "../onchain/fallbackRaffles";
 
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
-import { useRevalidateTick } from "../lib/revalidate";
+import { useRevalidateTick } from "../hooks/useRevalidateTick";
 
 type Mode = "indexer" | "live";
 
