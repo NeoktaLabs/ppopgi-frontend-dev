@@ -70,7 +70,30 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
 
-  const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading } = useHomeRaffles();
+  // ✅ pull refetch so we can refresh in background on “revalidate” events
+  const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading, refetch } = useHomeRaffles();
+
+  // ✅ Listen to global revalidate events and refresh home lists (debounced)
+  const revalTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    const onRevalidate = () => {
+      // Debounce so multiple events (buy + tx confirm + etc) don’t hammer your indexer
+      if (revalTimerRef.current != null) window.clearTimeout(revalTimerRef.current);
+      revalTimerRef.current = window.setTimeout(() => {
+        try {
+          refetch();
+        } catch {
+          // ignore
+        }
+      }, 900);
+    };
+
+    window.addEventListener("ppopgi:revalidate" as any, onRevalidate);
+    return () => {
+      window.removeEventListener("ppopgi:revalidate" as any, onRevalidate);
+      if (revalTimerRef.current != null) window.clearTimeout(revalTimerRef.current);
+    };
+  }, [refetch]);
 
   const endingRef = useRef<HTMLDivElement | null>(null);
   const settledRef = useRef<HTMLDivElement | null>(null);
