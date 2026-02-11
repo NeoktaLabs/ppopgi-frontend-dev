@@ -1,48 +1,85 @@
-import { useEffect, useState, useCallback } from "react";
+// src/lib/revalidate.ts
 
-function extractAddress(input: string): string | null {
-  const m = (input || "").match(/0x[a-fA-F0-9]{40}/);
-  return m ? m[0].toLowerCase() : null;
+type Listener = () => void;
+
+let listeners = new Set<Listener>();
+
+let isRunning = false;
+let timeout: any = null;
+
+let currentDelay = 2000; // start at 2s
+const MAX_DELAY = 30000; // max 30s
+const BACKOFF_FACTOR = 1.5;
+
+let targetBlock: number | null = null;
+let getIndexerBlock: (() => number | null) | null = null;
+
+/**
+ * Subscribe to revalidation ticks
+ */
+export function subscribeRevalidate(fn: Listener) {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
-export function useAppRouting() {
-  const [selectedRaffleId, setSelectedRaffleId] = useState<string | null>(null);
+/**
+ * Called after a successful tx
+ * Provide the tx block number
+ */
+export function requestRevalidate(txBlock?: number) {
+  if (txBlock) {
+    targetBlock = txBlock;
+  }
 
-  const getParam = useCallback(() => {
-    const url = new URL(window.location.href);
-    return extractAddress(url.searchParams.get("raffle") || "");
-  }, []);
+  if (!isRunning) {
+    isRunning = true;
+    currentDelay = 2000;
+    tick();
+  }
+}
 
-  // Sync URL -> State (back/forward)
-  useEffect(() => {
-    setSelectedRaffleId(getParam());
+/**
+ * Allows app to provide latest indexed block number
+ */
+export function setIndexerBlockGetter(fn: () => number | null) {
+  getIndexerBlock = fn;
+}
 
-    const onPop = () => setSelectedRaffleId(getParam());
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [getParam]);
+/**
+ * Core loop
+ */
+function tick() {
+  if (!isRunning) return;
 
-  // Sync State -> URL
-  const openRaffle = useCallback((id: string) => {
-    const addr = (extractAddress(id) ?? id).toLowerCase();
-    setSelectedRaffleId(addr);
-
+  // Notify listeners
+  listeners.forEach((fn) => {
     try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("raffle", addr);
-      window.history.pushState({}, "", url.toString());
+      fn();
     } catch {}
-  }, []);
+  });
 
-  const closeRaffle = useCallback(() => {
-    setSelectedRaffleId(null);
+  // Check if we reached the target block
+  if (targetBlock && getIndexerBlock) {
+    const indexed = getIndexerBlock();
+    if (indexed && indexed >= targetBlock) {
+      stop();
+      return;
+    }
+  }
 
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("raffle"); // ✅ don't wipe other params
-      window.history.pushState({}, "", url.toString());
-    } catch {}
-  }, []);
+  // Exponential backoff
+  currentDelay = Math.min(MAX_DELAY, Math.floor(currentDelay * BACKOFF_FACTOR));
 
-  return { selectedRaffleId, openRaffle, closeRaffle };
+  timeout = setTimeout(tick, currentDelay);
+}
+
+function stop() {
+  isRunning = false;
+  targetBlock = null;
+  if (timeout) {
+    clearTimeout(timeout);
+    timeout = null;
+  }
 }
