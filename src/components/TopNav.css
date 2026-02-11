@@ -1,3 +1,5 @@
+/* src/components/TopNav.css */
+
 /* 1. Wrapper */
 .topnav-wrapper {
   position: sticky;
@@ -5,8 +7,10 @@
   z-index: 300;
 
   display: flex;
-  justify-content: center;
-  padding: 0 16px;
+  flex-direction: column; 
+  align-items: center;
+
+  padding: 0 16px; 
   pointer-events: none;
 }
 
@@ -32,6 +36,15 @@
     0 10px 15px -3px rgba(0, 0, 0, 0.05),
     inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
+
+/* 3. The Notch Slot */
+.topnav-notch-slot {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto; 
+}
+
 
 /* --- BRAND --- */
 .topnav-brand {
@@ -87,7 +100,6 @@
   background: #fff0f5;
 }
 
-/* Create CTA */
 .create-btn {
   background: #1e293b;
   color: white !important;
@@ -114,16 +126,14 @@
   gap: 8px;
 }
 
-/* ✅ Balances Pill (desktop) */
+/* Balances Pill */
 .balances-pill {
   display: grid;
   align-items: center;
   gap: 4px;
-
   padding: 8px 12px;
   border-radius: 16px;
   border: 1px solid rgba(0,0,0,0.08);
-
   background: rgba(255,255,255,0.55);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -168,7 +178,7 @@
   font-size: 11px;
   font-weight: 950;
   color: #0f172a;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* Cashier */
@@ -187,7 +197,7 @@
   transform: translateY(-1px);
 }
 
-/* ✅ SIGN IN — PASTEL PINK CTA (DESKTOP) */
+/* Sign In */
 .signin-btn {
   background: linear-gradient(135deg, #ffe4ec, #ffd1df);
   color: #4A0F2B;
@@ -195,9 +205,7 @@
   padding: 8px 20px;
   border-radius: 999px;
   border: 1px solid rgba(190, 24, 93, 0.25);
-  box-shadow:
-    0 4px 12px rgba(190, 24, 93, 0.25),
-    inset 0 0 0 1px rgba(255,255,255,0.6);
+  box-shadow: 0 4px 12px rgba(190, 24, 93, 0.25), inset 0 0 0 1px rgba(255,255,255,0.6);
   transition: all 0.2s ease;
 }
 
@@ -205,9 +213,7 @@
   background: linear-gradient(135deg, #ffd1df, #ffbcd0);
   color: #3b0a21;
   transform: translateY(-1px);
-  box-shadow:
-    0 6px 18px rgba(190, 24, 93, 0.35),
-    inset 0 0 0 1px rgba(255,255,255,0.7);
+  box-shadow: 0 6px 18px rgba(190, 24, 93, 0.35), inset 0 0 0 1px rgba(255,255,255,0.7);
 }
 
 /* Account badge */
@@ -236,6 +242,7 @@
   border-radius: 50%;
 }
 
+
 /* --- MOBILE BURGER --- */
 .mobile-burger {
   display: none;
@@ -259,15 +266,10 @@
   transition: 0.2s;
 }
 
-.mobile-burger.open span:first-child {
-  transform: rotate(45deg) translate(5px, 5px);
-}
+.mobile-burger.open span:first-child { transform: rotate(45deg) translate(5px, 5px); }
+.mobile-burger.open span:last-child { transform: rotate(-45deg) translate(5px, -5px); }
 
-.mobile-burger.open span:last-child {
-  transform: rotate(-45deg) translate(5px, -5px);
-}
-
-/* --- RESPONSIVE --- */
+/* ✅ MOBILE OVERRIDES */
 @media (max-width: 900px) {
   .topnav-desktop-links,
   .desktop-actions {
@@ -286,7 +288,8 @@
 /* --- MOBILE MENU --- */
 .mobile-menu {
   position: absolute;
-  top: 80px;
+  /* Push menu down to clear the notch */
+  top: 130px; 
   left: 0;
   right: 0;
   display: flex;
@@ -296,6 +299,13 @@
   transform: translateY(-10px);
   transition: all 0.2s ease;
   z-index: 350;
+}
+
+@media (max-width: 700px) {
+  .mobile-menu {
+     /* Push slightly less down on smaller screens */
+     top: 120px;
+  }
 }
 
 .mobile-menu.visible {
@@ -327,9 +337,7 @@
   cursor: pointer;
 }
 
-.mobile-menu-inner button:hover {
-  background: #f8fafc;
-}
+.mobile-menu-inner button:hover { background: #f8fafc; }
 
 /* Mobile balances card */
 .mobile-balances {
@@ -373,7 +381,6 @@
   color: #4A0F2B;
 }
 
-/* ✅ SIGN IN — PASTEL PINK (MOBILE) */
 .mobile-menu-inner button.primary {
   background: linear-gradient(135deg, #ffd1df, #ffbcd0);
   color: #4A0F2B;
@@ -394,11 +401,4 @@
   height: 1px;
   background: #f1f5f9;
   margin: 8px 12px;
-}
-
-/* Overlay */
-.mobile-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 320;
 }

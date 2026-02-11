@@ -1,10 +1,10 @@
 // src/components/TopNav.tsx
-// src/components/TopNav.tsx
 import { useState, useEffect, memo, useRef } from "react";
 import { useWalletBalance } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
+import { InfraStatusPill } from "./InfraStatusPill";
 import "./TopNav.css";
 
 type Page = "home" | "explore" | "dashboard" | "about" | "faq";
@@ -122,8 +122,6 @@ export const TopNav = memo(function TopNav({
   const usdcText = fmtBal(usdcBal.data?.displayValue, 2);
   const usdcSym = usdcBal.data?.symbol || "USDC";
 
-  const balancesLoading = !!account && (xtzBal.isLoading || usdcBal.isLoading) && !xtzBal.data && !usdcBal.data;
-
   return (
     <div className="topnav-wrapper">
       <div className="topnav-pill">
@@ -133,7 +131,10 @@ export const TopNav = memo(function TopNav({
         </div>
 
         <nav className="topnav-desktop-links">
-          <button className={`nav-link ${page === "explore" ? "active" : ""}`} onClick={() => handleNav(onOpenExplore, "explore")}>
+          <button
+            className={`nav-link ${page === "explore" ? "active" : ""}`}
+            onClick={() => handleNav(onOpenExplore, "explore")}
+          >
             Explore
           </button>
 
@@ -155,8 +156,6 @@ export const TopNav = memo(function TopNav({
           <div className="desktop-actions">
             {account && (
               <button className="balances-pill" onClick={() => handleNav(onOpenCashier)} title="Open Cashier" type="button">
-                <div className="balances-title">{balancesLoading ? "Loading…" : "Balances"}</div>
-
                 <div className="balances-rows">
                   <div className="bal-row">
                     <span className="bal-sym">{xtzSym}</span>
@@ -179,10 +178,18 @@ export const TopNav = memo(function TopNav({
                 Sign In
               </button>
             ) : (
-              <div className="account-badge" onClick={() => handleNav(onSignOut)} title="Click to Sign Out">
-                <div className="acct-dot" />
-                {short(account)}
-              </div>
+              // ✅ removed the dot/avatar
+              <button
+                type="button"
+                className="account-badge account-badge-stack"
+                onClick={() => handleNav(onSignOut)}
+                title="Log Off"
+              >
+                <div className="acct-stack">
+                  <div className="acct-top">Log Off</div>
+                  <div className="acct-bottom">{short(account)}</div>
+                </div>
+              </button>
             )}
           </div>
 
@@ -197,6 +204,10 @@ export const TopNav = memo(function TopNav({
             <span />
           </button>
         </div>
+      </div>
+
+      <div className="topnav-notch-slot">
+        <InfraStatusPill />
       </div>
 
       <div ref={menuRef} className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
@@ -234,7 +245,7 @@ export const TopNav = memo(function TopNav({
             </button>
           ) : (
             <button className="danger" onClick={() => handleNav(onSignOut)}>
-              Sign Out ({short(account)})
+              Log Off ({short(account)})
             </button>
           )}
         </div>

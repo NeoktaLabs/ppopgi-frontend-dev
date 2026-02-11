@@ -2,6 +2,7 @@
 import React, { useMemo } from "react";
 import type { RaffleListItem } from "../indexer/subgraph";
 import { useRaffleCard } from "../hooks/useRaffleCard";
+import { useInfraStatus } from "../hooks/useInfraStatus";
 import "./RaffleCard.css";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
@@ -40,11 +41,20 @@ function clampPct(p: number) {
   return p < 1 ? `${p.toFixed(2)}%` : `${p.toFixed(1)}%`;
 }
 
+// "Xm Ys" (always includes seconds)
+function fmtMinSec(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}m ${r}s`;
+}
+
 export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.now(), hatch, userEntry }: Props) {
   const { ui, actions } = useRaffleCard(raffle, nowMs);
+  const infra = useInfraStatus();
 
   // -----------------------------
-  // ✅ Finalizing rules (card-level)
+  // Finalizing rules (card-level)
   // - Max reached => Finalizing
   // - Deadline passed while still OPEN => Finalizing
   // -----------------------------
@@ -60,9 +70,56 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
   const shouldFinalizing = isOpenStatus && (maxReached || deadlinePassed);
 
+  // ✅ Freeze at 0 once it hits 0, until refreshed
+  // We approximate "refreshed" by when infra.tsMs changes (the last poll completion time).
+  // If your bot hook triggers a refresh at 0, infra.tsMs will update and this will reset properly.
+  const finalizingSec = useMemo(() => {
+    const to = infra.bot?.secondsToNextRun ?? null;
+    if (to === null) return null;
+
+    // clamp to >=0 always
+    const sec = Math.max(0, Math.floor(to));
+
+    // once it hits 0, keep showing 0 until next infra refresh (tsMs changes)
+    // (because this memo re-runs when infra.tsMs changes)
+    return sec === 0 ? 0 : sec;
+  }, [infra.bot?.secondsToNextRun, infra.tsMs]);
+
+  const finalizingChipNode = useMemo(() => {
+    if (!shouldFinalizing) return null;
+
+    if (infra.bot?.running) {
+      return (
+        <>
+          Finalizing
+          <br />
+          ~ now
+        </>
+      );
+    }
+
+    if (finalizingSec === null) {
+      return (
+        <>
+          Finalizing
+          <br />
+          ~ soon
+        </>
+      );
+    }
+
+    return (
+      <>
+        Finalizing
+        <br />
+        ~ {fmtMinSec(finalizingSec)}
+      </>
+    );
+  }, [shouldFinalizing, infra.bot?.running, finalizingSec]);
+
   const displayStatus = shouldFinalizing ? "Finalizing" : ui.displayStatus;
 
-  // ✅ Hide quick-buy if not truly live (also hide on finalizing rules)
+  // Hide quick-buy if not truly live (also hide on finalizing rules)
   const isLiveForCard = ui.isLive && !shouldFinalizing;
 
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
@@ -88,7 +145,8 @@ export function RaffleCard({ raffle, onOpen, onOpenSafety, ribbon, nowMs = Date.
 
       {/* Header */}
       <div className="rc-header">
-        <div className={`rc-chip ${statusClass}`}>{displayStatus}</div>
+        {/* ✅ Chip: show 2-line "Finalizing ~ Xm Ys" when finalizing */}
+        <div className={`rc-chip ${statusClass}`}>{shouldFinalizing ? finalizingChipNode : displayStatus}</div>
 
         <div className="rc-winrate-badge" title="Win chance per ticket">
           🎲 Win: {winRateLabel}
