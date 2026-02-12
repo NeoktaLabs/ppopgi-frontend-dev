@@ -7,8 +7,6 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { useRaffleDetails } from "./useRaffleDetails";
 import { useConfetti } from "./useConfetti";
-
-// ✅ ADD: use the fixed USDC address from config
 import { ADDRESSES } from "../config/contracts";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -147,12 +145,22 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId });
   }, [raffleId]);
 
-  // ✅ PATCH: always use the global USDC address (never ZERO, never "loading")
+  /**
+   * ✅ IMPORTANT:
+   * Use the raffle's on-chain usdcToken() when available, otherwise fall back to global config.
+   * This fixes "balance shows 0 / not enough" when a raffle uses a different token address.
+   */
+  const paymentTokenAddr = useMemo(() => {
+    const onchain = String(data?.usdcToken || "").trim();
+    if (onchain && !isZeroAddr(onchain)) return onchain;
+    return ADDRESSES.USDC;
+  }, [data?.usdcToken]);
+
   const usdcContract = useMemo(() => {
-    const addr = ADDRESSES.USDC;
-    if (!addr || isZeroAddr(addr)) return null; // safety
+    const addr = paymentTokenAddr;
+    if (!addr || isZeroAddr(addr)) return null;
     return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: addr });
-  }, []);
+  }, [paymentTokenAddr]);
 
   const isConnected = !!account?.address;
 
@@ -216,9 +224,8 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
     if (!account?.address || !raffleId) return;
 
-    // ✅ with global USDC this should never happen, but keep guard
     if (!usdcContract) {
-      setBuyMsg("USDC contract unavailable. Check config.");
+      setBuyMsg("Payment token unavailable. Please retry.");
       return;
     }
 
@@ -295,8 +302,12 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     setTickets("1");
     setBuyMsg(null);
 
+    // reset displayed balances when switching raffles / token
+    setUsdcBal(null);
+    setAllowance(null);
+
     refreshAllowance("open");
-  }, [isOpen, raffleId, account?.address, refreshAllowance]);
+  }, [isOpen, raffleId, account?.address, paymentTokenAddr, refreshAllowance]);
 
   return {
     state: {
@@ -312,6 +323,8 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       allowLoading,
       usdcBal,
       allowance,
+      // optional: helpful for debugging in the modal
+      paymentTokenAddr,
     },
     math: {
       minBuy: uiMinBuy,
