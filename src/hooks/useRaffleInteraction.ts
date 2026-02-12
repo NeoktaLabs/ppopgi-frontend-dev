@@ -1,6 +1,6 @@
 // src/hooks/useRaffleInteraction.ts
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { formatUnits, parseUnits } from "ethers";
+import { formatUnits } from "ethers";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
@@ -11,35 +11,30 @@ import { useConfetti } from "./useConfetti";
 function short(a: string) {
   return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
 }
-
-
-function fmtUsdc(raw: any) {
-  const s0 = String(raw ?? "0").trim();
-  if (!s0) return "0";
-
-  const s = s0.replace(/,/g, "");
-
+function fmtUsdc(raw: string) {
   try {
-    // If it's already a decimal string, parse as USDC (6 decimals)
-    if (s.includes(".")) {
-      const u = parseUnits(s, 6);
-      return formatUnits(u, 6);
-    }
-
-    // Otherwise treat as base units
-    return formatUnits(BigInt(s), 6);
+    return formatUnits(BigInt(raw || "0"), 6);
   } catch {
     return "0";
   }
 }
-
 function clampInt(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.floor(n)));
 }
-
 function toInt(v: string, fb = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fb;
+}
+
+function safeTxHash(receipt: any): string {
+  // thirdweb receipts vary by connector/version
+  return String(
+    receipt?.transactionHash ||
+      receipt?.hash ||
+      receipt?.receipt?.transactionHash ||
+      receipt?.receipt?.hash ||
+      ""
+  ).toLowerCase();
 }
 
 export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
@@ -56,7 +51,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const [allowLoading, setAllowLoading] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  // ✅ Revalidate helpers (wakes up HomePage/ActivityBoard/etc)
+  // ✅ revalidate ping (Home/Explore/ActivityBoard/etc)
   const delayedRevalRef = useRef<number | null>(null);
 
   const emitRevalidate = useCallback((withDelayedPing = true) => {
@@ -67,6 +62,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
     if (!withDelayedPing) return;
 
+    // delayed ping to catch subgraph ingest lag
     try {
       if (typeof window === "undefined") return;
       if (delayedRevalRef.current != null) window.clearTimeout(delayedRevalRef.current);
@@ -77,6 +73,27 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       }, 6000);
     } catch {}
   }, []);
+
+  // ✅ optimistic store patch (instant UI)
+  const emitOptimisticBuy = useCallback(
+    (deltaSold: number, patchId?: string) => {
+      try {
+        if (typeof window === "undefined" || !raffleId) return;
+        window.dispatchEvent(
+          new CustomEvent("ppopgi:optimistic", {
+            detail: {
+              kind: "BUY",
+              patchId,
+              raffleId,
+              deltaSold,
+              tsMs: Date.now(),
+            },
+          })
+        );
+      } catch {}
+    },
+    [raffleId]
+  );
 
   useEffect(() => {
     return () => {
@@ -117,7 +134,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
   const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
 
-  // NOTE: These should be base units from onchain details (uint256)
   const ticketPriceU = BigInt(data?.ticketPrice || "0");
   const totalCostU = BigInt(ticketCount) * ticketPriceU;
 
@@ -191,20 +207,18 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const approve = useCallback(async () => {
     setBuyMsg(null);
     if (!account?.address || !usdcContract || !raffleId) return;
-
     try {
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "function approve(address,uint256) returns (bool)",
         params: [raffleId, totalCostU],
       });
-
       await sendAndConfirm(tx);
 
       setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
 
-      // approve does not need delayed ping
+      // approve => revalidate only (no delayed ping needed)
       emitRevalidate(false);
     } catch {
       setBuyMsg("Prepare wallet failed.");
@@ -222,19 +236,34 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         params: [BigInt(ticketCount)],
       });
 
-      await sendAndConfirm(tx);
+      const receipt = await sendAndConfirm(tx);
+
+      // ✅ instant UI: optimistic sold bump
+      const txh = safeTxHash(receipt);
+      const patchId = `buy:${raffleId}:${txh || Date.now()}:${ticketCount}`;
+      emitOptimisticBuy(ticketCount, patchId);
 
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance("postTx");
 
-      // delayed ping for indexer lag
+      // ✅ reconcile with subgraph (and delayed ping for ingest lag)
       emitRevalidate(true);
     } catch (e: any) {
       if (String(e).toLowerCase().includes("insufficient")) setBuyMsg("Not enough coins.");
       else setBuyMsg("Purchase failed.");
     }
-  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance, emitRevalidate]);
+  }, [
+    account?.address,
+    raffleContract,
+    ticketCount,
+    sendAndConfirm,
+    fireConfetti,
+    refreshAllowance,
+    emitRevalidate,
+    emitOptimisticBuy,
+    raffleId,
+  ]);
 
   const handleShare = useCallback(async () => {
     if (!raffleId) return;
@@ -279,7 +308,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       maxReached,
       ticketCount,
       totalCostU,
-      fmtUsdc, // ✅ now robust (fixes 0 pot in details)
+      fmtUsdc,
       short,
       nowMs,
       deadlineMs,
