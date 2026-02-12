@@ -115,6 +115,19 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label = "timeout"): Pro
   }
 }
 
+async function readWithRetry<T>(fn: () => Promise<T>, tries = 2, delayMs = 250): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
 async function gqlFetchTextFirst<T>(
   url: string,
   query: string,
@@ -156,9 +169,8 @@ async function readFirst(contract: any, candidates: string[], params: readonly u
 }
 
 /**
- * ✅ IMPORTANT CHANGE:
- * Returns { ok, value } instead of forcing fallback "0".
- * This lets us avoid overwriting good cached values with zero.
+ * ✅ Returns { ok, value } instead of forcing fallback "0".
+ * This avoids overwriting good cached values with zero on transient RPC failures.
  */
 async function safeRead<T>(
   label: string,
@@ -193,7 +205,6 @@ async function fetchRaffleHistoryFromSubgraph(id: string, signal?: AbortSignal):
   const raffleId = id.toLowerCase();
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
-  // NOTE: if your schema wants Bytes!, change $id: ID! to Bytes!
   const query = `
     query RaffleById($id: ID!) {
       raffle(id: $id) {
@@ -289,7 +300,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
     const key = normalizedAddress.toLowerCase();
     lastKeyRef.current = key;
 
-    // ✅ serve cache instantly (still refresh in background)
     const cached = DETAILS_CACHE.get(key);
     const hasFreshCache = cached && Date.now() - cached.ts < CACHE_TTL_MS;
 
@@ -303,7 +313,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
     }
 
     (async () => {
-      // base object: cached if exists, otherwise a minimal skeleton
       const base: RaffleDetails =
         (cached?.data as RaffleDetails) ||
         ({
@@ -343,7 +352,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         } as RaffleDetails);
 
       try {
-        // subgraph history in parallel (timeout, but doesn't kill whole hook)
         const historyP = withTimeout(
           fetchRaffleHistoryFromSubgraph(normalizedAddress, ac.signal).catch(() => null),
           4500,
@@ -351,9 +359,16 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         );
 
         // ✅ safe onchain reads (do NOT force 0 into state on failure)
+        // ✅ status gets retry + longer timeout because it gates buying
         const reads = await Promise.all([
           safeRead("name", readFirst(contract, ["function name() view returns (string)"])),
-          safeRead("status", readFirst(contract, ["function status() view returns (uint8)"])),
+
+          safeRead(
+            "status",
+            readWithRetry(() => readFirst(contract, ["function status() view returns (uint8)"]), 2, 250),
+            6500
+          ),
+
           safeRead("sold", readFirst(contract, ["function getSold() view returns (uint256)", "function sold() view returns (uint256)"])),
           safeRead("ticketPrice", readFirst(contract, ["function ticketPrice() view returns (uint256)"])),
           safeRead("winningPot", readFirst(contract, ["function winningPot() view returns (uint256)"])),
@@ -395,10 +410,8 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         if (!alive) return;
         if (lastKeyRef.current !== key) return;
 
-        // build next by patching base only where read ok
         const next: RaffleDetails = { ...base, address: normalizedAddress };
 
-        // convenience mapper by index
         const [
           rName,
           rStatus,
@@ -426,10 +439,10 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         ] = reads;
 
         if (rName.ok) next.name = String(rName.value);
+
         if (rSold.ok) next.sold = toStr(rSold.value, next.sold);
         if (rTicketRevenue.ok) next.ticketRevenue = toStr(rTicketRevenue.value, next.ticketRevenue);
 
-        // ✅ key fix: only overwrite pot/price if the read succeeded
         if (rTicketPrice.ok) next.ticketPrice = toStr(rTicketPrice.value, next.ticketPrice);
         if (rWinningPot.ok) next.winningPot = toStr(rWinningPot.value, next.winningPot);
 
@@ -457,27 +470,26 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         if (rEntropyRequestId.ok) next.entropyRequestId = toStr(rEntropyRequestId.value, next.entropyRequestId);
         if (rSelectedProvider.ok) next.selectedProvider = String(rSelectedProvider.value);
 
-        // status: derive from onchain if we got it, otherwise keep base
-        const onchainStatus = rStatus.ok ? statusFromUint8(Number(rStatus.value as any)) : (next.status || "UNKNOWN");
-        const subgraphStatus = statusFromSubgraph(history?.status);
+        // ✅ STATUS: ON-CHAIN IS SOURCE OF TRUTH (buy gating depends on it)
+        // If status read fails, keep last known cached status (avoid flipping to UNKNOWN).
+        const cachedPrevStatus = cached?.data?.status;
+        const onchainStatus: RaffleStatus = rStatus.ok
+          ? statusFromUint8(Number(rStatus.value as any))
+          : (cachedPrevStatus && cachedPrevStatus !== "UNKNOWN" ? cachedPrevStatus : next.status);
 
-        next.status =
-          subgraphStatus === "CANCELED" || subgraphStatus === "COMPLETED" || subgraphStatus === "DRAWING"
-            ? subgraphStatus
-            : onchainStatus;
+        next.status = onchainStatus;
 
+        // Keep subgraph status in history for UI/timeline purposes, but NEVER override on-chain status.
         next.history = history ?? next.history;
 
-        // cache + commit
         DETAILS_CACHE.set(key, { ts: Date.now(), data: next });
         setData(next);
 
-        // Note: show a hint if some important reads failed (but DON'T nuke values)
         const importantFailed =
-          !rWinningPot.ok || !rTicketPrice.ok || !rSold.ok || !rStatus.ok || !rName.ok || !rUsdcToken.ok;
+          !rStatus.ok || !rPaused.ok || !rDeadline.ok || !rMaxTickets.ok || !rSold.ok || !rTicketPrice.ok || !rUsdcToken.ok;
 
         if (importantFailed) {
-          setNote("Some live fields are still syncing (RPC/indexer lag). Values may update shortly.");
+          setNote("Syncing live on-chain fields (RPC lag). Values may update shortly.");
         } else if (String(next.name) === "Unknown raffle" || lower(next.usdcToken) === ZERO) {
           setNote("Some live fields could not be read yet, but the raffle is reachable.");
         } else {
@@ -487,7 +499,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         if (!alive) return;
         if (lastKeyRef.current !== key) return;
 
-        // ✅ do NOT drop to null if we already had something (prevents 0/null flashes)
         const stillHave = DETAILS_CACHE.get(key)?.data || data;
         if (stillHave) {
           setData(stillHave as any);
