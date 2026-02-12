@@ -128,14 +128,18 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
-  // ✅ NEW: auto-close after successful buy
-  const buyCloseTimerRef = useRef<number | null>(null);
-  const clearBuyTimer = () => {
-    if (buyCloseTimerRef.current != null) {
-      window.clearTimeout(buyCloseTimerRef.current);
-      buyCloseTimerRef.current = null;
+  // ✅ NEW: modal step like CreateRaffleModal
+  const [step, setStep] = useState<"details" | "success">("details");
+  const [successInfo, setSuccessInfo] = useState<{ raffleName: string; tickets: number } | null>(null);
+
+  // ✅ optional auto-return timer after success
+  const successTimerRef = useRef<number | null>(null);
+  const clearSuccessTimer = useCallback(() => {
+    if (successTimerRef.current != null) {
+      window.clearTimeout(successTimerRef.current);
+      successTimerRef.current = null;
     }
-  };
+  }, []);
 
   const goHome = useCallback(() => {
     if (window.location.pathname !== "/") window.location.href = "/";
@@ -143,19 +147,26 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   }, []);
 
   const handleFinalClose = useCallback(() => {
-    clearBuyTimer();
+    clearSuccessTimer();
     onClose();
     goHome();
-  }, [onClose, goHome]);
+  }, [clearSuccessTimer, onClose, goHome]);
 
   useEffect(() => {
     if (!raffleId || !open) {
       setMetadata(null);
       setEvents(null);
       setTab("receipt");
-      clearBuyTimer();
+      setStep("details");
+      setSuccessInfo(null);
+      clearSuccessTimer();
       return;
     }
+
+    // reset step when opening a new raffle / reopening modal
+    setStep("details");
+    setSuccessInfo(null);
+    clearSuccessTimer();
 
     if (initialRaffle?.createdAtTimestamp) setMetadata(initialRaffle);
 
@@ -175,10 +186,23 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return () => {
       active = false;
     };
-  }, [raffleId, open, initialRaffle]);
+  }, [raffleId, open, initialRaffle, clearSuccessTimer]);
 
   const displayData = (state.data || initialRaffle || metadata) as any;
   const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, Number(displayData?.sold || 0));
+
+  // Keep UI tickets clamped into [1..maxBuy]
+  const maxBuy = Math.max(1, math.maxBuy);
+  const uiTicket = clampTicketsUi(state.tickets);
+  const clampedUiTicket = Math.min(uiTicket, maxBuy);
+
+  useEffect(() => {
+    if (!open || !raffleId) return;
+    if (String(clampedUiTicket) !== String(state.tickets)) {
+      actions.setTickets(String(clampedUiTicket));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, raffleId, maxBuy]);
 
   const timeline = useMemo(() => {
     if (!displayData) return [];
@@ -302,56 +326,105 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const meAddr = String(account?.address || "").toLowerCase();
   const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
 
-  // Keep UI tickets clamped into [1..maxBuy]
-  const maxBuy = Math.max(1, math.maxBuy);
-  const uiTicket = clampTicketsUi(state.tickets);
-  const clampedUiTicket = Math.min(uiTicket, maxBuy);
-
-  useEffect(() => {
-    if (!open || !raffleId) return;
-    if (String(clampedUiTicket) !== String(state.tickets)) {
-      actions.setTickets(String(clampedUiTicket));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raffleId, maxBuy]);
-
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
-  // ✅ NEW: blur buy section if not connected
   const blurBuy = !state.isConnected;
-
-  // ✅ NEW: show clear balance warning when connected + allowance ok + not enough balance
   const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
-  // ✅ NEW: detect a successful buy and auto-close in 3s
-  // We treat a "success" as: not pending anymore AND we have a tx hash AND no error message.
-  const buyTxHash = (state as any).buyTxHash ?? (state as any).txHash ?? null;
-  const buyMsg = String((state as any).buyMsg ?? "");
+  // ✅ SUCCESS DETECTION: your hook sets this on successful buy
+  const buyMsg = String(state.buyMsg ?? "");
   const isPending = !!state.isPending;
-  const looksLikeError =
-    buyMsg.toLowerCase().includes("fail") ||
-    buyMsg.toLowerCase().includes("error") ||
-    buyMsg.toLowerCase().includes("revert") ||
-    buyMsg.toLowerCase().includes("denied");
 
   useEffect(() => {
-    clearBuyTimer();
-
+    // when purchase succeeds -> show success screen
     if (!open) return;
-    if (!buyTxHash) return;
-    if (isPending) return;
-    if (looksLikeError) return;
+    if (step === "success") return; // already shown
 
-    buyCloseTimerRef.current = window.setTimeout(() => {
+    const isSuccess = buyMsg === "🎉 Tickets purchased!" && !isPending;
+    if (!isSuccess) return;
+
+    const raffleName = String(displayData?.name || "this raffle");
+    const tickets = Number(clampedUiTicket || 1);
+
+    setSuccessInfo({ raffleName, tickets });
+    setStep("success");
+
+    // Optional auto-return (tweak or remove)
+    clearSuccessTimer();
+    successTimerRef.current = window.setTimeout(() => {
       handleFinalClose();
-    }, 3000);
+    }, 6000);
+  }, [open, step, buyMsg, isPending, displayData?.name, clampedUiTicket, clearSuccessTimer, handleFinalClose]);
 
-    return () => clearBuyTimer();
-  }, [open, buyTxHash, isPending, looksLikeError, handleFinalClose]);
-
-  // ✅ AFTER hooks
+  // AFTER hooks
   if (!open) return null;
+
+  // ✅ success screen
+  if (step === "success") {
+    const raffleName = successInfo?.raffleName ?? String(displayData?.name || "this raffle");
+    const tickets = successInfo?.tickets ?? Number(clampedUiTicket || 1);
+
+    return (
+      <div className="rdm-overlay" onMouseDown={handleFinalClose}>
+        <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="rdm-header">
+            <div style={{ width: 32 }} />
+            <div style={{ fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
+              Success
+            </div>
+            <button className="rdm-close-btn" onClick={handleFinalClose}>
+              ✕
+            </button>
+          </div>
+
+          <div style={{ padding: 18 }}>
+            <div style={{ textAlign: "center", fontSize: 34, marginTop: 6 }}>🎉</div>
+            <div style={{ textAlign: "center", fontWeight: 1000, fontSize: 18, marginTop: 8 }}>You’re in!</div>
+
+            <div style={{ textAlign: "center", fontWeight: 800, marginTop: 8, lineHeight: 1.4 }}>
+              You successfully bought <b>{tickets}</b> ticket{tickets === 1 ? "" : "s"} for{" "}
+              <b>{raffleName}</b>.
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                background: "#f8fafc",
+                border: "1px solid rgba(15,23,42,.08)",
+                borderRadius: 14,
+                padding: 14,
+                fontWeight: 800,
+                color: "#0f172a",
+              }}
+            >
+              <div style={{ marginBottom: 8 }}>Quick tips:</div>
+              <div style={{ display: "grid", gap: 8, fontWeight: 800 }}>
+                <div>✅ You can find this raffle in your <b>Dashboard → Live</b> tab.</div>
+                <div>🏆 Remember to claim your <b>prize</b> — or your <b>ticket refund</b> if it gets canceled — from the Dashboard.</div>
+              </div>
+            </div>
+
+            <button
+              className="rdm-cta buy"
+              style={{ width: "100%", marginTop: 14 }}
+              onClick={handleFinalClose}
+            >
+              Understood — take me back to Home →
+            </button>
+
+            <div style={{ textAlign: "center", fontSize: 11, fontWeight: 900, opacity: 0.65, marginTop: 10 }}>
+              Returning automatically in a few seconds…
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================
+  // ORIGINAL DETAILS VIEW
+  // =========================
 
   return (
     <div className="rdm-overlay" onMouseDown={handleFinalClose}>
@@ -572,13 +645,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                 {state.buyMsg && (
                   <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "#D32F2F", fontWeight: 700 }}>
                     {state.buyMsg}
-                  </div>
-                )}
-
-                {/* ✅ small helper once tx exists */}
-                {buyTxHash && !isPending && !looksLikeError && (
-                  <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, fontWeight: 900, opacity: 0.8 }}>
-                    Purchase confirmed — returning to Home in ~3s…
                   </div>
                 )}
               </div>
