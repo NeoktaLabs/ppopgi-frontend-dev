@@ -12,12 +12,7 @@ const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
   if (!addr || String(addr).toLowerCase() === ZERO) return <span>{label || "—"}</span>;
   const a = String(addr).toLowerCase();
   return (
-    <a
-      href={`https://explorer.etherlink.com/address/${a}`}
-      target="_blank"
-      rel="noreferrer"
-      className="rdm-info-link"
-    >
+    <a href={`https://explorer.etherlink.com/address/${a}`} target="_blank" rel="noreferrer" className="rdm-info-link">
       {label || `${a.slice(0, 6)}...${a.slice(-4)}`}
     </a>
   );
@@ -128,7 +123,7 @@ function clampTicketsUi(v: any) {
 }
 
 // --------------------------
-// ✅ merge helpers (prevent "0" onchain fallbacks from overriding subgraph)
+// ✅ merge helpers
 // --------------------------
 const norm = (v: any) => String(v ?? "").trim();
 const isZeroAddr = (v: any) => norm(v).toLowerCase() === ZERO;
@@ -148,6 +143,10 @@ function pickTruthy(primary: any, fallback: any) {
   return p !== null && p !== undefined && norm(p) !== "" ? p : fallback;
 }
 
+/**
+ * IMPORTANT: Don't allow onchain fallback "0" / ZERO to override subgraph base.
+ * This keeps your UI non-zero while onchain calls are flaky/timeouting.
+ */
 function mergeDisplayData(onchain: any, base: any) {
   if (!onchain && !base) return null;
   const b = base || {};
@@ -179,14 +178,14 @@ function mergeDisplayData(onchain: any, base: any) {
     // status
     status: pickTruthy(o.status, b.status),
 
-    // timestamps / tx (prefer subgraph history, but don't override with zeros)
+    // timestamps / tx (from onchain history if present, but don't override with zeros)
     createdAtTimestamp: pickNonZeroNum(o?.history?.createdAtTimestamp, b.createdAtTimestamp),
     creationTx: pickTruthy(o?.history?.creationTx, b.creationTx),
     completedAt: pickNonZeroNum(o?.history?.completedAt, b.completedAt),
     canceledAt: pickNonZeroNum(o?.history?.canceledAt, b.canceledAt),
     registeredAt: pickNonZeroNum(o?.history?.registeredAt, b.registeredAt),
 
-    // boolean (explicit wins)
+    // bool
     paused: typeof o.paused === "boolean" ? o.paused : b.paused,
 
     history: o.history ?? b.history,
@@ -229,12 +228,15 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle]);
 
+  // ✅ Keep the same "works like a charm" structure:
+  // base = initialRaffle/metadata, overlay = state.data (onchain)
   const baseData = (initialRaffle || metadata) as any;
   const onchainData = state.data as any;
 
+  // ✅ merged displayData so you don't see zeros everywhere
   const displayData = useMemo(() => mergeDisplayData(onchainData, baseData), [onchainData, baseData]);
 
-  // holders % relies on sold — use merged sold
+  // ✅ holders % must use merged sold
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForPct);
 
@@ -266,12 +268,15 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       steps.push({ label: "Registered", date: null, tx: null, status: "future" });
     }
 
-    const status = String(displayData.status || "");
+    const status = displayData.status;
 
     if (funding) {
       steps.push({ label: "Ticket Sales Open", date: funding.blockTimestamp, tx: funding.txHash, status: "done" });
     } else {
-      const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
+      const s =
+        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
+          ? "active"
+          : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
@@ -357,7 +362,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const meAddr = String(account?.address || "").toLowerCase();
   const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
 
-  // clamp UI tickets
+  // Keep UI tickets clamped into [1..maxBuy]
   const maxBuy = Math.max(1, math.maxBuy);
   const uiTicket = clampTicketsUi(state.tickets);
   const clampedUiTicket = Math.min(uiTicket, maxBuy);
@@ -373,17 +378,11 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
+  // blur buy section if not connected
   const blurBuy = !state.isConnected;
-  const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
-  // ✅ Your rule:
-  // - if raffle is OPEN (and not creator) => show buy UI
-  // - otherwise => hide buy section entirely
-  //
-  // Also: while details are still loading, show a small placeholder so it doesn't look "removed".
-  const detailsLoading = !!state.loading || !state.data;
-  const showBuyUi = !detailsLoading && flags.raffleIsOpen && !isCreator;
-  const showCreatorBlocked = !detailsLoading && flags.raffleIsOpen && isCreator;
+  // show balance warning when connected + allowance ok + not enough balance
+  const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -412,10 +411,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div className="rdm-hero-meta">
             <div className="rdm-host">
               <span>Created by</span>
-              <ExplorerLink
-                addr={String(displayData?.creator || "")}
-                label={math.short(String(displayData?.creator || ""))}
-              />
+              <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
             </div>
             <div className="rdm-createdon">
               <span>Created on</span>
@@ -508,25 +504,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
         <div className="rdm-tear" />
 
-        {/* ✅ BUY SECTION RULE:
-            - While loading details: show a small placeholder (so it doesn't look removed)
-            - If OPEN + not creator: show buy UI
-            - If OPEN + creator: show creator blocked message
-            - Else: show nothing (hidden) */}
-        {detailsLoading ? (
-          <div className="rdm-buy-section">
-            <div style={{ textAlign: "center", padding: 14, opacity: 0.65, fontWeight: 800 }}>
-              Loading purchase options…
+        {/* ✅ BUY SECTION (kept EXACTLY like your “works like a charm” version) */}
+        <div className="rdm-buy-section">
+          {!flags.raffleIsOpen ? (
+            <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
+              {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
             </div>
-          </div>
-        ) : showCreatorBlocked ? (
-          <div className="rdm-buy-section">
+          ) : isCreator ? (
             <div className="rdm-buy-disabled">
               {displayData?.name ? <b>{displayData.name}</b> : "This raffle"} can’t be entered by its creator.
             </div>
-          </div>
-        ) : showBuyUi ? (
-          <div className="rdm-buy-section">
+          ) : (
             <div style={{ position: "relative" }}>
               <div
                 style={{
@@ -647,8 +635,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                 </div>
               )}
             </div>
-          </div>
-        ) : null}
+          )}
+        </div>
 
         {/* TABS */}
         <div className="rdm-tab-group">
