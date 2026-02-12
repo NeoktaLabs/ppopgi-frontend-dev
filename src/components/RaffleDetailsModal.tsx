@@ -6,8 +6,10 @@ import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
 import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
 import "./RaffleDetailsModal.css";
 
+const ZERO = "0x0000000000000000000000000000000000000000";
+
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
-  if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{label || "—"}</span>;
+  if (!addr || addr === ZERO) return <span>{label || "—"}</span>;
   const a = String(addr).toLowerCase();
   return (
     <a href={`https://explorer.etherlink.com/address/${a}`} target="_blank" rel="noreferrer" className="rdm-info-link">
@@ -120,44 +122,78 @@ function clampTicketsUi(v: any) {
   return Math.max(1, n);
 }
 
-// ✅ NEW: do not let "0" / empty overwrite good values
-function isZeroish(v: any) {
-  if (v === null || v === undefined) return true;
-  const s = String(v).trim().toLowerCase();
+// --------------------------
+// ✅ merge helpers
+// --------------------------
+const norm = (v: any) => String(v ?? "").trim();
+const isZeroAddr = (v: any) => norm(v).toLowerCase() === ZERO;
+const isZeroNumStr = (v: any) => {
+  const s = norm(v);
   if (!s) return true;
-  if (s === "0") return true;
-  if (s === "0x0000000000000000000000000000000000000000") return true;
-  return false;
+  // treat "0", "0n", "0.0" as zero-ish (subgraph uses integer strings)
+  return s === "0" || s === "0n" || s === "0.0";
+};
+function pickNonZeroNum(primary: any, fallback: any) {
+  return !isZeroNumStr(primary) ? primary : fallback;
+}
+function pickNonZeroAddr(primary: any, fallback: any) {
+  return primary && !isZeroAddr(primary) ? primary : fallback;
+}
+function pickTruthy(primary: any, fallback: any) {
+  const p = primary;
+  return p !== null && p !== undefined && norm(p) !== "" ? p : fallback;
 }
 
-function preferNonZero(primary: any, fallback: any) {
-  return isZeroish(primary) ? fallback : primary;
-}
-
-function mergePreferNonZero(primary: any, fallback: any) {
-  const a = primary ?? {}; // onchain (state.data)
-  const b = fallback ?? {}; // subgraph (initialRaffle/metadata)
+/**
+ * Build the "displayData" from:
+ *  - base: subgraph-ish (initialRaffle / metadata) => usually correct for pots/sold/winner
+ *  - overlay: onchain details (state.data) => useful for live flags like paused, etc
+ *
+ * IMPORTANT: Don't allow onchain fallback "0" / ZERO to override base.
+ */
+function mergeDisplayData(onchain: any, base: any) {
+  if (!onchain && !base) return null;
+  const b = base || {};
+  const o = onchain || {};
 
   return {
     ...b,
-    ...a,
 
-    // Critical numeric fields
-    winningPot: preferNonZero(a?.winningPot, b?.winningPot),
-    ticketPrice: preferNonZero(a?.ticketPrice, b?.ticketPrice),
-    sold: preferNonZero(a?.sold, b?.sold),
-    ticketRevenue: preferNonZero(a?.ticketRevenue, b?.ticketRevenue),
+    // strings
+    name: pickTruthy(o.name, b.name),
 
-    // Winner fields
-    winner: preferNonZero(a?.winner, b?.winner),
-    winningTicketIndex: preferNonZero(a?.winningTicketIndex, b?.winningTicketIndex),
+    // numbers-as-strings (keep subgraph if onchain is 0)
+    winningPot: pickNonZeroNum(o.winningPot, b.winningPot),
+    ticketPrice: pickNonZeroNum(o.ticketPrice, b.ticketPrice),
+    sold: pickNonZeroNum(o.sold, b.sold),
+    ticketRevenue: pickNonZeroNum(o.ticketRevenue, b.ticketRevenue),
+    minTickets: pickNonZeroNum(o.minTickets, b.minTickets),
+    maxTickets: pickNonZeroNum(o.maxTickets, b.maxTickets),
+    deadline: pickNonZeroNum(o.deadline, b.deadline),
+    protocolFeePercent: pickNonZeroNum(o.protocolFeePercent, b.protocolFeePercent),
+    minPurchaseAmount: pickNonZeroNum(o.minPurchaseAmount, b.minPurchaseAmount),
 
-    // Creator / timestamps
-    creator: preferNonZero(a?.creator, b?.creator),
-    createdAtTimestamp: preferNonZero(a?.createdAtTimestamp, b?.createdAtTimestamp),
-    creationTx: preferNonZero(a?.creationTx, b?.creationTx),
-    completedAt: preferNonZero(a?.completedAt, b?.completedAt),
-    canceledAt: preferNonZero(a?.canceledAt, b?.canceledAt),
+    // addresses (keep subgraph if onchain is ZERO)
+    creator: pickNonZeroAddr(o.creator, b.creator),
+    usdcToken: pickNonZeroAddr(o.usdcToken, b.usdcToken ?? b.usdc),
+    feeRecipient: pickNonZeroAddr(o.feeRecipient, b.feeRecipient),
+    winner: pickNonZeroAddr(o.winner, b.winner),
+
+    // status: prefer something real
+    status: pickTruthy(o.status, b.status),
+
+    // timestamps / tx
+    createdAtTimestamp: pickNonZeroNum(o?.history?.createdAtTimestamp, b.createdAtTimestamp),
+    creationTx: pickTruthy(o?.history?.creationTx, b.creationTx),
+    completedAt: pickNonZeroNum(o?.history?.completedAt, b.completedAt),
+    canceledAt: pickNonZeroNum(o?.history?.canceledAt, b.canceledAt),
+    registeredAt: pickNonZeroNum(o?.history?.registeredAt, b.registeredAt),
+
+    // booleans: if onchain provides explicit boolean, use it
+    paused: typeof o.paused === "boolean" ? o.paused : b.paused,
+
+    // keep history if present
+    history: o.history ?? b.history,
   };
 }
 
@@ -197,17 +233,18 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle]);
 
-  // ✅ NEW: build a merged display object (prevents "0 everywhere")
-  const subgraphData = (initialRaffle || metadata) as any;
-  const displayData = useMemo(() => mergePreferNonZero(state.data, subgraphData), [state.data, subgraphData]);
+  // ✅ Base comes from subgraph-ish sources (these are what your cards already show correctly)
+  const baseData = (initialRaffle || metadata) as any;
 
-  // ✅ NEW: use merged sold so holder % works
-  const totalSoldForPct = useMemo(() => {
-    const n = Number(displayData?.sold || 0);
-    return Number.isFinite(n) ? n : 0;
-  }, [displayData?.sold]);
+  // ✅ Overlay comes from onchain hook (but may contain 0 fallbacks)
+  const onchainData = state.data as any;
 
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, totalSoldForPct);
+  // ✅ Final merged display data
+  const displayData = useMemo(() => mergeDisplayData(onchainData, baseData), [onchainData, baseData]);
+
+  // ✅ IMPORTANT: participants % rely on sold — use merged sold (won’t be 0 if subgraph has it)
+  const soldForPct = Number(displayData?.sold || 0);
+  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForPct);
 
   const timeline = useMemo(() => {
     if (!displayData) return [];
@@ -409,6 +446,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
+        {/* ✅ prize distribution restored (same UI, but now uses merged non-zero values) */}
         {distribution && (
           <>
             {distribution.isCanceled ? (
