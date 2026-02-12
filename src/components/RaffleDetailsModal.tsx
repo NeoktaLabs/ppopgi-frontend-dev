@@ -120,7 +120,17 @@ function clampTicketsUi(v: any) {
   return Math.max(1, n);
 }
 
-function toBI(v: any): bigint {
+// -----------------------------
+// ✅ “best-of” merge helpers
+// -----------------------------
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+function isZeroAddr(v: any) {
+  const s = String(v || "").toLowerCase();
+  return !s || s === ZERO_ADDR;
+}
+
+function asBigIntOr0(v: any): bigint {
   try {
     const s = String(v ?? "0");
     if (!s) return 0n;
@@ -128,6 +138,76 @@ function toBI(v: any): bigint {
   } catch {
     return 0n;
   }
+}
+
+function pickStr(primary: any, fallback: any) {
+  const a = String(primary ?? "");
+  if (a && a !== "Unknown raffle" && a !== "0") return a;
+  const b = String(fallback ?? "");
+  return b || a;
+}
+
+function pickAddr(primary: any, fallback: any) {
+  const a = String(primary ?? "");
+  if (!isZeroAddr(a)) return a;
+  const b = String(fallback ?? "");
+  return b || a;
+}
+
+function pickU256(primary: any, fallback: any) {
+  const A = asBigIntOr0(primary);
+  if (A > 0n) return String(A);
+  const B = asBigIntOr0(fallback);
+  return String(B > 0n ? B : A);
+}
+
+function pickU64(primary: any, fallback: any) {
+  // same as pickU256 but keeps as string
+  return pickU256(primary, fallback);
+}
+
+function pickBool(primary: any, fallback: any) {
+  if (typeof primary === "boolean") return primary;
+  if (typeof fallback === "boolean") return fallback;
+  return Boolean(primary ?? fallback ?? false);
+}
+
+function mergeRaffleDisplay(onchain: any, subgraph: any) {
+  const a = onchain ?? {};
+  const b = subgraph ?? {};
+
+  // Keep all existing fields, but override the important ones with best-of picks
+  return {
+    ...b,
+    ...a,
+
+    id: String(a.id ?? b.id ?? ""),
+    address: String(a.address ?? b.id ?? b.address ?? ""),
+    name: pickStr(a.name, b.name),
+
+    // Money + counters (this is what was showing 0)
+    winningPot: pickU256(a.winningPot, b.winningPot),
+    ticketPrice: pickU256(a.ticketPrice, b.ticketPrice),
+    sold: pickU256(a.sold, b.sold),
+    ticketRevenue: pickU256(a.ticketRevenue, b.ticketRevenue),
+
+    // Params used everywhere
+    deadline: pickU64(a.deadline, b.deadline),
+    minTickets: pickU64(a.minTickets, b.minTickets),
+    maxTickets: pickU64(a.maxTickets, b.maxTickets),
+
+    // Addresses
+    creator: pickAddr(a.creator, b.creator),
+    winner: pickAddr(a.winner, b.winner),
+    feeRecipient: pickAddr(a.feeRecipient, b.feeRecipient),
+    usdcToken: pickAddr(a.usdcToken, (b as any).usdc ?? b.usdcToken),
+
+    // Flags
+    paused: pickBool(a.paused, b.paused),
+
+    // Status (prefer onchain hook’s computed status if present, else subgraph)
+    status: String(a.status ?? b.status ?? "UNKNOWN"),
+  };
 }
 
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
@@ -173,7 +253,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       return;
     }
 
-    // reset step when opening a new raffle / reopening modal
     setStep("details");
     setSuccessInfo(null);
     clearSuccessTimer();
@@ -198,42 +277,19 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle, clearSuccessTimer]);
 
-  /**
-   * ✅ CRITICAL FIX:
-   * Cards use subgraph (initialRaffle/metadata) and show correct pot/price.
-   * Modal used state.data (onchain reads) first; when those reads fall back to 0,
-   * it overrides correct values => you see 0 everywhere.
-   *
-   * We merge subgraph-first, then overlay onchain, BUT we never let 0 override a known-good non-zero.
-   */
+  // ✅ IMPORTANT: use a “best-of” merge instead of `state.data || initialRaffle || metadata`
   const displayData = useMemo(() => {
-    const sg = (initialRaffle || metadata || null) as any; // subgraph-shaped
-    const on = (state.data || null) as any; // onchain-shaped
-
-    // base: subgraph, then onchain overrides
-    const merged: any = { ...(sg || {}), ...(on || {}) };
-
-    // keep non-zero winningPot/ticketPrice from subgraph if onchain returned 0
-    const sgPot = toBI(sg?.winningPot);
-    const onPot = toBI(on?.winningPot);
-    if (onPot === 0n && sgPot > 0n) merged.winningPot = String(sgPot);
-
-    const sgPrice = toBI(sg?.ticketPrice);
-    const onPrice = toBI(on?.ticketPrice);
-    if (onPrice === 0n && sgPrice > 0n) merged.ticketPrice = String(sgPrice);
-
-    // sold can also glitch; keep subgraph if onchain is missing/zero but subgraph > 0
-    const sgSold = Number(sg?.sold ?? 0);
-    const onSold = Number(on?.sold ?? 0);
-    if ((onSold === 0 || !Number.isFinite(onSold)) && sgSold > 0) merged.sold = String(sgSold);
-
-    // creator sometimes differs by field names; if onchain missing, keep subgraph
-    if (!merged.creator && sg?.creator) merged.creator = sg.creator;
-
-    return merged;
+    const subgraphData = (initialRaffle || metadata) as any;
+    return mergeRaffleDisplay(state.data, subgraphData);
   }, [state.data, initialRaffle, metadata]);
 
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, Number(displayData?.sold || 0));
+  // ✅ Use the best sold value for holders % (fixes 0% issue)
+  const soldForHolders = useMemo(() => {
+    const n = Number(displayData?.sold || 0);
+    return Number.isFinite(n) ? n : 0;
+  }, [displayData?.sold]);
+
+  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForHolders);
 
   // Keep UI tickets clamped into [1..maxBuy]
   const maxBuy = Math.max(1, math.maxBuy);
@@ -263,28 +319,25 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     steps.push({
       label: "Initialized",
-      date: displayData.createdAtTimestamp || deployed?.blockTimestamp || null,
-      tx: displayData.creationTx || deployed?.txHash || null,
+      date: (displayData as any).createdAtTimestamp || deployed?.blockTimestamp || null,
+      tx: (displayData as any).creationTx || deployed?.txHash || null,
       status: "done",
     });
 
     if (registered) {
       steps.push({ label: "Registered", date: registered.blockTimestamp, tx: registered.txHash, status: "done" });
-    } else if (displayData.registeredAt) {
-      steps.push({ label: "Registered", date: displayData.registeredAt, tx: null, status: "done" });
+    } else if ((displayData as any).registeredAt) {
+      steps.push({ label: "Registered", date: (displayData as any).registeredAt, tx: null, status: "done" });
     } else {
       steps.push({ label: "Registered", date: null, tx: null, status: "future" });
     }
 
-    const status = displayData.status;
+    const status = String(displayData.status || "");
 
     if (funding) {
       steps.push({ label: "Ticket Sales Open", date: funding.blockTimestamp, tx: funding.txHash, status: "done" });
     } else {
-      const s =
-        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
-          ? "active"
-          : "future";
+      const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
@@ -295,7 +348,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     } else {
       steps.push({
         label: "Draw Deadline",
-        date: displayData.deadline || null,
+        date: (displayData as any).deadline || null,
         tx: null,
         status: status === "OPEN" ? "active" : "future",
       });
@@ -307,20 +360,20 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         date: winner.blockTimestamp,
         tx: winner.txHash,
         status: "done",
-        winner: displayData.winner || winner.actor || null,
+        winner: (displayData as any).winner || winner.actor || null,
       });
     } else if (canceled) {
       steps.push({ label: "Canceled", date: canceled.blockTimestamp, tx: canceled.txHash, status: "done" });
     } else if (status === "COMPLETED") {
       steps.push({
         label: "Winner Selected",
-        date: displayData.completedAt || null,
+        date: (displayData as any).completedAt || null,
         tx: null,
         status: "done",
-        winner: displayData.winner || null,
+        winner: (displayData as any).winner || null,
       });
     } else if (status === "CANCELED") {
-      steps.push({ label: "Canceled", date: displayData.canceledAt || null, tx: null, status: "done" });
+      steps.push({ label: "Canceled", date: (displayData as any).canceledAt || null, tx: null, status: "done" });
     } else {
       steps.push({ label: "Settlement", date: null, tx: null, status: "future" });
     }
@@ -343,8 +396,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return { roi, oddsPct, price };
   }, [displayData, math]);
 
-  // ✅ Restore/keep prize distribution section by ensuring pot/price are non-zero via displayData merge.
-  // Also: if ticketPrice is 0, avoid weird NaNs.
   const distribution = useMemo(() => {
     if (!displayData) return null;
 
@@ -354,10 +405,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const sold = Number(displayData.sold || 0);
-
-    const priceNum = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
-    const ticketPrice = Number.isFinite(priceNum) ? priceNum : 0;
-
+    const ticketPrice = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
     const grossSales = ticketPrice * sold;
 
     const winnerNet = pot * 0.9;
@@ -404,7 +452,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     }, 6000);
   }, [open, step, buyMsg, isPending, displayData?.name, clampedUiTicket, clearSuccessTimer, handleFinalClose]);
 
-  // AFTER hooks
   if (!open) return null;
 
   // ✅ success screen
@@ -418,9 +465,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div className="rdm-header">
             <div style={{ width: 32 }} />
             <div style={{ fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>Success</div>
-            <button className="rdm-close-btn" onClick={handleFinalClose}>
-              ✕
-            </button>
+            <button className="rdm-close-btn" onClick={handleFinalClose}>✕</button>
           </div>
 
           <div style={{ padding: 18 }}>
@@ -444,12 +489,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             >
               <div style={{ marginBottom: 8 }}>Quick tips:</div>
               <div style={{ display: "grid", gap: 8, fontWeight: 800 }}>
+                <div>✅ You can find this raffle in your <b>Dashboard → Live</b> tab.</div>
                 <div>
-                  ✅ You can find this raffle in your <b>Dashboard → Live</b> tab.
-                </div>
-                <div>
-                  🏆 Remember to claim your <b>prize</b> — or your <b>ticket refund</b> if it gets canceled — from the
-                  Dashboard.
+                  🏆 Remember to claim your <b>prize</b> — or your <b>ticket refund</b> if it gets canceled — from the Dashboard.
                 </div>
               </div>
             </div>
@@ -470,22 +512,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   // =========================
   // DETAILS VIEW
   // =========================
-
   return (
     <div className="rdm-overlay" onMouseDown={handleFinalClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="rdm-header">
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="rdm-close-btn" onClick={actions.handleShare} title="Copy Link">
-              🔗
-            </button>
+            <button className="rdm-close-btn" onClick={actions.handleShare} title="Copy Link">🔗</button>
           </div>
           <div style={{ fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
             TICKET #{raffleId?.slice(2, 8).toUpperCase()}
           </div>
-          <button className="rdm-close-btn" onClick={handleFinalClose}>
-            ✕
-          </button>
+          <button className="rdm-close-btn" onClick={handleFinalClose}>✕</button>
         </div>
 
         <div className="rdm-hero">
@@ -528,6 +565,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
+        {/* ✅ Restored distribution (now uses merged displayData so it won’t be 0 unless truly 0) */}
         {distribution && (
           <>
             {distribution.isCanceled ? (
@@ -751,7 +789,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     <div className="rdm-tl-date">
                       {formatDate(step.date)} <TxLink hash={step.tx} />
                     </div>
-                    {step.winner && (
+                    {step.winner && !isZeroAddr(step.winner) && (
                       <div className="rdm-tl-winner-box">
                         <span>🏆 Winner:</span> <ExplorerLink addr={step.winner} />
                       </div>
