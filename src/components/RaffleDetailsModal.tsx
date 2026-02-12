@@ -145,7 +145,6 @@ function pickTruthy(primary: any, fallback: any) {
 
 /**
  * IMPORTANT: Don't allow onchain fallback "0" / ZERO to override subgraph base.
- * This keeps your UI non-zero while onchain calls are flaky/timeouting.
  */
 function mergeDisplayData(onchain: any, base: any) {
   if (!onchain && !base) return null;
@@ -155,10 +154,8 @@ function mergeDisplayData(onchain: any, base: any) {
   return {
     ...b,
 
-    // strings
     name: pickTruthy(o.name, b.name),
 
-    // numbers-as-strings
     winningPot: pickNonZeroNum(o.winningPot, b.winningPot),
     ticketPrice: pickNonZeroNum(o.ticketPrice, b.ticketPrice),
     sold: pickNonZeroNum(o.sold, b.sold),
@@ -169,23 +166,19 @@ function mergeDisplayData(onchain: any, base: any) {
     protocolFeePercent: pickNonZeroNum(o.protocolFeePercent, b.protocolFeePercent),
     minPurchaseAmount: pickNonZeroNum(o.minPurchaseAmount, b.minPurchaseAmount),
 
-    // addresses
     creator: pickNonZeroAddr(o.creator, b.creator),
     usdcToken: pickNonZeroAddr(o.usdcToken, b.usdcToken ?? b.usdc),
     feeRecipient: pickNonZeroAddr(o.feeRecipient, b.feeRecipient),
     winner: pickNonZeroAddr(o.winner, b.winner),
 
-    // status
     status: pickTruthy(o.status, b.status),
 
-    // timestamps / tx (from onchain history if present, but don't override with zeros)
     createdAtTimestamp: pickNonZeroNum(o?.history?.createdAtTimestamp, b.createdAtTimestamp),
     creationTx: pickTruthy(o?.history?.creationTx, b.creationTx),
     completedAt: pickNonZeroNum(o?.history?.completedAt, b.completedAt),
     canceledAt: pickNonZeroNum(o?.history?.canceledAt, b.canceledAt),
     registeredAt: pickNonZeroNum(o?.history?.registeredAt, b.registeredAt),
 
-    // bool
     paused: typeof o.paused === "boolean" ? o.paused : b.paused,
 
     history: o.history ?? b.history,
@@ -228,15 +221,12 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle]);
 
-  // ✅ Keep the same "works like a charm" structure:
   // base = initialRaffle/metadata, overlay = state.data (onchain)
   const baseData = (initialRaffle || metadata) as any;
   const onchainData = state.data as any;
 
-  // ✅ merged displayData so you don't see zeros everywhere
   const displayData = useMemo(() => mergeDisplayData(onchainData, baseData), [onchainData, baseData]);
 
-  // ✅ holders % must use merged sold
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForPct);
 
@@ -358,14 +348,20 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return { isSettled, isCanceled, winnerNet, platformPrizeFee, prizeTotal, creatorNet, platformSalesFee, salesTotal };
   }, [displayData, math]);
 
+  // ✅ Creator can't buy (ignore ZERO)
   const creatorAddr = String(displayData?.creator || "").toLowerCase();
   const meAddr = String(account?.address || "").toLowerCase();
-  const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
+  const isCreator = !!creatorAddr && creatorAddr !== ZERO && !!meAddr && creatorAddr === meAddr;
 
-  // Keep UI tickets clamped into [1..maxBuy]
-  const maxBuy = Math.max(1, math.maxBuy);
+  // ✅ Finalizing must close buy section too
+  const isFinalizing = state.displayStatus === "Finalizing";
+
+  // ✅ Max buy should be "remaining" when maxTickets is set. Allow 0.
+  const maxBuy = Math.max(0, Number(math.maxBuy || 0));
+
+  // clamp ui ticket; if sold out, force 1 for display but buying will be disabled/closed
   const uiTicket = clampTicketsUi(state.tickets);
-  const clampedUiTicket = Math.min(uiTicket, maxBuy);
+  const clampedUiTicket = maxBuy > 0 ? Math.min(uiTicket, maxBuy) : 1;
 
   useEffect(() => {
     if (!open || !raffleId) return;
@@ -378,11 +374,12 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
-  // blur buy section if not connected
   const blurBuy = !state.isConnected;
-
-  // show balance warning when connected + allowance ok + not enough balance
   const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
+
+  // ✅ single source of truth for showing buy UI:
+  // open + chain says open + NOT finalizing + remaining > 0
+  const canShowBuyUi = flags.raffleIsOpen && !isFinalizing && maxBuy > 0;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -504,11 +501,11 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
         <div className="rdm-tear" />
 
-        {/* ✅ BUY SECTION (kept EXACTLY like your “works like a charm” version) */}
+        {/* ✅ BUY SECTION (same design, improved logic) */}
         <div className="rdm-buy-section">
-          {!flags.raffleIsOpen ? (
+          {!canShowBuyUi ? (
             <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
-              {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
+              {isFinalizing ? "Raffle is finalizing..." : "Raffle Closed"}
             </div>
           ) : isCreator ? (
             <div className="rdm-buy-disabled">
@@ -526,7 +523,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               >
                 <div className="rdm-balance-row">
                   <span>Bal: {math.fmtUsdc(state.usdcBal?.toString() || "0")} USDC</span>
-                  <span>Max: {math.maxBuy} Tickets</span>
+                  <span>Max: {maxBuy} Tickets</span>
                 </div>
 
                 {showRemainingNote && (
