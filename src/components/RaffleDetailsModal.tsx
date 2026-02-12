@@ -356,18 +356,44 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   // ✅ Finalizing must close buy section too
   const isFinalizing = state.displayStatus === "Finalizing";
 
-  // ✅ Max buy should be "remaining" when maxTickets is set. Allow 0.
-  const maxBuy = Math.max(0, Number(math.maxBuy || 0));
+  // ✅ Respect on-chain minPurchaseAmount (contract will revert otherwise)
+  const minBuy = Math.max(1, Number(displayData?.minPurchaseAmount || 1));
 
-  // clamp ui ticket; if sold out, force 1 for display but buying will be disabled/closed
+  // Remaining tickets cap (0 means sold out / cannot buy)
+  const remainingCap = Math.max(0, Number(math.maxBuy || 0)); // hook provides remaining tickets cap
+
+  // ✅ Balance cap: how many tickets can the user afford (in raw USDC units)
+  const ticketPriceU = BigInt(displayData?.ticketPrice || "0");
+  const affordableCap = useMemo(() => {
+    if (!state.isConnected) return null;
+    if (state.usdcBal == null) return null;
+    if (ticketPriceU <= 0n) return null;
+    return Number(state.usdcBal / ticketPriceU);
+  }, [state.isConnected, state.usdcBal, ticketPriceU]);
+
+  // ✅ Final max you can buy right now
+  const maxBuy = useMemo(() => {
+    const caps: number[] = [];
+    caps.push(remainingCap);
+    if (affordableCap != null) caps.push(Math.max(0, affordableCap));
+    return caps.length ? Math.min(...caps) : 0;
+  }, [remainingCap, affordableCap]);
+
   const uiTicket = clampTicketsUi(state.tickets);
-  const clampedUiTicket = maxBuy > 0 ? Math.min(uiTicket, maxBuy) : 1;
+
+  // ✅ single source of truth for showing buy UI:
+  // open + chain says open + NOT finalizing + you can buy at least minBuy tickets
+  const canShowBuyUi = flags.raffleIsOpen && !isFinalizing && maxBuy >= minBuy;
+
+  // clamp ui ticket with minBuy..maxBuy (if cannot show buy UI, leave display alone)
+  const clampedUiTicket = canShowBuyUi ? Math.min(Math.max(uiTicket, minBuy), maxBuy) : Math.max(1, uiTicket);
 
   useEffect(() => {
     if (!open || !raffleId) return;
+    if (!canShowBuyUi) return;
     if (String(clampedUiTicket) !== String(state.tickets)) actions.setTickets(String(clampedUiTicket));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raffleId, maxBuy]);
+  }, [open, raffleId, canShowBuyUi, minBuy, maxBuy]);
 
   if (!open) return null;
 
@@ -375,11 +401,16 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
   const blurBuy = !state.isConnected;
-  const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
-  // ✅ single source of truth for showing buy UI:
-  // open + chain says open + NOT finalizing + remaining > 0
-  const canShowBuyUi = flags.raffleIsOpen && !isFinalizing && maxBuy > 0;
+  const notEnoughBalance =
+    state.isConnected &&
+    state.usdcBal != null &&
+    ticketPriceU > 0n &&
+    BigInt(clampedUiTicket) * ticketPriceU > state.usdcBal;
+
+  const showBalanceWarn = state.isConnected && (notEnoughBalance || (flags.hasEnoughAllowance && !flags.hasEnoughBalance));
+
+  const showMinBuyNote = canShowBuyUi && minBuy > 1;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -501,7 +532,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
         <div className="rdm-tear" />
 
-        {/* ✅ BUY SECTION (same design, improved logic) */}
+        {/* ✅ BUY SECTION (same design, improved clamp logic) */}
         <div className="rdm-buy-section">
           {!canShowBuyUi ? (
             <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
@@ -532,6 +563,12 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   </div>
                 )}
 
+                {showMinBuyNote && (
+                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 800, opacity: 0.8, marginBottom: 10 }}>
+                    Minimum purchase: {minBuy} ticket{minBuy === 1 ? "" : "s"}
+                  </div>
+                )}
+
                 {showBalanceWarn && (
                   <div
                     style={{
@@ -553,8 +590,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                 <div className="rdm-stepper">
                   <button
                     className="rdm-step-btn"
-                    onClick={() => actions.setTickets(String(Math.max(1, clampedUiTicket - 1)))}
-                    disabled={clampedUiTicket <= 1}
+                    onClick={() => actions.setTickets(String(Math.max(minBuy, clampedUiTicket - 1)))}
+                    disabled={clampedUiTicket <= minBuy}
                   >
                     −
                   </button>
@@ -566,9 +603,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                       value={String(clampedUiTicket)}
                       onChange={(e) => {
                         const v = clampTicketsUi(e.target.value);
-                        actions.setTickets(String(Math.min(v, maxBuy)));
+                        const next = Math.min(Math.max(v, minBuy), maxBuy);
+                        actions.setTickets(String(next));
                       }}
-                      placeholder="1"
+                      placeholder={String(minBuy)}
                     />
                     <div className="rdm-cost-preview">Total: {math.fmtUsdc(math.totalCostU.toString())} USDC</div>
                   </div>
