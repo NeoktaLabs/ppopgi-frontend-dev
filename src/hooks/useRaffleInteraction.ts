@@ -26,6 +26,31 @@ function toInt(v: string, fb = 0) {
   return Number.isFinite(n) ? Math.floor(n) : fb;
 }
 
+function emitActivity(detail: {
+  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
+  raffleId: string;
+  raffleName: string;
+  subject: string;
+  value: string;
+  txHash: string;
+  timestamp?: number;
+  pendingLabel?: string;
+}) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("ppopgi:activity", {
+        detail: {
+          ...detail,
+          timestamp: detail.timestamp ?? Math.floor(Date.now() / 1000),
+          pending: true,
+          pendingLabel: detail.pendingLabel ?? "Pending",
+        },
+      })
+    );
+  } catch {}
+}
+
 export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const { data, loading, note } = useRaffleDetails(raffleId, isOpen);
   const account = useActiveAccount();
@@ -40,7 +65,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const [allowLoading, setAllowLoading] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  // ✅ NEW: revalidate helpers (wakes up HomePage/ActivityBoard/etc)
+  // ✅ revalidate helpers
   const delayedRevalRef = useRef<number | null>(null);
 
   const emitRevalidate = useCallback((withDelayedPing = true) => {
@@ -49,7 +74,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
     } catch {}
 
-    // Optional second ping to catch indexer lag (still not “hammering”)
     if (!withDelayedPing) return;
 
     try {
@@ -59,7 +83,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         try {
           window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
         } catch {}
-      }, 6000); // give the indexer time to ingest
+      }, 6000);
     } catch {}
   }, []);
 
@@ -181,13 +205,13 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         method: "function approve(address,uint256) returns (bool)",
         params: [raffleId, totalCostU],
       });
+
       await sendAndConfirm(tx);
 
       setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
 
-      // ✅ NEW: refresh UI lists in background
-      emitRevalidate(false); // approve doesn’t need delayed ping
+      emitRevalidate(false);
     } catch {
       setBuyMsg("Prepare wallet failed.");
     }
@@ -196,6 +220,13 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const buy = useCallback(async () => {
     setBuyMsg(null);
     if (!account?.address || !raffleContract) return;
+
+    // values for optimistic UI
+    const me = String(account.address).toLowerCase();
+    const rName = String((data as any)?.name || "this raffle");
+    const rId = String(raffleId || "").toLowerCase();
+    const count = String(ticketCount);
+
     try {
       const tx = prepareContractCall({
         contract: raffleContract,
@@ -203,19 +234,39 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         params: [BigInt(ticketCount)],
       });
 
-      await sendAndConfirm(tx);
+      // ✅ thirdweb sendAndConfirm typically returns a receipt-like object.
+      // We try best-effort to extract tx hash early. If not available until confirm,
+      // we still emit after it resolves.
+      const receipt: any = await sendAndConfirm(tx);
+
+      const txHash =
+        String(receipt?.transactionHash || receipt?.hash || receipt?.txHash || "").toLowerCase() ||
+        ""; // best-effort
+
+      if (txHash) {
+        // pending will be reconciled by ActivityBoard once it shows up in subgraph
+        emitActivity({
+          type: "BUY",
+          raffleId: rId,
+          raffleName: rName,
+          subject: me,
+          value: count,
+          txHash,
+          pendingLabel: "Pending",
+        });
+      }
 
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance("postTx");
 
-      // ✅ NEW: wake up Home + ActivityBoard (and one delayed ping for indexer lag)
+      // wake up Home + ActivityBoard
       emitRevalidate(true);
     } catch (e: any) {
       if (String(e).includes("insufficient")) setBuyMsg("Not enough coins.");
       else setBuyMsg("Purchase failed.");
     }
-  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance, emitRevalidate]);
+  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance, emitRevalidate, data, raffleId]);
 
   const handleShare = useCallback(async () => {
     if (!raffleId) return;
