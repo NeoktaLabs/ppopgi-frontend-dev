@@ -193,11 +193,7 @@ async function subgraphIndexedBlock(subgraphUrl: string, timeoutMs: number): Pro
     ? subgraphUrl.replace(/\/graphql$/, "/meta")
     : subgraphUrl;
 
-  const res = await withTimeout(
-    fetch(metaUrl, { method: "GET", cache: "no-store" }),
-    timeoutMs,
-    "subgraph_timeout"
-  );
+  const res = await withTimeout(fetch(metaUrl, { method: "GET", cache: "no-store" }), timeoutMs, "subgraph_timeout");
 
   if (!res.ok) throw new Error(`subgraph_http_${res.status}`);
   const json = await res.json().catch(() => null);
@@ -235,8 +231,10 @@ export function useInfraStatus() {
 
   const pollMs = useMemo(() => {
     const v = env("VITE_INFRA_POLL_MS");
-    const n = v ? Number(v) : 30000;
-    return Number.isFinite(n) ? Math.max(5000, Math.floor(n)) : 30000;
+    // ✅ default 60s
+    const n = v ? Number(v) : 60_000;
+    // ✅ never poll faster than 60s (prevents accidental hammering)
+    return Number.isFinite(n) ? Math.max(60_000, Math.floor(n)) : 60_000;
   }, []);
 
   // 3 minutes by default, configurable
@@ -296,14 +294,15 @@ export function useInfraStatus() {
     const nextPollAt = fetchedAtMs + pollMs;
 
     try {
-      // ---- RPC (median of 3) ----
+      // ---- RPC ----
       let rpcOk = false;
       let rpcLatency: number | null = null;
       let headBlock: number | null = null;
       let rpcErr: string | undefined;
 
       try {
-        const tries = 3;
+        // ✅ single call per poll
+        const tries = 1;
         const latencies: number[] = [];
         let latestBlock = 0;
 
@@ -458,7 +457,8 @@ export function useInfraStatus() {
     if (isHidden()) return;
 
     const now = Date.now();
-    if (now - lastRvAtRef.current < 3_000) return;
+    // ✅ was 3s — too aggressive for infra checks
+    if (now - lastRvAtRef.current < 15_000) return;
     lastRvAtRef.current = now;
 
     void runOnce();
