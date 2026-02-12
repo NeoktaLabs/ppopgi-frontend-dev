@@ -2,17 +2,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { fetchRafflesFromSubgraph, type RaffleListItem } from "../indexer/subgraph";
 
-/**
- * Shared raffle store
- * - Single indexer poller for the whole app
- * - Dedupes requests
- * - Backs off on 429 / rate limits
- * - Slows down when tab is hidden
- * - Stops polling when unused
- * - ✅ NEW: optimistic patches for snappy UX (BUY/CREATE)
- * - ✅ NEW: revalidate event listener w/ burst dedupe
- */
-
 export type StoreState = {
   items: RaffleListItem[] | null;
   isLoading: boolean;
