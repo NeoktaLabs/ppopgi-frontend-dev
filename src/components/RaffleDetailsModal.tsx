@@ -120,6 +120,16 @@ function clampTicketsUi(v: any) {
   return Math.max(1, n);
 }
 
+function toBI(v: any): bigint {
+  try {
+    const s = String(v ?? "0");
+    if (!s) return 0n;
+    return BigInt(s);
+  } catch {
+    return 0n;
+  }
+}
+
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
   const account = useActiveAccount();
@@ -128,7 +138,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
-  // ✅ NEW: modal step like CreateRaffleModal
+  // ✅ modal step like CreateRaffleModal
   const [step, setStep] = useState<"details" | "success">("details");
   const [successInfo, setSuccessInfo] = useState<{ raffleName: string; tickets: number } | null>(null);
 
@@ -188,7 +198,41 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     };
   }, [raffleId, open, initialRaffle, clearSuccessTimer]);
 
-  const displayData = (state.data || initialRaffle || metadata) as any;
+  /**
+   * ✅ CRITICAL FIX:
+   * Cards use subgraph (initialRaffle/metadata) and show correct pot/price.
+   * Modal used state.data (onchain reads) first; when those reads fall back to 0,
+   * it overrides correct values => you see 0 everywhere.
+   *
+   * We merge subgraph-first, then overlay onchain, BUT we never let 0 override a known-good non-zero.
+   */
+  const displayData = useMemo(() => {
+    const sg = (initialRaffle || metadata || null) as any; // subgraph-shaped
+    const on = (state.data || null) as any; // onchain-shaped
+
+    // base: subgraph, then onchain overrides
+    const merged: any = { ...(sg || {}), ...(on || {}) };
+
+    // keep non-zero winningPot/ticketPrice from subgraph if onchain returned 0
+    const sgPot = toBI(sg?.winningPot);
+    const onPot = toBI(on?.winningPot);
+    if (onPot === 0n && sgPot > 0n) merged.winningPot = String(sgPot);
+
+    const sgPrice = toBI(sg?.ticketPrice);
+    const onPrice = toBI(on?.ticketPrice);
+    if (onPrice === 0n && sgPrice > 0n) merged.ticketPrice = String(sgPrice);
+
+    // sold can also glitch; keep subgraph if onchain is missing/zero but subgraph > 0
+    const sgSold = Number(sg?.sold ?? 0);
+    const onSold = Number(on?.sold ?? 0);
+    if ((onSold === 0 || !Number.isFinite(onSold)) && sgSold > 0) merged.sold = String(sgSold);
+
+    // creator sometimes differs by field names; if onchain missing, keep subgraph
+    if (!merged.creator && sg?.creator) merged.creator = sg.creator;
+
+    return merged;
+  }, [state.data, initialRaffle, metadata]);
+
   const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, Number(displayData?.sold || 0));
 
   // Keep UI tickets clamped into [1..maxBuy]
@@ -299,6 +343,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return { roi, oddsPct, price };
   }, [displayData, math]);
 
+  // ✅ Restore/keep prize distribution section by ensuring pot/price are non-zero via displayData merge.
+  // Also: if ticketPrice is 0, avoid weird NaNs.
   const distribution = useMemo(() => {
     if (!displayData) return null;
 
@@ -308,7 +354,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
     const sold = Number(displayData.sold || 0);
-    const ticketPrice = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
+
+    const priceNum = parseFloat(math.fmtUsdc(displayData.ticketPrice || "0"));
+    const ticketPrice = Number.isFinite(priceNum) ? priceNum : 0;
+
     const grossSales = ticketPrice * sold;
 
     const winnerNet = pot * 0.9;
@@ -337,9 +386,8 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const isPending = !!state.isPending;
 
   useEffect(() => {
-    // when purchase succeeds -> show success screen
     if (!open) return;
-    if (step === "success") return; // already shown
+    if (step === "success") return;
 
     const isSuccess = buyMsg === "🎉 Tickets purchased!" && !isPending;
     if (!isSuccess) return;
@@ -350,7 +398,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     setSuccessInfo({ raffleName, tickets });
     setStep("success");
 
-    // Optional auto-return (tweak or remove)
     clearSuccessTimer();
     successTimerRef.current = window.setTimeout(() => {
       handleFinalClose();
@@ -370,9 +417,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
           <div className="rdm-header">
             <div style={{ width: 32 }} />
-            <div style={{ fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
-              Success
-            </div>
+            <div style={{ fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>Success</div>
             <button className="rdm-close-btn" onClick={handleFinalClose}>
               ✕
             </button>
@@ -383,8 +428,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             <div style={{ textAlign: "center", fontWeight: 1000, fontSize: 18, marginTop: 8 }}>You’re in!</div>
 
             <div style={{ textAlign: "center", fontWeight: 800, marginTop: 8, lineHeight: 1.4 }}>
-              You successfully bought <b>{tickets}</b> ticket{tickets === 1 ? "" : "s"} for{" "}
-              <b>{raffleName}</b>.
+              You successfully bought <b>{tickets}</b> ticket{tickets === 1 ? "" : "s"} for <b>{raffleName}</b>.
             </div>
 
             <div
@@ -400,16 +444,17 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             >
               <div style={{ marginBottom: 8 }}>Quick tips:</div>
               <div style={{ display: "grid", gap: 8, fontWeight: 800 }}>
-                <div>✅ You can find this raffle in your <b>Dashboard → Live</b> tab.</div>
-                <div>🏆 Remember to claim your <b>prize</b> — or your <b>ticket refund</b> if it gets canceled — from the Dashboard.</div>
+                <div>
+                  ✅ You can find this raffle in your <b>Dashboard → Live</b> tab.
+                </div>
+                <div>
+                  🏆 Remember to claim your <b>prize</b> — or your <b>ticket refund</b> if it gets canceled — from the
+                  Dashboard.
+                </div>
               </div>
             </div>
 
-            <button
-              className="rdm-cta buy"
-              style={{ width: "100%", marginTop: 14 }}
-              onClick={handleFinalClose}
-            >
+            <button className="rdm-cta buy" style={{ width: "100%", marginTop: 14 }} onClick={handleFinalClose}>
               Understood — take me back to Home →
             </button>
 
@@ -423,7 +468,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   }
 
   // =========================
-  // ORIGINAL DETAILS VIEW
+  // DETAILS VIEW
   // =========================
 
   return (
