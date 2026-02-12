@@ -1,6 +1,6 @@
 // src/hooks/useRaffleInteraction.ts
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { formatUnits } from "ethers";
+import { formatUnits, parseUnits } from "ethers";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
@@ -11,46 +11,41 @@ import { useConfetti } from "./useConfetti";
 function short(a: string) {
   return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
 }
-function fmtUsdc(raw: string) {
+
+/**
+ * ✅ Robust USDC formatter:
+ * - Accepts base-unit strings like "1000000"
+ * - Accepts decimal strings like "1.0" or "0.25"
+ * - Strips commas
+ * - Never throws; returns "0" on bad input
+ */
+function fmtUsdc(raw: any) {
+  const s0 = String(raw ?? "0").trim();
+  if (!s0) return "0";
+
+  const s = s0.replace(/,/g, "");
+
   try {
-    return formatUnits(BigInt(raw || "0"), 6);
+    // If it's already a decimal string, parse as USDC (6 decimals)
+    if (s.includes(".")) {
+      const u = parseUnits(s, 6);
+      return formatUnits(u, 6);
+    }
+
+    // Otherwise treat as base units
+    return formatUnits(BigInt(s), 6);
   } catch {
     return "0";
   }
 }
+
 function clampInt(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.floor(n)));
 }
+
 function toInt(v: string, fb = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fb;
-}
-
-type OptimisticBuyDetail = {
-  kind: "BUY";
-  patchId?: string;
-  raffleId: string;
-  deltaSold: number;
-  tsMs?: number;
-};
-
-function emitOptimisticBuy(raffleId: string, ticketCount: number) {
-  try {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(
-      new CustomEvent("ppopgi:optimistic", {
-        detail: {
-          kind: "BUY",
-          patchId: `buy:${raffleId}:${Date.now()}:${ticketCount}`,
-          raffleId,
-          deltaSold: Number(ticketCount),
-          tsMs: Date.now(),
-        } satisfies OptimisticBuyDetail,
-      })
-    );
-  } catch {
-    // ignore
-  }
 }
 
 export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
@@ -67,7 +62,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const [allowLoading, setAllowLoading] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  // ✅ revalidate helpers (wakes up HomePage/ActivityBoard/etc)
+  // ✅ Revalidate helpers (wakes up HomePage/ActivityBoard/etc)
   const delayedRevalRef = useRef<number | null>(null);
 
   const emitRevalidate = useCallback((withDelayedPing = true) => {
@@ -76,7 +71,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
     } catch {}
 
-    // Optional second ping to catch indexer lag (still not “hammering”)
     if (!withDelayedPing) return;
 
     try {
@@ -86,7 +80,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         try {
           window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
         } catch {}
-      }, 6000); // give the indexer time to ingest
+      }, 6000);
     } catch {}
   }, []);
 
@@ -129,6 +123,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
   const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
 
+  // NOTE: These should be base units from onchain details (uint256)
   const ticketPriceU = BigInt(data?.ticketPrice || "0");
   const totalCostU = BigInt(ticketCount) * ticketPriceU;
 
@@ -202,18 +197,20 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const approve = useCallback(async () => {
     setBuyMsg(null);
     if (!account?.address || !usdcContract || !raffleId) return;
+
     try {
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "function approve(address,uint256) returns (bool)",
         params: [raffleId, totalCostU],
       });
+
       await sendAndConfirm(tx);
 
       setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
 
-      // approve doesn’t need delayed ping
+      // approve does not need delayed ping
       emitRevalidate(false);
     } catch {
       setBuyMsg("Prepare wallet failed.");
@@ -222,7 +219,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
-    if (!account?.address || !raffleContract || !raffleId) return;
+    if (!account?.address || !raffleContract) return;
 
     try {
       const tx = prepareContractCall({
@@ -233,29 +230,17 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
       await sendAndConfirm(tx);
 
-      // ✅ Optimistic Home update: increment sold instantly
-      emitOptimisticBuy(raffleId, ticketCount);
-
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance("postTx");
 
-      // ✅ wake up Home + ActivityBoard (and one delayed ping for indexer lag)
+      // delayed ping for indexer lag
       emitRevalidate(true);
     } catch (e: any) {
       if (String(e).toLowerCase().includes("insufficient")) setBuyMsg("Not enough coins.");
       else setBuyMsg("Purchase failed.");
     }
-  }, [
-    account?.address,
-    raffleContract,
-    raffleId,
-    ticketCount,
-    sendAndConfirm,
-    fireConfetti,
-    refreshAllowance,
-    emitRevalidate,
-  ]);
+  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance, emitRevalidate]);
 
   const handleShare = useCallback(async () => {
     if (!raffleId) return;
@@ -300,7 +285,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       maxReached,
       ticketCount,
       totalCostU,
-      fmtUsdc,
+      fmtUsdc, // ✅ now robust (fixes 0 pot in details)
       short,
       nowMs,
       deadlineMs,
