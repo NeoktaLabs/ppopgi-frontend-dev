@@ -5,6 +5,8 @@ import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgrap
 import { useRevalidate } from "../hooks/useRevalidateTick";
 import "./ActivityBoard.css";
 
+type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
+
 const short = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
 
 function isHidden() {
@@ -46,26 +48,20 @@ function timeAgoFrom(nowSec: number, ts: string) {
 }
 
 export function ActivityBoard() {
-  const [items, setItems] = useState<GlobalActivityItem[]>([]);
+  const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Revalidate tick (increments when window "ppopgi:revalidate" fires)
-  // You can optionally debounce here too:
-  // const rvTick = useRevalidate({ debounceMs: 800 });
   const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
 
-  // ✅ 1s ticker (UI-only)
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(t);
   }, []);
 
-  // ✅ Enter animation memory
   const seenRef = useRef<Set<string>>(new Set());
 
-  // ---- polling controls ----
   const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const backoffStepRef = useRef(0);
@@ -84,6 +80,35 @@ export function ActivityBoard() {
     }, ms);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ✅ listen for optimistic activity inserts
+  useEffect(() => {
+    const onOptimistic = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
+      if (!d?.txHash) return;
+
+      const now = Math.floor(Date.now() / 1000);
+      const item: LocalActivityItem = {
+        type: (d.type as any) ?? "BUY",
+        raffleId: String(d.raffleId ?? ""),
+        raffleName: String(d.raffleName ?? "Pending..."),
+        subject: String(d.subject ?? "0x"),
+        value: String(d.value ?? "0"),
+        timestamp: String(d.timestamp ?? now),
+        txHash: String(d.txHash),
+        pending: true,
+        pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
+      };
+
+      setItems((prev) => {
+        const next = [item, ...prev.filter((x) => x.txHash !== item.txHash)];
+        return next.slice(0, 20);
+      });
+    };
+
+    window.addEventListener("ppopgi:activity", onOptimistic as any);
+    return () => window.removeEventListener("ppopgi:activity", onOptimistic as any);
+  }, []);
+
   const load = useCallback(
     async (isBackground = false) => {
       if (isBackground && isHidden()) {
@@ -97,21 +122,32 @@ export function ActivityBoard() {
       if (!isBackground && items.length === 0) setLoading(true);
 
       try {
-        const data = await fetchGlobalActivity({ first: 10 });
-        setItems(data ?? []);
+        const data = await fetchGlobalActivity({ first: 15 });
+
+        setItems((prev) => {
+          const pending = prev.filter((x) => x.pending);
+          const real = (data ?? []) as LocalActivityItem[];
+
+          const realHashes = new Set(real.map((x) => x.txHash));
+          const stillPending = pending.filter((p) => !realHashes.has(p.txHash));
+
+          return [...stillPending, ...real].slice(0, 20);
+        });
+
         setLoading(false);
 
         backoffStepRef.current = 0;
-        scheduleNext(isBackground ? 45_000 : 20_000);
+        // ✅ "feels live" but cheap thanks to Worker TTL
+        scheduleNext(isBackground ? 15_000 : 5_000);
       } catch (e) {
         console.error("[ActivityBoard] load failed", e);
 
         if (isRateLimitError(e)) {
           backoffStepRef.current = Math.min(backoffStepRef.current + 1, 5);
-          const delays = [20_000, 30_000, 60_000, 120_000, 180_000, 180_000];
+          const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
           scheduleNext(delays[backoffStepRef.current]);
         } else {
-          scheduleNext(isBackground ? 60_000 : 30_000);
+          scheduleNext(isBackground ? 30_000 : 15_000);
         }
 
         setLoading(false);
@@ -140,18 +176,16 @@ export function ActivityBoard() {
     };
   }, [load]);
 
-  // ✅ Revalidate-driven refresh (cheap + throttled)
   useEffect(() => {
-    // ignore first render
     if (rvTick === 0) return;
 
     const now = Date.now();
-    if (now - lastRvAtRef.current < 3_000) return; // throttle bursty events
+    if (now - lastRvAtRef.current < 2_000) return;
     lastRvAtRef.current = now;
 
     if (isHidden()) return;
 
-    void load(true); // background refresh (no spinner)
+    void load(true);
   }, [rvTick, load]);
 
   const rowsWithFlags = useMemo(() => {
@@ -181,7 +215,7 @@ export function ActivityBoard() {
     <div className="ab-board">
       <div className="ab-header">
         <div className="ab-pulse" />
-        Live Feed (Last 10)
+        Live Feed
       </div>
 
       <div className="ab-list">
@@ -208,7 +242,12 @@ export function ActivityBoard() {
 
           const fresh = isFresh(item.timestamp, 10);
 
-          const rowClass = ["ab-row", enter ? "ab-enter" : "", fresh ? `ab-fresh ab-fresh-${iconClass}` : ""]
+          const rowClass = [
+            "ab-row",
+            enter ? "ab-enter" : "",
+            fresh ? `ab-fresh ab-fresh-${iconClass}` : "",
+            item.pending ? "ab-pending" : "",
+          ]
             .filter(Boolean)
             .join(" ");
 
@@ -261,6 +300,14 @@ export function ActivityBoard() {
                   <span className="ab-time">
                     {timeAgoFrom(nowSec, item.timestamp)}
                     {fresh && <span className="ab-new-pill">NEW</span>}
+                    {item.pending && (
+                      <span
+                        className="ab-new-pill"
+                        style={{ marginLeft: 6, background: "rgba(2,132,199,.12)", color: "#075985" }}
+                      >
+                        {item.pendingLabel || "PENDING"}
+                      </span>
+                    )}
                   </span>
 
                   {!isBuy && (
