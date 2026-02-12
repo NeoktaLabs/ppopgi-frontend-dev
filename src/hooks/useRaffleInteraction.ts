@@ -26,29 +26,31 @@ function toInt(v: string, fb = 0) {
   return Number.isFinite(n) ? Math.floor(n) : fb;
 }
 
-function emitActivity(detail: {
-  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
+type OptimisticBuyDetail = {
+  kind: "BUY";
+  patchId?: string;
   raffleId: string;
-  raffleName: string;
-  subject: string;
-  value: string;
-  txHash: string;
-  timestamp?: number;
-  pendingLabel?: string;
-}) {
+  deltaSold: number;
+  tsMs?: number;
+};
+
+function emitOptimisticBuy(raffleId: string, ticketCount: number) {
   try {
     if (typeof window === "undefined") return;
     window.dispatchEvent(
-      new CustomEvent("ppopgi:activity", {
+      new CustomEvent("ppopgi:optimistic", {
         detail: {
-          ...detail,
-          timestamp: detail.timestamp ?? Math.floor(Date.now() / 1000),
-          pending: true,
-          pendingLabel: detail.pendingLabel ?? "Pending",
-        },
+          kind: "BUY",
+          patchId: `buy:${raffleId}:${Date.now()}:${ticketCount}`,
+          raffleId,
+          deltaSold: Number(ticketCount),
+          tsMs: Date.now(),
+        } satisfies OptimisticBuyDetail,
       })
     );
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
@@ -65,7 +67,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const [allowLoading, setAllowLoading] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  // ✅ revalidate helpers
+  // ✅ revalidate helpers (wakes up HomePage/ActivityBoard/etc)
   const delayedRevalRef = useRef<number | null>(null);
 
   const emitRevalidate = useCallback((withDelayedPing = true) => {
@@ -74,6 +76,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
     } catch {}
 
+    // Optional second ping to catch indexer lag (still not “hammering”)
     if (!withDelayedPing) return;
 
     try {
@@ -83,7 +86,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         try {
           window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
         } catch {}
-      }, 6000);
+      }, 6000); // give the indexer time to ingest
     } catch {}
   }, []);
 
@@ -205,12 +208,12 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         method: "function approve(address,uint256) returns (bool)",
         params: [raffleId, totalCostU],
       });
-
       await sendAndConfirm(tx);
 
       setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
 
+      // approve doesn’t need delayed ping
       emitRevalidate(false);
     } catch {
       setBuyMsg("Prepare wallet failed.");
@@ -219,13 +222,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
-    if (!account?.address || !raffleContract) return;
-
-    // values for optimistic UI
-    const me = String(account.address).toLowerCase();
-    const rName = String((data as any)?.name || "this raffle");
-    const rId = String(raffleId || "").toLowerCase();
-    const count = String(ticketCount);
+    if (!account?.address || !raffleContract || !raffleId) return;
 
     try {
       const tx = prepareContractCall({
@@ -234,39 +231,31 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         params: [BigInt(ticketCount)],
       });
 
-      // ✅ thirdweb sendAndConfirm typically returns a receipt-like object.
-      // We try best-effort to extract tx hash early. If not available until confirm,
-      // we still emit after it resolves.
-      const receipt: any = await sendAndConfirm(tx);
+      await sendAndConfirm(tx);
 
-      const txHash =
-        String(receipt?.transactionHash || receipt?.hash || receipt?.txHash || "").toLowerCase() ||
-        ""; // best-effort
-
-      if (txHash) {
-        // pending will be reconciled by ActivityBoard once it shows up in subgraph
-        emitActivity({
-          type: "BUY",
-          raffleId: rId,
-          raffleName: rName,
-          subject: me,
-          value: count,
-          txHash,
-          pendingLabel: "Pending",
-        });
-      }
+      // ✅ Optimistic Home update: increment sold instantly
+      emitOptimisticBuy(raffleId, ticketCount);
 
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance("postTx");
 
-      // wake up Home + ActivityBoard
+      // ✅ wake up Home + ActivityBoard (and one delayed ping for indexer lag)
       emitRevalidate(true);
     } catch (e: any) {
-      if (String(e).includes("insufficient")) setBuyMsg("Not enough coins.");
+      if (String(e).toLowerCase().includes("insufficient")) setBuyMsg("Not enough coins.");
       else setBuyMsg("Purchase failed.");
     }
-  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance, emitRevalidate, data, raffleId]);
+  }, [
+    account?.address,
+    raffleContract,
+    raffleId,
+    ticketCount,
+    sendAndConfirm,
+    fireConfetti,
+    refreshAllowance,
+    emitRevalidate,
+  ]);
 
   const handleShare = useCallback(async () => {
     if (!raffleId) return;
