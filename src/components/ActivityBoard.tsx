@@ -49,24 +49,20 @@ export function ActivityBoard() {
   const [items, setItems] = useState<GlobalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Revalidate tick (fires when you emit "create/buy/finalize/claim" events from your app)
+  // ✅ Revalidate tick (increments when window "ppopgi:revalidate" fires)
+  // You can optionally debounce here too:
+  // const rvTick = useRevalidate({ debounceMs: 800 });
   const rvTick = useRevalidate();
-
-  // ✅ Throttle revalidate-triggered refreshes
   const lastRvAtRef = useRef<number>(0);
 
-  // ✅ Detect tick change safely (works whether rvTick is number/boolean/string)
-  const prevRvRef = useRef<any>(rvTick);
-
-  // ✅ 1s ticker (UI-only) so "time ago" updates without hammering the indexer
+  // ✅ 1s ticker (UI-only)
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(t);
   }, []);
 
-  // ✅ Track which events have been seen to play enter animation once
-  // Use txHash as stable identity (order can change between polls)
+  // ✅ Enter animation memory
   const seenRef = useRef<Set<string>>(new Set());
 
   // ---- polling controls ----
@@ -88,15 +84,8 @@ export function ActivityBoard() {
     }, ms);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * ✅ Network polling (cheap):
-   * - Foreground normal: 20s
-   * - Background/hidden: 60s
-   * - Rate limit: exponential backoff up to 180s
-   */
   const load = useCallback(
     async (isBackground = false) => {
-      // Slow down aggressively when hidden
       if (isBackground && isHidden()) {
         scheduleNext(60_000);
         return;
@@ -105,20 +94,14 @@ export function ActivityBoard() {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
 
-      // Only show loader on cold start
       if (!isBackground && items.length === 0) setLoading(true);
 
       try {
         const data = await fetchGlobalActivity({ first: 10 });
-        const next = data ?? [];
-
-        setItems(next);
+        setItems(data ?? []);
         setLoading(false);
 
-        // success: reset backoff
         backoffStepRef.current = 0;
-
-        // normal cadence
         scheduleNext(isBackground ? 45_000 : 20_000);
       } catch (e) {
         console.error("[ActivityBoard] load failed", e);
@@ -157,28 +140,20 @@ export function ActivityBoard() {
     };
   }, [load]);
 
-  // ✅ Revalidate-driven refresh (WITHOUT hammering the indexer)
-  // - Refresh only when rvTick changes (not based on truthiness)
-  // - Throttle: max once per 3s
-  // - Background fetch only (no UI spinner)
+  // ✅ Revalidate-driven refresh (cheap + throttled)
   useEffect(() => {
-    const prev = prevRvRef.current;
-
-    // first mount: just store and do nothing
-    if (prev === rvTick) return;
-
-    prevRvRef.current = rvTick;
+    // ignore first render
+    if (rvTick === 0) return;
 
     const now = Date.now();
-    if (now - lastRvAtRef.current < 3_000) return;
+    if (now - lastRvAtRef.current < 3_000) return; // throttle bursty events
     lastRvAtRef.current = now;
 
     if (isHidden()) return;
 
-    void load(true);
+    void load(true); // background refresh (no spinner)
   }, [rvTick, load]);
 
-  // ✅ Compute enter animation flags (only first time txHash appears)
   const rowsWithFlags = useMemo(() => {
     return (items ?? []).map((it) => {
       const stableKey = String(it.txHash || "");
@@ -187,9 +162,7 @@ export function ActivityBoard() {
 
       if (stableKey && !already) seenRef.current.add(stableKey);
 
-      // key must be unique even if txHash missing (should be rare)
       const reactKey = stableKey || `${it.type}-${it.raffleId}-${it.timestamp}-${it.subject}`;
-
       return { it, key: reactKey, enter };
     });
   }, [items]);
