@@ -15,6 +15,49 @@ function toInt(raw: string, fallback = 0) {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
+function emitActivity(detail: {
+  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
+  raffleId: string;
+  raffleName: string;
+  subject: string;
+  value: string;
+  txHash: string;
+  timestamp?: number;
+  pendingLabel?: string;
+}) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("ppopgi:activity", {
+        detail: {
+          ...detail,
+          timestamp: detail.timestamp ?? Math.floor(Date.now() / 1000),
+          pending: true,
+          pendingLabel: detail.pendingLabel ?? "Pending",
+        },
+      })
+    );
+  } catch {}
+}
+
+function emitRevalidate(withDelayedPing = true) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+  } catch {}
+
+  if (!withDelayedPing) return;
+
+  try {
+    if (typeof window === "undefined") return;
+    window.setTimeout(() => {
+      try {
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      } catch {}
+    }, 6000);
+  } catch {}
+}
+
 // Minimal ERC20 ABI
 const ERC20_ABI = [
   {
@@ -158,7 +201,6 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       setUsdcBal(BigInt(bal ?? 0n));
       setAllowance(BigInt(a ?? 0n));
     } catch (e) {
-      // don't spam errors, just log once per refresh attempt
       console.error("USDC refresh failed", e);
     } finally {
       if (reqId === reqIdRef.current) setAllowLoading(false);
@@ -182,6 +224,9 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       await sendAndConfirm(tx);
       setMsg("Approval successful!");
       await refreshAllowance();
+
+      // approve doesn’t need delayed ping
+      emitRevalidate(false);
     } catch (e) {
       console.error("Approve failed", e);
       setMsg("Approval failed.");
@@ -193,6 +238,10 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     setMsg(null);
     if (!canSubmit) return;
 
+    const meLower = String(me).toLowerCase();
+    const raffleName = name.trim();
+    const potU6 = String(winningPotU); // keep as bigint string (board formats it as USDC)
+
     try {
       setMsg("Please confirm creation in wallet...");
 
@@ -200,14 +249,17 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
         contract: factoryContract,
         method:
           "function createSingleWinnerLottery(string,uint256,uint256,uint64,uint64,uint64,uint32) returns (address)",
-        params: [name.trim(), ticketPriceU, winningPotU, minT, maxT, BigInt(durationSecondsN), minPurchaseU32],
+        params: [raffleName, ticketPriceU, winningPotU, minT, maxT, BigInt(durationSecondsN), minPurchaseU32],
       });
 
-      const receipt = await sendAndConfirm(tx);
+      const receipt: any = await sendAndConfirm(tx);
+
+      const txHash =
+        String(receipt?.transactionHash || receipt?.hash || receipt?.txHash || "").toLowerCase() || "";
 
       // Try to derive new address from logs (best-effort)
       let newAddr = "";
-      const logs: any[] = (receipt as any)?.logs ?? [];
+      const logs: any[] = receipt?.logs ?? [];
       for (const log of logs) {
         if (String(log?.address || "").toLowerCase() !== ADDRESSES.SingleWinnerDeployer.toLowerCase()) continue;
         const topics: string[] = log?.topics ?? [];
@@ -217,23 +269,31 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
         }
       }
 
+      // ✅ optimistic activity (if we have tx hash)
+      if (txHash) {
+        emitActivity({
+          type: "CREATE",
+          raffleId: (newAddr || "0x").toLowerCase(),
+          raffleName,
+          subject: meLower,
+          value: potU6,
+          txHash,
+          pendingLabel: "Pending",
+        });
+      }
+
       setMsg("🎉 Success!");
-      // refresh balances/allowance after creation (pot got transferred/locked)
       await refreshAllowance();
       onCreated?.(newAddr || undefined);
+
+      // ✅ wake up Home + ActivityBoard (and one delayed ping for indexer lag)
+      emitRevalidate(true);
     } catch (e) {
       console.error("Create failed", e);
       setMsg("Creation failed.");
     }
   };
 
-  /**
-   * Reduced polling strategy:
-   * - refresh immediately on open
-   * - refresh on focus / visibility changes (feels instant to user)
-   * - light polling every 15s only while open AND only if not ready yet
-   * - stop polling once allowance is sufficient
-   */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -248,11 +308,9 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVis);
 
-    // Poll less frequently, and only if still not ready
     const intervalMs = 15000;
     const t = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      // only poll if user still needs allowance/balance to proceed
       const needs = !hasEnoughAllowance || !hasEnoughBalance;
       if (needs) refreshAllowance();
     }, intervalMs);
@@ -261,7 +319,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
       window.clearInterval(t);
-      reqIdRef.current++; // invalidate in-flight
+      reqIdRef.current++;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, me, refreshAllowance, hasEnoughAllowance, hasEnoughBalance]);
@@ -305,11 +363,10 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       isPending,
       allowLoading,
       usdcBal,
-      // UI uses this to disable "Approve" button (true when allowance is enough)
       isReady: hasEnoughAllowance,
       approve,
       create,
-      refresh: refreshAllowance, // handy for a manual refresh button
+      refresh: refreshAllowance,
     },
     helpers: { sanitizeInt },
   };
