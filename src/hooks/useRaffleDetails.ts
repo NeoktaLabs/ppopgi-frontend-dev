@@ -155,12 +155,35 @@ async function readFirst(contract: any, candidates: string[], params: readonly u
   throw lastErr;
 }
 
-async function readFirstOr(contract: any, candidates: string[], fallback: any, params: readonly unknown[] = []) {
+/**
+ * ✅ IMPORTANT CHANGE:
+ * Returns { ok, value } instead of forcing fallback "0".
+ * This lets us avoid overwriting good cached values with zero.
+ */
+async function safeRead<T>(
+  label: string,
+  p: Promise<T>,
+  ms = 4000
+): Promise<{ ok: true; value: T } | { ok: false; value: undefined; err: any; label: string }> {
   try {
-    return await readFirst(contract, candidates, params);
-  } catch {
-    return fallback;
+    const v = await withTimeout(p, ms, `${label}_timeout`);
+    return { ok: true, value: v };
+  } catch (err) {
+    return { ok: false, value: undefined, err, label };
   }
+}
+
+function toStr(v: any, fb = "0") {
+  try {
+    if (v === null || v === undefined) return fb;
+    return String(v);
+  } catch {
+    return fb;
+  }
+}
+
+function lower(a: any) {
+  return String(a || "").toLowerCase();
 }
 
 // --------------------
@@ -268,8 +291,10 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
 
     // ✅ serve cache instantly (still refresh in background)
     const cached = DETAILS_CACHE.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-      setData(cached.data);
+    const hasFreshCache = cached && Date.now() - cached.ts < CACHE_TTL_MS;
+
+    if (hasFreshCache) {
+      setData(cached!.data);
       setLoading(false);
       setNote(null);
     } else {
@@ -278,161 +303,199 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
     }
 
     (async () => {
+      // base object: cached if exists, otherwise a minimal skeleton
+      const base: RaffleDetails =
+        (cached?.data as RaffleDetails) ||
+        ({
+          address: normalizedAddress,
+          name: "Unknown raffle",
+          status: "UNKNOWN",
+
+          sold: "0",
+          ticketRevenue: "0",
+
+          ticketPrice: "0",
+          winningPot: "0",
+
+          minTickets: "0",
+          maxTickets: "0",
+          deadline: "0",
+          paused: false,
+
+          minPurchaseAmount: "1",
+
+          finalizeRequestId: "0",
+          callbackGasLimit: "0",
+
+          usdcToken: ZERO,
+          creator: ZERO,
+
+          winner: ZERO,
+          winningTicketIndex: "0",
+
+          feeRecipient: ZERO,
+          protocolFeePercent: "0",
+
+          entropy: ZERO,
+          entropyProvider: ZERO,
+          entropyRequestId: "0",
+          selectedProvider: ZERO,
+        } as RaffleDetails);
+
       try {
-        // subgraph history in parallel
-        const historyP = withTimeout(fetchRaffleHistoryFromSubgraph(normalizedAddress, ac.signal).catch(() => null), 4500, "subgraph_timeout");
+        // subgraph history in parallel (timeout, but doesn't kill whole hook)
+        const historyP = withTimeout(
+          fetchRaffleHistoryFromSubgraph(normalizedAddress, ac.signal).catch(() => null),
+          4500,
+          "subgraph_timeout"
+        );
 
-        // onchain reads in parallel
-        const [
-          name,
-          statusU8,
-          sold,
-          ticketPrice,
-          winningPot,
-          minTickets,
-          maxTickets,
-          deadline,
-          paused,
-          usdcToken,
-          creator,
-          winner,
-          winningTicketIndex,
-          feeRecipient,
-          protocolFeePercent,
-          ticketRevenue,
-          minPurchaseAmount,
-          finalizeRequestId,
-          callbackGasLimit,
-          entropy,
-          entropyProvider,
-          entropyRequestId,
-          selectedProvider,
-          history,
-        ] = await Promise.all([
-          withTimeout(readFirstOr(contract, ["function name() view returns (string)"], "Unknown raffle"), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function status() view returns (uint8)"], 255), 4000, "rpc_timeout"),
+        // ✅ safe onchain reads (do NOT force 0 into state on failure)
+        const reads = await Promise.all([
+          safeRead("name", readFirst(contract, ["function name() view returns (string)"])),
+          safeRead("status", readFirst(contract, ["function status() view returns (uint8)"])),
+          safeRead("sold", readFirst(contract, ["function getSold() view returns (uint256)", "function sold() view returns (uint256)"])),
+          safeRead("ticketPrice", readFirst(contract, ["function ticketPrice() view returns (uint256)"])),
+          safeRead("winningPot", readFirst(contract, ["function winningPot() view returns (uint256)"])),
 
-          withTimeout(
-            readFirstOr(contract, ["function getSold() view returns (uint256)", "function sold() view returns (uint256)"], 0n),
-            4000,
-            "rpc_timeout"
+          safeRead("minTickets", readFirst(contract, ["function minTickets() view returns (uint64)"])),
+          safeRead("maxTickets", readFirst(contract, ["function maxTickets() view returns (uint64)"])),
+
+          safeRead("deadline", readFirst(contract, ["function deadline() view returns (uint64)"])),
+          safeRead("paused", readFirst(contract, ["function paused() view returns (bool)"])),
+
+          safeRead("usdcToken", readFirst(contract, ["function usdcToken() view returns (address)", "function usdc() view returns (address)"])),
+          safeRead("creator", readFirst(contract, ["function creator() view returns (address)", "function owner() view returns (address)"])),
+
+          safeRead("winner", readFirst(contract, ["function winner() view returns (address)"])),
+          safeRead("winningTicketIndex", readFirst(contract, ["function winningTicketIndex() view returns (uint256)"])),
+
+          safeRead("feeRecipient", readFirst(contract, ["function feeRecipient() view returns (address)"])),
+          safeRead("protocolFeePercent", readFirst(contract, ["function protocolFeePercent() view returns (uint256)"])),
+
+          safeRead("ticketRevenue", readFirst(contract, ["function ticketRevenue() view returns (uint256)"])),
+
+          safeRead("minPurchaseAmount", readFirst(contract, ["function minPurchaseAmount() view returns (uint32)"])),
+
+          safeRead(
+            "finalizeRequestId",
+            readFirst(contract, ["function finalizeRequestId() view returns (uint64)", "function entropyRequestId() view returns (uint64)"])
           ),
 
-          withTimeout(readFirstOr(contract, ["function ticketPrice() view returns (uint256)"], 0n), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function winningPot() view returns (uint256)"], 0n), 4000, "rpc_timeout"),
+          safeRead("callbackGasLimit", readFirst(contract, ["function callbackGasLimit() view returns (uint32)"])),
 
-          withTimeout(readFirstOr(contract, ["function minTickets() view returns (uint64)"], 0), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function maxTickets() view returns (uint64)"], 0), 4000, "rpc_timeout"),
-
-          withTimeout(readFirstOr(contract, ["function deadline() view returns (uint64)"], 0), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function paused() view returns (bool)"], false), 4000, "rpc_timeout"),
-
-          withTimeout(
-            readFirstOr(contract, ["function usdcToken() view returns (address)", "function usdc() view returns (address)"], ZERO),
-            4000,
-            "rpc_timeout"
-          ),
-
-          withTimeout(
-            readFirstOr(contract, ["function creator() view returns (address)", "function owner() view returns (address)"], ZERO),
-            4000,
-            "rpc_timeout"
-          ),
-
-          withTimeout(readFirstOr(contract, ["function winner() view returns (address)"], ZERO), 4000, "rpc_timeout"),
-
-          withTimeout(
-            readFirstOr(contract, ["function winningTicketIndex() view returns (uint256)"], 0n),
-            4000,
-            "rpc_timeout"
-          ),
-
-          withTimeout(readFirstOr(contract, ["function feeRecipient() view returns (address)"], ZERO), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function protocolFeePercent() view returns (uint256)"], 0n), 4000, "rpc_timeout"),
-
-          withTimeout(readFirstOr(contract, ["function ticketRevenue() view returns (uint256)"], 0n), 4000, "rpc_timeout"),
-
-          withTimeout(readFirstOr(contract, ["function minPurchaseAmount() view returns (uint32)"], 1), 4000, "rpc_timeout"),
-
-          withTimeout(
-            readFirstOr(contract, ["function finalizeRequestId() view returns (uint64)", "function entropyRequestId() view returns (uint64)"], 0),
-            4000,
-            "rpc_timeout"
-          ),
-
-          withTimeout(readFirstOr(contract, ["function callbackGasLimit() view returns (uint32)"], 0), 4000, "rpc_timeout"),
-
-          withTimeout(readFirstOr(contract, ["function entropy() view returns (address)"], ZERO), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function entropyProvider() view returns (address)"], ZERO), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function entropyRequestId() view returns (uint64)"], 0), 4000, "rpc_timeout"),
-          withTimeout(readFirstOr(contract, ["function selectedProvider() view returns (address)"], ZERO), 4000, "rpc_timeout"),
-
-          historyP,
+          safeRead("entropy", readFirst(contract, ["function entropy() view returns (address)"])),
+          safeRead("entropyProvider", readFirst(contract, ["function entropyProvider() view returns (address)"])),
+          safeRead("entropyRequestId", readFirst(contract, ["function entropyRequestId() view returns (uint64)"])),
+          safeRead("selectedProvider", readFirst(contract, ["function selectedProvider() view returns (address)"])),
         ]);
+
+        const history = await historyP;
 
         if (!alive) return;
         if (lastKeyRef.current !== key) return;
 
-        const onchainStatus = statusFromUint8(Number(statusU8));
+        // build next by patching base only where read ok
+        const next: RaffleDetails = { ...base, address: normalizedAddress };
+
+        // convenience mapper by index
+        const [
+          rName,
+          rStatus,
+          rSold,
+          rTicketPrice,
+          rWinningPot,
+          rMinTickets,
+          rMaxTickets,
+          rDeadline,
+          rPaused,
+          rUsdcToken,
+          rCreator,
+          rWinner,
+          rWinningTicketIndex,
+          rFeeRecipient,
+          rProtocolFeePercent,
+          rTicketRevenue,
+          rMinPurchaseAmount,
+          rFinalizeRequestId,
+          rCallbackGasLimit,
+          rEntropy,
+          rEntropyProvider,
+          rEntropyRequestId,
+          rSelectedProvider,
+        ] = reads;
+
+        if (rName.ok) next.name = String(rName.value);
+        if (rSold.ok) next.sold = toStr(rSold.value, next.sold);
+        if (rTicketRevenue.ok) next.ticketRevenue = toStr(rTicketRevenue.value, next.ticketRevenue);
+
+        // ✅ key fix: only overwrite pot/price if the read succeeded
+        if (rTicketPrice.ok) next.ticketPrice = toStr(rTicketPrice.value, next.ticketPrice);
+        if (rWinningPot.ok) next.winningPot = toStr(rWinningPot.value, next.winningPot);
+
+        if (rMinTickets.ok) next.minTickets = toStr(rMinTickets.value, next.minTickets);
+        if (rMaxTickets.ok) next.maxTickets = toStr(rMaxTickets.value, next.maxTickets);
+        if (rDeadline.ok) next.deadline = toStr(rDeadline.value, next.deadline);
+        if (rPaused.ok) next.paused = Boolean(rPaused.value);
+
+        if (rMinPurchaseAmount.ok) next.minPurchaseAmount = toStr(rMinPurchaseAmount.value, next.minPurchaseAmount);
+
+        if (rFinalizeRequestId.ok) next.finalizeRequestId = toStr(rFinalizeRequestId.value, next.finalizeRequestId);
+        if (rCallbackGasLimit.ok) next.callbackGasLimit = toStr(rCallbackGasLimit.value, next.callbackGasLimit);
+
+        if (rUsdcToken.ok) next.usdcToken = String(rUsdcToken.value);
+        if (rCreator.ok) next.creator = String(rCreator.value);
+
+        if (rWinner.ok) next.winner = String(rWinner.value);
+        if (rWinningTicketIndex.ok) next.winningTicketIndex = toStr(rWinningTicketIndex.value, next.winningTicketIndex);
+
+        if (rFeeRecipient.ok) next.feeRecipient = String(rFeeRecipient.value);
+        if (rProtocolFeePercent.ok) next.protocolFeePercent = toStr(rProtocolFeePercent.value, next.protocolFeePercent);
+
+        if (rEntropy.ok) next.entropy = String(rEntropy.value);
+        if (rEntropyProvider.ok) next.entropyProvider = String(rEntropyProvider.value);
+        if (rEntropyRequestId.ok) next.entropyRequestId = toStr(rEntropyRequestId.value, next.entropyRequestId);
+        if (rSelectedProvider.ok) next.selectedProvider = String(rSelectedProvider.value);
+
+        // status: derive from onchain if we got it, otherwise keep base
+        const onchainStatus = rStatus.ok ? statusFromUint8(Number(rStatus.value as any)) : (next.status || "UNKNOWN");
         const subgraphStatus = statusFromSubgraph(history?.status);
 
-        // Prefer terminal-ish subgraph statuses when present
-        const finalStatus: RaffleStatus =
+        next.status =
           subgraphStatus === "CANCELED" || subgraphStatus === "COMPLETED" || subgraphStatus === "DRAWING"
             ? subgraphStatus
             : onchainStatus;
 
-        const out: RaffleDetails = {
-          address: normalizedAddress,
+        next.history = history ?? next.history;
 
-          name: String(name),
-          status: finalStatus,
+        // cache + commit
+        DETAILS_CACHE.set(key, { ts: Date.now(), data: next });
+        setData(next);
 
-          sold: String(sold),
-          ticketRevenue: String(ticketRevenue),
+        // Note: show a hint if some important reads failed (but DON'T nuke values)
+        const importantFailed =
+          !rWinningPot.ok || !rTicketPrice.ok || !rSold.ok || !rStatus.ok || !rName.ok || !rUsdcToken.ok;
 
-          ticketPrice: String(ticketPrice),
-          winningPot: String(winningPot),
-
-          minTickets: String(minTickets),
-          maxTickets: String(maxTickets),
-          deadline: String(deadline),
-          paused: Boolean(paused),
-
-          minPurchaseAmount: String(minPurchaseAmount),
-
-          finalizeRequestId: String(finalizeRequestId),
-          callbackGasLimit: String(callbackGasLimit),
-
-          usdcToken: String(usdcToken),
-          creator: String(creator),
-
-          winner: String(winner),
-          winningTicketIndex: String(winningTicketIndex),
-
-          feeRecipient: String(feeRecipient),
-          protocolFeePercent: String(protocolFeePercent),
-
-          entropy: String(entropy),
-          entropyProvider: String(entropyProvider),
-          entropyRequestId: String(entropyRequestId),
-          selectedProvider: String(selectedProvider),
-
-          history: history ?? undefined,
-        };
-
-        DETAILS_CACHE.set(key, { ts: Date.now(), data: out });
-
-        setData(out);
-        setNote(null);
-
-        if (String(name) === "Unknown raffle" || String(usdcToken).toLowerCase() === ZERO) {
+        if (importantFailed) {
+          setNote("Some live fields are still syncing (RPC/indexer lag). Values may update shortly.");
+        } else if (String(next.name) === "Unknown raffle" || lower(next.usdcToken) === ZERO) {
           setNote("Some live fields could not be read yet, but the raffle is reachable.");
+        } else {
+          setNote(null);
         }
       } catch (e: any) {
         if (!alive) return;
-        setData(null);
-        setNote("Could not load this raffle right now. Please refresh.");
+        if (lastKeyRef.current !== key) return;
+
+        // ✅ do NOT drop to null if we already had something (prevents 0/null flashes)
+        const stillHave = DETAILS_CACHE.get(key)?.data || data;
+        if (stillHave) {
+          setData(stillHave as any);
+          setNote("Could not refresh live details right now. Showing last known values.");
+        } else {
+          setData(null);
+          setNote("Could not load this raffle right now. Please refresh.");
+        }
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -445,6 +508,7 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         ac.abort();
       } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contract, normalizedAddress]);
 
   return { data, loading, note };
