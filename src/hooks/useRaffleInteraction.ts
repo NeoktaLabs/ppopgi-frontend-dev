@@ -8,6 +8,9 @@ import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { useRaffleDetails } from "./useRaffleDetails";
 import { useConfetti } from "./useConfetti";
 
+const ZERO = "0x0000000000000000000000000000000000000000";
+const isZeroAddr = (a: any) => String(a || "").toLowerCase() === ZERO;
+
 function short(a: string) {
   return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
 }
@@ -142,9 +145,12 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId });
   }, [raffleId]);
 
+  // ✅ FIX: don't create a contract with ZERO address
+  // also allow either `usdcToken` or `usdc` depending on source
   const usdcContract = useMemo(() => {
-    if (!(data as any)?.usdcToken) return null;
-    return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: (data as any).usdcToken });
+    const token = (data as any)?.usdcToken || (data as any)?.usdc;
+    if (!token || isZeroAddr(token)) return null;
+    return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: token });
   }, [data]);
 
   const isConnected = !!account?.address;
@@ -206,7 +212,15 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
   const approve = useCallback(async () => {
     setBuyMsg(null);
-    if (!account?.address || !usdcContract || !raffleId) return;
+
+    if (!account?.address || !raffleId) return;
+
+    // ✅ UX: never silently fail / never point at 0x000…
+    if (!usdcContract) {
+      setBuyMsg("USDC token is still loading. Please retry in a moment.");
+      return;
+    }
+
     try {
       const tx = prepareContractCall({
         contract: usdcContract,
