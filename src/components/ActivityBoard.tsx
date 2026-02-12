@@ -2,12 +2,13 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
-import { useRevalidate } from "../hooks/useRevalidateTick";
 import "./ActivityBoard.css";
 
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
 const short = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
+
+const REFRESH_MS = 5_000;
 
 function isHidden() {
   try {
@@ -28,7 +29,7 @@ function isRateLimitError(err: any) {
   if (status === 429 || status === 503) return true;
 
   const msg = String(err?.message ?? err ?? "").toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
+  return msg.includes("429") || msg.includes("too many requests");
 }
 
 function isFresh(ts: string, seconds = 10) {
@@ -50,21 +51,18 @@ function timeAgoFrom(nowSec: number, ts: string) {
 export function ActivityBoard() {
   const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const rvTick = useRevalidate();
-  const lastRvAtRef = useRef<number>(0);
-
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+
+  const seenRef = useRef<Set<string>>(new Set());
+  const timerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const backoffStepRef = useRef(0);
+
+  // Tick clock
   useEffect(() => {
     const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(t);
   }, []);
-
-  const seenRef = useRef<Set<string>>(new Set());
-
-  const timerRef = useRef<number | null>(null);
-  const inFlightRef = useRef(false);
-  const backoffStepRef = useRef(0);
 
   const clearTimer = () => {
     if (timerRef.current != null) {
@@ -78,9 +76,9 @@ export function ActivityBoard() {
     timerRef.current = window.setTimeout(() => {
       void load(true);
     }, ms);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ✅ listen for optimistic activity inserts
+  // Optimistic inserts
   useEffect(() => {
     const onOptimistic = (ev: Event) => {
       const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
@@ -110,16 +108,16 @@ export function ActivityBoard() {
   }, []);
 
   const load = useCallback(
-    async (isBackground = false) => {
-      if (isBackground && isHidden()) {
-        scheduleNext(60_000);
+    async (background = false) => {
+      if (background && isHidden()) {
+        scheduleNext(REFRESH_MS);
         return;
       }
 
       if (inFlightRef.current) return;
       inFlightRef.current = true;
 
-      if (!isBackground && items.length === 0) setLoading(true);
+      if (!background && items.length === 0) setLoading(true);
 
       try {
         const data = await fetchGlobalActivity({ first: 15 });
@@ -135,19 +133,18 @@ export function ActivityBoard() {
         });
 
         setLoading(false);
-
         backoffStepRef.current = 0;
-        // ✅ "feels live" but cheap thanks to Worker TTL
-        scheduleNext(isBackground ? 15_000 : 5_000);
+
+        scheduleNext(REFRESH_MS);
       } catch (e) {
         console.error("[ActivityBoard] load failed", e);
 
         if (isRateLimitError(e)) {
           backoffStepRef.current = Math.min(backoffStepRef.current + 1, 5);
-          const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
+          const delays = [5_000, 10_000, 20_000, 30_000, 60_000, 60_000];
           scheduleNext(delays[backoffStepRef.current]);
         } else {
-          scheduleNext(isBackground ? 30_000 : 15_000);
+          scheduleNext(REFRESH_MS);
         }
 
         setLoading(false);
@@ -175,18 +172,6 @@ export function ActivityBoard() {
       clearTimer();
     };
   }, [load]);
-
-  useEffect(() => {
-    if (rvTick === 0) return;
-
-    const now = Date.now();
-    if (now - lastRvAtRef.current < 2_000) return;
-    lastRvAtRef.current = now;
-
-    if (isHidden()) return;
-
-    void load(true);
-  }, [rvTick, load]);
 
   const rowsWithFlags = useMemo(() => {
     return (items ?? []).map((it) => {
@@ -227,18 +212,9 @@ export function ActivityBoard() {
 
           let icon = "✨";
           let iconClass = "create";
-          if (isBuy) {
-            icon = "🎟️";
-            iconClass = "buy";
-          }
-          if (isWin) {
-            icon = "🏆";
-            iconClass = "win";
-          }
-          if (isCancel) {
-            icon = "⛔";
-            iconClass = "cancel";
-          }
+          if (isBuy) { icon = "🎟️"; iconClass = "buy"; }
+          if (isWin) { icon = "🏆"; iconClass = "win"; }
+          if (isCancel) { icon = "⛔"; iconClass = "cancel"; }
 
           const fresh = isFresh(item.timestamp, 10);
 
@@ -247,73 +223,25 @@ export function ActivityBoard() {
             enter ? "ab-enter" : "",
             fresh ? `ab-fresh ab-fresh-${iconClass}` : "",
             item.pending ? "ab-pending" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
+          ].filter(Boolean).join(" ");
 
           return (
             <div key={key} className={rowClass}>
               <div className={`ab-icon ${iconClass}`}>{icon}</div>
-
               <div className="ab-content">
                 <div className="ab-main-text">
-                  {isCancel ? (
-                    <>
-                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
-                        {item.raffleName}
-                      </a>{" "}
-                      got <b style={{ color: "#991b1b" }}>canceled</b> due to min ticket not reached
-                    </>
-                  ) : (
-                    <>
-                      <a
-                        href={`https://explorer.etherlink.com/address/${item.subject}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="ab-user"
-                      >
-                        {short(item.subject)}
-                      </a>
-
-                      {isBuy && (
-                        <>
-                          {" "}
-                          bought <b>{item.value} tix</b> in{" "}
-                        </>
-                      )}
-                      {isCreate && <> created </>}
-                      {isWin && (
-                        <>
-                          {" "}
-                          <b style={{ color: "#166534" }}>won</b> the pot on{" "}
-                        </>
-                      )}
-
-                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
-                        {item.raffleName}
-                      </a>
-                    </>
-                  )}
+                  <a href={`/?raffle=${item.raffleId}`} className="ab-link">
+                    {item.raffleName}
+                  </a>
                 </div>
-
                 <div className="ab-meta">
                   <span className="ab-time">
                     {timeAgoFrom(nowSec, item.timestamp)}
                     {fresh && <span className="ab-new-pill">NEW</span>}
-                    {item.pending && (
-                      <span
-                        className="ab-new-pill"
-                        style={{ marginLeft: 6, background: "rgba(2,132,199,.12)", color: "#075985" }}
-                      >
-                        {item.pendingLabel || "PENDING"}
-                      </span>
-                    )}
                   </span>
-
-                  {!isBuy && (
-                    <span className={`ab-pot-tag ${isWin ? "win" : isCancel ? "cancel" : ""}`}>
-                      {isWin ? "Won: " : isCancel ? "Refunded" : "Pot: "}
-                      {!isCancel && formatUnits(item.value, 6)}
+                  {!isCancel && (
+                    <span className="ab-pot-tag">
+                      {formatUnits(item.value, 6)}
                     </span>
                   )}
                 </div>
