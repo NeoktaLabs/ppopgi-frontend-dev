@@ -121,6 +121,56 @@ function scoreForClaimScan(r: RaffleListItem): number {
   return 0;
 }
 
+/**
+ * Read claimableFunds/claimableNative/ticketsOwned with a short-lived cache.
+ * Keeps existing logic: failures become 0, and we never throw.
+ */
+async function readDashboardValues(args: {
+  raffleId: string;
+  account: string;
+  cache: Map<string, { ts: number; cf: string; cn: string; owned: string }>;
+  ttlMs: number;
+  ownedHint?: string; // if known, avoid rereading ticketsOwned
+}) {
+  const { raffleId, account, cache, ttlMs, ownedHint } = args;
+
+  const rid = normId(raffleId);
+  const acct = account.toLowerCase();
+  const key = `${acct}:${rid}`;
+
+  const now = Date.now();
+  const hit = cache.get(key);
+  if (hit && now - hit.ts < ttlMs) {
+    return { cf: hit.cf, cn: hit.cn, owned: hit.owned };
+  }
+
+  const contract = getContract({
+    client: thirdwebClient,
+    chain: ETHERLINK_CHAIN,
+    address: rid,
+    abi: RAFFLE_DASH_ABI,
+  });
+
+  let cf = "0";
+  let cn = "0";
+  let owned = ownedHint ?? "0";
+
+  try {
+    cf = toBigInt(await readContract({ contract, method: "claimableFunds", params: [account] })).toString();
+  } catch {}
+  try {
+    cn = toBigInt(await readContract({ contract, method: "claimableNative", params: [account] })).toString();
+  } catch {}
+  if (ownedHint == null) {
+    try {
+      owned = toBigInt(await readContract({ contract, method: "ticketsOwned", params: [account] })).toString();
+    } catch {}
+  }
+
+  cache.set(key, { ts: now, cf, cn, owned });
+  return { cf, cn, owned };
+}
+
 export function useDashboardController() {
   const accountObj = useActiveAccount();
   const account = accountObj?.address ?? null;
@@ -146,12 +196,20 @@ export function useDashboardController() {
   // cache for "tickets bought" lookups (per page load)
   const boughtCacheRef = useRef<Map<string, string>>(new Map());
 
+  // --- RPC read cache + throttles (no logic changes, just reuse results / reduce bursts) ---
+  const rpcCacheRef = useRef<Map<string, { ts: number; cf: string; cn: string; owned: string }>>(new Map());
+  const lastBgRunRef = useRef(0);
+  const rpcConcurrencyRef = useRef({ joinedOwned: 12, claimScan: 10 });
+
   // Reset on wallet change
   useEffect(() => {
     lastJoinedIdsRef.current = null;
     joinedIdsPromiseRef.current = null;
     joinedBackoffMsRef.current = 0;
     boughtCacheRef.current = new Map();
+    rpcCacheRef.current = new Map();
+    lastBgRunRef.current = 0;
+    rpcConcurrencyRef.current = { joinedOwned: 12, claimScan: 10 };
     setHiddenClaimables({});
     setMsg(null);
     setCreated([]);
@@ -243,6 +301,13 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
+      // Throttle background recomputes to avoid bursts from store ticks/focus/vis
+      if (isBackground) {
+        const now = Date.now();
+        if (now - lastBgRunRef.current < 6_000) return;
+        lastBgRunRef.current = now;
+      }
+
       if (!store.items) {
         if (!isBackground) setLocalPending(true);
         return;
@@ -293,7 +358,7 @@ export function useDashboardController() {
         const ownedByRaffleId = new Map<string, string>();
         const joinedToCheck = joinedBase.slice(0, 120);
 
-        await mapPool(joinedToCheck, 12, async (r) => {
+        await mapPool(joinedToCheck, rpcConcurrencyRef.current.joinedOwned, async (r) => {
           try {
             const contract = getContract({
               client: thirdwebClient,
@@ -387,31 +452,29 @@ export function useDashboardController() {
         const candidates = uniqueCandidates.slice(0, 600); // slightly higher, since feeRecipient adds more
         const newClaimables: ClaimableItem[] = [];
 
-        await mapPool(candidates, 10, async (r) => {
-          const contract = getContract({
-            client: thirdwebClient,
-            chain: ETHERLINK_CHAIN,
-            address: r.id,
-            abi: RAFFLE_DASH_ABI,
+        const rpcCache = rpcCacheRef.current;
+
+        await mapPool(candidates, rpcConcurrencyRef.current.claimScan, async (r) => {
+          const rid = normId(r.id);
+
+          // Reuse known ticketsOwned where possible (avoids duplicate reads)
+          const ownedHintStr = ownedByRaffleId.get(rid);
+
+          const v = await readDashboardValues({
+            raffleId: rid,
+            account,
+            cache: rpcCache,
+            ttlMs: 20_000,
+            ownedHint: ownedHintStr,
           });
 
-          let cf = 0n;
-          let cn = 0n;
-          let ticketsOwned = 0n;
-
-          try {
-            cf = toBigInt(await readContract({ contract, method: "claimableFunds", params: [account] }));
-          } catch {}
-          try {
-            cn = toBigInt(await readContract({ contract, method: "claimableNative", params: [account] }));
-          } catch {}
-          try {
-            ticketsOwned = toBigInt(await readContract({ contract, method: "ticketsOwned", params: [account] }));
-          } catch {}
+          const cf = BigInt(v.cf);
+          const cn = BigInt(v.cn);
+          const ticketsOwned = BigInt(v.owned);
 
           const roles = {
             created: r.creator?.toLowerCase() === myAddr,
-            participated: ticketsOwned > 0n || joinedIds.has(normId(r.id)),
+            participated: ticketsOwned > 0n || joinedIds.has(rid),
             feeRecipient: r.feeRecipient?.toLowerCase() === myAddr, // ✅ NEW
           };
 
@@ -462,8 +525,23 @@ export function useDashboardController() {
 
         if (runId !== runIdRef.current) return;
         setClaimables(newClaimables);
+
+        // Recover concurrency slowly on success
+        rpcConcurrencyRef.current = {
+          joinedOwned: Math.min(12, rpcConcurrencyRef.current.joinedOwned + 1),
+          claimScan: Math.min(10, rpcConcurrencyRef.current.claimScan + 1),
+        };
       } catch (e) {
         console.error("Dashboard recompute error", e);
+
+        // If rate-limited, temporarily reduce concurrency (keeps same logic, just less pressure)
+        if (isRateLimitError(e)) {
+          rpcConcurrencyRef.current = {
+            joinedOwned: Math.max(4, Math.floor(rpcConcurrencyRef.current.joinedOwned / 2)),
+            claimScan: Math.max(3, Math.floor(rpcConcurrencyRef.current.claimScan / 2)),
+          };
+        }
+
         if (!isBackground) setMsg("Failed to load dashboard data.");
       } finally {
         if (!isBackground) setLocalPending(false);
