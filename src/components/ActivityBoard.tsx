@@ -2,11 +2,14 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { formatUnits } from "ethers";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
+import { useRevalidate } from "../hooks/useRevalidateTick";
 import "./ActivityBoard.css";
 
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
 const REFRESH_MS = 5_000;
+
+const shortAddr = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
 
 function isHidden() {
   try {
@@ -27,7 +30,7 @@ function isRateLimitError(err: any) {
   if (status === 429 || status === 503) return true;
 
   const msg = String(err?.message ?? err ?? "").toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests");
+  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
 }
 
 function isFresh(ts: string, seconds = 10) {
@@ -49,21 +52,24 @@ function timeAgoFrom(nowSec: number, ts: string) {
 export function ActivityBoard() {
   const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // existing revalidate tick (keeps your “wake up” behavior)
+  const rvTick = useRevalidate();
+  const lastRvAtRef = useRef<number>(0);
+
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const [lastUpdatedSec, setLastUpdatedSec] = useState<number | null>(null);
 
+  useEffect(() => {
+    const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
   const seenRef = useRef<Set<string>>(new Set());
+
   const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const backoffStepRef = useRef(0);
-
-  // 1s clock tick
-  useEffect(() => {
-    const t = window.setInterval(() => {
-      setNowSec(Math.floor(Date.now() / 1000));
-    }, 1000);
-    return () => window.clearInterval(t);
-  }, []);
 
   const clearTimer = () => {
     if (timerRef.current != null) {
@@ -79,17 +85,50 @@ export function ActivityBoard() {
     }, ms);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ✅ listen for optimistic activity inserts
+  useEffect(() => {
+    const onOptimistic = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
+      if (!d?.txHash) return;
+
+      const now = Math.floor(Date.now() / 1000);
+      const item: LocalActivityItem = {
+        type: (d.type as any) ?? "BUY",
+        raffleId: String(d.raffleId ?? ""),
+        raffleName: String(d.raffleName ?? "Pending..."),
+        subject: String(d.subject ?? "0x"),
+        value: String(d.value ?? "0"),
+        timestamp: String(d.timestamp ?? now),
+        txHash: String(d.txHash),
+        pending: true,
+        pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
+      };
+
+      setItems((prev) => {
+        const next = [item, ...prev.filter((x) => x.txHash !== item.txHash)];
+        return next.slice(0, 20);
+      });
+
+      // optimistic insert means “fresh”
+      setLastUpdatedSec(Math.floor(Date.now() / 1000));
+    };
+
+    window.addEventListener("ppopgi:activity", onOptimistic as any);
+    return () => window.removeEventListener("ppopgi:activity", onOptimistic as any);
+  }, []);
+
   const load = useCallback(
-    async (background = false) => {
-      if (background && isHidden()) {
-        scheduleNext(REFRESH_MS);
+    async (isBackground = false) => {
+      // if hidden, keep it cheap (but still try again soon)
+      if (isBackground && isHidden()) {
+        scheduleNext(60_000);
         return;
       }
 
       if (inFlightRef.current) return;
       inFlightRef.current = true;
 
-      if (!background && items.length === 0) setLoading(true);
+      if (!isBackground && items.length === 0) setLoading(true);
 
       try {
         const data = await fetchGlobalActivity({ first: 15 });
@@ -106,18 +145,20 @@ export function ActivityBoard() {
 
         setLoading(false);
         setLastUpdatedSec(Math.floor(Date.now() / 1000));
+
         backoffStepRef.current = 0;
 
+        // ✅ Always aim for 5s refresh (Worker TTL makes it safe)
         scheduleNext(REFRESH_MS);
       } catch (e) {
         console.error("[ActivityBoard] load failed", e);
 
         if (isRateLimitError(e)) {
           backoffStepRef.current = Math.min(backoffStepRef.current + 1, 5);
-          const delays = [5_000, 10_000, 20_000, 30_000, 60_000, 60_000];
+          const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
           scheduleNext(delays[backoffStepRef.current]);
         } else {
-          scheduleNext(REFRESH_MS);
+          scheduleNext(isBackground ? 15_000 : 10_000);
         }
 
         setLoading(false);
@@ -145,6 +186,18 @@ export function ActivityBoard() {
       clearTimer();
     };
   }, [load]);
+
+  // keep your revalidate hook behavior (fast wake-up)
+  useEffect(() => {
+    if (rvTick === 0) return;
+
+    const now = Date.now();
+    if (now - lastRvAtRef.current < 2_000) return;
+    lastRvAtRef.current = now;
+
+    if (isHidden()) return;
+    void load(true);
+  }, [rvTick, load]);
 
   const rowsWithFlags = useMemo(() => {
     return (items ?? []).map((it) => {
@@ -174,13 +227,14 @@ export function ActivityBoard() {
 
   return (
     <div className="ab-board">
-      <div className="ab-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div className="ab-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div className="ab-pulse" />
           <span>Live Feed</span>
-          <span style={{ fontSize: 12, opacity: 0.6 }}>
-            • Updated {updatedAgo} ago
-          </span>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.65 }}>
+          Updated {updatedAgo} ago
         </div>
       </div>
 
@@ -190,11 +244,22 @@ export function ActivityBoard() {
           const isWin = (item as any).type === "WIN";
           const isCancel = (item as any).type === "CANCEL";
 
+          // (TS warning fixed by removing unused isCreate variable)
+
           let icon = "✨";
           let iconClass = "create";
-          if (isBuy) { icon = "🎟️"; iconClass = "buy"; }
-          if (isWin) { icon = "🏆"; iconClass = "win"; }
-          if (isCancel) { icon = "⛔"; iconClass = "cancel"; }
+          if (isBuy) {
+            icon = "🎟️";
+            iconClass = "buy";
+          }
+          if (isWin) {
+            icon = "🏆";
+            iconClass = "win";
+          }
+          if (isCancel) {
+            icon = "⛔";
+            iconClass = "cancel";
+          }
 
           const fresh = isFresh(item.timestamp, 10);
 
@@ -203,7 +268,9 @@ export function ActivityBoard() {
             enter ? "ab-enter" : "",
             fresh ? `ab-fresh ab-fresh-${iconClass}` : "",
             item.pending ? "ab-pending" : "",
-          ].filter(Boolean).join(" ");
+          ]
+            .filter(Boolean)
+            .join(" ");
 
           return (
             <div key={key} className={rowClass}>
@@ -211,20 +278,65 @@ export function ActivityBoard() {
 
               <div className="ab-content">
                 <div className="ab-main-text">
-                  <a href={`/?raffle=${item.raffleId}`} className="ab-link">
-                    {item.raffleName}
-                  </a>
+                  {isCancel ? (
+                    <>
+                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
+                        {item.raffleName}
+                      </a>{" "}
+                      got <b style={{ color: "#991b1b" }}>canceled</b> due to min ticket not reached
+                    </>
+                  ) : (
+                    <>
+                      <a
+                        href={`https://explorer.etherlink.com/address/${item.subject}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ab-user"
+                      >
+                        {shortAddr(item.subject)}
+                      </a>
+
+                      {isBuy && (
+                        <>
+                          {" "}
+                          bought <b>{item.value} tix</b> in{" "}
+                        </>
+                      )}
+
+                      {!isBuy && !isWin && <> created </>}
+
+                      {isWin && (
+                        <>
+                          {" "}
+                          <b style={{ color: "#166534" }}>won</b> the pot on{" "}
+                        </>
+                      )}
+
+                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
+                        {item.raffleName}
+                      </a>
+                    </>
+                  )}
                 </div>
 
                 <div className="ab-meta">
                   <span className="ab-time">
                     {timeAgoFrom(nowSec, item.timestamp)}
                     {fresh && <span className="ab-new-pill">NEW</span>}
+                    {item.pending && (
+                      <span
+                        className="ab-new-pill"
+                        style={{ marginLeft: 6, background: "rgba(2,132,199,.12)", color: "#075985" }}
+                      >
+                        {item.pendingLabel || "PENDING"}
+                      </span>
+                    )}
                   </span>
 
-                  {!isCancel && (
-                    <span className="ab-pot-tag">
-                      {formatUnits(item.value, 6)}
+                  {!isBuy && (
+                    <span className={`ab-pot-tag ${isWin ? "win" : isCancel ? "cancel" : ""}`}>
+                      {isWin ? "Won: " : isCancel ? "Refunded" : "Pot: "}
+                      {!isCancel && formatUnits(item.value, 6)}
                     </span>
                   )}
                 </div>
