@@ -12,13 +12,7 @@ function short(a: string) {
   return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
 }
 
-/**
- * ✅ Robust USDC formatter:
- * - Accepts base-unit strings like "1000000"
- * - Accepts decimal strings like "1.0" or "0.25"
- * - Strips commas
- * - Never throws; returns "0" on bad input
- */
+
 function fmtUsdc(raw: any) {
   const s0 = String(raw ?? "0").trim();
   if (!s0) return "0";
