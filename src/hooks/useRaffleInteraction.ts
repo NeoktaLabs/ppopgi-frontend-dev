@@ -8,6 +8,9 @@ import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { useRaffleDetails } from "./useRaffleDetails";
 import { useConfetti } from "./useConfetti";
 
+// ✅ ADD: use the fixed USDC address from config
+import { ADDRESSES } from "../config/contracts";
+
 const ZERO = "0x0000000000000000000000000000000000000000";
 const isZeroAddr = (a: any) => String(a || "").toLowerCase() === ZERO;
 
@@ -30,7 +33,6 @@ function toInt(v: string, fb = 0) {
 }
 
 function safeTxHash(receipt: any): string {
-  // thirdweb receipts vary by connector/version
   return String(
     receipt?.transactionHash ||
       receipt?.hash ||
@@ -145,13 +147,12 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId });
   }, [raffleId]);
 
-  // ✅ FIX: don't create a contract with ZERO address
-  // also allow either `usdcToken` or `usdc` depending on source
+  // ✅ PATCH: always use the global USDC address (never ZERO, never "loading")
   const usdcContract = useMemo(() => {
-    const token = (data as any)?.usdcToken || (data as any)?.usdc;
-    if (!token || isZeroAddr(token)) return null;
-    return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: token });
-  }, [data]);
+    const addr = ADDRESSES.USDC;
+    if (!addr || isZeroAddr(addr)) return null; // safety
+    return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: addr });
+  }, []);
 
   const isConnected = !!account?.address;
 
@@ -215,9 +216,9 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
     if (!account?.address || !raffleId) return;
 
-    // ✅ UX: never silently fail / never point at 0x000…
+    // ✅ with global USDC this should never happen, but keep guard
     if (!usdcContract) {
-      setBuyMsg("USDC token is still loading. Please retry in a moment.");
+      setBuyMsg("USDC contract unavailable. Check config.");
       return;
     }
 
@@ -232,7 +233,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
 
-      // approve => revalidate only (no delayed ping needed)
       emitRevalidate(false);
     } catch {
       setBuyMsg("Prepare wallet failed.");
@@ -252,7 +252,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
       const receipt = await sendAndConfirm(tx);
 
-      // ✅ instant UI: optimistic sold bump
       const txh = safeTxHash(receipt);
       const patchId = `buy:${raffleId}:${txh || Date.now()}:${ticketCount}`;
       emitOptimisticBuy(ticketCount, patchId);
@@ -261,7 +260,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance("postTx");
 
-      // ✅ reconcile with subgraph (and delayed ping for ingest lag)
       emitRevalidate(true);
     } catch (e: any) {
       if (String(e).toLowerCase().includes("insufficient")) setBuyMsg("Not enough coins.");
