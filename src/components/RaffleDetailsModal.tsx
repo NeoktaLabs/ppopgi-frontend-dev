@@ -1,5 +1,5 @@
 // src/components/RaffleDetailsModal.tsx
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
@@ -120,93 +120,44 @@ function clampTicketsUi(v: any) {
   return Math.max(1, n);
 }
 
-// -----------------------------
-// ✅ “best-of” merge helpers
-// -----------------------------
-const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
-
-function isZeroAddr(v: any) {
-  const s = String(v || "").toLowerCase();
-  return !s || s === ZERO_ADDR;
+// ✅ NEW: do not let "0" / empty overwrite good values
+function isZeroish(v: any) {
+  if (v === null || v === undefined) return true;
+  const s = String(v).trim().toLowerCase();
+  if (!s) return true;
+  if (s === "0") return true;
+  if (s === "0x0000000000000000000000000000000000000000") return true;
+  return false;
 }
 
-function asBigIntOr0(v: any): bigint {
-  try {
-    const s = String(v ?? "0");
-    if (!s) return 0n;
-    return BigInt(s);
-  } catch {
-    return 0n;
-  }
+function preferNonZero(primary: any, fallback: any) {
+  return isZeroish(primary) ? fallback : primary;
 }
 
-function pickStr(primary: any, fallback: any) {
-  const a = String(primary ?? "");
-  if (a && a !== "Unknown raffle" && a !== "0") return a;
-  const b = String(fallback ?? "");
-  return b || a;
-}
+function mergePreferNonZero(primary: any, fallback: any) {
+  const a = primary ?? {}; // onchain (state.data)
+  const b = fallback ?? {}; // subgraph (initialRaffle/metadata)
 
-function pickAddr(primary: any, fallback: any) {
-  const a = String(primary ?? "");
-  if (!isZeroAddr(a)) return a;
-  const b = String(fallback ?? "");
-  return b || a;
-}
-
-function pickU256(primary: any, fallback: any) {
-  const A = asBigIntOr0(primary);
-  if (A > 0n) return String(A);
-  const B = asBigIntOr0(fallback);
-  return String(B > 0n ? B : A);
-}
-
-function pickU64(primary: any, fallback: any) {
-  // same as pickU256 but keeps as string
-  return pickU256(primary, fallback);
-}
-
-function pickBool(primary: any, fallback: any) {
-  if (typeof primary === "boolean") return primary;
-  if (typeof fallback === "boolean") return fallback;
-  return Boolean(primary ?? fallback ?? false);
-}
-
-function mergeRaffleDisplay(onchain: any, subgraph: any) {
-  const a = onchain ?? {};
-  const b = subgraph ?? {};
-
-  // Keep all existing fields, but override the important ones with best-of picks
   return {
     ...b,
     ...a,
 
-    id: String(a.id ?? b.id ?? ""),
-    address: String(a.address ?? b.id ?? b.address ?? ""),
-    name: pickStr(a.name, b.name),
+    // Critical numeric fields
+    winningPot: preferNonZero(a?.winningPot, b?.winningPot),
+    ticketPrice: preferNonZero(a?.ticketPrice, b?.ticketPrice),
+    sold: preferNonZero(a?.sold, b?.sold),
+    ticketRevenue: preferNonZero(a?.ticketRevenue, b?.ticketRevenue),
 
-    // Money + counters (this is what was showing 0)
-    winningPot: pickU256(a.winningPot, b.winningPot),
-    ticketPrice: pickU256(a.ticketPrice, b.ticketPrice),
-    sold: pickU256(a.sold, b.sold),
-    ticketRevenue: pickU256(a.ticketRevenue, b.ticketRevenue),
+    // Winner fields
+    winner: preferNonZero(a?.winner, b?.winner),
+    winningTicketIndex: preferNonZero(a?.winningTicketIndex, b?.winningTicketIndex),
 
-    // Params used everywhere
-    deadline: pickU64(a.deadline, b.deadline),
-    minTickets: pickU64(a.minTickets, b.minTickets),
-    maxTickets: pickU64(a.maxTickets, b.maxTickets),
-
-    // Addresses
-    creator: pickAddr(a.creator, b.creator),
-    winner: pickAddr(a.winner, b.winner),
-    feeRecipient: pickAddr(a.feeRecipient, b.feeRecipient),
-    usdcToken: pickAddr(a.usdcToken, (b as any).usdc ?? b.usdcToken),
-
-    // Flags
-    paused: pickBool(a.paused, b.paused),
-
-    // Status (prefer onchain hook’s computed status if present, else subgraph)
-    status: String(a.status ?? b.status ?? "UNKNOWN"),
+    // Creator / timestamps
+    creator: preferNonZero(a?.creator, b?.creator),
+    createdAtTimestamp: preferNonZero(a?.createdAtTimestamp, b?.createdAtTimestamp),
+    creationTx: preferNonZero(a?.creationTx, b?.creationTx),
+    completedAt: preferNonZero(a?.completedAt, b?.completedAt),
+    canceledAt: preferNonZero(a?.canceledAt, b?.canceledAt),
   };
 }
 
@@ -218,44 +169,13 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
-  // ✅ modal step like CreateRaffleModal
-  const [step, setStep] = useState<"details" | "success">("details");
-  const [successInfo, setSuccessInfo] = useState<{ raffleName: string; tickets: number } | null>(null);
-
-  // ✅ optional auto-return timer after success
-  const successTimerRef = useRef<number | null>(null);
-  const clearSuccessTimer = useCallback(() => {
-    if (successTimerRef.current != null) {
-      window.clearTimeout(successTimerRef.current);
-      successTimerRef.current = null;
-    }
-  }, []);
-
-  const goHome = useCallback(() => {
-    if (window.location.pathname !== "/") window.location.href = "/";
-    else window.location.reload();
-  }, []);
-
-  const handleFinalClose = useCallback(() => {
-    clearSuccessTimer();
-    onClose();
-    goHome();
-  }, [clearSuccessTimer, onClose, goHome]);
-
   useEffect(() => {
     if (!raffleId || !open) {
       setMetadata(null);
       setEvents(null);
       setTab("receipt");
-      setStep("details");
-      setSuccessInfo(null);
-      clearSuccessTimer();
       return;
     }
-
-    setStep("details");
-    setSuccessInfo(null);
-    clearSuccessTimer();
 
     if (initialRaffle?.createdAtTimestamp) setMetadata(initialRaffle);
 
@@ -275,34 +195,19 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return () => {
       active = false;
     };
-  }, [raffleId, open, initialRaffle, clearSuccessTimer]);
+  }, [raffleId, open, initialRaffle]);
 
-  // ✅ IMPORTANT: use a “best-of” merge instead of `state.data || initialRaffle || metadata`
-  const displayData = useMemo(() => {
-    const subgraphData = (initialRaffle || metadata) as any;
-    return mergeRaffleDisplay(state.data, subgraphData);
-  }, [state.data, initialRaffle, metadata]);
+  // ✅ NEW: build a merged display object (prevents "0 everywhere")
+  const subgraphData = (initialRaffle || metadata) as any;
+  const displayData = useMemo(() => mergePreferNonZero(state.data, subgraphData), [state.data, subgraphData]);
 
-  // ✅ Use the best sold value for holders % (fixes 0% issue)
-  const soldForHolders = useMemo(() => {
+  // ✅ NEW: use merged sold so holder % works
+  const totalSoldForPct = useMemo(() => {
     const n = Number(displayData?.sold || 0);
     return Number.isFinite(n) ? n : 0;
   }, [displayData?.sold]);
 
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForHolders);
-
-  // Keep UI tickets clamped into [1..maxBuy]
-  const maxBuy = Math.max(1, math.maxBuy);
-  const uiTicket = clampTicketsUi(state.tickets);
-  const clampedUiTicket = Math.min(uiTicket, maxBuy);
-
-  useEffect(() => {
-    if (!open || !raffleId) return;
-    if (String(clampedUiTicket) !== String(state.tickets)) {
-      actions.setTickets(String(clampedUiTicket));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raffleId, maxBuy]);
+  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, totalSoldForPct);
 
   const timeline = useMemo(() => {
     if (!displayData) return [];
@@ -319,25 +224,28 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
     steps.push({
       label: "Initialized",
-      date: (displayData as any).createdAtTimestamp || deployed?.blockTimestamp || null,
-      tx: (displayData as any).creationTx || deployed?.txHash || null,
+      date: displayData.createdAtTimestamp || deployed?.blockTimestamp || null,
+      tx: displayData.creationTx || deployed?.txHash || null,
       status: "done",
     });
 
     if (registered) {
       steps.push({ label: "Registered", date: registered.blockTimestamp, tx: registered.txHash, status: "done" });
-    } else if ((displayData as any).registeredAt) {
-      steps.push({ label: "Registered", date: (displayData as any).registeredAt, tx: null, status: "done" });
+    } else if (displayData.registeredAt) {
+      steps.push({ label: "Registered", date: displayData.registeredAt, tx: null, status: "done" });
     } else {
       steps.push({ label: "Registered", date: null, tx: null, status: "future" });
     }
 
-    const status = String(displayData.status || "");
+    const status = displayData.status;
 
     if (funding) {
       steps.push({ label: "Ticket Sales Open", date: funding.blockTimestamp, tx: funding.txHash, status: "done" });
     } else {
-      const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
+      const s =
+        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
+          ? "active"
+          : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
@@ -348,7 +256,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     } else {
       steps.push({
         label: "Draw Deadline",
-        date: (displayData as any).deadline || null,
+        date: displayData.deadline || null,
         tx: null,
         status: status === "OPEN" ? "active" : "future",
       });
@@ -360,20 +268,20 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
         date: winner.blockTimestamp,
         tx: winner.txHash,
         status: "done",
-        winner: (displayData as any).winner || winner.actor || null,
+        winner: displayData.winner || winner.actor || null,
       });
     } else if (canceled) {
       steps.push({ label: "Canceled", date: canceled.blockTimestamp, tx: canceled.txHash, status: "done" });
     } else if (status === "COMPLETED") {
       steps.push({
         label: "Winner Selected",
-        date: (displayData as any).completedAt || null,
+        date: displayData.completedAt || null,
         tx: null,
         status: "done",
-        winner: (displayData as any).winner || null,
+        winner: displayData.winner || null,
       });
     } else if (status === "CANCELED") {
-      steps.push({ label: "Canceled", date: (displayData as any).canceledAt || null, tx: null, status: "done" });
+      steps.push({ label: "Canceled", date: displayData.canceledAt || null, tx: null, status: "done" });
     } else {
       steps.push({ label: "Settlement", date: null, tx: null, status: "future" });
     }
@@ -423,106 +331,42 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const meAddr = String(account?.address || "").toLowerCase();
   const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
 
+  // Keep UI tickets clamped into [1..maxBuy]
+  const maxBuy = Math.max(1, math.maxBuy);
+  const uiTicket = clampTicketsUi(state.tickets);
+  const clampedUiTicket = Math.min(uiTicket, maxBuy);
+
+  useEffect(() => {
+    if (!open || !raffleId) return;
+    if (String(clampedUiTicket) !== String(state.tickets)) {
+      actions.setTickets(String(clampedUiTicket));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, raffleId, maxBuy]);
+
+  if (!open) return null;
+
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
   const blurBuy = !state.isConnected;
   const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
-  // ✅ SUCCESS DETECTION: your hook sets this on successful buy
-  const buyMsg = String(state.buyMsg ?? "");
-  const isPending = !!state.isPending;
-
-  useEffect(() => {
-    if (!open) return;
-    if (step === "success") return;
-
-    const isSuccess = buyMsg === "🎉 Tickets purchased!" && !isPending;
-    if (!isSuccess) return;
-
-    const raffleName = String(displayData?.name || "this raffle");
-    const tickets = Number(clampedUiTicket || 1);
-
-    setSuccessInfo({ raffleName, tickets });
-    setStep("success");
-
-    clearSuccessTimer();
-    successTimerRef.current = window.setTimeout(() => {
-      handleFinalClose();
-    }, 6000);
-  }, [open, step, buyMsg, isPending, displayData?.name, clampedUiTicket, clearSuccessTimer, handleFinalClose]);
-
-  if (!open) return null;
-
-  // ✅ success screen
-  if (step === "success") {
-    const raffleName = successInfo?.raffleName ?? String(displayData?.name || "this raffle");
-    const tickets = successInfo?.tickets ?? Number(clampedUiTicket || 1);
-
-    return (
-      <div className="rdm-overlay" onMouseDown={handleFinalClose}>
-        <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="rdm-header">
-            <div style={{ width: 32 }} />
-            <div style={{ fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>Success</div>
-            <button className="rdm-close-btn" onClick={handleFinalClose}>✕</button>
-          </div>
-
-          <div style={{ padding: 18 }}>
-            <div style={{ textAlign: "center", fontSize: 34, marginTop: 6 }}>🎉</div>
-            <div style={{ textAlign: "center", fontWeight: 1000, fontSize: 18, marginTop: 8 }}>You’re in!</div>
-
-            <div style={{ textAlign: "center", fontWeight: 800, marginTop: 8, lineHeight: 1.4 }}>
-              You successfully bought <b>{tickets}</b> ticket{tickets === 1 ? "" : "s"} for <b>{raffleName}</b>.
-            </div>
-
-            <div
-              style={{
-                marginTop: 16,
-                background: "#f8fafc",
-                border: "1px solid rgba(15,23,42,.08)",
-                borderRadius: 14,
-                padding: 14,
-                fontWeight: 800,
-                color: "#0f172a",
-              }}
-            >
-              <div style={{ marginBottom: 8 }}>Quick tips:</div>
-              <div style={{ display: "grid", gap: 8, fontWeight: 800 }}>
-                <div>✅ You can find this raffle in your <b>Dashboard → Live</b> tab.</div>
-                <div>
-                  🏆 Remember to claim your <b>prize</b> — or your <b>ticket refund</b> if it gets canceled — from the Dashboard.
-                </div>
-              </div>
-            </div>
-
-            <button className="rdm-cta buy" style={{ width: "100%", marginTop: 14 }} onClick={handleFinalClose}>
-              Understood — take me back to Home →
-            </button>
-
-            <div style={{ textAlign: "center", fontSize: 11, fontWeight: 900, opacity: 0.65, marginTop: 10 }}>
-              Returning automatically in a few seconds…
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // =========================
-  // DETAILS VIEW
-  // =========================
   return (
-    <div className="rdm-overlay" onMouseDown={handleFinalClose}>
+    <div className="rdm-overlay" onMouseDown={onClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="rdm-header">
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="rdm-close-btn" onClick={actions.handleShare} title="Copy Link">🔗</button>
+            <button className="rdm-close-btn" onClick={actions.handleShare} title="Copy Link">
+              🔗
+            </button>
           </div>
           <div style={{ fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
             TICKET #{raffleId?.slice(2, 8).toUpperCase()}
           </div>
-          <button className="rdm-close-btn" onClick={handleFinalClose}>✕</button>
+          <button className="rdm-close-btn" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         <div className="rdm-hero">
@@ -565,7 +409,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
-        {/* ✅ Restored distribution (now uses merged displayData so it won’t be 0 unless truly 0) */}
         {distribution && (
           <>
             {distribution.isCanceled ? (
@@ -789,7 +632,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     <div className="rdm-tl-date">
                       {formatDate(step.date)} <TxLink hash={step.tx} />
                     </div>
-                    {step.winner && !isZeroAddr(step.winner) && (
+                    {step.winner && (
                       <div className="rdm-tl-winner-box">
                         <span>🏆 Winner:</span> <ExplorerLink addr={step.winner} />
                       </div>
