@@ -40,6 +40,38 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const [allowLoading, setAllowLoading] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
+  // ✅ NEW: revalidate helpers (wakes up HomePage/ActivityBoard/etc)
+  const delayedRevalRef = useRef<number | null>(null);
+
+  const emitRevalidate = useCallback((withDelayedPing = true) => {
+    try {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+    } catch {}
+
+    // Optional second ping to catch indexer lag (still not “hammering”)
+    if (!withDelayedPing) return;
+
+    try {
+      if (typeof window === "undefined") return;
+      if (delayedRevalRef.current != null) window.clearTimeout(delayedRevalRef.current);
+      delayedRevalRef.current = window.setTimeout(() => {
+        try {
+          window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+        } catch {}
+      }, 6000); // give the indexer time to ingest
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (delayedRevalRef.current != null) {
+        window.clearTimeout(delayedRevalRef.current);
+        delayedRevalRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -53,10 +85,8 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const deadlineMs = Number(data?.deadline || "0") * 1000;
   const deadlinePassed = deadlineMs > 0 && nowMs >= deadlineMs;
 
-  // Remaining tickets (only meaningful if maxTickets is set)
   const remainingTickets = maxTicketsN > 0 ? Math.max(0, maxTicketsN - soldNow) : null;
 
-  // Status label shown in UI
   let displayStatus = "Unknown";
   if (data) {
     if (data.status === "OPEN" && (deadlinePassed || maxReached)) displayStatus = "Finalizing";
@@ -67,13 +97,9 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     else displayStatus = data.status.charAt(0) + data.status.slice(1).toLowerCase();
   }
 
-  // UI min should always be 1 (you requested)
   const uiMinBuy = 1;
+  const uiMaxBuy = maxTicketsN > 0 ? Math.max(0, remainingTickets || 0) : 500;
 
-  // Cap max buy to remaining when maxTickets is set
-  const uiMaxBuy = maxTicketsN > 0 ? Math.max(0, remainingTickets || 0) : 500; // UX cap when unlimited
-
-  // Clamp ticketCount (if uiMaxBuy is 0, ticketCount will still clamp to 1, but buying will be disabled below)
   const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
 
   const ticketPriceU = BigInt(data?.ticketPrice || "0");
@@ -85,15 +111,12 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   }, [raffleId]);
 
   const usdcContract = useMemo(() => {
-    // NOTE: your subgraph type uses `usdc`, but your hook used `usdcToken`.
-    // Keep as-is if your useRaffleDetails really returns `usdcToken`.
     if (!(data as any)?.usdcToken) return null;
     return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: (data as any).usdcToken });
   }, [data]);
 
   const isConnected = !!account?.address;
 
-  // ✅ Close buying if: not OPEN, paused, deadline passed, max reached, or no remaining tickets
   const raffleIsOpen =
     data?.status === "OPEN" &&
     !data.paused &&
@@ -120,7 +143,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       allowInFlight.current = true;
       lastAllowFetchAt.current = now;
 
-      let alive = true;
       setAllowLoading(true);
 
       try {
@@ -137,22 +159,15 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
           }),
         ]);
 
-        if (!alive) return;
         setUsdcBal(BigInt(bal as any));
         setAllowance(BigInt(a as any));
       } catch {
-        if (!alive) return;
         setUsdcBal(null);
         setAllowance(null);
       } finally {
-        if (!alive) return;
         setAllowLoading(false);
         allowInFlight.current = false;
       }
-
-      return () => {
-        alive = false;
-      };
     },
     [isOpen, account?.address, usdcContract, raffleId]
   );
@@ -167,12 +182,16 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         params: [raffleId, totalCostU],
       });
       await sendAndConfirm(tx);
+
       setBuyMsg("✅ Wallet prepared.");
       refreshAllowance("postTx");
+
+      // ✅ NEW: refresh UI lists in background
+      emitRevalidate(false); // approve doesn’t need delayed ping
     } catch {
       setBuyMsg("Prepare wallet failed.");
     }
-  }, [account?.address, usdcContract, raffleId, totalCostU, sendAndConfirm, refreshAllowance]);
+  }, [account?.address, usdcContract, raffleId, totalCostU, sendAndConfirm, refreshAllowance, emitRevalidate]);
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
@@ -189,11 +208,14 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
       refreshAllowance("postTx");
+
+      // ✅ NEW: wake up Home + ActivityBoard (and one delayed ping for indexer lag)
+      emitRevalidate(true);
     } catch (e: any) {
       if (String(e).includes("insufficient")) setBuyMsg("Not enough coins.");
       else setBuyMsg("Purchase failed.");
     }
-  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance]);
+  }, [account?.address, raffleContract, ticketCount, sendAndConfirm, fireConfetti, refreshAllowance, emitRevalidate]);
 
   const handleShare = useCallback(async () => {
     if (!raffleId) return;
@@ -210,7 +232,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   useEffect(() => {
     if (!isOpen) return;
 
-    // Always default to 1 in the buy UI
     setTickets("1");
     setBuyMsg(null);
 
