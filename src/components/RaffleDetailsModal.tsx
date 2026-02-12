@@ -130,7 +130,6 @@ const isZeroAddr = (v: any) => norm(v).toLowerCase() === ZERO;
 const isZeroNumStr = (v: any) => {
   const s = norm(v);
   if (!s) return true;
-  // treat "0", "0n", "0.0" as zero-ish (subgraph uses integer strings)
   return s === "0" || s === "0n" || s === "0.0";
 };
 function pickNonZeroNum(primary: any, fallback: any) {
@@ -197,6 +196,21 @@ function mergeDisplayData(onchain: any, base: any) {
   };
 }
 
+// ✅ Strict UI gate: ONLY OPEN is buyable (and not paused / not past deadline)
+function isRaffleOpenForUi(d: any) {
+  const status = String(d?.status || "").toUpperCase();
+  if (status !== "OPEN") return false;
+  if (d?.paused === true) return false;
+
+  const dl = Number(d?.deadline || "0");
+  if (Number.isFinite(dl) && dl > 0) {
+    const now = Math.floor(Date.now() / 1000);
+    if (dl <= now) return false;
+  }
+
+  return true;
+}
+
 export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
   const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
   const account = useActiveAccount();
@@ -242,7 +256,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   // ✅ Final merged display data
   const displayData = useMemo(() => mergeDisplayData(onchainData, baseData), [onchainData, baseData]);
 
-  // ✅ IMPORTANT: participants % rely on sold — use merged sold (won’t be 0 if subgraph has it)
+  const raffleIsOpenUi = useMemo(() => isRaffleOpenForUi(displayData), [displayData]);
+
+  // ✅ IMPORTANT: participants % rely on sold — use merged sold
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForPct);
 
@@ -446,7 +462,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
-        {/* ✅ prize distribution restored (same UI, but now uses merged non-zero values) */}
         {distribution && (
           <>
             {distribution.isCanceled ? (
@@ -510,13 +525,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
         <div className="rdm-tear" />
 
-        {/* BUY SECTION */}
+        {/* BUY SECTION (ONLY when OPEN; hidden for all other statuses) */}
         <div className="rdm-buy-section">
-          {!flags.raffleIsOpen ? (
-            <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
-              {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
-            </div>
-          ) : isCreator ? (
+          {!raffleIsOpenUi ? null : isCreator ? (
             <div className="rdm-buy-disabled">
               {displayData?.name ? <b>{displayData.name}</b> : "This raffle"} can’t be entered by its creator.
             </div>
