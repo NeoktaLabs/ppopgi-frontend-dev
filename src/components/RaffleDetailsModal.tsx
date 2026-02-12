@@ -154,7 +154,7 @@ function mergeDisplayData(onchain: any, base: any) {
   return {
     ...b,
 
-    name: pickTruthy(o.name, b.name),
+    name: pickTruthy(b.name, o.name),
 
     winningPot: pickNonZeroNum(o.winningPot, b.winningPot),
     ticketPrice: pickNonZeroNum(o.ticketPrice, b.ticketPrice),
@@ -166,7 +166,7 @@ function mergeDisplayData(onchain: any, base: any) {
     protocolFeePercent: pickNonZeroNum(o.protocolFeePercent, b.protocolFeePercent),
     minPurchaseAmount: pickNonZeroNum(o.minPurchaseAmount, b.minPurchaseAmount),
 
-    creator: pickNonZeroAddr(o.creator, b.creator),
+    creator: pickNonZeroAddr(b.creator, o.creator),
     usdcToken: pickNonZeroAddr(o.usdcToken, b.usdcToken ?? b.usdc),
     feeRecipient: pickNonZeroAddr(o.feeRecipient, b.feeRecipient),
     winner: pickNonZeroAddr(o.winner, b.winner),
