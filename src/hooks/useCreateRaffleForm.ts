@@ -8,57 +8,14 @@ import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 
 function sanitizeInt(raw: string) {
-  return raw.replace(/[^\d]/g, "");
+  return String(raw ?? "").replace(/[^\d]/g, "");
 }
 function toInt(raw: string, fallback = 0) {
   const n = Number(sanitizeInt(raw));
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
-function emitActivity(detail: {
-  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
-  raffleId: string;
-  raffleName: string;
-  subject: string;
-  value: string;
-  txHash: string;
-  timestamp?: number;
-  pendingLabel?: string;
-}) {
-  try {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(
-      new CustomEvent("ppopgi:activity", {
-        detail: {
-          ...detail,
-          timestamp: detail.timestamp ?? Math.floor(Date.now() / 1000),
-          pending: true,
-          pendingLabel: detail.pendingLabel ?? "Pending",
-        },
-      })
-    );
-  } catch {}
-}
-
-function emitRevalidate(withDelayedPing = true) {
-  try {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-  } catch {}
-
-  if (!withDelayedPing) return;
-
-  try {
-    if (typeof window === "undefined") return;
-    window.setTimeout(() => {
-      try {
-        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-      } catch {}
-    }, 6000);
-  } catch {}
-}
-
-// Minimal ERC20 ABI
+// Minimal ERC20 ABI (for typed thirdweb contract)
 const ERC20_ABI = [
   {
     type: "function",
@@ -89,6 +46,51 @@ const ERC20_ABI = [
   },
 ] as const;
 
+// ✅ optimistic + revalidate events (Home responsiveness without hammering indexer)
+type OptimisticCreateDetail = {
+  kind: "CREATE";
+  patchId?: string;
+  raffleId: string;
+  name: string;
+  creator: string;
+  createdAtTimestamp: string;
+  creationTx?: string | null;
+  winningPot: string;
+  ticketPrice: string;
+  deadline: string;
+  minTickets: string;
+  maxTickets: string;
+  sold: string;
+  lastUpdatedTimestamp: string;
+};
+
+function emitOptimisticCreate(detail: OptimisticCreateDetail) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("ppopgi:optimistic", { detail }));
+  } catch {
+    // ignore
+  }
+}
+
+function emitRevalidate(withDelayedPing = true) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+  } catch {}
+
+  if (!withDelayedPing) return;
+
+  try {
+    if (typeof window === "undefined") return;
+    window.setTimeout(() => {
+      try {
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      } catch {}
+    }, 7000); // give indexer time to ingest
+  } catch {}
+}
+
 export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string) => void) {
   const account = useActiveAccount();
   const me = account?.address ?? null;
@@ -103,7 +105,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
 
   // Limits
   const [minTickets, setMinTickets] = useState("1");
-  const [maxTickets, setMaxTickets] = useState("");
+  const [maxTickets, setMaxTickets] = useState(""); // "" => treat as 0 (unlimited)
   const [minPurchaseAmount, setMinPurchaseAmount] = useState("1");
 
   // --- Web3 State ---
@@ -161,11 +163,11 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
   }, [winningPotInt]);
 
   const minT = BigInt(Math.max(1, toInt(minTickets, 1)));
-  const maxT = BigInt(Math.max(0, toInt(maxTickets, 0)));
+  const maxT = BigInt(Math.max(0, toInt(maxTickets, 0))); // 0 => unlimited
   const minPurchaseU32 = Math.max(1, toInt(minPurchaseAmount, 1));
 
   // --- Validation ---
-  const durOk = durationSecondsN >= 60; // Min 1 min
+  const durOk = durationSecondsN >= 60; // Min 1 min (UI); your modal enforces 10m separately
   const hasEnoughAllowance = allowance !== null && allowance >= winningPotU;
   const hasEnoughBalance = usdcBal !== null && usdcBal >= winningPotU;
 
@@ -225,7 +227,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       setMsg("Approval successful!");
       await refreshAllowance();
 
-      // approve doesn’t need delayed ping
+      // Approval affects readiness; no need to “optimistic” raffles list.
       emitRevalidate(false);
     } catch (e) {
       console.error("Approve failed", e);
@@ -238,10 +240,6 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     setMsg(null);
     if (!canSubmit) return;
 
-    const meLower = String(me).toLowerCase();
-    const raffleName = name.trim();
-    const potU6 = String(winningPotU); // keep as bigint string (board formats it as USDC)
-
     try {
       setMsg("Please confirm creation in wallet...");
 
@@ -249,17 +247,14 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
         contract: factoryContract,
         method:
           "function createSingleWinnerLottery(string,uint256,uint256,uint64,uint64,uint64,uint32) returns (address)",
-        params: [raffleName, ticketPriceU, winningPotU, minT, maxT, BigInt(durationSecondsN), minPurchaseU32],
+        params: [name.trim(), ticketPriceU, winningPotU, minT, maxT, BigInt(durationSecondsN), minPurchaseU32],
       });
 
-      const receipt: any = await sendAndConfirm(tx);
-
-      const txHash =
-        String(receipt?.transactionHash || receipt?.hash || receipt?.txHash || "").toLowerCase() || "";
+      const receipt = await sendAndConfirm(tx);
 
       // Try to derive new address from logs (best-effort)
       let newAddr = "";
-      const logs: any[] = receipt?.logs ?? [];
+      const logs: any[] = (receipt as any)?.logs ?? [];
       for (const log of logs) {
         if (String(log?.address || "").toLowerCase() !== ADDRESSES.SingleWinnerDeployer.toLowerCase()) continue;
         const topics: string[] = log?.topics ?? [];
@@ -269,31 +264,49 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
         }
       }
 
-      // ✅ optimistic activity (if we have tx hash)
-      if (txHash) {
-        emitActivity({
-          type: "CREATE",
-          raffleId: (newAddr || "0x").toLowerCase(),
-          raffleName,
-          subject: meLower,
-          value: potU6,
-          txHash,
-          pendingLabel: "Pending",
+      // ✅ optimistic Home update: show new raffle immediately
+      if (newAddr && me) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const deadlineSec = nowSec + Math.max(0, durationSecondsN);
+
+        emitOptimisticCreate({
+          kind: "CREATE",
+          patchId: `create:${newAddr}:${nowSec}`,
+          raffleId: newAddr.toLowerCase(),
+          name: name.trim(),
+          creator: me.toLowerCase(),
+          createdAtTimestamp: String(nowSec),
+          creationTx: null,
+          winningPot: String(winningPotU.toString()),
+          ticketPrice: String(ticketPriceU.toString()),
+          deadline: String(deadlineSec),
+          minTickets: String(minT.toString()),
+          maxTickets: String(maxT.toString()),
+          sold: "0",
+          lastUpdatedTimestamp: String(nowSec),
         });
       }
 
       setMsg("🎉 Success!");
       await refreshAllowance();
-      onCreated?.(newAddr || undefined);
 
-      // ✅ wake up Home + ActivityBoard (and one delayed ping for indexer lag)
+      // ✅ wake up Home + ActivityBoard + a delayed ping for subgraph lag
       emitRevalidate(true);
+
+      onCreated?.(newAddr || undefined);
     } catch (e) {
       console.error("Create failed", e);
       setMsg("Creation failed.");
     }
   };
 
+  /**
+   * Reduced polling strategy:
+   * - refresh immediately on open
+   * - refresh on focus / visibility changes
+   * - light polling every 15s only while open AND only if not ready yet
+   * - stop polling once allowance is sufficient
+   */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -319,7 +332,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
       window.clearInterval(t);
-      reqIdRef.current++;
+      reqIdRef.current++; // invalidate in-flight
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, me, refreshAllowance, hasEnoughAllowance, hasEnoughBalance]);
