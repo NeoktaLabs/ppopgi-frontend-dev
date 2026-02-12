@@ -35,6 +35,14 @@ function fmtBal(v?: string, maxDp = 4) {
   return n.toLocaleString("en-US", { maximumFractionDigits: maxDp });
 }
 
+function isHidden() {
+  try {
+    return typeof document !== "undefined" && document.hidden;
+  } catch {
+    return false;
+  }
+}
+
 export const TopNav = memo(function TopNav({
   page,
   account,
@@ -50,6 +58,9 @@ export const TopNav = memo(function TopNav({
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const burgerRef = useRef<HTMLButtonElement | null>(null);
+
+  // ✅ pause balance polling when tab hidden
+  const [pollEnabled, setPollEnabled] = useState(() => !isHidden());
 
   useEffect(() => {
     setMenuOpen(false);
@@ -83,6 +94,23 @@ export const TopNav = memo(function TopNav({
     };
   }, [menuOpen]);
 
+  // ✅ keep polling off in background tabs, and refresh once when returning
+  useEffect(() => {
+    const onVis = () => {
+      const enabled = !isHidden();
+      setPollEnabled(enabled);
+      // no need to do anything else here; hooks will refetch on next interval,
+      // but we also trigger a manual refresh below on visibility/focus
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVis);
+    };
+  }, []);
+
   const closeMenu = () => setMenuOpen(false);
 
   const handleNav = (action: () => void, targetPage?: Page) => {
@@ -91,6 +119,8 @@ export const TopNav = memo(function TopNav({
     closeMenu();
   };
 
+  const BALANCE_POLL_MS = 60_000;
+
   const xtzBal = useWalletBalance(
     {
       client: thirdwebClient,
@@ -98,8 +128,8 @@ export const TopNav = memo(function TopNav({
       address: account ?? undefined,
     },
     {
-      enabled: !!account,
-      refetchInterval: 15_000,
+      enabled: !!account && pollEnabled,
+      refetchInterval: BALANCE_POLL_MS,
     } as any
   );
 
@@ -111,10 +141,21 @@ export const TopNav = memo(function TopNav({
       tokenAddress: (ADDRESSES as any).USDC,
     },
     {
-      enabled: !!account,
-      refetchInterval: 15_000,
+      enabled: !!account && pollEnabled,
+      refetchInterval: BALANCE_POLL_MS,
     } as any
   );
+
+  // ✅ refresh balances immediately when tab becomes visible again (no extra polling)
+  useEffect(() => {
+    if (!account) return;
+    if (!pollEnabled) return;
+    try {
+      xtzBal.refetch?.();
+      usdcBal.refetch?.();
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, pollEnabled]);
 
   const xtzText = fmtBal(xtzBal.data?.displayValue, 4);
   const xtzSym = xtzBal.data?.symbol || "XTZ";
