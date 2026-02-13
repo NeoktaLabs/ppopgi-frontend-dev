@@ -9,6 +9,7 @@ import {
   fetchMyJoinedRaffleIdsFromEvents,
   fetchRafflesByIds,
   fetchRaffleParticipants,
+  fetchMyFundsClaimedRaffleIds, // ✅ NEW (from subgraph.ts change)
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -212,6 +213,9 @@ export function useDashboardController() {
   // cache for "tickets bought" lookups (per page load)
   const boughtCacheRef = useRef<Map<string, string>>(new Map());
 
+  // ✅ cache for "already withdrew USDC" (FUNDS_CLAIMED) per account
+  const fundsClaimedCacheRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
+
   // --- RPC read cache + throttles ---
   const rpcCacheRef = useRef<Map<string, { ts: number; cf: string; cn: string; owned: string }>>(new Map());
   const lastBgRunRef = useRef(0);
@@ -223,6 +227,7 @@ export function useDashboardController() {
     joinedIdsPromiseRef.current = null;
     joinedBackoffMsRef.current = 0;
     boughtCacheRef.current = new Map();
+    fundsClaimedCacheRef.current = null;
     rpcCacheRef.current = new Map();
     lastBgRunRef.current = 0;
     rpcConcurrencyRef.current = { joinedOwned: 12, claimScan: 10 };
@@ -456,6 +461,34 @@ export function useDashboardController() {
         });
 
         const candidates = uniqueCandidates.slice(0, 600);
+
+        // ✅ NEW: prefetch which CANCELED raffles already had FUNDS_CLAIMED by this user
+        // so we can hide “already reclaimed” refund cards when cf/cn/owned are now zero.
+        let fundsClaimedSet: Set<string> = new Set();
+        try {
+          const now = Date.now();
+          const cached = fundsClaimedCacheRef.current;
+          const acct = account.toLowerCase();
+
+          const canceledCandidateIds = candidates
+            .filter((r) => r.status === "CANCELED")
+            .map((r) => normId(r.id));
+
+          if (
+            cached &&
+            cached.account === acct &&
+            now - cached.ts < 60_000 // 60s TTL
+          ) {
+            fundsClaimedSet = cached.ids;
+          } else if (canceledCandidateIds.length > 0) {
+            fundsClaimedSet = await fetchMyFundsClaimedRaffleIds(account, canceledCandidateIds);
+            fundsClaimedCacheRef.current = { ts: Date.now(), account: acct, ids: fundsClaimedSet };
+          }
+        } catch {
+          // fail-open: don't hide anything
+          fundsClaimedSet = new Set();
+        }
+
         const newClaimables: ClaimableItem[] = [];
         const rpcCache = rpcCacheRef.current;
 
@@ -475,7 +508,7 @@ export function useDashboardController() {
           const cn = BigInt(v.cn);
           const ticketsOwned = BigInt(v.owned);
 
-          const participatedEver = joinedIds.has(rid); // ✅ important
+          const participatedEver = joinedIds.has(rid);
 
           const roles = {
             created: r.creator?.toLowerCase() === myAddr,
@@ -486,15 +519,20 @@ export function useDashboardController() {
           const isWinnerEligible =
             r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
 
-          // ✅ FIX: Refund eligibility should NOT depend on ticketsOwned
-          // If raffle is canceled and user ever participated, they should see the REFUND card
-          // even if ticketsOwned is 0 (common when the contract zeros it on cancel).
+          const isCanceled = r.status === "CANCELED";
+
+          // ✅ Key fix:
+          // Refund cards are shown if user ever participated, even if ticketsOwned=0 (common on cancel).
+          // BUT we now hide the card once the user already withdrew (FUNDS_CLAIMED)
+          // and there is nothing currently claimable and no owned tickets.
+          const alreadyWithdrewFunds = isCanceled && fundsClaimedSet.has(rid);
+          const refundFullySettledNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
+
           const isParticipantRefundEligible =
-            r.status === "CANCELED" && (participatedEver || ticketsOwned > 0n || cf > 0n || cn > 0n);
+            isCanceled && !refundFullySettledNow && (participatedEver || ticketsOwned > 0n || cf > 0n || cn > 0n);
 
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
-          // show if: winner claim, refund flow, or any claimable balance
           if (!isWinnerEligible && !isParticipantRefundEligible && !isAnythingClaimable) return;
 
           if (isWinnerEligible) {
@@ -626,27 +664,16 @@ export function useDashboardController() {
         abi: RAFFLE_DASH_ABI,
       });
 
-      // ✅ FIX: do NOT block claimTicketRefund when ticketsOwned == 0.
-      // Many canceled raffles zero ticketsOwned, yet the user is still eligible to run claimTicketRefund().
-      // We'll only “soft-guard” if it looks totally non-participated AND no balances exist.
+      // ✅ do NOT block claimTicketRefund when ticketsOwned == 0
       if (method === "claimTicketRefund") {
         try {
-          const [cf, cn, owned] = await Promise.all([
+          await Promise.all([
             readContract({ contract: c, method: "claimableFunds", params: [account] }).then(toBigInt).catch(() => 0n),
             readContract({ contract: c, method: "claimableNative", params: [account] }).then(toBigInt).catch(() => 0n),
             readContract({ contract: c, method: "ticketsOwned", params: [account] }).then(toBigInt).catch(() => 0n),
           ]);
-
-          // If they already have balances, great (maybe step1 was already done).
-          // If they have owned tickets, great.
-          // If all are zero, still allow sending because claimTicketRefund is the step that *creates* claimableFunds
-          // in your 2-step UI.
-          // So: no early return here.
-          void cf;
-          void cn;
-          void owned;
         } catch {
-          // still allow sending; wallet tx will reveal revert reason if any
+          // still allow sending
         }
       }
 
@@ -663,6 +690,7 @@ export function useDashboardController() {
 
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
+      fundsClaimedCacheRef.current = null; // ✅ refresh claimed cache after a withdrawal
 
       await refreshRaffleStore(true, true);
       await recompute(true);
@@ -677,6 +705,7 @@ export function useDashboardController() {
     setHiddenClaimables({});
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
+    fundsClaimedCacheRef.current = null;
 
     await refreshRaffleStore(false, true);
     await recompute(false);
