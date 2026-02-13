@@ -99,8 +99,6 @@ export const TopNav = memo(function TopNav({
     const onVis = () => {
       const enabled = !isHidden();
       setPollEnabled(enabled);
-      // no need to do anything else here; hooks will refetch on next interval,
-      // but we also trigger a manual refresh below on visibility/focus
     };
 
     document.addEventListener("visibilitychange", onVis);
@@ -146,7 +144,7 @@ export const TopNav = memo(function TopNav({
     } as any
   );
 
-  // ✅ refresh balances immediately when tab becomes visible again (no extra polling)
+  // ✅ refresh balances immediately when tab becomes visible again
   useEffect(() => {
     if (!account) return;
     if (!pollEnabled) return;
@@ -195,7 +193,8 @@ export const TopNav = memo(function TopNav({
 
         <div className="topnav-right">
           <div className="desktop-actions">
-            {account && (
+            {account ? (
+              // If logged in, show Balances Pill (acts as cashier button)
               <button className="balances-pill" onClick={() => handleNav(onOpenCashier)} title="Open Cashier" type="button">
                 <div className="balances-rows">
                   <div className="bal-row">
@@ -208,21 +207,22 @@ export const TopNav = memo(function TopNav({
                   </div>
                 </div>
               </button>
+            ) : (
+              // If logged out, show generic Cashier button
+              <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
+                🏦 Cashier
+              </button>
             )}
 
-            <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
-              🏦 Cashier
-            </button>
-
             {!account ? (
-              <button className="nav-link signin-btn" onClick={() => handleNav(onOpenSignIn)}>
+              <button className="nav-link primary-pill-btn" onClick={() => handleNav(onOpenSignIn)}>
                 Sign In
               </button>
             ) : (
-              // ✅ removed the dot/avatar
+              // ✅ Updated Sign Out button to match Sign In style
               <button
                 type="button"
-                className="account-badge account-badge-stack"
+                className="nav-link primary-pill-btn"
                 onClick={() => handleNav(onSignOut)}
                 title="Log Off"
               >
