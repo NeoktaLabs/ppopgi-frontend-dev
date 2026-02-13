@@ -31,12 +31,19 @@ type InfraStatus = {
     label: string;
     running: boolean;
     lastRunMs: number | null;
+
+    /**
+     * Derived schedule (UI truth):
+     * nextRunMs = lastRunMs + finalizerEverySec*1000
+     */
     nextRunMs: number | null;
     finalizerEverySec: number;
 
+    // raw wire values (debug / fallback)
     secondsSinceLastRunWire: number | null;
     secondsToNextRunWire: number | null;
 
+    // live values (computed locally every second)
     secondsSinceLastRun: number | null;
     secondsToNextRun: number | null;
 
@@ -180,6 +187,7 @@ async function rpcEthBlockNumber(rpcUrl: string, timeoutMs: number): Promise<{ b
   return { block, latencyMs };
 }
 
+// ✅ use Worker /meta endpoint instead of POSTing _meta through /graphql
 async function subgraphIndexedBlock(subgraphUrl: string, timeoutMs: number): Promise<number> {
   const metaUrl = subgraphUrl.endsWith("/graphql") ? subgraphUrl.replace(/\/graphql$/, "/meta") : subgraphUrl;
 
@@ -215,15 +223,19 @@ export function useInfraStatus() {
   const rpcUrl = useMemo(() => mustEnv("VITE_ETHERLINK_RPC_URL"), []);
   const botUrl = useMemo(() => env("VITE_FINALIZER_STATUS_URL"), []);
 
+  // revalidate tick (app can "poke" infra refresh after actions)
   const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
 
   const pollMs = useMemo(() => {
     const v = env("VITE_INFRA_POLL_MS");
+    // ✅ default 60s
     const n = v ? Number(v) : 60_000;
+    // ✅ never poll faster than 60s (prevents accidental hammering)
     return Number.isFinite(n) ? Math.max(60_000, Math.floor(n)) : 60_000;
   }, []);
 
+  // 3 minutes by default, configurable
   const finalizerEverySec = useMemo(() => {
     const v = env("VITE_FINALIZER_EVERY_SEC");
     const n = v ? Number(v) : 180;
@@ -233,8 +245,9 @@ export function useInfraStatus() {
   const aliveRef = useRef(true);
   const fetchingRef = useRef(false);
 
-  // ✅ edge-trigger tracking for zeroKick
-  const lastBotToSecRef = useRef<number | null>(null);
+  // ✅ When bot "Next" hits 0, we bot-poll every 5s until it becomes > 0 (bot-only; no RPC/_meta spam)
+  const botZeroModeRef = useRef(false);
+  const botZeroIntervalRef = useRef<any>(null);
 
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -242,11 +255,21 @@ export function useInfraStatus() {
     return () => clearInterval(t);
   }, []);
 
+  const stopBotZeroMode = () => {
+    botZeroModeRef.current = false;
+    try {
+      clearInterval(botZeroIntervalRef.current);
+    } catch {}
+    botZeroIntervalRef.current = null;
+  };
+
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      stopBotZeroMode();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [state, setState] = useState<InfraStatus>(() => ({
@@ -273,10 +296,76 @@ export function useInfraStatus() {
     secondsToNextPoll: Math.floor(pollMs / 1000),
   }));
 
-  const runOnce = async () => {
-    // ✅ don’t do infra polling while hidden (prevents background spam)
+  const runBotOnlyOnce = async () => {
+    if (!botUrl) return;
     if (isHidden()) return;
 
+    try {
+      const w = await fetchBotStatus(botUrl.trim(), 5000);
+
+      const bs = botStatusFromWire(w);
+      const botLevel = bs.level;
+      const botLabel = bs.label;
+      const botRunning = !!w?.running;
+
+      const lastRunMs = typeof w?.lastRun === "number" ? w.lastRun : null;
+
+      const sinceWire = clampSec(w?.secondsSinceLastRun);
+      const toWire = clampSec(w?.secondsToNextRun);
+      const lastError = w?.lastError ? String(w.lastError) : null;
+
+      let nextRunMs: number | null = null;
+      if (lastRunMs !== null) nextRunMs = lastRunMs + finalizerEverySec * 1000;
+      else nextRunMs = typeof w?.nextRun === "number" ? w.nextRun : null;
+
+      const now = Date.now();
+      const liveSince = lastRunMs !== null ? Math.max(0, Math.floor((now - lastRunMs) / 1000)) : sinceWire;
+      const liveTo = nextRunMs !== null ? Math.max(0, Math.floor((nextRunMs - now) / 1000)) : toWire;
+
+      if (!aliveRef.current) return;
+
+      setState((prev) => {
+        const overall = worstOverall(prev.indexer.level, prev.rpc.level, botLevel);
+        return {
+          ...prev,
+          tsMs: now, // optional: makes “Updated HH:MM” tick during bot-only refresh
+          bot: {
+            ...prev.bot,
+            level: botLevel,
+            label: botLabel,
+            running: botRunning,
+            lastRunMs,
+            nextRunMs,
+            finalizerEverySec,
+            secondsSinceLastRunWire: sinceWire,
+            secondsToNextRunWire: toWire,
+            secondsSinceLastRun: liveSince ?? null,
+            secondsToNextRun: liveTo ?? null,
+            lastError,
+            error: undefined,
+          },
+          overall,
+        };
+      });
+    } catch (e: any) {
+      if (!aliveRef.current) return;
+      setState((prev) => {
+        const overall = worstOverall(prev.indexer.level, prev.rpc.level, "unknown");
+        return {
+          ...prev,
+          bot: {
+            ...prev.bot,
+            level: "unknown",
+            label: "Unknown",
+            error: String(e?.message || e || "bot_error"),
+          },
+          overall,
+        };
+      });
+    }
+  };
+
+  const runOnce = async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
 
@@ -291,6 +380,7 @@ export function useInfraStatus() {
       let rpcErr: string | undefined;
 
       try {
+        // ✅ single call per poll
         const tries = 1;
         const latencies: number[] = [];
         let latestBlock = 0;
@@ -325,7 +415,7 @@ export function useInfraStatus() {
 
       const idxS = indexerStatus(behind);
 
-      // ---- Bot status ----
+      // ---- Bot status (only once per poll) ----
       let botLevel: BotLevel = "unknown";
       let botLabel = "Unknown";
       let botRunning = false;
@@ -354,6 +444,7 @@ export function useInfraStatus() {
           toWire = clampSec(w?.secondsToNextRun);
           lastError = w?.lastError ? String(w.lastError) : null;
 
+          // next = last + finalizerEverySec
           if (lastRunMs !== null) {
             nextRunMs = lastRunMs + finalizerEverySec * 1000;
           } else {
@@ -417,17 +508,16 @@ export function useInfraStatus() {
     }
   };
 
-  // ✅ normal polling (no async leak)
+  // normal polling
   useEffect(() => {
     let interval: any = null;
 
-    // run immediately
-    void runOnce();
+    const loop = async () => {
+      await runOnce();
+      interval = setInterval(runOnce, pollMs);
+    };
 
-    // start interval immediately so cleanup always clears it
-    interval = setInterval(() => {
-      void runOnce();
-    }, pollMs);
+    void loop();
 
     return () => {
       try {
@@ -443,6 +533,7 @@ export function useInfraStatus() {
     if (isHidden()) return;
 
     const now = Date.now();
+    // ✅ was 3s — too aggressive for infra checks
     if (now - lastRvAtRef.current < 15_000) return;
     lastRvAtRef.current = now;
 
@@ -450,7 +541,7 @@ export function useInfraStatus() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rvTick]);
 
-  // every second: recompute countdowns + edge-triggered “zeroKick”
+  // every second: recompute live countdowns + bot-only refresh at 0s
   useEffect(() => {
     const now = nowTick;
 
@@ -485,17 +576,27 @@ export function useInfraStatus() {
       };
     });
 
-    // ✅ edge-triggered kick: only when it transitions to 0
-    const cur = state.bot.secondsToNextRun ?? null;
-    const prev = lastBotToSecRef.current;
-    lastBotToSecRef.current = cur;
+    // ✅ Smart: when Next == 0, bot-poll every 5s until it changes (bot-only; no RPC/_meta spam)
+    const secToNext = state.bot.secondsToNextRun;
+    const shouldZeroPoll = !!botUrl && secToNext === 0 && !isHidden();
 
-    if (!isHidden() && prev !== null && prev > 0 && cur === 0) {
-      setTimeout(() => void runOnce(), 800);
+    if (shouldZeroPoll && !botZeroModeRef.current) {
+      botZeroModeRef.current = true;
+
+      // fire immediately, then every 5s
+      void runBotOnlyOnce();
+      botZeroIntervalRef.current = setInterval(() => {
+        void runBotOnlyOnce();
+      }, 5_000);
     }
 
+    if (!shouldZeroPoll && botZeroModeRef.current) {
+      stopBotZeroMode();
+    }
+
+    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nowTick]);
+  }, [nowTick, state.bot.secondsToNextRun, botUrl, finalizerEverySec]);
 
   return state;
 }
