@@ -257,6 +257,9 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         const name = await readFirstOr(contract, "name", ["function name() view returns (string)"], "Unknown raffle");
         const statusU8 = await readFirstOr(contract, "status", ["function status() view returns (uint8)"], 255);
 
+        // ✅ Determine on-chain status early (used to gate some reads)
+        const onchainStatus = statusFromUint8(Number(statusU8));
+
         const sold = await readFirstOr(
           contract,
           "sold",
@@ -289,12 +292,17 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
 
         const winner = await readFirstOr(contract, "winner", ["function winner() view returns (address)"], ZERO);
 
-        const winningTicketIndex = await readFirstOr(
-          contract,
-          "winningTicketIndex",
-          ["function winningTicketIndex() view returns (uint256)"],
-          0n
-        );
+        // ✅ FIX: many contracts revert for winningTicketIndex until settled.
+        // Gate the read to avoid noisy console warnings + unnecessary RPC calls.
+        const winningTicketIndex =
+          onchainStatus === "COMPLETED"
+            ? await readFirstOr(
+                contract,
+                "winningTicketIndex",
+                ["function winningTicketIndex() view returns (uint256)"],
+                0n
+              )
+            : 0n;
 
         const feeRecipient = await readFirstOr(contract, "feeRecipient", ["function feeRecipient() view returns (address)"], ZERO);
 
@@ -344,8 +352,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         );
 
         if (!alive) return;
-
-        const onchainStatus = statusFromUint8(Number(statusU8));
 
         // ✅ Set data immediately from RPC (buy UI will work even if subgraph is slow/down)
         setData({
