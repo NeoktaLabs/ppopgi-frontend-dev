@@ -7,6 +7,12 @@ import "./ActivityBoard.css";
 
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
+// ✅ show only last 10
+const MAX_ITEMS = 10;
+
+// ✅ NEW pill window
+const NEW_WINDOW_SEC = 30;
+
 const REFRESH_MS = 5_000;
 
 const shortAddr = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
@@ -33,7 +39,7 @@ function isRateLimitError(err: any) {
   return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
 }
 
-function isFresh(ts: string, seconds = 10) {
+function isFresh(ts: string, seconds = NEW_WINDOW_SEC) {
   const now = Math.floor(Date.now() / 1000);
   const t = Number(ts || "0");
   if (!Number.isFinite(t) || t <= 0) return false;
@@ -53,8 +59,12 @@ export function ActivityBoard() {
   const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // used only to render "x ago" values; we tick it when we refresh, not every second
+  // ✅ tick every second so "NEW" and time-ago update smoothly
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(t);
+  }, []);
 
   // existing revalidate tick (keeps your “wake up” behavior)
   const rvTick = useRevalidate();
@@ -104,11 +114,8 @@ export function ActivityBoard() {
 
       setItems((prev) => {
         const next = [item, ...prev.filter((x) => x.txHash !== item.txHash)];
-        return next.slice(0, 20);
+        return next.slice(0, MAX_ITEMS);
       });
-
-      // keep "x ago" display reasonably fresh after optimistic updates
-      setNowSec(Math.floor(Date.now() / 1000));
     };
 
     window.addEventListener("ppopgi:activity", onOptimistic as any);
@@ -136,9 +143,8 @@ export function ActivityBoard() {
       abortRef.current = ac;
 
       try {
-        // If your fetchGlobalActivity supports signal, pass it through.
-        // If not, you can remove the second argument below.
-        const data = await fetchGlobalActivity({ first: 15 } as any, { signal: ac.signal } as any);
+        // ✅ FIX: fetchGlobalActivity takes a single options object (0-1 args)
+        const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal });
 
         if (ac.signal.aborted) return;
 
@@ -149,11 +155,10 @@ export function ActivityBoard() {
           const realHashes = new Set(real.map((x) => x.txHash));
           const stillPending = pending.filter((p) => !realHashes.has(p.txHash));
 
-          return [...stillPending, ...real].slice(0, 20);
+          return [...stillPending, ...real].slice(0, MAX_ITEMS);
         });
 
         setLoading(false);
-        setNowSec(Math.floor(Date.now() / 1000));
 
         backoffStepRef.current = 0;
 
@@ -208,7 +213,7 @@ export function ActivityBoard() {
     if (rvTick === 0) return;
 
     const now = Date.now();
-    if (now - lastRvAtRef.current < 5_000) return; // was 2s; a bit calmer
+    if (now - lastRvAtRef.current < 5_000) return;
     lastRvAtRef.current = now;
 
     if (isHidden()) return;
@@ -245,15 +250,14 @@ export function ActivityBoard() {
           <div className="ab-pulse" />
           <span>Live Feed</span>
         </div>
-
         {/* ✅ removed "Updated Xs ago" */}
       </div>
 
       <div className="ab-list">
         {rowsWithFlags.map(({ it: item, key, enter }) => {
           const isBuy = item.type === "BUY";
-          const isWin = (item as any).type === "WIN";
-          const isCancel = (item as any).type === "CANCEL";
+          const isWin = item.type === "WIN";
+          const isCancel = item.type === "CANCEL";
 
           let icon = "✨";
           let iconClass = "create";
@@ -270,7 +274,8 @@ export function ActivityBoard() {
             iconClass = "cancel";
           }
 
-          const fresh = isFresh(item.timestamp, 10);
+          // ✅ NEW pill for anything in last 30s
+          const fresh = isFresh(item.timestamp, NEW_WINDOW_SEC);
 
           const rowClass = [
             "ab-row",
