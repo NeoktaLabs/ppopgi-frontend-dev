@@ -200,6 +200,7 @@ export function useDashboardController() {
   const [joined, setJoined] = useState<JoinedRaffleItem[]>([]);
   const [claimables, setClaimables] = useState<ClaimableItem[]>([]);
   const [localPending, setLocalPending] = useState(true);
+  const [txPending, setTxPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
@@ -236,6 +237,8 @@ export function useDashboardController() {
     setCreated([]);
     setJoined([]);
     setClaimables([]);
+    setLocalPending(true);
+    setTxPending(false);
   }, [account]);
 
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
@@ -463,7 +466,6 @@ export function useDashboardController() {
         const candidates = uniqueCandidates.slice(0, 600);
 
         // ✅ NEW: prefetch which CANCELED raffles already had FUNDS_CLAIMED by this user
-        // so we can hide “already reclaimed” refund cards when cf/cn/owned are now zero.
         let fundsClaimedSet: Set<string> = new Set();
         try {
           const now = Date.now();
@@ -474,18 +476,13 @@ export function useDashboardController() {
             .filter((r) => r.status === "CANCELED")
             .map((r) => normId(r.id));
 
-          if (
-            cached &&
-            cached.account === acct &&
-            now - cached.ts < 60_000 // 60s TTL
-          ) {
+          if (cached && cached.account === acct && now - cached.ts < 60_000) {
             fundsClaimedSet = cached.ids;
           } else if (canceledCandidateIds.length > 0) {
             fundsClaimedSet = await fetchMyFundsClaimedRaffleIds(account, canceledCandidateIds);
             fundsClaimedCacheRef.current = { ts: Date.now(), account: acct, ids: fundsClaimedSet };
           }
         } catch {
-          // fail-open: don't hide anything
           fundsClaimedSet = new Set();
         }
 
@@ -521,10 +518,6 @@ export function useDashboardController() {
 
           const isCanceled = r.status === "CANCELED";
 
-          // ✅ Key fix:
-          // Refund cards are shown if user ever participated, even if ticketsOwned=0 (common on cancel).
-          // BUT we now hide the card once the user already withdrew (FUNDS_CLAIMED)
-          // and there is nothing currently claimable and no owned tickets.
           const alreadyWithdrewFunds = isCanceled && fundsClaimedSet.has(rid);
           const refundFullySettledNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
 
@@ -649,12 +642,31 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
+  function emitRevalidate() {
+    try {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+    } catch {}
+  }
+
+  function clearRpcCacheFor(raffleId: string, acct: string) {
+    const rid = normId(raffleId);
+    const key = `${acct.toLowerCase()}:${rid}`;
+    try {
+      rpcCacheRef.current.delete(key);
+    } catch {}
+  }
+
   // ✅ IMPORTANT: method is ABI-derived
   const withdraw = async (raffleId: string, method: DashTxMethod) => {
     if (!account) return;
     setMsg(null);
 
     const rid = normId(raffleId);
+
+    // IMPORTANT: do NOT "hide claimable card" for step-1 refund.
+    // Only hide when we've actually withdrawn everything (or the card truly becomes empty).
+    setTxPending(true);
 
     try {
       const c = getContract({
@@ -664,19 +676,6 @@ export function useDashboardController() {
         abi: RAFFLE_DASH_ABI,
       });
 
-      // ✅ do NOT block claimTicketRefund when ticketsOwned == 0
-      if (method === "claimTicketRefund") {
-        try {
-          await Promise.all([
-            readContract({ contract: c, method: "claimableFunds", params: [account] }).then(toBigInt).catch(() => 0n),
-            readContract({ contract: c, method: "claimableNative", params: [account] }).then(toBigInt).catch(() => 0n),
-            readContract({ contract: c, method: "ticketsOwned", params: [account] }).then(toBigInt).catch(() => 0n),
-          ]);
-        } catch {
-          // still allow sending
-        }
-      }
-
       await sendAndConfirm(
         prepareContractCall({
           contract: c,
@@ -685,18 +684,62 @@ export function useDashboardController() {
         })
       );
 
-      setHiddenClaimables((p) => ({ ...p, [rid]: true }));
+      // Clear cached reads so immediate post-tx checks aren't stale
+      clearRpcCacheFor(rid, account);
+
+      // Always revalidate other pages/widgets
+      emitRevalidate();
+
+      // ✅ If this was the refund "step 1", keep card visible.
+      // The UI should now show claimableFunds > 0 (step 2 enabled) after refresh/recompute.
+      if (method === "claimTicketRefund") {
+        setMsg("✅ Reclaimed. Now withdraw.");
+        // Refresh data so step 2 lights up
+        fundsClaimedCacheRef.current = null;
+        await refreshRaffleStore(true, true);
+        await recompute(true);
+        return;
+      }
+
+      // ✅ For withdrawFunds / withdrawNative:
+      // Only hide the card if there is truly nothing left to claim.
+      // (Important for WIN cases where USDC+Native can both exist.)
+      let stillHasSomething = true;
+      try {
+        const v = await readDashboardValues({
+          raffleId: rid,
+          account,
+          cache: rpcCacheRef.current,
+          ttlMs: 0, // force read
+        });
+
+        const cf = BigInt(v.cf);
+        const cn = BigInt(v.cn);
+        const owned = BigInt(v.owned);
+
+        stillHasSomething = cf > 0n || cn > 0n || owned > 0n;
+      } catch {
+        // fail-open: don't aggressively hide
+        stillHasSomething = true;
+      }
+
+      if (!stillHasSomething) {
+        setHiddenClaimables((p) => ({ ...p, [rid]: true }));
+      }
+
       setMsg("Claim successful.");
 
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
-      fundsClaimedCacheRef.current = null; // ✅ refresh claimed cache after a withdrawal
+      fundsClaimedCacheRef.current = null;
 
       await refreshRaffleStore(true, true);
       await recompute(true);
     } catch (e) {
       console.error("Withdraw failed", e);
       setMsg("Claim failed or rejected.");
+    } finally {
+      setTxPending(false);
     }
   };
 
@@ -721,7 +764,7 @@ export function useDashboardController() {
       joined: joinedSorted,
       claimables: claimablesSorted,
       msg,
-      isPending: localPending || store.isLoading,
+      isPending: txPending || localPending || store.isLoading,
       isColdLoading,
       isRefreshing,
       storeNote: store.note,
