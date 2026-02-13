@@ -31,19 +31,12 @@ type InfraStatus = {
     label: string;
     running: boolean;
     lastRunMs: number | null;
-
-    /**
-     * Derived schedule (UI truth):
-     * nextRunMs = lastRunMs + finalizerEverySec*1000
-     */
     nextRunMs: number | null;
     finalizerEverySec: number;
 
-    // raw wire values (debug / fallback)
     secondsSinceLastRunWire: number | null;
     secondsToNextRunWire: number | null;
 
-    // live values (computed locally every second)
     secondsSinceLastRun: number | null;
     secondsToNextRun: number | null;
 
@@ -187,11 +180,8 @@ async function rpcEthBlockNumber(rpcUrl: string, timeoutMs: number): Promise<{ b
   return { block, latencyMs };
 }
 
-// ✅ UPDATED: use Worker /meta endpoint instead of POSTing _meta through /graphql
 async function subgraphIndexedBlock(subgraphUrl: string, timeoutMs: number): Promise<number> {
-  const metaUrl = subgraphUrl.endsWith("/graphql")
-    ? subgraphUrl.replace(/\/graphql$/, "/meta")
-    : subgraphUrl;
+  const metaUrl = subgraphUrl.endsWith("/graphql") ? subgraphUrl.replace(/\/graphql$/, "/meta") : subgraphUrl;
 
   const res = await withTimeout(fetch(metaUrl, { method: "GET", cache: "no-store" }), timeoutMs, "subgraph_timeout");
 
@@ -225,19 +215,15 @@ export function useInfraStatus() {
   const rpcUrl = useMemo(() => mustEnv("VITE_ETHERLINK_RPC_URL"), []);
   const botUrl = useMemo(() => env("VITE_FINALIZER_STATUS_URL"), []);
 
-  // revalidate tick (app can "poke" infra refresh after actions)
   const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
 
   const pollMs = useMemo(() => {
     const v = env("VITE_INFRA_POLL_MS");
-    // ✅ default 60s
     const n = v ? Number(v) : 60_000;
-    // ✅ never poll faster than 60s (prevents accidental hammering)
     return Number.isFinite(n) ? Math.max(60_000, Math.floor(n)) : 60_000;
   }, []);
 
-  // 3 minutes by default, configurable
   const finalizerEverySec = useMemo(() => {
     const v = env("VITE_FINALIZER_EVERY_SEC");
     const n = v ? Number(v) : 180;
@@ -246,8 +232,9 @@ export function useInfraStatus() {
 
   const aliveRef = useRef(true);
   const fetchingRef = useRef(false);
-  const zeroKickArmedRef = useRef(true);
-  const zeroKickTimerRef = useRef<any>(null);
+
+  // ✅ edge-trigger tracking for zeroKick
+  const lastBotToSecRef = useRef<number | null>(null);
 
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -287,6 +274,9 @@ export function useInfraStatus() {
   }));
 
   const runOnce = async () => {
+    // ✅ don’t do infra polling while hidden (prevents background spam)
+    if (isHidden()) return;
+
     if (fetchingRef.current) return;
     fetchingRef.current = true;
 
@@ -301,7 +291,6 @@ export function useInfraStatus() {
       let rpcErr: string | undefined;
 
       try {
-        // ✅ single call per poll
         const tries = 1;
         const latencies: number[] = [];
         let latestBlock = 0;
@@ -365,7 +354,6 @@ export function useInfraStatus() {
           toWire = clampSec(w?.secondsToNextRun);
           lastError = w?.lastError ? String(w.lastError) : null;
 
-          // next = last + finalizerEverySec
           if (lastRunMs !== null) {
             nextRunMs = lastRunMs + finalizerEverySec * 1000;
           } else {
@@ -424,24 +412,22 @@ export function useInfraStatus() {
         nextPollMs: nextPollAt,
         secondsToNextPoll: Math.max(0, Math.floor((nextPollAt - Date.now()) / 1000)),
       });
-
-      // re-arm after successful fetch
-      zeroKickArmedRef.current = true;
     } finally {
       fetchingRef.current = false;
     }
   };
 
-  // normal polling
+  // ✅ normal polling (no async leak)
   useEffect(() => {
     let interval: any = null;
 
-    const loop = async () => {
-      await runOnce();
-      interval = setInterval(runOnce, pollMs);
-    };
+    // run immediately
+    void runOnce();
 
-    void loop();
+    // start interval immediately so cleanup always clears it
+    interval = setInterval(() => {
+      void runOnce();
+    }, pollMs);
 
     return () => {
       try {
@@ -457,7 +443,6 @@ export function useInfraStatus() {
     if (isHidden()) return;
 
     const now = Date.now();
-    // ✅ was 3s — too aggressive for infra checks
     if (now - lastRvAtRef.current < 15_000) return;
     lastRvAtRef.current = now;
 
@@ -465,7 +450,7 @@ export function useInfraStatus() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rvTick]);
 
-  // every second: recompute live countdowns + force refresh at 0s
+  // every second: recompute countdowns + edge-triggered “zeroKick”
   useEffect(() => {
     const now = nowTick;
 
@@ -500,20 +485,15 @@ export function useInfraStatus() {
       };
     });
 
-    const secToNext = state.bot.secondsToNextRun;
-    if (secToNext === 0 && zeroKickArmedRef.current) {
-      zeroKickArmedRef.current = false;
+    // ✅ edge-triggered kick: only when it transitions to 0
+    const cur = state.bot.secondsToNextRun ?? null;
+    const prev = lastBotToSecRef.current;
+    lastBotToSecRef.current = cur;
 
-      try {
-        clearTimeout(zeroKickTimerRef.current);
-      } catch {}
-
-      zeroKickTimerRef.current = setTimeout(() => {
-        void runOnce();
-      }, 800);
+    if (!isHidden() && prev !== null && prev > 0 && cur === 0) {
+      setTimeout(() => void runOnce(), 800);
     }
 
-    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nowTick]);
 
