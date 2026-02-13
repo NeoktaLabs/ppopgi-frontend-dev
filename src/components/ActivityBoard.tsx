@@ -8,7 +8,7 @@ import "./ActivityBoard.css";
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
 // ✅ show only last 10
-const MAX_ITEMS = 10;
+const MAX_ITEMS = 15;
 
 // ✅ NEW pill window
 const NEW_WINDOW_SEC = 30;
