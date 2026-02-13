@@ -171,6 +171,13 @@ async function readDashboardValues(args: {
   return { cf, cn, owned };
 }
 
+// ✅ FIX: explicit signatures for thirdweb prepareContractCall (prevents calldata = 0x)
+const WITHDRAW_SIG = {
+  withdrawFunds: "function withdrawFunds()",
+  withdrawNative: "function withdrawNative()",
+  claimTicketRefund: "function claimTicketRefund()",
+} as const;
+
 export function useDashboardController() {
   const accountObj = useActiveAccount();
   const account = accountObj?.address ?? null;
@@ -439,7 +446,7 @@ export function useDashboardController() {
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
-        myFeeRaffles.forEach((r) => candidateById.set(normId(r.id), r)); // ✅ NEW
+        myFeeRaffles.forEach((r) => candidateById.set(normId(r.id), r));
 
         const uniqueCandidates = Array.from(candidateById.values());
         uniqueCandidates.sort((a, b) => {
@@ -449,7 +456,7 @@ export function useDashboardController() {
           return Number(b.lastUpdatedTimestamp || "0") - Number(a.lastUpdatedTimestamp || "0");
         });
 
-        const candidates = uniqueCandidates.slice(0, 600); // slightly higher, since feeRecipient adds more
+        const candidates = uniqueCandidates.slice(0, 600);
         const newClaimables: ClaimableItem[] = [];
 
         const rpcCache = rpcCacheRef.current;
@@ -475,7 +482,7 @@ export function useDashboardController() {
           const roles = {
             created: r.creator?.toLowerCase() === myAddr,
             participated: ticketsOwned > 0n || joinedIds.has(rid),
-            feeRecipient: r.feeRecipient?.toLowerCase() === myAddr, // ✅ NEW
+            feeRecipient: r.feeRecipient?.toLowerCase() === myAddr,
           };
 
           const isWinnerEligible =
@@ -609,21 +616,44 @@ export function useDashboardController() {
     if (!account) return;
     setMsg(null);
 
+    const rid = normId(raffleId); // ✅ FIX: normalize address
+    const sig = WITHDRAW_SIG[method]; // ✅ FIX: explicit signature
+
     try {
       const c = getContract({
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
-        address: raffleId,
+        address: rid,
         abi: RAFFLE_DASH_ABI,
       });
 
-      await sendAndConfirm(prepareContractCall({ contract: c, method, params: [] }));
+      const tx = prepareContractCall({
+        contract: c,
+        method: sig,
+        params: [],
+      });
 
-      setHiddenClaimables((p) => ({ ...p, [normId(raffleId)]: true }));
+      // ✅ FIX: catch the exact bug you saw (wallet shows "no function defined")
+      const dataHex = (tx as any)?.data;
+      if (!dataHex || dataHex === "0x") {
+        console.error("[dash] BUG: empty calldata for withdraw", { rid, method, sig, tx });
+        throw new Error("BUG_EMPTY_CALLDATA_WITHDRAW");
+      }
+
+      await sendAndConfirm(tx);
+
+      setHiddenClaimables((p) => ({ ...p, [rid]: true }));
       setMsg("Claim successful.");
 
+      // bust caches so the UI updates right away
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
+
+      // ✅ also bust per-raffle rpc cache for this raffle so claimables update immediately
+      try {
+        const acct = account.toLowerCase();
+        rpcCacheRef.current.delete(`${acct}:${rid}`);
+      } catch {}
 
       await refreshRaffleStore(true, true);
       await recompute(true);
