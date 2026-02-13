@@ -294,10 +294,42 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const meAddr = String(account?.address || "").toLowerCase();
   const isCreator = !!creatorAddr && !!meAddr && creatorAddr === meAddr;
 
-  // Clamp UI tickets into [1..maxBuy]
-  const maxBuy = Math.max(1, math.maxBuy);
+  // ----------------------------------------------------
+  // ✅ NEW: effective max buy = remaining cap AND balance cap
+  // ----------------------------------------------------
+  const ticketPriceU = (() => {
+    try {
+      return BigInt(displayData?.ticketPrice || "0");
+    } catch {
+      return 0n;
+    }
+  })();
+
+  const affordableMaxBuy = useMemo(() => {
+    // If we can't compute, don't artificially restrict the UI.
+    if (!state.usdcBal || ticketPriceU <= 0n) return Number.POSITIVE_INFINITY;
+
+    const max = state.usdcBal / ticketPriceU; // bigint division floors automatically
+    // Cap to a safe JS number (stepper uses numbers)
+    const capped = max > 10_000n ? 10_000 : Number(max); // UX cap; adjust if you want
+    return Math.max(0, capped);
+  }, [state.usdcBal, ticketPriceU]);
+
+  // math.maxBuy already respects remaining tickets when maxTickets is set
+  const remainingCap = Math.max(0, Number(math.maxBuy || 0));
+
+  // effectiveMaxBuy can be 0 if user can't afford even 1
+  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy)
+    ? Math.max(0, Math.min(remainingCap, affordableMaxBuy))
+    : remainingCap;
+
+  // For the input/stepper we still display at least 1,
+  // but "+" will be disabled at effectiveMaxBuy (or 1 if it's 0).
+  const uiMaxForStepper = Math.max(1, effectiveMaxBuy);
+
+  // Keep UI tickets clamped into [1..uiMaxForStepper]
   const uiTicket = clampTicketsUi(state.tickets);
-  const clampedUiTicket = Math.min(uiTicket, maxBuy);
+  const clampedUiTicket = Math.min(uiTicket, uiMaxForStepper);
 
   useEffect(() => {
     if (!open || !raffleId) return;
@@ -305,7 +337,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       actions.setTickets(String(clampedUiTicket));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raffleId, maxBuy]);
+  }, [open, raffleId, uiMaxForStepper]);
 
   if (!open) return null;
 
@@ -316,7 +348,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
   // --------------------------
-  // ✅ NEW: Raffle Details data
+  // Raffle Details block values
   // --------------------------
   const soldNow = Number(displayData?.sold || 0);
   const minTicketsN = Math.max(0, Number(displayData?.minTickets || 0));
@@ -327,13 +359,11 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const minReached = minTicketsN > 0 ? soldNow >= minTicketsN : true;
 
   const expectedOutcome = (() => {
-    // terminal states first
     const st = String(displayData?.status || "").toUpperCase();
     if (st === "CANCELED") return "This raffle is canceled.";
     if (st === "COMPLETED") return "This raffle is completed — winner already selected.";
     if (st === "DRAWING") return "Winner selection is in progress.";
 
-    // open-ish states
     if (!minReached) {
       if (minTicketsN <= 0) return "A winner will be selected at the deadline.";
       return `Not enough tickets yet. If the minimum (${minTicketsN}) isn’t reached before the deadline, it will likely be canceled.`;
@@ -405,8 +435,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         )}
 
-        {/* ✅ BUY SECTION */}
         <div className="rdm-tear" />
+
+        {/* BUY SECTION */}
         <div className="rdm-buy-section">
           {!flags.raffleIsOpen ? (
             <div style={{ textAlign: "center", padding: 20, opacity: 0.6, fontWeight: 700 }}>
@@ -428,7 +459,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               >
                 <div className="rdm-balance-row">
                   <span>Bal: {math.fmtUsdc(state.usdcBal?.toString() || "0")} USDC</span>
-                  <span>Max: {math.maxBuy} Tickets</span>
+                  <span>Max: {uiMaxForStepper} Tickets</span>
                 </div>
 
                 {showRemainingNote && (
@@ -471,7 +502,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                       value={String(clampedUiTicket)}
                       onChange={(e) => {
                         const v = clampTicketsUi(e.target.value);
-                        actions.setTickets(String(Math.min(v, maxBuy)));
+                        actions.setTickets(String(Math.min(v, uiMaxForStepper)));
                       }}
                       placeholder="1"
                     />
@@ -480,8 +511,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
 
                   <button
                     className="rdm-step-btn"
-                    onClick={() => actions.setTickets(String(Math.min(maxBuy, clampedUiTicket + 1)))}
-                    disabled={clampedUiTicket >= maxBuy}
+                    onClick={() => actions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)))}
+                    disabled={clampedUiTicket >= uiMaxForStepper}
+                    title={effectiveMaxBuy === 0 ? "Not enough balance" : undefined}
                   >
                     +
                   </button>
@@ -540,7 +572,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           )}
         </div>
 
-        {/* ✅ NEW: RAFFLE DETAILS (above distribution) */}
+        {/* RAFFLE DETAILS */}
         <div className="rdm-tear" />
         <div className="rdm-dist" style={{ marginTop: 0 }}>
           <div className="rdm-dist-title">Raffle Details</div>
@@ -593,7 +625,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
         </div>
 
-        {/* EXISTING DISTRIBUTION */}
+        {/* DISTRIBUTION */}
         {distribution && (
           <>
             {distribution.isCanceled ? (
