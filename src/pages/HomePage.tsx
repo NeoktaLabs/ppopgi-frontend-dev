@@ -52,18 +52,75 @@ function computeEdges(el: HTMLDivElement | null) {
   };
 }
 
-// ✅ fire global “open cashier”
+// Global dispatchers
 function openCashierFromHome() {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:open-cashier"));
   } catch {}
 }
 
-// ✅ fire global “navigate page” (App.tsx should listen)
 function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "faq") {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page } }));
   } catch {}
+}
+
+// ✅ 1. NEW SLIDING BANNER COMPONENT
+const BANNER_MESSAGES = [
+  {
+    id: "cashier",
+    text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC",
+    action: openCashierFromHome,
+  },
+  {
+    id: "explore",
+    text: "🔎 Discover all raffles from the Explore page",
+    action: () => navigateFromHome("explore"),
+  },
+  {
+    id: "dashboard",
+    text: "🎁 Visit your dashboard to reclaim prizes or tickets",
+    action: () => navigateFromHome("dashboard"),
+  },
+  {
+    id: "about",
+    text: "📖 Read the story behind Ppopgi",
+    action: () => navigateFromHome("about"),
+  },
+  {
+    id: "faq",
+    text: "❓ Learn how Ppopgi works (FAQ)",
+    action: () => navigateFromHome("faq"),
+  },
+];
+
+function BannerSlider() {
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    // 3000ms (3s) per slide for readability
+    const timer = setInterval(() => {
+      setIdx((prev) => (prev + 1) % BANNER_MESSAGES.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="hp-banner-wrapper">
+      <div
+        className="hp-banner-track"
+        style={{ transform: `translateX(-${idx * 100}%)` }}
+      >
+        {BANNER_MESSAGES.map((msg) => (
+          <div key={msg.id} className="hp-banner-slide">
+            <button className="hp-banner-btn" onClick={msg.action}>
+              {msg.text}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
@@ -71,13 +128,9 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
 
-  // ✅ ONE infra poll for the entire homepage (do NOT call useInfraStatus in each card)
   const infra = useInfraStatus();
-
-  // ✅ pull refetch so we can refresh in background on “revalidate” events
   const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading, refetch } = useHomeRaffles();
 
-  // ✅ Create ONE stable payload for all cards
   const finalizerForCards = useMemo(
     () => ({
       running: !!infra.bot?.running,
@@ -87,18 +140,14 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     [infra.bot?.running, infra.bot?.secondsToNextRun, infra.tsMs]
   );
 
-  // ✅ Listen to global revalidate events and refresh home lists (debounced)
   const revalTimerRef = useRef<number | null>(null);
   useEffect(() => {
     const onRevalidate = () => {
-      // Debounce so multiple events (buy + tx confirm + etc) don’t hammer your indexer
       if (revalTimerRef.current != null) window.clearTimeout(revalTimerRef.current);
       revalTimerRef.current = window.setTimeout(() => {
         try {
           refetch();
-        } catch {
-          // ignore
-        }
+        } catch {}
       }, 900);
     };
 
@@ -159,79 +208,11 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     };
   }, [isLoading, endingSoonSorted.length, recentlySettledSorted.length, updateEndingEdges, updateSettledEdges]);
 
-  // ✅ Banner item: button (so we don’t rely on URL routing)
-  const BannerItem = ({
-    children,
-    onClick,
-    title,
-  }: {
-    children: React.ReactNode;
-    onClick: () => void;
-    title?: string;
-  }) => {
-    return (
-      <button type="button" className="hp-announcement-btn" onClick={onClick} title={title}>
-        {children}
-      </button>
-    );
-  };
-
-  const MarqueeContent = () => (
-    <>
-      <BannerItem onClick={openCashierFromHome} title="Open Cashier">
-        💡 Pro tip: Visit the Cashier to buy more XTZ or USDC
-      </BannerItem>
-
-      <span className="hp-announcement-sep">|</span>
-
-      <BannerItem onClick={() => navigateFromHome("explore")} title="Explore all raffles">
-        🔎 Discover all raffles from the Explore page
-      </BannerItem>
-
-      <span className="hp-announcement-sep">|</span>
-
-      <BannerItem onClick={() => navigateFromHome("dashboard")} title="Open Dashboard">
-        🎁 Visit your dashboard to reclaim prizes or ticket reclaims
-      </BannerItem>
-
-      <span className="hp-announcement-sep">|</span>
-
-      <BannerItem onClick={() => navigateFromHome("about")} title="The story behind Ppopgi">
-        📖 The story behind Ppopgi
-      </BannerItem>
-
-      <span className="hp-announcement-sep">|</span>
-
-      <BannerItem onClick={() => navigateFromHome("faq")} title="How Ppopgi works">
-        ❓ How Ppopgi works (FAQ)
-      </BannerItem>
-
-      <span className="hp-announcement-sep" style={{ opacity: 0.3 }}>
-        ◆
-      </span>
-    </>
-  );
-
   return (
     <>
-      {/* ✅ SCROLLING BANNER */}
+      {/* ✅ New Sliding Banner */}
       <div className="hp-announcement-bar">
-        <div className="hp-announcement-container">
-          <div className="hp-marquee-track">
-            <div className="hp-marquee-content">
-              <MarqueeContent />
-              <MarqueeContent />
-              <MarqueeContent />
-              <MarqueeContent />
-            </div>
-            <div className="hp-marquee-content">
-              <MarqueeContent />
-              <MarqueeContent />
-              <MarqueeContent />
-              <MarqueeContent />
-            </div>
-          </div>
-        </div>
+        <BannerSlider />
       </div>
 
       {/* Activity Board */}
@@ -268,27 +249,22 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
         {/* 2. PODIUM */}
         <div className="hp-podium-section">
-          <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 40 }}>
+          <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 50 }}>
             <div className="hp-section-title">🏆 Top Active Prizepools</div>
           </div>
 
           <div className="hp-podium">
             {isLoading && (
               <>
-                <div className="pp-silver-wrapper">
-                  <RaffleCardSkeleton />
-                </div>
-                <div className="pp-gold-wrapper">
-                  <RaffleCardSkeleton />
-                </div>
-                <div className="pp-bronze-wrapper">
-                  <RaffleCardSkeleton />
-                </div>
+                <div className="pp-silver-wrapper"><RaffleCardSkeleton /></div>
+                <div className="pp-gold-wrapper"><RaffleCardSkeleton /></div>
+                <div className="pp-bronze-wrapper"><RaffleCardSkeleton /></div>
               </>
             )}
 
             {!isLoading && podium.silver && (
               <div className="pp-silver-wrapper">
+                <div className="pp-rank-badge silver">2</div>
                 <RaffleCard
                   raffle={podium.silver}
                   onOpen={onOpenRaffle}
@@ -301,6 +277,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             )}
             {!isLoading && podium.gold && (
               <div className="pp-gold-wrapper">
+                <div className="pp-rank-badge gold">1</div>
                 <RaffleCard
                   raffle={podium.gold}
                   onOpen={onOpenRaffle}
@@ -313,6 +290,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             )}
             {!isLoading && podium.bronze && (
               <div className="pp-bronze-wrapper">
+                <div className="pp-rank-badge bronze">3</div>
                 <RaffleCard
                   raffle={podium.bronze}
                   onOpen={onOpenRaffle}
@@ -341,37 +319,27 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
           <div className="hp-strip-wrap">
             {!endingEdges.atLeft && (
-              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")}>
-                ‹
-              </button>
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")}>‹</button>
             )}
             {!endingEdges.atRight && (
-              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")}>
-                ›
-              </button>
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")}>›</button>
             )}
 
             <div className="hp-strip" ref={endingRef} onScroll={updateEndingEdges}>
-              {isLoading &&
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="hp-strip-item">
-                    <RaffleCardSkeleton />
-                  </div>
-                ))}
-
-              {!isLoading &&
-                endingSoonSorted.map((r) => (
-                  <div key={r.id} className="hp-strip-item">
-                    <RaffleCard
-                      raffle={r}
-                      onOpen={onOpenRaffle}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowMs}
-                      finalizer={finalizerForCards}
-                    />
-                  </div>
-                ))}
-
+              {isLoading && Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="hp-strip-item"><RaffleCardSkeleton /></div>
+              ))}
+              {!isLoading && endingSoonSorted.map((r) => (
+                <div key={r.id} className="hp-strip-item">
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                  />
+                </div>
+              ))}
               {!isLoading && endingSoonSorted.length === 0 && (
                 <div className="hp-empty-msg">
                   <div className="hp-empty-icon">😴</div>
@@ -391,37 +359,27 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
           <div className="hp-strip-wrap">
             {!settledEdges.atLeft && (
-              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")}>
-                ‹
-              </button>
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")}>‹</button>
             )}
             {!settledEdges.atRight && (
-              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")}>
-                ›
-              </button>
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")}>›</button>
             )}
 
             <div className="hp-strip" ref={settledRef} onScroll={updateSettledEdges}>
-              {isLoading &&
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="hp-strip-item">
-                    <RaffleCardSkeleton />
-                  </div>
-                ))}
-
-              {!isLoading &&
-                recentlySettledSorted.map((r) => (
-                  <div key={r.id} className="hp-strip-item">
-                    <RaffleCard
-                      raffle={r}
-                      onOpen={onOpenRaffle}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowMs}
-                      finalizer={finalizerForCards}
-                    />
-                  </div>
-                ))}
-
+              {isLoading && Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="hp-strip-item"><RaffleCardSkeleton /></div>
+              ))}
+              {!isLoading && recentlySettledSorted.map((r) => (
+                <div key={r.id} className="hp-strip-item">
+                  <RaffleCard
+                    raffle={r}
+                    onOpen={onOpenRaffle}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                  />
+                </div>
+              ))}
               {!isLoading && recentlySettledSorted.length === 0 && (
                 <div className="hp-empty-msg">
                   <div className="hp-empty-icon">📂</div>
