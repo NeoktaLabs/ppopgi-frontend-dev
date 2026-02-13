@@ -224,8 +224,14 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
   if (!open) return null;
 
   return (
-    <div className="crm-overlay" onMouseDown={handleFinalClose}>
-      <div className="crm-modal" onMouseDown={(e) => e.stopPropagation()}>
+    // ✅ FIX: close ONLY when clicking the backdrop itself (not any click inside modal)
+    <div
+      className="crm-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleFinalClose();
+      }}
+    >
+      <div className="crm-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="crm-header">
           <div className="crm-header-text">
@@ -332,9 +338,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
 
               {/* Warning Messages */}
               {hasBalanceInfo && insufficientPrizeFunds && (
-                <div className="crm-warning-msg">
-                  ⚠️ Your wallet balance isn’t enough to fund this prize.
-                </div>
+                <div className="crm-warning-msg">⚠️ Your wallet balance isn’t enough to fund this prize.</div>
               )}
 
               <div className="crm-grid-dur">
@@ -380,7 +384,15 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     <div className="crm-grid-2">
                       <div className="crm-input-group">
                         <label>Min Tickets</label>
-                        <input className="crm-input" value={form.minTickets} onChange={(e) => handleMinTicketsChange(e.target.value)} />
+                        <input
+                          className="crm-input"
+                          value={form.minTickets}
+                          onChange={(e) => handleMinTicketsChange(e.target.value)}
+                          // ✅ Hardening: if user clears it, restore to 1 (prevents "empty => 1" surprises at submit)
+                          onBlur={() => {
+                            if (!form.minTickets || toInt(form.minTickets) <= 0) form.setMinTickets("1");
+                          }}
+                        />
                       </div>
                       <div className="crm-input-group">
                         <label>Max Capacity</label>
@@ -416,6 +428,8 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     className={`crm-dock-btn primary ${!status.isReady || status.isPending ? "disabled" : "active"}`}
                     onClick={() => {
                       setSubmitAttempted(true);
+                      // Optional debugging line (remove once confirmed):
+                      // console.log("MIN TICKETS RIGHT BEFORE CREATE:", form.minTickets);
                       if (canCreate) status.create();
                     }}
                     disabled={createDisabled}
