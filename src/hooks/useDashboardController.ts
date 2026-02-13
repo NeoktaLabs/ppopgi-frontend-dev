@@ -41,7 +41,7 @@ const RAFFLE_DASH_ABI = [
   },
 ] as const;
 
-// ✅ Use ABI-derived tx method union (prevents TS2322 / “function xxx()” mismatches)
+// ABI-derived nonpayable method union
 type DashTxMethod = Extract<
   (typeof RAFFLE_DASH_ABI)[number],
   { type: "function"; stateMutability: "nonpayable" }
@@ -95,11 +95,7 @@ function normId(v: string): string {
 /**
  * Simple concurrency pool to avoid hammering RPC.
  */
-async function mapPool<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  fn: (item: T, idx: number) => Promise<R>
-): Promise<R[]> {
+async function mapPool<T, R>(items: readonly T[], concurrency: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length) as any;
   let i = 0;
 
@@ -150,6 +146,7 @@ async function readDashboardValues(args: {
     return { cf: hit.cf, cn: hit.cn, owned: hit.owned };
   }
 
+  // ✅ IMPORTANT: always use normalized address
   const contract = getContract({
     client: thirdwebClient,
     chain: ETHERLINK_CHAIN,
@@ -223,10 +220,6 @@ export function useDashboardController() {
     setClaimables([]);
   }, [account]);
 
-  /**
-   * Everyone awaits the SAME in-flight promise.
-   * Participants first; events only if participants returns empty.
-   */
   const getJoinedIds = useCallback(async (): Promise<Set<string>> => {
     if (!account) return new Set<string>();
 
@@ -307,7 +300,6 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
-      // Throttle background recomputes to avoid bursts
       if (isBackground) {
         const now = Date.now();
         if (now - lastBgRunRef.current < 6_000) return;
@@ -319,7 +311,6 @@ export function useDashboardController() {
         return;
       }
 
-      // show loader only on true cold load
       if (!isBackground) {
         const nothingYet = created.length === 0 && joined.length === 0 && claimables.length === 0;
         if (nothingYet) setLocalPending(true);
@@ -336,8 +327,7 @@ export function useDashboardController() {
 
         const joinedIdArr = Array.from(joinedIds);
 
-        const joinedBaseFromStore =
-          joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+        const joinedBaseFromStore = joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
         setCreated(myCreated);
 
@@ -361,18 +351,20 @@ export function useDashboardController() {
         const joinedToCheck = joinedBase.slice(0, 120);
 
         await mapPool(joinedToCheck, rpcConcurrencyRef.current.joinedOwned, async (r) => {
+          const rid = normId(r.id);
           try {
+            // ✅ IMPORTANT: always use normalized address
             const contract = getContract({
               client: thirdwebClient,
               chain: ETHERLINK_CHAIN,
-              address: r.id,
+              address: rid,
               abi: RAFFLE_DASH_ABI,
             });
 
             const owned = await readContract({ contract, method: "ticketsOwned", params: [account] });
-            ownedByRaffleId.set(normId(r.id), toBigInt(owned).toString());
+            ownedByRaffleId.set(rid, toBigInt(owned).toString());
           } catch {
-            ownedByRaffleId.set(normId(r.id), "0");
+            ownedByRaffleId.set(rid, "0");
           }
         });
 
@@ -391,14 +383,12 @@ export function useDashboardController() {
 
         const canceledToFetch = canceledNeedingBought.slice(0, 40);
 
-        // Fill from cache first
         canceledToFetch.forEach((r) => {
           const rid = normId(r.id);
           const cachedBought = boughtCache.get(rid);
           if (cachedBought != null) boughtByRaffleId.set(rid, cachedBought);
         });
 
-        // Fetch missing ones
         const toFetch = canceledToFetch.filter((r) => !boughtByRaffleId.has(normId(r.id)));
 
         await mapPool(toFetch, 6, async (r) => {
@@ -422,6 +412,7 @@ export function useDashboardController() {
           const rid = normId(r.id);
           return {
             ...r,
+            id: rid, // ✅ normalize in stored joined state too
             userTicketsOwned: ownedByRaffleId.get(rid) ?? "0",
             userTicketsBought: boughtByRaffleId.get(rid),
           };
@@ -432,17 +423,16 @@ export function useDashboardController() {
           for (let i = 0; i < prev.length; i++) {
             if (normId(prev[i].id) !== normId(nextJoined[i].id)) return nextJoined;
             if (String(prev[i].userTicketsOwned) !== String(nextJoined[i].userTicketsOwned)) return nextJoined;
-            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? ""))
-              return nextJoined;
+            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? "")) return nextJoined;
           }
           return prev;
         });
 
         // Claimables: include feeRecipient raffles too
         const candidateById = new Map<string, RaffleListItem>();
-        myCreated.forEach((r) => candidateById.set(normId(r.id), r));
-        joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
-        myFeeRaffles.forEach((r) => candidateById.set(normId(r.id), r));
+        myCreated.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
+        joinedBase.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
+        myFeeRaffles.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
 
         const uniqueCandidates = Array.from(candidateById.values());
         uniqueCandidates.sort((a, b) => {
@@ -454,11 +444,11 @@ export function useDashboardController() {
 
         const candidates = uniqueCandidates.slice(0, 600);
         const newClaimables: ClaimableItem[] = [];
-
         const rpcCache = rpcCacheRef.current;
 
         await mapPool(candidates, rpcConcurrencyRef.current.claimScan, async (r) => {
           const rid = normId(r.id);
+
           const ownedHintStr = ownedByRaffleId.get(rid);
 
           const v = await readDashboardValues({
@@ -490,7 +480,7 @@ export function useDashboardController() {
 
           if (isWinnerEligible) {
             newClaimables.push({
-              raffle: r,
+              raffle: { ...r, id: rid },
               claimableUsdc: cf.toString(),
               claimableNative: cn.toString(),
               type: "WIN",
@@ -502,7 +492,7 @@ export function useDashboardController() {
 
           if (isParticipantRefundEligible) {
             newClaimables.push({
-              raffle: r,
+              raffle: { ...r, id: rid },
               claimableUsdc: cf.toString(),
               claimableNative: cn.toString(),
               type: "REFUND",
@@ -513,7 +503,7 @@ export function useDashboardController() {
           }
 
           newClaimables.push({
-            raffle: r,
+            raffle: { ...r, id: rid },
             claimableUsdc: cf.toString(),
             claimableNative: cn.toString(),
             type: "OTHER",
@@ -597,23 +587,43 @@ export function useDashboardController() {
     [joined]
   );
 
-  const claimablesSorted = useMemo(
-    () => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]),
-    [claimables, hiddenClaimables]
-  );
+  const claimablesSorted = useMemo(() => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]), [claimables, hiddenClaimables]);
 
   // ✅ IMPORTANT: method is ABI-derived ("withdrawFunds" | "withdrawNative" | "claimTicketRefund")
   const withdraw = async (raffleId: string, method: DashTxMethod) => {
     if (!account) return;
     setMsg(null);
 
+    const rid = normId(raffleId);
+
     try {
       const c = getContract({
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
-        address: raffleId,
+        address: rid, // ✅ normalize here too
         abi: RAFFLE_DASH_ABI,
       });
+
+      // ✅ Refund guard:
+      // If ticketsOwned reads as 0, do NOT send a “no-op” refund tx.
+      // Instead, refresh/recompute so the UI shows the real claimable amount first.
+      if (method === "claimTicketRefund") {
+        try {
+          const owned = toBigInt(await readContract({ contract: c, method: "ticketsOwned", params: [account] }));
+          if (owned <= 0n) {
+            setMsg("Refund not ready yet — reloading…");
+            await refreshRaffleStore(true, true);
+            await recompute(false);
+            return;
+          }
+        } catch {
+          // If read fails, also avoid sending (prevents the “first click does nothing” symptom)
+          setMsg("Loading refund details — try again in a second…");
+          await refreshRaffleStore(true, true);
+          await recompute(false);
+          return;
+        }
+      }
 
       await sendAndConfirm(
         prepareContractCall({
@@ -623,7 +633,7 @@ export function useDashboardController() {
         })
       );
 
-      setHiddenClaimables((p) => ({ ...p, [normId(raffleId)]: true }));
+      setHiddenClaimables((p) => ({ ...p, [rid]: true }));
       setMsg("Claim successful.");
 
       lastJoinedIdsRef.current = null;
