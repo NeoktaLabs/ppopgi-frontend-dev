@@ -74,8 +74,8 @@ export function RaffleCard({
 
   // -----------------------------
   // Finalizing rules (card-level)
-  // - Max reached => Finalizing
-  // - Deadline passed while still OPEN => Finalizing
+  // - Max reached => End condition reached
+  // - Deadline passed while still OPEN => End condition reached
   // -----------------------------
   const statusRaw = String((raffle as any).status || "");
   const isOpenStatus = statusRaw === "OPEN";
@@ -87,34 +87,45 @@ export function RaffleCard({
   const deadlineSec = Number((raffle as any).deadline ?? 0);
   const deadlinePassed = deadlineSec > 0 && nowMs >= deadlineSec * 1000;
 
-  const shouldFinalizing = isOpenStatus && (maxReached || deadlinePassed);
+  const endConditionReached = isOpenStatus && (maxReached || deadlinePassed);
+
+  // whether min is reached (prefer hook computed if present)
+  const minTicketsN = Number((raffle as any).minTickets ?? 0);
+  const hasMin = (ui as any)?.hasMin ?? (minTicketsN > 0);
+  const minReached =
+    (ui as any)?.minReached ?? (hasMin ? soldN >= Math.max(0, minTicketsN) : true /* no min => treat as reached */);
+
+  // End-mode label
+  type EndMode = "CANCELING" | "DRAWING";
+  const endMode: EndMode | null = endConditionReached ? (minReached ? "DRAWING" : "CANCELING") : null;
 
   // ✅ Freeze at 0 once it hits 0, until refreshed (tsMs changes)
-  const finalizingSec = useMemo(() => {
+  const endCountdownSec = useMemo(() => {
     const to = finalizer?.secondsToNextRun ?? null;
     if (to === null) return null;
-
     const sec = Math.max(0, Math.floor(to));
     return sec === 0 ? 0 : sec;
   }, [finalizer?.secondsToNextRun, finalizer?.tsMs]);
 
-  const finalizingChipNode = useMemo(() => {
-    if (!shouldFinalizing) return null;
+  const endChipNode = useMemo(() => {
+    if (!endMode) return null;
+
+    const title = endMode === "CANCELING" ? "Canceling" : "Drawing winner";
 
     if (finalizer?.running) {
       return (
         <>
-          Finalizing
+          {title}
           <br />
           ~ now
         </>
       );
     }
 
-    if (finalizingSec === null) {
+    if (endCountdownSec === null) {
       return (
         <>
-          Finalizing
+          {title}
           <br />
           ~ soon
         </>
@@ -123,17 +134,18 @@ export function RaffleCard({
 
     return (
       <>
-        Finalizing
+        {title}
         <br />
-        ~ {fmtMinSec(finalizingSec)}
+        ~ {fmtMinSec(endCountdownSec)}
       </>
     );
-  }, [shouldFinalizing, finalizer?.running, finalizingSec]);
+  }, [endMode, finalizer?.running, endCountdownSec]);
 
-  const displayStatus = shouldFinalizing ? "Finalizing" : ui.displayStatus;
+  // What the chip should show
+  const displayStatus = endMode ? (endMode === "CANCELING" ? "Canceling" : "Drawing") : ui.displayStatus;
 
-  // Hide quick-buy if not truly live (also hide on finalizing rules)
-  const isLiveForCard = ui.isLive && !shouldFinalizing;
+  // Hide quick-buy if not truly live (also hide on end condition reached)
+  const isLiveForCard = ui.isLive && !endConditionReached;
 
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
@@ -150,6 +162,36 @@ export function RaffleCard({
     return clampPct(pct);
   }, [raffle.maxTickets, raffle.sold]);
 
+  const endInfoBlock = useMemo(() => {
+    if (!endMode) return null;
+
+    if (endMode === "CANCELING") {
+      return (
+        <div className="rc-quick-buy-note" style={{ padding: "12px 12px", textAlign: "center", fontWeight: 800 }}>
+          <div style={{ marginBottom: 6 }}>Canceling raffle (min tickets not reached).</div>
+          <div style={{ fontWeight: 700, opacity: 0.85, fontSize: 12, lineHeight: 1.25 }}>
+            If you participated, don’t forget to reclaim your ticket price.
+            <br />
+            If you’re the creator, reclaim your prize pot.
+          </div>
+        </div>
+      );
+    }
+
+    // DRAWING
+    const reason = maxReached ? "max tickets reached" : "deadline ended";
+    return (
+      <div className="rc-quick-buy-note" style={{ padding: "12px 12px", textAlign: "center", fontWeight: 800 }}>
+        <div style={{ marginBottom: 6 }}>Drawing winner ({reason}).</div>
+        <div style={{ fontWeight: 700, opacity: 0.85, fontSize: 12, lineHeight: 1.25 }}>
+          Winner selection will happen automatically.
+          <br />
+          Check back soon for the result.
+        </div>
+      </div>
+    );
+  }, [endMode, maxReached]);
+
   return (
     <div className={cardClass} onClick={() => onOpen(raffle.id)} role="button" tabIndex={0}>
       <div className="rc-notch left" />
@@ -158,8 +200,8 @@ export function RaffleCard({
 
       {/* Header */}
       <div className="rc-header">
-        {/* ✅ Chip: show 2-line "Finalizing ~ Xm Ys" when finalizing */}
-        <div className={`rc-chip ${statusClass}`}>{shouldFinalizing ? finalizingChipNode : displayStatus}</div>
+        {/* ✅ Chip: show 2-line "Canceling/Drawing winner ~ Xm Ys" when ending */}
+        <div className={`rc-chip ${statusClass}`}>{endMode ? endChipNode : ui.displayStatus}</div>
 
         <div className="rc-winrate-badge" title="Win chance per ticket">
           🎲 Win: {winRateLabel}
@@ -232,7 +274,8 @@ export function RaffleCard({
 
       <div className="rc-quick-buy-wrapper">
         <div className="rc-perforation" />
-        {isLiveForCard && (
+
+        {isLiveForCard ? (
           <button
             className="rc-quick-buy-btn"
             onClick={(e) => {
@@ -242,6 +285,9 @@ export function RaffleCard({
           >
             ⚡ Buy Ticket
           </button>
+        ) : (
+          // ✅ When ending (deadline/max reached), show contextual guidance
+          endInfoBlock
         )}
       </div>
 
