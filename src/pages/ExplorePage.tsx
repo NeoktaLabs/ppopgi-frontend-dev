@@ -71,8 +71,6 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
                 >
                   <option value="ALL">All Status</option>
                   <option value="OPEN">Open</option>
-                  <option value="FUNDING_PENDING">Getting Ready</option>
-                  <option value="DRAWING">Drawing</option>
                   <option value="COMPLETED">Settled</option>
                   <option value="CANCELED">Canceled</option>
                 </select>
