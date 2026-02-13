@@ -386,7 +386,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
       {data.msg && <div className={`db-msg-banner ${msgIsSuccess ? "success" : "error"}`}>{data.msg}</div>}
 
       <div className="db-section claim-section">
-        {/* ✅ Matching Subtitle Style */}
         <div className="db-section-header">
           <div className="db-section-title">Claimables</div>
           {hasClaims && <span className="db-pill pulse">Action Required</span>}
@@ -490,7 +489,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 <div key={r.id} className="db-claim-wrapper">
                   <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
 
-                  {/* "Gift Voucher" style separator */}
                   <div className="db-claim-cut-line" />
 
                   <div className="db-claim-box">
@@ -531,48 +529,27 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     <div className="db-claim-actions">
                       {showDual ? (
                         <>
-                          <button
-                            className="db-btn primary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
-                          >
+                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
                             {data.isPending ? "..." : "Claim USDC"}
                           </button>
-                          <button
-                            className="db-btn secondary"
-                            disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
-                          >
+                          <button className="db-btn secondary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawNative")}>
                             {data.isPending ? "..." : "Claim Native"}
                           </button>
                         </>
                       ) : isRefund ? (
                         <div style={{ display: "flex", gap: 10, width: "100%" }}>
-                          <button
-                            className="db-btn secondary"
-                            disabled={refundStep1Disabled}
-                            onClick={() => actions.withdraw(r.id, "claimTicketRefund")}
-                          >
+                          <button className="db-btn secondary" disabled={refundStep1Disabled} onClick={() => actions.withdraw(r.id, "claimTicketRefund")}>
                             {data.isPending ? "..." : "1) Reclaim"}
                           </button>
 
-                          <button
-                            className="db-btn primary"
-                            disabled={refundStep2Disabled}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
-                          >
+                          <button className="db-btn primary" disabled={refundStep2Disabled} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
                             {data.isPending ? "..." : "2) Withdraw"}
                           </button>
                         </div>
                       ) : (
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                          disabled={
-                            data.isPending ||
-                            refundDisabled ||
-                            !primaryMethod ||
-                            primaryLabel === "Nothing to Claim"
-                          }
+                          disabled={data.isPending || refundDisabled || !primaryMethod || primaryLabel === "Nothing to Claim"}
                           onClick={() => primaryMethod && actions.withdraw(r.id, primaryMethod)}
                         >
                           {data.isPending ? "Processing..." : primaryLabel}
@@ -587,7 +564,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         )}
       </div>
 
-      {/* ✅ Matching Subtitle Style */}
       <div className="db-section-header">
         <div className="db-section-title">My Raffles</div>
         <div className="db-section-line" />
@@ -675,7 +651,10 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const iWon = completed && acct && winner === acct;
 
               const canceled = r.status === "CANCELED";
-              const isRefunded = canceled && ownedNow === 0 && purchasedEver > 0;
+
+              // ✅ CHANGE: this is NOT "Refunded" (we can't know that here without an explicit claimed flag)
+              // It's simply: canceled raffle where the user bought tickets historically.
+              const isCanceledParticipant = canceled && purchasedEver > 0;
 
               const participatedEver = purchasedEver > 0;
               const iLost = completed && participatedEver && !iWon;
@@ -691,9 +670,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     nowMs={nowS * 1000}
                   />
 
-                  {isRefunded && (
+                  {isCanceledParticipant && (
                     <div className="db-history-badge refunded">
-                      ↩ Refunded ({purchasedEver} {pluralTickets(purchasedEver)})
+                      ⚠️ Canceled ({purchasedEver} {pluralTickets(purchasedEver)})
                     </div>
                   )}
                   {iWon && <div className="db-history-badge won">🏆 Winner</div>}
@@ -714,13 +693,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             )}
 
             {data.created.map((r: any) => (
-              <RaffleCard
-                key={r.id}
-                raffle={r}
-                onOpen={onOpenRaffle}
-                onOpenSafety={onOpenSafety}
-                nowMs={nowS * 1000}
-              />
+              <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
             ))}
           </div>
         )}
