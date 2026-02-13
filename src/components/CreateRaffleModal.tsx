@@ -1,5 +1,5 @@
 // src/components/CreateRaffleModal.tsx
-import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { useActiveAccount } from "thirdweb/react";
 import { ADDRESSES } from "../config/contracts";
