@@ -616,6 +616,67 @@ export async function fetchMyJoinedRaffleIds(
 }
 
 /**
+ * ✅ NEW: Determine which raffles the user already withdrew USDC from (FUNDS_CLAIMED).
+ * This is used to hide “already reclaimed” canceled-refund claimables.
+ *
+ * Note: Your schema.graphql has:
+ *   RaffleEvent.amount: BigInt
+ * so we read `amount` (not uintValue) for FUNDS_CLAIMED.
+ */
+export async function fetchMyFundsClaimedRaffleIds(
+  buyer: string,
+  raffleIds: string[],
+  opts: { signal?: AbortSignal } = {}
+): Promise<Set<string>> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const out = new Set<string>();
+
+  const acct = buyer?.toLowerCase();
+  const ids = Array.from(new Set(raffleIds.map((x) => (normHex(x) ?? "")).filter(Boolean))).map((x) => x.toLowerCase());
+  if (!acct || ids.length === 0) return out;
+
+  const chunkSize = 150;
+
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+
+    const query = `
+      query MyFundsClaimed($buyer: Bytes!, $ids: [Bytes!]!) {
+        raffleEvents(
+          first: 1000
+          where: { type: FUNDS_CLAIMED, actor: $buyer, raffle_in: $ids }
+          orderBy: blockTimestamp
+          orderDirection: desc
+        ) {
+          raffle { id }
+          amount
+          blockTimestamp
+          txHash
+        }
+      }
+    `;
+
+    try {
+      type Resp = { raffleEvents: any[] };
+      const data = await gqlFetch<Resp>(url, query, { buyer: acct, ids: chunk }, opts.signal);
+      const rows = (data.raffleEvents ?? []) as any[];
+
+      for (const e of rows) {
+        const rid = normHex(e?.raffle?.id);
+        const amt = String(e?.amount ?? "0");
+        // treat non-zero withdrawals as “already withdrew”
+        if (rid && amt !== "0") out.add(rid);
+      }
+    } catch {
+      // fail-open: don't hide anything if this query fails
+      continue;
+    }
+  }
+
+  return out;
+}
+
+/**
  * ✅ Fallback “joined raffles” source:
  * derives joined raffle IDs from ticket purchase events,
  * even if RaffleParticipant aggregation is broken.
