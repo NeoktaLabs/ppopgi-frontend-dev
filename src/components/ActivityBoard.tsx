@@ -7,10 +7,10 @@ import "./ActivityBoard.css";
 
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
-// ✅ show only last 10
+// ✅ Show last 15 items for the wider view
 const MAX_ITEMS = 15;
 
-// ✅ NEW pill window
+// ✅ New items stay "Fresh" for 30s
 const NEW_WINDOW_SEC = 30;
 
 const REFRESH_MS = 5_000;
@@ -59,24 +59,19 @@ export function ActivityBoard() {
   const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ tick every second so "NEW" and time-ago update smoothly
+  // Tick every second so "NEW" and time-ago update smoothly
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(t);
   }, []);
 
-  // existing revalidate tick (keeps your “wake up” behavior)
   const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
-
   const seenRef = useRef<Set<string>>(new Set());
-
   const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const backoffStepRef = useRef(0);
-
-  // abort in-flight fetches when a new one starts
   const abortRef = useRef<AbortController | null>(null);
 
   const clearTimer = () => {
@@ -91,9 +86,9 @@ export function ActivityBoard() {
     timerRef.current = window.setTimeout(() => {
       void load(true);
     }, ms);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ✅ listen for optimistic activity inserts
+  // Listen for optimistic activity inserts
   useEffect(() => {
     const onOptimistic = (ev: Event) => {
       const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
@@ -124,7 +119,6 @@ export function ActivityBoard() {
 
   const load = useCallback(
     async (isBackground = false) => {
-      // if hidden, keep it cheap (but still try again later)
       if (isBackground && isHidden()) {
         scheduleNext(60_000);
         return;
@@ -135,7 +129,6 @@ export function ActivityBoard() {
 
       if (!isBackground && items.length === 0) setLoading(true);
 
-      // abort any in-flight request
       try {
         abortRef.current?.abort();
       } catch {}
@@ -143,7 +136,6 @@ export function ActivityBoard() {
       abortRef.current = ac;
 
       try {
-        // ✅ FIX: fetchGlobalActivity takes a single options object (0-1 args)
         const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal });
 
         if (ac.signal.aborted) return;
@@ -159,10 +151,7 @@ export function ActivityBoard() {
         });
 
         setLoading(false);
-
         backoffStepRef.current = 0;
-
-        // ✅ 5s refresh while visible
         scheduleNext(REFRESH_MS);
       } catch (e: any) {
         if (String(e?.name || "").toLowerCase().includes("abort")) return;
@@ -177,19 +166,16 @@ export function ActivityBoard() {
         } else {
           scheduleNext(isBackground ? 15_000 : 10_000);
         }
-
         setLoading(false);
       } finally {
         inFlightRef.current = false;
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [items.length, scheduleNext]
   );
 
   useEffect(() => {
     void load(false);
-
     const onFocus = () => void load(true);
     const onVis = () => {
       if (!isHidden()) void load(true);
@@ -208,14 +194,11 @@ export function ActivityBoard() {
     };
   }, [load]);
 
-  // keep your revalidate hook behavior (fast wake-up), but not too aggressive
   useEffect(() => {
     if (rvTick === 0) return;
-
     const now = Date.now();
     if (now - lastRvAtRef.current < 5_000) return;
     lastRvAtRef.current = now;
-
     if (isHidden()) return;
     void load(true);
   }, [rvTick, load]);
@@ -245,12 +228,11 @@ export function ActivityBoard() {
 
   return (
     <div className="ab-board">
-      <div className="ab-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="ab-header">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div className="ab-pulse" />
           <span>Live Feed</span>
         </div>
-        {/* ✅ removed "Updated Xs ago" */}
       </div>
 
       <div className="ab-list">
@@ -274,7 +256,6 @@ export function ActivityBoard() {
             iconClass = "cancel";
           }
 
-          // ✅ NEW pill for anything in last 30s
           const fresh = isFresh(item.timestamp, NEW_WINDOW_SEC);
 
           const rowClass = [
@@ -297,7 +278,7 @@ export function ActivityBoard() {
                       <a href={`/?raffle=${item.raffleId}`} className="ab-link">
                         {item.raffleName}
                       </a>{" "}
-                      got <b style={{ color: "#991b1b" }}>canceled</b> due to min ticket not reached
+                      got <b style={{ color: "#991b1b" }}>canceled</b> (min not reached)
                     </>
                   ) : (
                     <>
