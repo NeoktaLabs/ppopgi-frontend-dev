@@ -1,10 +1,12 @@
+/* src/components/ActivityBoard.css */
+
 /* ==================================================
    ActivityBoard — Wider + Left aligned + Pastel stripes
 ================================================== */
 
 /* 1. Wrapper */
 .ab-board {
-  width: min(780px, calc(100vw - 32px)); /* ✅ wider */
+  width: min(780px, calc(100vw - 32px)); /* Wider */
   margin: 60px auto 30px auto;
   background: white;
   border-radius: 12px;
@@ -63,10 +65,10 @@
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: flex-start; /* ✅ LEFT */
+  justify-content: flex-start; /* LEFT ALIGNED */
   gap: 10px;
   padding: 0 14px;
-  height: 44px; /* restore readable line height */
+  height: 44px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
   transition: filter 0.15s ease, transform 0.12s ease;
 }
@@ -114,7 +116,8 @@
 .ab-icon {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  /* ✅ REVERTED TO ROUNDED SQUARE */
+  border-radius: 8px; 
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -250,10 +253,7 @@
 }
 
 /* --------------------------------------------------
-   Fresh highlight (keep shimmer but DON'T kill stripes)
-   ✅ IMPORTANT: previously your ab-fresh-* used background: ... !important;
-      That overrides nth-child stripes.
-   ✅ Fix: use ::before overlay instead of replacing background.
+   Fresh highlight (Overlays to preserve stripes)
 -------------------------------------------------- */
 
 .ab-fresh {
@@ -294,7 +294,6 @@
   opacity: 1;
 }
 
-/* set accent colors per type (NO background override) */
 .ab-fresh-buy::before { background: #3b82f6; }
 .ab-fresh-create::before { background: #db2777; }
 .ab-fresh-win::before { background: #22c55e; }
