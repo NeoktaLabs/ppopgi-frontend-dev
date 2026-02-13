@@ -505,7 +505,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             )}
           </div>
 
-          {/* DETAILS (RESTORED) */}
+          {/* DETAILS (RESTORED & ADDED MIN REQUIRED) */}
           <div className="rdm-dist-section">
             <div className="rdm-dist-header">Raffle Specs</div>
             <div className="rdm-dist-note">{expectedOutcome}</div>
@@ -514,12 +514,24 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               <div className="rdm-spec-row">
                 <span>Status</span> <b>{prettyStatus(displayData?.status)}</b>
               </div>
+              {/* ✅ ADDED: Explicitly show Min Required to explain potential cancellation */}
+              <div className="rdm-spec-row">
+                <span>Min Required</span> <b>{minTicketsN > 0 ? minTicketsN.toLocaleString("en-US") : "None"}</b>
+              </div>
               <div className="rdm-spec-row">
                 <span>Sold / Max</span> <b>{soldNow} / {hasMax ? maxTicketsN : "∞"}</b>
               </div>
               <div className="rdm-spec-row">
                 <span>Deadline</span> <b>{formatDate(displayData?.deadline || "0")}</b>
               </div>
+              
+              {/* ✅ ADDED: Progress to minimum if relevant */}
+              {!minReached && minTicketsN > 0 && (
+                <div className="rdm-spec-row">
+                  <span>Progress to Min</span>
+                  <b>{soldNow.toLocaleString("en-US")} / {minTicketsN.toLocaleString("en-US")}</b>
+                </div>
+              )}
             </div>
           </div>
 
