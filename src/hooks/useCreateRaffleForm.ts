@@ -46,6 +46,25 @@ const ERC20_ABI = [
   },
 ] as const;
 
+// ✅ Factory ABI (typed) — prevents “no function defined” wallet UI + encoding issues
+const FACTORY_ABI = [
+  {
+    type: "function",
+    name: "createSingleWinnerLottery",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "ticketPrice", type: "uint256" },
+      { name: "winningPot", type: "uint256" },
+      { name: "minTickets", type: "uint64" },
+      { name: "maxTickets", type: "uint64" },
+      { name: "durationSeconds", type: "uint64" },
+      { name: "minPurchaseAmount", type: "uint32" },
+    ],
+    outputs: [{ name: "raffle", type: "address" }],
+  },
+] as const;
+
 // ✅ optimistic + revalidate events (Home responsiveness without hammering indexer)
 type OptimisticCreateDetail = {
   kind: "CREATE";
@@ -124,6 +143,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.SingleWinnerDeployer,
+        abi: FACTORY_ABI, // ✅ important
       }),
     []
   );
@@ -227,7 +247,6 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       setMsg("Approval successful!");
       await refreshAllowance();
 
-      // Approval affects readiness; no need to “optimistic” raffles list.
       emitRevalidate(false);
     } catch (e) {
       console.error("Approve failed", e);
@@ -243,11 +262,19 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     try {
       setMsg("Please confirm creation in wallet...");
 
+      // ✅ method by NAME (typed), not signature string
       const tx = prepareContractCall({
         contract: factoryContract,
-        method:
-          "function createSingleWinnerLottery(string,uint256,uint256,uint64,uint64,uint64,uint32) returns (address)",
-        params: [name.trim(), ticketPriceU, winningPotU, minT, maxT, BigInt(durationSecondsN), minPurchaseU32],
+        method: "createSingleWinnerLottery",
+        params: [
+          name.trim(),
+          ticketPriceU,
+          winningPotU,
+          minT,
+          maxT,
+          BigInt(durationSecondsN),
+          minPurchaseU32,
+        ],
       });
 
       const receipt = await sendAndConfirm(tx);
@@ -290,7 +317,6 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       setMsg("🎉 Success!");
       await refreshAllowance();
 
-      // ✅ wake up Home + ActivityBoard + a delayed ping for subgraph lag
       emitRevalidate(true);
 
       onCreated?.(newAddr || undefined);
