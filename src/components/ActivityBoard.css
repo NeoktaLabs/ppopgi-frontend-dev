@@ -1,12 +1,16 @@
 /* src/components/ActivityBoard.css */
 
+/* 1. Wrapper (Floating Card Style) */
 .ab-board {
   width: min(680px, calc(100vw - 32px));
   margin: 90px auto 40px auto;
   background: white;
   border-radius: 16px;
-  border: 1px solid rgba(0,0,0,0.08);
-  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.06);
+  /* Removed border, added deep floating shadow */
+  border: none;
+  box-shadow: 
+    0 10px 40px -5px rgba(0,0,0,0.08),
+    0 4px 12px -2px rgba(0,0,0,0.04);
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -57,16 +61,16 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 8px 16px;
-  height: 44px;
+  height: 52px; /* Slightly taller for breathing room */
   background: #ffffff;
   border-bottom: 1px solid #f1f5f9;
-  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+  transition: background 0.12s ease, transform 0.12s ease;
 }
 
 .ab-row:nth-child(even) {
-  background: #f8fafc;
+  background: #fcfdfe; /* Subtle stripe */
 }
 
 .ab-row:last-child {
@@ -78,32 +82,45 @@
 }
 
 /* --------------------------------------------------
-   Enter animation (newly seen rows)
+   "Pile" Entry Animation
+   Drops in from above like a card being placed on a deck
 -------------------------------------------------- */
 
 .ab-enter {
-  animation: ab-enter 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: ab-drop-in 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 10; /* Ensure it drops "over" previous content visually during anim */
 }
 
-@keyframes ab-enter {
-  from { transform: translateY(-6px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
+@keyframes ab-drop-in {
+  0% { 
+    transform: translateY(-25px) scale(0.98); 
+    opacity: 0; 
+  }
+  60% {
+    transform: translateY(2px) scale(1.01);
+    opacity: 1;
+  }
+  100% { 
+    transform: translateY(0) scale(1); 
+    opacity: 1; 
+  }
 }
 
 /* --------------------------------------------------
-   Icons
+   Icons (Circular)
 -------------------------------------------------- */
 
 .ab-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%; /* Full Circle */
   display: grid;
   place-items: center;
-  font-size: 14px;
+  font-size: 15px;
   flex-shrink: 0;
   background: white;
   border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
 }
 
 .ab-icon.buy { color: #2563eb; }
@@ -135,18 +152,19 @@
 }
 
 .ab-main-text {
-  font-size: 12px;
+  font-size: 13px;
   color: #334155;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.1px;
 }
 
 .ab-user {
   font-weight: 700;
   color: #0f172a;
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   text-decoration: none;
   border-bottom: 1px dotted #94a3b8;
 }
@@ -178,7 +196,7 @@
 }
 
 .ab-time {
-  font-size: 10px;
+  font-size: 11px;
   color: #94a3b8;
   font-weight: 600;
   display: inline-flex;
@@ -195,6 +213,14 @@
   background: #fff0f5;
   color: #be185d;
   border: 1px solid rgba(190, 24, 93, 0.22);
+  /* Slight pulse for attention without layout shift */
+  animation: ab-pill-pulse 2s infinite;
+}
+
+@keyframes ab-pill-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 
 /* --------------------------------------------------
@@ -204,10 +230,10 @@
 .ab-pot-tag {
   background: #fdf4ff;
   color: #d946ef;
-  padding: 2px 5px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 99px;
   font-weight: 700;
-  font-size: 9px;
+  font-size: 10px;
   border: 1px solid #fce7f3;
 }
 
@@ -235,19 +261,13 @@
 }
 
 /* ==================================================
-   Fresh highlight (last 10 seconds)
-   Pulse + shimmer sweep
+   Fresh highlight (No longer bounces up/down)
+   Only Shimmer + Background
 ================================================== */
 
 .ab-fresh {
   z-index: 1;
-  animation: ab-fresh-pulse 900ms ease-in-out infinite;
-}
-
-@keyframes ab-fresh-pulse {
-  0%   { transform: translateY(0); }
-  50%  { transform: translateY(-1px); }
-  100% { transform: translateY(0); }
+  /* Removed translate/bounce animation here */
 }
 
 .ab-fresh::after {
@@ -258,12 +278,12 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255,255,255,0.55) 35%,
-    transparent 70%
+    rgba(255,255,255,0.6) 30%,
+    transparent 60%
   );
   transform: translateX(-120%);
-  animation: ab-fresh-shimmer 1.2s ease-in-out infinite;
-  opacity: 0.6;
+  animation: ab-fresh-shimmer 2s ease-in-out infinite;
+  opacity: 0.8;
 }
 
 @keyframes ab-fresh-shimmer {
@@ -271,26 +291,25 @@
   to   { transform: translateX(120%); }
 }
 
-/* Color variants (must override nth-child backgrounds) */
-
+/* Fresh color variants */
 .ab-fresh-buy {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.06), transparent 45%), #ffffff !important;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18), 0 10px 18px -14px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.05), transparent 60%), #ffffff !important;
+  box-shadow: inset 3px 0 0 #3b82f6; /* Left accent bar */
 }
 
 .ab-fresh-create {
-  background: linear-gradient(90deg, rgba(190, 24, 93, 0.07), transparent 45%), #ffffff !important;
-  box-shadow: 0 0 0 1px rgba(190, 24, 93, 0.18), 0 10px 18px -14px rgba(190, 24, 93, 0.35);
+  background: linear-gradient(90deg, rgba(190, 24, 93, 0.06), transparent 60%), #ffffff !important;
+  box-shadow: inset 3px 0 0 #db2777;
 }
 
 .ab-fresh-win {
-  background: linear-gradient(90deg, rgba(22, 163, 74, 0.07), transparent 45%), #ffffff !important;
-  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18), 0 10px 18px -14px rgba(22, 163, 74, 0.35);
+  background: linear-gradient(90deg, rgba(22, 163, 74, 0.06), transparent 60%), #ffffff !important;
+  box-shadow: inset 3px 0 0 #22c55e;
 }
 
 .ab-fresh-cancel {
-  background: linear-gradient(90deg, rgba(153, 27, 27, 0.06), transparent 45%), #ffffff !important;
-  box-shadow: 0 0 0 1px rgba(153, 27, 27, 0.14), 0 10px 18px -14px rgba(153, 27, 27, 0.22);
+  background: linear-gradient(90deg, rgba(153, 27, 27, 0.05), transparent 60%), #ffffff !important;
+  box-shadow: inset 3px 0 0 #ef4444;
 }
 
 /* --------------------------------------------------
@@ -299,8 +318,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ab-enter,
-  .ab-fresh,
-  .ab-fresh::after {
+  .ab-fresh::after,
+  .ab-pill-pulse {
     animation: none !important;
   }
 }
@@ -324,6 +343,7 @@
   }
 
   .ab-pot-tag {
-    display: none;
+    /* Keep visible on mobile if needed, or hide if space constraint */
+    display: none; 
   }
 }
