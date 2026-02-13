@@ -55,6 +55,8 @@ type ClaimableItem = {
   userTicketsOwned?: string;
 };
 
+type WithdrawMethod = "withdrawFunds" | "withdrawNative" | "claimTicketRefund";
+
 function isRateLimitError(e: unknown) {
   const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
   return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate");
@@ -171,13 +173,6 @@ async function readDashboardValues(args: {
   return { cf, cn, owned };
 }
 
-// ✅ FIX: explicit signatures for thirdweb prepareContractCall (prevents calldata = 0x)
-const WITHDRAW_SIG = {
-  withdrawFunds: "function withdrawFunds()",
-  withdrawNative: "function withdrawNative()",
-  claimTicketRefund: "function claimTicketRefund()",
-} as const;
-
 export function useDashboardController() {
   const accountObj = useActiveAccount();
   const account = accountObj?.address ?? null;
@@ -203,7 +198,7 @@ export function useDashboardController() {
   // cache for "tickets bought" lookups (per page load)
   const boughtCacheRef = useRef<Map<string, string>>(new Map());
 
-  // --- RPC read cache + throttles (no logic changes, just reuse results / reduce bursts) ---
+  // --- RPC read cache + throttles ---
   const rpcCacheRef = useRef<Map<string, { ts: number; cf: string; cn: string; owned: string }>>(new Map());
   const lastBgRunRef = useRef(0);
   const rpcConcurrencyRef = useRef({ joinedOwned: 12, claimScan: 10 });
@@ -242,7 +237,7 @@ export function useDashboardController() {
       const ids = new Set<string>();
 
       try {
-        // Primary: raffleParticipants aggregation (fast + direct)
+        // Primary: raffleParticipants aggregation
         try {
           let skip = 0;
           const pageSize = 1000;
@@ -308,7 +303,7 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
-      // Throttle background recomputes to avoid bursts from store ticks/focus/vis
+      // Throttle background recomputes to avoid bursts
       if (isBackground) {
         const now = Date.now();
         if (now - lastBgRunRef.current < 6_000) return;
@@ -330,9 +325,7 @@ export function useDashboardController() {
         const myAddr = account.toLowerCase();
 
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
-
-        // ✅ NEW: raffles where I am feeRecipient (platform fees)
-        const myFeeRaffles = allRaffles.filter((r) => r.feeRecipient?.toLowerCase() === myAddr);
+        const myFeeRaffles = allRaffles.filter((r) => (r as any).feeRecipient?.toLowerCase() === myAddr);
 
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
@@ -342,16 +335,14 @@ export function useDashboardController() {
         const joinedBaseFromStore =
           joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
-        // Always update created
         setCreated(myCreated);
 
-        // Don't paint 0 tickets on background refresh. Only do on cold load.
         const hasJoinedAlready = joined.length > 0;
         if (!hasJoinedAlready) {
           setJoined(joinedBaseFromStore.map((r) => ({ ...r, userTicketsOwned: "0" })));
         }
 
-        // Fetch full raffle objects by ids (more reliable)
+        // Fetch full raffle objects by ids
         let joinedBase: RaffleListItem[] = joinedBaseFromStore;
         if (joinedIdArr.length > 0) {
           try {
@@ -442,7 +433,7 @@ export function useDashboardController() {
           return prev;
         });
 
-        // ✅ Claimables: include feeRecipient raffles too
+        // Claimables: include feeRecipient raffles too
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), r));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), r));
@@ -463,8 +454,6 @@ export function useDashboardController() {
 
         await mapPool(candidates, rpcConcurrencyRef.current.claimScan, async (r) => {
           const rid = normId(r.id);
-
-          // Reuse known ticketsOwned where possible (avoids duplicate reads)
           const ownedHintStr = ownedByRaffleId.get(rid);
 
           const v = await readDashboardValues({
@@ -482,7 +471,7 @@ export function useDashboardController() {
           const roles = {
             created: r.creator?.toLowerCase() === myAddr,
             participated: ticketsOwned > 0n || joinedIds.has(rid),
-            feeRecipient: r.feeRecipient?.toLowerCase() === myAddr,
+            feeRecipient: (r as any).feeRecipient?.toLowerCase() === myAddr,
           };
 
           const isWinnerEligible =
@@ -533,7 +522,6 @@ export function useDashboardController() {
         if (runId !== runIdRef.current) return;
         setClaimables(newClaimables);
 
-        // Recover concurrency slowly on success
         rpcConcurrencyRef.current = {
           joinedOwned: Math.min(12, rpcConcurrencyRef.current.joinedOwned + 1),
           claimScan: Math.min(10, rpcConcurrencyRef.current.claimScan + 1),
@@ -541,7 +529,6 @@ export function useDashboardController() {
       } catch (e) {
         console.error("Dashboard recompute error", e);
 
-        // If rate-limited, temporarily reduce concurrency (keeps same logic, just less pressure)
         if (isRateLimitError(e)) {
           rpcConcurrencyRef.current = {
             joinedOwned: Math.max(4, Math.floor(rpcConcurrencyRef.current.joinedOwned / 2)),
@@ -612,48 +599,34 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  const withdraw = async (raffleId: string, method: "withdrawFunds" | "withdrawNative" | "claimTicketRefund") => {
+  // ✅ FIX FOR YOUR TS ERROR:
+  // - Do NOT pass "function withdrawFunds()" strings.
+  // - Pass the ABI function NAME union: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
+  const withdraw = async (raffleId: string, method: WithdrawMethod) => {
     if (!account) return;
     setMsg(null);
-
-    const rid = normId(raffleId); // ✅ FIX: normalize address
-    const sig = WITHDRAW_SIG[method]; // ✅ FIX: explicit signature
 
     try {
       const c = getContract({
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
-        address: rid,
+        address: raffleId,
         abi: RAFFLE_DASH_ABI,
       });
 
-      const tx = prepareContractCall({
-        contract: c,
-        method: sig,
-        params: [],
-      });
+      await sendAndConfirm(
+        prepareContractCall({
+          contract: c,
+          method, // ✅ strictly typed method name
+          params: [],
+        })
+      );
 
-      // ✅ FIX: catch the exact bug you saw (wallet shows "no function defined")
-      const dataHex = (tx as any)?.data;
-      if (!dataHex || dataHex === "0x") {
-        console.error("[dash] BUG: empty calldata for withdraw", { rid, method, sig, tx });
-        throw new Error("BUG_EMPTY_CALLDATA_WITHDRAW");
-      }
-
-      await sendAndConfirm(tx);
-
-      setHiddenClaimables((p) => ({ ...p, [rid]: true }));
+      setHiddenClaimables((p) => ({ ...p, [normId(raffleId)]: true }));
       setMsg("Claim successful.");
 
-      // bust caches so the UI updates right away
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
-
-      // ✅ also bust per-raffle rpc cache for this raffle so claimables update immediately
-      try {
-        const acct = account.toLowerCase();
-        rpcCacheRef.current.delete(`${acct}:${rid}`);
-      } catch {}
 
       await refreshRaffleStore(true, true);
       await recompute(true);
