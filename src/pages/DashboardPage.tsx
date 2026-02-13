@@ -429,6 +429,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const purchasedEver = getPurchasedEver(r.id);
               const displayTicketCount = ownedNow > 0 ? ownedNow : purchasedEver;
 
+              // ✅ Refund UX: show expected amount immediately (ticketsOwned * ticketPrice)
+              const ticketPriceU6 = safeBigInt(r.ticketPrice); // ticketPrice is USDC(6) on-chain
+              const estimatedRefundU6 =
+                isRefund && displayTicketCount > 0 ? BigInt(displayTicketCount) * ticketPriceU6 : 0n;
+
+              const claimableU6 = safeBigInt(it.claimableUsdc);
+              const refundStep1Disabled = !isRefund || displayTicketCount <= 0 || data.isPending;
+              const refundStep2Disabled = !isRefund || claimableU6 <= 0n || data.isPending;
+
               // ---- status detection (defensive)
               const status = String(r.status || "").toUpperCase();
               const isCanceled = status === "CANCELED";
@@ -503,7 +512,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const showDual = !isRefund && hasUsdc && hasNative;
 
-              // ✅ FIX: for refunds, the button should be enabled when user has tickets to refund
+              // Keep existing gate (not used for refund buttons anymore, but safe to keep)
               const refundDisabled = isRefund && displayTicketCount <= 0;
 
               return (
@@ -520,10 +529,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
                       {isRefund ? (
                         <div className="db-refund-layout">
-                          {/* keep this optional: subgraph may not populate amounts */}
-                          {safeBigInt(it.claimableUsdc) > 0n && (
-                            <div className="db-refund-sub">
-                              Expected: <b>{fmt(it.claimableUsdc, 6)} USDC</b>
+                          <div className="db-refund-sub">
+                            Expected:{" "}
+                            <b>{estimatedRefundU6 > 0n ? fmt(estimatedRefundU6.toString(), 6) : "—"} USDC</b>
+                          </div>
+
+                          {claimableU6 > 0n && (
+                            <div className="db-refund-sub" style={{ marginTop: 6 }}>
+                              Available now: <b>{fmt(claimableU6.toString(), 6)} USDC</b>
                             </div>
                           )}
                         </div>
@@ -546,7 +559,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                     <div className="db-claim-actions">
                       {showDual ? (
                         <>
-                          <button className="db-btn primary" disabled={data.isPending} onClick={() => actions.withdraw(r.id, "withdrawFunds")}>
+                          <button
+                            className="db-btn primary"
+                            disabled={data.isPending}
+                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                          >
                             {data.isPending ? "Processing..." : "Claim USDC"}
                           </button>
                           <button
@@ -557,6 +574,26 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                             {data.isPending ? "Processing..." : "Claim Native"}
                           </button>
                         </>
+                      ) : isRefund ? (
+                        <div style={{ display: "flex", gap: 10, width: "100%" }}>
+                          <button
+                            className="db-btn secondary"
+                            disabled={refundStep1Disabled}
+                            onClick={() => actions.withdraw(r.id, "claimTicketRefund")}
+                            title={displayTicketCount <= 0 ? "No refundable tickets found" : "Allocates refund to your claimable balance"}
+                          >
+                            {data.isPending ? "Processing..." : "1) Reclaim Ticket Refunds"}
+                          </button>
+
+                          <button
+                            className="db-btn primary"
+                            disabled={refundStep2Disabled}
+                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                            title={claimableU6 <= 0n ? "Run step 1 first" : "Transfers USDC to your wallet"}
+                          >
+                            {data.isPending ? "Processing..." : "2) Withdraw USDC"}
+                          </button>
+                        </div>
                       ) : (
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
@@ -705,7 +742,13 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             )}
 
             {data.created.map((r: any) => (
-              <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+              <RaffleCard
+                key={r.id}
+                raffle={r}
+                onOpen={onOpenRaffle}
+                onOpenSafety={onOpenSafety}
+                nowMs={nowS * 1000}
+              />
             ))}
           </div>
         )}
