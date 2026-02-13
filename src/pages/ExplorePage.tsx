@@ -20,7 +20,6 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
   const hasAnyItems = (state.items?.length ?? 0) > 0;
   const showSkeletons = meta.isLoading && !hasAnyItems;
 
-  // Determine which empty state to show
   const isSearching = !!state.q;
   const isMyRaffles = state.myRafflesOnly;
 
@@ -132,16 +131,20 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
         {showSkeletons && (
           <>
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="xp-card-shell">
+              <div key={i} className="xp-card-shell" style={{ animationDelay: `${i * 0.05}s` }}>
                 <RaffleCardSkeleton />
               </div>
             ))}
           </>
         )}
 
-        {/* Real Cards */}
-        {state.list.map((r) => (
-          <div key={r.id} className="xp-card-shell">
+        {/* Real Cards (With Staggered Delay) */}
+        {state.list.map((r, i) => (
+          <div 
+            key={r.id} 
+            className="xp-card-shell"
+            style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}
+          >
             <RaffleCard
               raffle={r}
               onOpen={onOpenRaffle}
@@ -150,7 +153,7 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
           </div>
         ))}
 
-        {/* Empty States (Emotive) */}
+        {/* Empty States */}
         {!meta.isLoading && state.list.length === 0 && (
           <div className="xp-empty-state">
             <div className="xp-empty-icon">
