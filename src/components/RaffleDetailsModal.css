@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: 9000;
-  background: rgba(15, 23, 42, 0.75); /* Darker overlay for focus */
+  background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(6px);
   padding-top: 60px;
   padding-bottom: 40px;
@@ -187,6 +187,20 @@
 .rdm-spec-row { display: flex; justify-content: space-between; font-size: 12px; color: #64748b; }
 .rdm-spec-row b { color: #0f172a; }
 
+/* Payout Slip (Restored Distribution) */
+.rdm-payout-slip {
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  color: #334155;
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  padding: 12px;
+  border-radius: 8px;
+}
+.rdm-slip-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.rdm-slip-row.head { font-weight: 800; text-transform: uppercase; color: #0f172a; margin-bottom: 6px; }
+.rdm-slip-divider { border-bottom: 1px dashed #cbd5e1; margin: 8px 0; }
+
 /* Tabs (Receipt) */
 .rdm-tabs { display: flex; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; }
 .rdm-tab {
@@ -199,9 +213,12 @@
 .rdm-receipt { font-family: "Courier New", monospace; color: #334155; font-size: 11px; }
 .rdm-receipt-line { text-align: center; opacity: 0.4; margin: 10px 0; }
 .rdm-tl-row { display: flex; gap: 12px; margin-bottom: 8px; }
-.rdm-tl-time { opacity: 0.6; white-space: nowrap; }
+.rdm-tl-time { opacity: 0.6; white-space: nowrap; width: 40px; }
+.rdm-tl-desc { flex: 1; }
 .rdm-tl-label { font-weight: 700; text-transform: uppercase; }
+.rdm-tl-sub { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; opacity: 0.85; }
 .rdm-tl-tx { color: #2563eb; text-decoration: none; }
+.rdm-winner-hl { color: #16a34a; font-weight: 800; }
 
 .rdm-holders { display: grid; gap: 8px; }
 .rdm-holder-row { display: flex; justify-content: space-between; font-size: 12px; padding-bottom: 6px; border-bottom: 1px dashed #e2e8f0; }
