@@ -84,6 +84,60 @@ flowchart TD
   linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
 `;
 
+// ✅ NEW: Architecture diagram (same theme + style)
+const SYSTEM_ARCH = `
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#ffffff',
+      'primaryTextColor': '#4A0F2B',
+      'primaryBorderColor': '#fce7f3',
+      'lineColor': '#be185d',
+      'fontFamily': 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+      'fontSize': '14px'
+    },
+    'flowchart': {
+      'curve': 'basis',
+      'nodeSpacing': 40,
+      'rankSpacing': 60
+    }
+  }
+}%%
+
+flowchart TD
+  classDef brand fill:#fdf2f8,stroke:#db2777,stroke-width:2px,color:#be185d,rx:12,ry:12;
+  classDef decision fill:#ffffff,stroke:#9d174d,stroke-width:2px,color:#4A0F2B,rx:6,ry:6,stroke-dasharray: 5 5;
+  classDef success fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d,rx:12,ry:12;
+  classDef fail fill:#fff1f2,stroke:#e11d48,stroke-width:2px,color:#9f1239,rx:12,ry:12;
+  classDef tech fill:#fff,stroke:#4A0F2B,stroke-width:2px,color:#4A0F2B,rx:4,ry:4,stroke-dasharray: 2 2;
+
+  User[User Wallet<br/>(MetaMask etc.)]:::tech
+  App[Ppopgi Frontend<br/>(React)]:::brand
+
+  RPC[RPC / Etherlink Node]:::tech
+  Chain[Etherlink (EVM)<br/>Raffle Contracts]:::brand
+
+  Entropy[Pyth Entropy<br/>Verifiable Randomness]:::tech
+  Bot[Finalizer Bot<br/>permissionless caller]:::tech
+
+  Subgraph[The Graph Subgraph<br/>(indexed events)]:::tech
+  Worker[Edge Cache Worker<br/>(GraphQL cache)]:::tech
+
+  User --> App
+  App --> RPC
+  RPC --> Chain
+
+  Bot -.-> Chain
+  Chain --> Entropy
+  Entropy --> Chain
+
+  Chain --> Subgraph
+  App --> Worker --> Subgraph
+
+  linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
+`;
+
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "what-is",
@@ -111,6 +165,55 @@ const FAQ_ITEMS: FaqItem[] = [
         </ul>
         <div className="faq-callout">
           Core idea: no hidden server logic deciding outcomes — the important rules are enforced by the raffle contract.
+        </div>
+      </>
+    ),
+  },
+
+  // ✅ NEW: Added right after "what-is"
+  {
+    id: "architecture-tech",
+    q: "What is Ppopgi’s system architecture? (Technical overview)",
+    a: (
+      <>
+        Ppopgi is a hybrid on-chain / off-chain system where <b>funds custody and winner logic live entirely on-chain</b>, while
+        off-chain components improve performance and UX.
+        <br />
+        <br />
+
+        <div className="faq-mermaid" style={{ marginTop: 12 }}>
+          <div className="faq-diagram-title">System Architecture</div>
+          <MermaidDiagram code={SYSTEM_ARCH} id="ppopgi-system-architecture" />
+          <div className="faq-diagram-note">On-chain components enforce rules; off-chain components speed up reads and automation.</div>
+        </div>
+
+        <br />
+
+        <b>🧱 On-chain (Etherlink smart contracts)</b>
+        <ul className="faq-ul">
+          <li>Holds USDC (prize pot + ticket revenue) inside the raffle contract.</li>
+          <li>Enforces the raffle state machine (FundingPending → Open → Drawing → Completed / Canceled).</li>
+          <li>Requests randomness from Pyth Entropy and accepts callbacks only from the Entropy contract.</li>
+          <li>Computes winner deterministically (<code>random % totalSold</code>) using ticket ownership ranges.</li>
+          <li>Uses pull-based claims (winner/creator/feeRecipient claim their own funds).</li>
+        </ul>
+
+        <b>🌐 Off-chain (UX + performance)</b>
+        <ul className="faq-ul">
+          <li>
+            <b>Subgraph (The Graph)</b> indexes events for fast lists/participants/history.
+          </li>
+          <li>
+            <b>Edge cache worker</b> caches GraphQL queries to reduce load and speed up responses.
+          </li>
+          <li>
+            <b>Finalizer bot</b> periodically calls <code>finalize()</code> when raffles are eligible (permissionless).
+          </li>
+        </ul>
+
+        <div className="faq-callout">
+          Important: Off-chain services don’t control outcomes and can’t steal funds — they just make the app faster and help trigger
+          public actions.
         </div>
       </>
     ),
