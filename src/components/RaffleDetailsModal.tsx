@@ -505,7 +505,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             )}
           </div>
 
-          {/* DETAILS & DIST */}
+          {/* DETAILS (RESTORED) */}
           <div className="rdm-dist-section">
             <div className="rdm-dist-header">Raffle Specs</div>
             <div className="rdm-dist-note">{expectedOutcome}</div>
@@ -522,6 +522,39 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               </div>
             </div>
           </div>
+
+          {/* DISTRIBUTION (RESTORED as "Payout Slip") */}
+          {distribution && (
+            <div className="rdm-dist-section">
+              <div className="rdm-dist-header">Payout Distribution</div>
+              {distribution.isCanceled ? (
+                <div className="rdm-dist-note warn">Canceled. Reclaim available on dashboard.</div>
+              ) : (
+                <div className="rdm-payout-slip">
+                  <div className="rdm-slip-row head">
+                    <span>Prize Breakdown</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Winner (Net)</span> <span>{fmtNum(distribution.winnerNet)} USDC</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Fee</span> <span>{fmtNum(distribution.platformPrizeFee)} USDC</span>
+                  </div>
+                  <div className="rdm-slip-divider" />
+                  
+                  <div className="rdm-slip-row head" style={{ marginTop: 8 }}>
+                    <span>Sales Breakdown</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Creator (Net)</span> <span>{fmtNum(distribution.creatorNet)} USDC</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Fee</span> <span>{fmtNum(distribution.platformSalesFee)} USDC</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* TABS (Receipt Style) */}
           <div className="rdm-tabs">
@@ -542,7 +575,12 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     <div className="rdm-tl-time">{step.date ? formatDate(step.date).split(",")[0] : "--/--"}</div>
                     <div className="rdm-tl-desc">
                       <div className="rdm-tl-label">{step.label}</div>
-                      {step.tx && <TxLink hash={step.tx} />}
+                      <div className="rdm-tl-sub">
+                        {step.tx && <TxLink hash={step.tx} />}
+                        {step.winner && (
+                          <div className="rdm-winner-hl">Winner: {<ExplorerLink addr={step.winner} label={step.winner.slice(0,6)+'...'} />}</div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
