@@ -18,6 +18,7 @@ const RAFFLE_DASH_ABI = [
   { type: "function", name: "withdrawFunds", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "withdrawNative", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "claimTicketRefund", stateMutability: "nonpayable", inputs: [], outputs: [] },
+
   {
     type: "function",
     name: "ticketsOwned",
@@ -38,6 +39,15 @@ const RAFFLE_DASH_ABI = [
     stateMutability: "view",
     inputs: [{ type: "address" }],
     outputs: [{ type: "uint256" }],
+  },
+
+  // ✅ optional but helpful for safer prechecks (matches your ABI)
+  {
+    type: "function",
+    name: "status",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint8" }],
   },
 ] as const;
 
@@ -95,7 +105,11 @@ function normId(v: string): string {
 /**
  * Simple concurrency pool to avoid hammering RPC.
  */
-async function mapPool<T, R>(items: readonly T[], concurrency: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+async function mapPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, idx: number) => Promise<R>
+): Promise<R[]> {
   const out: R[] = new Array(items.length) as any;
   let i = 0;
 
@@ -146,7 +160,6 @@ async function readDashboardValues(args: {
     return { cf: hit.cf, cn: hit.cn, owned: hit.owned };
   }
 
-  // ✅ IMPORTANT: always use normalized address
   const contract = getContract({
     client: thirdwebClient,
     chain: ETHERLINK_CHAIN,
@@ -327,7 +340,8 @@ export function useDashboardController() {
 
         const joinedIdArr = Array.from(joinedIds);
 
-        const joinedBaseFromStore = joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+        const joinedBaseFromStore =
+          joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
         setCreated(myCreated);
 
@@ -353,7 +367,6 @@ export function useDashboardController() {
         await mapPool(joinedToCheck, rpcConcurrencyRef.current.joinedOwned, async (r) => {
           const rid = normId(r.id);
           try {
-            // ✅ IMPORTANT: always use normalized address
             const contract = getContract({
               client: thirdwebClient,
               chain: ETHERLINK_CHAIN,
@@ -412,7 +425,7 @@ export function useDashboardController() {
           const rid = normId(r.id);
           return {
             ...r,
-            id: rid, // ✅ normalize in stored joined state too
+            id: rid,
             userTicketsOwned: ownedByRaffleId.get(rid) ?? "0",
             userTicketsBought: boughtByRaffleId.get(rid),
           };
@@ -448,7 +461,6 @@ export function useDashboardController() {
 
         await mapPool(candidates, rpcConcurrencyRef.current.claimScan, async (r) => {
           const rid = normId(r.id);
-
           const ownedHintStr = ownedByRaffleId.get(rid);
 
           const v = await readDashboardValues({
@@ -463,19 +475,26 @@ export function useDashboardController() {
           const cn = BigInt(v.cn);
           const ticketsOwned = BigInt(v.owned);
 
+          const participatedEver = joinedIds.has(rid); // ✅ important
+
           const roles = {
             created: r.creator?.toLowerCase() === myAddr,
-            participated: ticketsOwned > 0n || joinedIds.has(rid),
+            participated: ticketsOwned > 0n || participatedEver,
             feeRecipient: (r as any).feeRecipient?.toLowerCase() === myAddr,
           };
 
           const isWinnerEligible =
             r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
 
-          const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
+          // ✅ FIX: Refund eligibility should NOT depend on ticketsOwned
+          // If raffle is canceled and user ever participated, they should see the REFUND card
+          // even if ticketsOwned is 0 (common when the contract zeros it on cancel).
+          const isParticipantRefundEligible =
+            r.status === "CANCELED" && (participatedEver || ticketsOwned > 0n || cf > 0n || cn > 0n);
 
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
+          // show if: winner claim, refund flow, or any claimable balance
           if (!isWinnerEligible && !isParticipantRefundEligible && !isAnythingClaimable) return;
 
           if (isWinnerEligible) {
@@ -587,9 +606,12 @@ export function useDashboardController() {
     [joined]
   );
 
-  const claimablesSorted = useMemo(() => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]), [claimables, hiddenClaimables]);
+  const claimablesSorted = useMemo(
+    () => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]),
+    [claimables, hiddenClaimables]
+  );
 
-  // ✅ IMPORTANT: method is ABI-derived ("withdrawFunds" | "withdrawNative" | "claimTicketRefund")
+  // ✅ IMPORTANT: method is ABI-derived
   const withdraw = async (raffleId: string, method: DashTxMethod) => {
     if (!account) return;
     setMsg(null);
@@ -600,28 +622,31 @@ export function useDashboardController() {
       const c = getContract({
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
-        address: rid, // ✅ normalize here too
+        address: rid,
         abi: RAFFLE_DASH_ABI,
       });
 
-      // ✅ Refund guard:
-      // If ticketsOwned reads as 0, do NOT send a “no-op” refund tx.
-      // Instead, refresh/recompute so the UI shows the real claimable amount first.
+      // ✅ FIX: do NOT block claimTicketRefund when ticketsOwned == 0.
+      // Many canceled raffles zero ticketsOwned, yet the user is still eligible to run claimTicketRefund().
+      // We'll only “soft-guard” if it looks totally non-participated AND no balances exist.
       if (method === "claimTicketRefund") {
         try {
-          const owned = toBigInt(await readContract({ contract: c, method: "ticketsOwned", params: [account] }));
-          if (owned <= 0n) {
-            setMsg("Refund not ready yet — reloading…");
-            await refreshRaffleStore(true, true);
-            await recompute(false);
-            return;
-          }
+          const [cf, cn, owned] = await Promise.all([
+            readContract({ contract: c, method: "claimableFunds", params: [account] }).then(toBigInt).catch(() => 0n),
+            readContract({ contract: c, method: "claimableNative", params: [account] }).then(toBigInt).catch(() => 0n),
+            readContract({ contract: c, method: "ticketsOwned", params: [account] }).then(toBigInt).catch(() => 0n),
+          ]);
+
+          // If they already have balances, great (maybe step1 was already done).
+          // If they have owned tickets, great.
+          // If all are zero, still allow sending because claimTicketRefund is the step that *creates* claimableFunds
+          // in your 2-step UI.
+          // So: no early return here.
+          void cf;
+          void cn;
+          void owned;
         } catch {
-          // If read fails, also avoid sending (prevents the “first click does nothing” symptom)
-          setMsg("Loading refund details — try again in a second…");
-          await refreshRaffleStore(true, true);
-          await recompute(false);
-          return;
+          // still allow sending; wallet tx will reveal revert reason if any
         }
       }
 
