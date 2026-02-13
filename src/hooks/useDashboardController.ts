@@ -41,6 +41,12 @@ const RAFFLE_DASH_ABI = [
   },
 ] as const;
 
+// ✅ Use ABI-derived tx method union (prevents TS2322 / “function xxx()” mismatches)
+type DashTxMethod = Extract<
+  (typeof RAFFLE_DASH_ABI)[number],
+  { type: "function"; stateMutability: "nonpayable" }
+>["name"];
+
 type JoinedRaffleItem = RaffleListItem & {
   userTicketsOwned: string; // bigint string (on-chain current balance)
   userTicketsBought?: string; // historical purchased count (subgraph lookup)
@@ -54,8 +60,6 @@ type ClaimableItem = {
   roles: { participated?: boolean; created?: boolean; feeRecipient?: boolean };
   userTicketsOwned?: string;
 };
-
-type WithdrawMethod = "withdrawFunds" | "withdrawNative" | "claimTicketRefund";
 
 function isRateLimitError(e: unknown) {
   const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
@@ -428,7 +432,8 @@ export function useDashboardController() {
           for (let i = 0; i < prev.length; i++) {
             if (normId(prev[i].id) !== normId(nextJoined[i].id)) return nextJoined;
             if (String(prev[i].userTicketsOwned) !== String(nextJoined[i].userTicketsOwned)) return nextJoined;
-            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? "")) return nextJoined;
+            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? ""))
+              return nextJoined;
           }
           return prev;
         });
@@ -475,9 +480,7 @@ export function useDashboardController() {
           };
 
           const isWinnerEligible =
-            r.status === "COMPLETED" &&
-            r.winner?.toLowerCase() === myAddr &&
-            (cf > 0n || cn > 0n);
+            r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
 
           const isParticipantRefundEligible = r.status === "CANCELED" && ticketsOwned > 0n;
 
@@ -599,10 +602,8 @@ export function useDashboardController() {
     [claimables, hiddenClaimables]
   );
 
-  // ✅ FIX FOR YOUR TS ERROR:
-  // - Do NOT pass "function withdrawFunds()" strings.
-  // - Pass the ABI function NAME union: "withdrawFunds" | "withdrawNative" | "claimTicketRefund"
-  const withdraw = async (raffleId: string, method: WithdrawMethod) => {
+  // ✅ IMPORTANT: method is ABI-derived ("withdrawFunds" | "withdrawNative" | "claimTicketRefund")
+  const withdraw = async (raffleId: string, method: DashTxMethod) => {
     if (!account) return;
     setMsg(null);
 
@@ -617,7 +618,7 @@ export function useDashboardController() {
       await sendAndConfirm(
         prepareContractCall({
           contract: c,
-          method, // ✅ strictly typed method name
+          method,
           params: [],
         })
       );
