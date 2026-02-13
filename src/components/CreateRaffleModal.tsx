@@ -421,7 +421,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
                     disabled={createDisabled}
                   >
                     <span className="crm-dock-icon">{status.isPending ? "⏳" : "2"}</span>
-                    <span className="crm-dock-label">{status.isPending ? "Creating..." : "Launch"}</span>
+                    <span className="crm-dock-label">{status.isPending ? "Creating..." : "Create"}</span>
                   </button>
                 </div>
                 {status.msg && <div className="crm-status-msg">{status.msg}</div>}

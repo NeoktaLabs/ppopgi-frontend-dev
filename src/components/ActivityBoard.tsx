@@ -8,7 +8,7 @@ import "./ActivityBoard.css";
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
 // ✅ Show last 15 items for the wider view
-const MAX_ITEMS = 15;
+const MAX_ITEMS = 10;
 
 // ✅ New items stay "Fresh" for 30s
 const NEW_WINDOW_SEC = 30;
