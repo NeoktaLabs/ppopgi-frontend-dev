@@ -1,15 +1,14 @@
-/* src/components/ActivityBoard.css */
 
-/* 1. Wrapper (Floating Card - More Compact) */
+
 .ab-board {
-  width: min(680px, calc(100vw - 32px));
-  margin: 60px auto 30px auto; /* Reduced margins */
+  width: min(720px, calc(100vw - 32px));
+  margin: 60px auto 30px auto;
   background: white;
-  border-radius: 12px; /* Slightly tighter radius */
+  border-radius: 14px;
   border: none;
-  box-shadow: 
-    0 4px 20px -5px rgba(0,0,0,0.06),
-    0 2px 8px -2px rgba(0,0,0,0.03);
+  box-shadow:
+    0 6px 24px -6px rgba(0,0,0,0.08),
+    0 3px 10px -4px rgba(0,0,0,0.04);
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -19,22 +18,22 @@
 -------------------------------------------------- */
 
 .ab-header {
-  padding: 8px 12px; /* Tighter padding */
+  padding: 10px 14px;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   color: #64748b;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background: #fff;
 }
 
 .ab-pulse {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   background: #22c55e;
   border-radius: 50%;
   box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
@@ -43,12 +42,12 @@
 
 @keyframes ab-pulse-anim {
   0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 3px rgba(34, 197, 94, 0); }
+  70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
 
 /* --------------------------------------------------
-   List + rows
+   List + Rows (Less Condensed)
 -------------------------------------------------- */
 
 .ab-list {
@@ -60,12 +59,12 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px; /* No vertical padding, let height control it */
-  height: 36px;    /* CONDENSED HEIGHT */
+  gap: 14px;
+  padding: 12px 16px;
+  min-height: 56px;
   background: #ffffff;
   border-bottom: 1px solid #f1f5f9;
-  transition: background 0.12s ease, transform 0.12s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .ab-row:nth-child(even) {
@@ -81,44 +80,46 @@
 }
 
 /* --------------------------------------------------
-   "Pile" Entry Animation
+   Horizontal Slide-in Animation
 -------------------------------------------------- */
 
 .ab-enter {
-  animation: ab-drop-in 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  z-index: 10;
+  animation: ab-slide-in-left 520ms cubic-bezier(0.2, 0.85, 0.2, 1);
+  transform-origin: left center;
+  z-index: 5;
+  box-shadow: 0 10px 24px -14px rgba(0,0,0,0.22);
 }
 
-@keyframes ab-drop-in {
-  0% { 
-    transform: translateY(-15px) scale(0.98); 
-    opacity: 0; 
+@keyframes ab-slide-in-left {
+  0% {
+    transform: translateX(-32px) scale(0.985);
+    opacity: 0;
   }
   60% {
-    transform: translateY(1px) scale(1.01);
+    transform: translateX(3px) scale(1.01);
     opacity: 1;
   }
-  100% { 
-    transform: translateY(0) scale(1); 
-    opacity: 1; 
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
   }
 }
 
 /* --------------------------------------------------
-   Icons (Circular & Smaller)
+   Icons
 -------------------------------------------------- */
 
 .ab-icon {
-  width: 22px;  /* Smaller */
-  height: 22px; /* Smaller */
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px; /* Smaller emoji */
+  font-size: 15px;
   flex-shrink: 0;
   background: white;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .ab-icon.buy { color: #2563eb; }
@@ -146,23 +147,22 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .ab-main-text {
-  font-size: 12px; /* Smaller text */
+  font-size: 13px;
   color: #334155;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: -0.1px;
 }
 
 .ab-user {
   font-weight: 700;
   color: #0f172a;
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   text-decoration: none;
   border-bottom: 1px dotted #94a3b8;
 }
@@ -189,48 +189,48 @@
 .ab-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .ab-time {
-  font-size: 10px;
+  font-size: 11px;
   color: #94a3b8;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .ab-new-pill {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 900;
-  letter-spacing: 0.5px;
-  padding: 1px 5px;
+  letter-spacing: 0.6px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: #fff0f5;
   color: #be185d;
-  border: 1px solid rgba(190, 24, 93, 0.22);
+  border: 1px solid rgba(190, 24, 93, 0.25);
   animation: ab-pill-pulse 2s infinite;
 }
 
 @keyframes ab-pill-pulse {
   0% { opacity: 1; }
-  50% { opacity: 0.7; }
+  50% { opacity: 0.75; }
   100% { opacity: 1; }
 }
 
 /* --------------------------------------------------
-   Pot tags
+   Pot Tags
 -------------------------------------------------- */
 
 .ab-pot-tag {
   background: #fdf4ff;
   color: #d946ef;
-  padding: 2px 6px;
-  border-radius: 99px;
+  padding: 3px 8px;
+  border-radius: 999px;
   font-weight: 700;
-  font-size: 9px;
+  font-size: 10px;
   border: 1px solid #fce7f3;
 }
 
@@ -252,13 +252,13 @@
 
 .ab-loading {
   text-align: center;
-  padding: 16px;
+  padding: 18px;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* ==================================================
-   Fresh highlight (Shimmer Only)
+   Fresh Highlight (Shimmer Accent)
 ================================================== */
 
 .ab-fresh {
@@ -288,26 +288,26 @@
 
 .ab-fresh-buy {
   background: linear-gradient(90deg, rgba(37, 99, 235, 0.05), transparent 60%), #ffffff !important;
-  box-shadow: inset 2px 0 0 #3b82f6; /* Thinner accent bar */
+  box-shadow: inset 3px 0 0 #3b82f6;
 }
 
 .ab-fresh-create {
   background: linear-gradient(90deg, rgba(190, 24, 93, 0.06), transparent 60%), #ffffff !important;
-  box-shadow: inset 2px 0 0 #db2777;
+  box-shadow: inset 3px 0 0 #db2777;
 }
 
 .ab-fresh-win {
   background: linear-gradient(90deg, rgba(22, 163, 74, 0.06), transparent 60%), #ffffff !important;
-  box-shadow: inset 2px 0 0 #22c55e;
+  box-shadow: inset 3px 0 0 #22c55e;
 }
 
 .ab-fresh-cancel {
   background: linear-gradient(90deg, rgba(153, 27, 27, 0.05), transparent 60%), #ffffff !important;
-  box-shadow: inset 2px 0 0 #ef4444;
+  box-shadow: inset 3px 0 0 #ef4444;
 }
 
 /* --------------------------------------------------
-   Reduced motion
+   Reduced Motion
 -------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -329,15 +329,17 @@
   }
 
   .ab-row {
-    padding: 0 8px;
-    height: 40px; /* Slightly taller on mobile for touch targets */
+    padding: 12px 12px;
+    min-height: 60px;
   }
 
-  .ab-meta {
-    gap: 4px;
+  .ab-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
   }
 
   .ab-pot-tag {
-    display: none; 
+    display: none;
   }
 }
