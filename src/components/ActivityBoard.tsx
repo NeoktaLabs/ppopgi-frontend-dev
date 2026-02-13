@@ -53,23 +53,21 @@ export function ActivityBoard() {
   const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // used only to render "x ago" values; we tick it when we refresh, not every second
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+
   // existing revalidate tick (keeps your “wake up” behavior)
   const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
-
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-  const [lastUpdatedSec, setLastUpdatedSec] = useState<number | null>(null);
-
-  useEffect(() => {
-    const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
-    return () => window.clearInterval(t);
-  }, []);
 
   const seenRef = useRef<Set<string>>(new Set());
 
   const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const backoffStepRef = useRef(0);
+
+  // abort in-flight fetches when a new one starts
+  const abortRef = useRef<AbortController | null>(null);
 
   const clearTimer = () => {
     if (timerRef.current != null) {
@@ -109,8 +107,8 @@ export function ActivityBoard() {
         return next.slice(0, 20);
       });
 
-      // optimistic insert means “fresh”
-      setLastUpdatedSec(Math.floor(Date.now() / 1000));
+      // keep "x ago" display reasonably fresh after optimistic updates
+      setNowSec(Math.floor(Date.now() / 1000));
     };
 
     window.addEventListener("ppopgi:activity", onOptimistic as any);
@@ -119,7 +117,7 @@ export function ActivityBoard() {
 
   const load = useCallback(
     async (isBackground = false) => {
-      // if hidden, keep it cheap (but still try again soon)
+      // if hidden, keep it cheap (but still try again later)
       if (isBackground && isHidden()) {
         scheduleNext(60_000);
         return;
@@ -130,8 +128,19 @@ export function ActivityBoard() {
 
       if (!isBackground && items.length === 0) setLoading(true);
 
+      // abort any in-flight request
       try {
-        const data = await fetchGlobalActivity({ first: 15 });
+        abortRef.current?.abort();
+      } catch {}
+      const ac = new AbortController();
+      abortRef.current = ac;
+
+      try {
+        // If your fetchGlobalActivity supports signal, pass it through.
+        // If not, you can remove the second argument below.
+        const data = await fetchGlobalActivity({ first: 15 } as any, { signal: ac.signal } as any);
+
+        if (ac.signal.aborted) return;
 
         setItems((prev) => {
           const pending = prev.filter((x) => x.pending);
@@ -144,13 +153,16 @@ export function ActivityBoard() {
         });
 
         setLoading(false);
-        setLastUpdatedSec(Math.floor(Date.now() / 1000));
+        setNowSec(Math.floor(Date.now() / 1000));
 
         backoffStepRef.current = 0;
 
-        // ✅ Always aim for 5s refresh (Worker TTL makes it safe)
+        // ✅ 5s refresh while visible
         scheduleNext(REFRESH_MS);
-      } catch (e) {
+      } catch (e: any) {
+        if (String(e?.name || "").toLowerCase().includes("abort")) return;
+        if (String(e).toLowerCase().includes("abort")) return;
+
         console.error("[ActivityBoard] load failed", e);
 
         if (isRateLimitError(e)) {
@@ -166,6 +178,7 @@ export function ActivityBoard() {
         inFlightRef.current = false;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [items.length, scheduleNext]
   );
 
@@ -184,15 +197,18 @@ export function ActivityBoard() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
       clearTimer();
+      try {
+        abortRef.current?.abort();
+      } catch {}
     };
   }, [load]);
 
-  // keep your revalidate hook behavior (fast wake-up)
+  // keep your revalidate hook behavior (fast wake-up), but not too aggressive
   useEffect(() => {
     if (rvTick === 0) return;
 
     const now = Date.now();
-    if (now - lastRvAtRef.current < 2_000) return;
+    if (now - lastRvAtRef.current < 5_000) return; // was 2s; a bit calmer
     lastRvAtRef.current = now;
 
     if (isHidden()) return;
@@ -212,9 +228,6 @@ export function ActivityBoard() {
     });
   }, [items]);
 
-  const updatedAgo =
-    lastUpdatedSec != null ? timeAgoFrom(nowSec, String(lastUpdatedSec)) : "—";
-
   if (loading && items.length === 0) {
     return (
       <div className="ab-board">
@@ -233,9 +246,7 @@ export function ActivityBoard() {
           <span>Live Feed</span>
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.65 }}>
-          Updated {updatedAgo} ago
-        </div>
+        {/* ✅ removed "Updated Xs ago" */}
       </div>
 
       <div className="ab-list">
@@ -243,8 +254,6 @@ export function ActivityBoard() {
           const isBuy = item.type === "BUY";
           const isWin = (item as any).type === "WIN";
           const isCancel = (item as any).type === "CANCEL";
-
-          // (TS warning fixed by removing unused isCreate variable)
 
           let icon = "✨";
           let iconClass = "create";
