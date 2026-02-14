@@ -277,7 +277,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     [actions]
   );
 
-  // ✅ UPDATED: advance state only when tx truly succeeded
+  /**
+   * ✅ Refund flow (participants only):
+   * - Step 1: claimTicketRefund
+   * - Step 2: withdrawFunds
+   *
+   * IMPORTANT:
+   * - Creator reclaim on canceled raffles is NOT a refund and should use withdrawFunds/withdrawNative directly.
+   */
   const onRefundOneClick = useCallback(
     async (raffleId: string) => {
       const rid = normId(raffleId);
@@ -351,14 +358,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     if (!data.msg) return false;
     return /success|successful|claimed/i.test(data.msg);
   }, [data.msg]);
-
-  const getPrimaryMethod = (opts: { isRefund: boolean; hasUsdc: boolean; hasNative: boolean }): WithdrawMethod | null => {
-    const { isRefund, hasUsdc, hasNative } = opts;
-    if (isRefund) return "claimTicketRefund";
-    if (hasUsdc) return "withdrawFunds";
-    if (hasNative) return "withdrawNative";
-    return null;
-  };
 
   const hasClaims = data.claimables.length > 0;
   const showColdSkeletons = data.isColdLoading && ongoingRaffles.length === 0;
@@ -466,7 +465,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const hasUsdc = safeBigInt(it.claimableUsdc) > 0n;
               const hasNative = safeBigInt(it.claimableNative) > 0n;
 
-              const isRefund = it.type === "REFUND";
+              const status = String(r.status || "").toUpperCase();
+              const isCanceled = status === "CANCELED";
+              const isSettled = status === "COMPLETED" || status === "SETTLED";
+
+              // IMPORTANT: creator reclaim on canceled raffles should NOT be treated as refund flow.
+              const isRefund = it.type === "REFUND" && !(isCanceled && iAmCreator);
 
               const ownedNow = Number(it.userTicketsOwned || 0);
               const purchasedEver = getPurchasedEver(r.id);
@@ -477,11 +481,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const claimableU6 = safeBigInt(it.claimableUsdc);
 
-              const status = String(r.status || "").toUpperCase();
-              const isCanceled = status === "CANCELED";
-              const isSettled = status === "COMPLETED" || status === "SETTLED";
-
-              const primaryMethod = getPrimaryMethod({ isRefund, hasUsdc, hasNative });
+              // Primary method:
+              // - refunds (participants) => claimTicketRefund (step 1)
+              // - creator canceled reclaim => withdrawFunds/withdrawNative directly
+              // - winners/others => withdrawFunds/withdrawNative
+              let primaryMethod: WithdrawMethod | null = null;
+              if (isRefund) primaryMethod = "claimTicketRefund";
+              else if (hasUsdc) primaryMethod = "withdrawFunds";
+              else if (hasNative) primaryMethod = "withdrawNative";
+              else primaryMethod = null;
 
               let badgeTitle = "Claim";
               let message = "Funds available to claim.";
@@ -492,8 +500,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 badgeTitle = "Canceled";
                 badgeKind = "creator";
                 message = "Raffle canceled — reclaim your pot.";
-                primaryLabel = "Reclaim Pot";
-              } else if (isCanceled && (isRefund || !iAmCreator)) {
+                primaryLabel = hasUsdc ? "Reclaim Pot (USDC)" : hasNative ? "Reclaim Pot (Native)" : "Reclaim Pot";
+              } else if (isCanceled && isRefund) {
                 badgeTitle = "Refund";
                 badgeKind = "refund";
                 message = "Raffle canceled — reclaim your ticket refund.";
