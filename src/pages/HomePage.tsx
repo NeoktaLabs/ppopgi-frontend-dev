@@ -107,10 +107,7 @@ function BannerSlider() {
 
   return (
     <div className="hp-banner-wrapper">
-      <div
-        className="hp-banner-track"
-        style={{ transform: `translateX(-${idx * 100}%)` }}
-      >
+      <div className="hp-banner-track" style={{ transform: `translateX(-${idx * 100}%)` }}>
         {BANNER_MESSAGES.map((msg) => (
           <div key={msg.id} className="hp-banner-slide">
             <button className="hp-banner-btn" onClick={msg.action}>
@@ -140,22 +137,24 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     [infra.bot?.running, infra.bot?.secondsToNextRun, infra.tsMs]
   );
 
-  const revalTimerRef = useRef<number | null>(null);
+  /**
+   * ✅ IMPORTANT CHANGE (to reduce 5s flashing):
+   * Remove "ppopgi:revalidate -> refetch()" listener.
+   *
+   * GlobalDataRefresher already emits ppopgi:revalidate every 5s, but
+   * the raffle store refresh is throttled (~20s). Calling refetch here
+   * forces mode resets/loading churn and can cause visible flashes.
+   *
+   * If you still want a manual kick, keep "refresh on focus" only.
+   */
   useEffect(() => {
-    const onRevalidate = () => {
-      if (revalTimerRef.current != null) window.clearTimeout(revalTimerRef.current);
-      revalTimerRef.current = window.setTimeout(() => {
-        try {
-          refetch();
-        } catch {}
-      }, 900);
+    const onFocus = () => {
+      try {
+        refetch();
+      } catch {}
     };
-
-    window.addEventListener("ppopgi:revalidate" as any, onRevalidate);
-    return () => {
-      window.removeEventListener("ppopgi:revalidate" as any, onRevalidate);
-      if (revalTimerRef.current != null) window.clearTimeout(revalTimerRef.current);
-    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [refetch]);
 
   const endingRef = useRef<HTMLDivElement | null>(null);
@@ -256,9 +255,15 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
           <div className="hp-podium">
             {isLoading && (
               <>
-                <div className="pp-silver-wrapper"><RaffleCardSkeleton /></div>
-                <div className="pp-gold-wrapper"><RaffleCardSkeleton /></div>
-                <div className="pp-bronze-wrapper"><RaffleCardSkeleton /></div>
+                <div className="pp-silver-wrapper">
+                  <RaffleCardSkeleton />
+                </div>
+                <div className="pp-gold-wrapper">
+                  <RaffleCardSkeleton />
+                </div>
+                <div className="pp-bronze-wrapper">
+                  <RaffleCardSkeleton />
+                </div>
               </>
             )}
 
@@ -319,27 +324,35 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
           <div className="hp-strip-wrap">
             {!endingEdges.atLeft && (
-              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")}>‹</button>
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(endingRef.current, "left")}>
+                ‹
+              </button>
             )}
             {!endingEdges.atRight && (
-              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")}>›</button>
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(endingRef.current, "right")}>
+                ›
+              </button>
             )}
 
             <div className="hp-strip" ref={endingRef} onScroll={updateEndingEdges}>
-              {isLoading && Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="hp-strip-item"><RaffleCardSkeleton /></div>
-              ))}
-              {!isLoading && endingSoonSorted.map((r) => (
-                <div key={r.id} className="hp-strip-item">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowMs}
-                    finalizer={finalizerForCards}
-                  />
-                </div>
-              ))}
+              {isLoading &&
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="hp-strip-item">
+                    <RaffleCardSkeleton />
+                  </div>
+                ))}
+              {!isLoading &&
+                endingSoonSorted.map((r) => (
+                  <div key={r.id} className="hp-strip-item">
+                    <RaffleCard
+                      raffle={r}
+                      onOpen={onOpenRaffle}
+                      onOpenSafety={onOpenSafety}
+                      nowMs={nowMs}
+                      finalizer={finalizerForCards}
+                    />
+                  </div>
+                ))}
               {!isLoading && endingSoonSorted.length === 0 && (
                 <div className="hp-empty-msg">
                   <div className="hp-empty-icon">😴</div>
@@ -359,27 +372,35 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
           <div className="hp-strip-wrap">
             {!settledEdges.atLeft && (
-              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")}>‹</button>
+              <button className="hp-strip-arrow left" onClick={() => scrollStrip(settledRef.current, "left")}>
+                ‹
+              </button>
             )}
             {!settledEdges.atRight && (
-              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")}>›</button>
+              <button className="hp-strip-arrow right" onClick={() => scrollStrip(settledRef.current, "right")}>
+                ›
+              </button>
             )}
 
             <div className="hp-strip" ref={settledRef} onScroll={updateSettledEdges}>
-              {isLoading && Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="hp-strip-item"><RaffleCardSkeleton /></div>
-              ))}
-              {!isLoading && recentlySettledSorted.map((r) => (
-                <div key={r.id} className="hp-strip-item">
-                  <RaffleCard
-                    raffle={r}
-                    onOpen={onOpenRaffle}
-                    onOpenSafety={onOpenSafety}
-                    nowMs={nowMs}
-                    finalizer={finalizerForCards}
-                  />
-                </div>
-              ))}
+              {isLoading &&
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="hp-strip-item">
+                    <RaffleCardSkeleton />
+                  </div>
+                ))}
+              {!isLoading &&
+                recentlySettledSorted.map((r) => (
+                  <div key={r.id} className="hp-strip-item">
+                    <RaffleCard
+                      raffle={r}
+                      onOpen={onOpenRaffle}
+                      onOpenSafety={onOpenSafety}
+                      nowMs={nowMs}
+                      finalizer={finalizerForCards}
+                    />
+                  </div>
+                ))}
               {!isLoading && recentlySettledSorted.length === 0 && (
                 <div className="hp-empty-msg">
                   <div className="hp-empty-icon">📂</div>
