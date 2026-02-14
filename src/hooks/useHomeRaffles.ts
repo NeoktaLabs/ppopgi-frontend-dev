@@ -22,7 +22,7 @@ function shouldFallback(note: string | null) {
   if (!note) return false;
   const s = note.toLowerCase();
 
-  // We only want to fallback for genuine “indexer is down / unreachable” scenarios.
+  // Only fallback for genuine “indexer down/unreachable” cases.
   // For rate-limits, better to wait/backoff than hammer on-chain + indexer.
   if (isRateLimitNote(note)) return false;
 
@@ -61,9 +61,19 @@ export function useHomeRaffles() {
   const isIndexerLoading = !!store.isLoading;
   const indexerNote = store.note ?? null;
 
-  // Manual refetch:
-  // - Always ask store to refresh (deduped)
-  // - Also clear live so we can snap back to indexer if it recovers
+  /**
+   * ✅ Soft refresh (used for global revalidate ticks):
+   * - refreshes the shared store
+   * - does NOT reset mode/live/note (prevents UI "snapping")
+   */
+  const softRefetch = useCallback(() => {
+    void refreshRaffleStore(true, true);
+  }, []);
+
+  /**
+   * ✅ Hard/manual refetch (user-driven):
+   * - clears live mode and forces indexer attempt
+   */
   const refetch = useCallback(() => {
     setLiveItems(null);
     setLiveLoading(false);
@@ -72,7 +82,7 @@ export function useHomeRaffles() {
     void refreshRaffleStore(false, true);
   }, []);
 
-  // ✅ Background refresh on revalidate tick (throttled)
+  // ✅ Background refresh on revalidate tick (throttled) — use soft refresh to avoid UI snapping
   useEffect(() => {
     if (!rvTick) return;
 
@@ -80,8 +90,8 @@ export function useHomeRaffles() {
     if (now - lastRvAtRef.current < RV_MIN_GAP_MS) return;
     lastRvAtRef.current = now;
 
-    refetch();
-  }, [rvTick, refetch]);
+    softRefetch();
+  }, [rvTick, softRefetch]);
 
   // If we have indexer data, always prefer it and exit live mode
   useEffect(() => {
@@ -93,6 +103,13 @@ export function useHomeRaffles() {
     }
   }, [indexerItems]);
 
+  // If indexer is rate-limited, surface the note but do NOT flip to live
+  useEffect(() => {
+    if (indexerNote && isRateLimitNote(indexerNote)) {
+      setNote(indexerNote);
+    }
+  }, [indexerNote]);
+
   // Fallback trigger (only when indexer has no data AND looks down, and only occasionally)
   useEffect(() => {
     const canTry =
@@ -101,14 +118,13 @@ export function useHomeRaffles() {
       shouldFallback(indexerNote);
 
     if (!canTry) {
-      // If it’s rate-limited, show the store note but don’t flip to live
-      setNote(indexerNote);
+      // if store has an error note, show it (but don't constantly overwrite)
+      if (indexerNote && !isRateLimitNote(indexerNote)) setNote(indexerNote);
       return;
     }
 
     const now = Date.now();
     if (now - lastLiveAtRef.current < LIVE_CACHE_MS) {
-      // already fetched live recently
       setMode("live");
       setNote("Indexer unavailable. Showing live blockchain data.");
       return;
@@ -162,7 +178,7 @@ export function useHomeRaffles() {
    * - Indexer only (live mode returns [])
    * - Sorted by the most recent "final action" timestamp we can find:
    *   completedAt -> finalizedAt -> lastUpdatedTimestamp
-   * - Shows the 5 most recent (leftmost should be most recent in your strip)
+   * - Shows the 5 most recent
    */
   const recentlyFinalized = useMemo(() => {
     if (mode === "live") return [];
@@ -181,7 +197,7 @@ export function useHomeRaffles() {
           numOr0((b as any).finalizedAt) ||
           numOr0((b as any).lastUpdatedTimestamp);
 
-        return bKey - aKey; // most recent first
+        return bKey - aKey;
       })
       .slice(0, 5);
   }, [all, mode]);
@@ -208,6 +224,6 @@ export function useHomeRaffles() {
     mode,
     note,
     isLoading,
-    refetch,
+    refetch, // manual/hard refresh
   };
 }
