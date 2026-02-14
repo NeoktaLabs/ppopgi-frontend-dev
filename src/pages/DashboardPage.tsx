@@ -242,7 +242,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
 
   // ✅ local per-session UI state so refund can be a single “guided” button
-  // and we can show progress without requiring a full refresh.
   const [refundFlowState, setRefundFlowState] = useState<
     Record<string, "IDLE" | "STEP1_PENDING" | "STEP2_PENDING" | "DONE" | "NEEDS_WITHDRAW">
   >({});
@@ -264,7 +263,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Wrapper: keep behavior consistent for all non-refund actions
   const onWithdraw = useCallback(
     async (raffleId: string, method: WithdrawMethod) => {
       try {
@@ -276,15 +274,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     [actions]
   );
 
-  // ✅ NEW: “One button, two interactions” refund flow:
-  // click once -> tx #1 (claimTicketRefund) -> tx #2 (withdrawFunds)
-  // If user cancels tx #2, we keep state as NEEDS_WITHDRAW and allow clicking again to retry withdraw only.
   const onRefundOneClick = useCallback(
     async (raffleId: string) => {
       const rid = normId(raffleId);
       const state = refundFlowState[rid] ?? "IDLE";
 
-      // If we already reached “needs withdraw”, do only step 2 on next click.
       if (state === "NEEDS_WITHDRAW") {
         setRefundFlowState((p) => ({ ...p, [rid]: "STEP2_PENDING" }));
         try {
@@ -296,10 +290,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         return;
       }
 
-      // Prevent double-click spam while pending
       if (state === "STEP1_PENDING" || state === "STEP2_PENDING") return;
 
-      // Step 1
       setRefundFlowState((p) => ({ ...p, [rid]: "STEP1_PENDING" }));
       try {
         await actions.withdraw(raffleId, "claimTicketRefund");
@@ -308,13 +300,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
         return;
       }
 
-      // Step 2 (immediately after step 1 confirms)
       setRefundFlowState((p) => ({ ...p, [rid]: "STEP2_PENDING" }));
       try {
         await actions.withdraw(raffleId, "withdrawFunds");
         setRefundFlowState((p) => ({ ...p, [rid]: "DONE" }));
       } catch {
-        // User rejected / not ready / etc — keep it retryable
         setRefundFlowState((p) => ({ ...p, [rid]: "NEEDS_WITHDRAW" }));
       }
     },
@@ -483,10 +473,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const isRefund = it.type === "REFUND";
 
-              // ownedNow can be stale; used only for display.
               const ownedNow = Number(it.userTicketsOwned || 0);
-
-              // purchasedEver is only for display/history.
               const purchasedEver = getPurchasedEver(r.id);
               const displayTicketCount = ownedNow > 0 ? ownedNow : purchasedEver;
 
@@ -550,10 +537,10 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const showDual = !isRefund && hasUsdc && hasNative;
 
-              // single-button route disabled if nothing actionable and not refund
-              const refundDisabled = isRefund && claimableU6 <= 0n && ownedNow <= 0;
+              // ✅ keep this only for non-refund single-button route
+              const nothingToDoNonRefund =
+                !isRefund && !hasUsdc && !hasNative && (primaryLabel === "Nothing to Claim" || !primaryMethod);
 
-              // refund one-click state
               const flow = refundFlowState[rid] ?? "IDLE";
               const refundBusy = flow === "STEP1_PENDING" || flow === "STEP2_PENDING";
               const refundBtnLabel =
@@ -567,6 +554,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                   ? "Done ✅"
                   : "Reclaim & Withdraw";
 
+              // ✅ IMPORTANT: do NOT disable refunds based on ownedNow/claimableU6 (can be stale).
               const refundBtnDisabled = data.isPending || refundBusy || flow === "DONE";
 
               return (
@@ -642,24 +630,13 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                           </button>
                         </>
                       ) : isRefund ? (
-                        <button
-                          className="db-btn primary"
-                          disabled={refundBtnDisabled || refundDisabled}
-                          onClick={() => onRefundOneClick(r.id)}
-                          title={
-                            refundDisabled
-                              ? "No refund available (already reclaimed/withdrawn or nothing owned)."
-                              : flow === "NEEDS_WITHDRAW"
-                              ? "Step 1 already completed; click to withdraw."
-                              : undefined
-                          }
-                        >
+                        <button className="db-btn primary" disabled={refundBtnDisabled} onClick={() => onRefundOneClick(r.id)}>
                           {data.isPending ? "Processing..." : refundBtnLabel}
                         </button>
                       ) : (
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                          disabled={data.isPending || refundDisabled || !primaryMethod || primaryLabel === "Nothing to Claim"}
+                          disabled={data.isPending || nothingToDoNonRefund || !primaryMethod || primaryLabel === "Nothing to Claim"}
                           onClick={() => primaryMethod && onWithdraw(r.id, primaryMethod)}
                         >
                           {data.isPending ? "Processing..." : primaryLabel}
@@ -762,7 +739,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const canceled = r.status === "CANCELED";
 
-              // canceled raffle where the user bought tickets historically.
               const isCanceledParticipant = canceled && purchasedEver > 0;
 
               const participatedEver = purchasedEver > 0;
