@@ -455,7 +455,7 @@ function requestRevalidate(force = false) {
 
 export function startRaffleStore(consumerKey: string, pollMs: number) {
   subscribers += 1;
-  requestedPolls.set(consumerKey, pollMs);
+  requestedPolls.set(consumerKey);
 
   if (subscribers === 1) {
     const onFocus = () => requestRevalidate(true);
