@@ -657,9 +657,9 @@ export function useDashboardController() {
     } catch {}
   }
 
-  // ✅ IMPORTANT: method is ABI-derived
-  const withdraw = async (raffleId: string, method: DashTxMethod) => {
-    if (!account) return;
+  // ✅ UPDATED: return boolean so UI can reliably know if tx succeeded
+  const withdraw = async (raffleId: string, method: DashTxMethod): Promise<boolean> => {
+    if (!account) return false;
     setMsg(null);
 
     const rid = normId(raffleId);
@@ -698,7 +698,7 @@ export function useDashboardController() {
         fundsClaimedCacheRef.current = null;
         await refreshRaffleStore(true, true);
         await recompute(true);
-        return;
+        return true;
       }
 
       // ✅ For withdrawFunds / withdrawNative:
@@ -735,9 +735,11 @@ export function useDashboardController() {
 
       await refreshRaffleStore(true, true);
       await recompute(true);
+      return true;
     } catch (e) {
       console.error("Withdraw failed", e);
       setMsg("Claim failed or rejected.");
+      return false;
     } finally {
       setTxPending(false);
     }
