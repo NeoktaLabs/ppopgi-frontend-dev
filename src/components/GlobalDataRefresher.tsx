@@ -1,6 +1,6 @@
-// src/components/GlobalDataRefresher.tsx
 import { useEffect, useRef } from "react";
 import { refresh as refreshRaffleStore } from "../hooks/useRaffleStore";
+import { refresh as refreshActivityStore } from "../hooks/useActivityStore";
 
 function isVisible() {
   try {
@@ -20,13 +20,10 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
 
     runningRef.current = true;
     try {
-      // ✅ Always emit a lightweight "sync" tick (Home/Explore/Dashboard listeners decide what to do)
-      try {
-        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-      } catch {}
+      // ✅ 1) Activity refresh every 5s (keeps feed synced)
+      await refreshActivityStore(true, true);
 
-      // ✅ Raffle store refresh: DO NOT do every 5s, it’s expensive.
-      // Throttle to e.g. 20s (tune as you like).
+      // ✅ 2) Raffles refresh is heavier — throttle it (e.g. 20s)
       const now = Date.now();
       const RAFFLE_REFRESH_MIN_GAP_MS = 20_000;
 
@@ -34,6 +31,11 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
         lastRaffleRefreshAtRef.current = now;
         await refreshRaffleStore(true, true);
       }
+
+      // ✅ 3) Then notify listeners (Home/Explore/Dashboard)
+      try {
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      } catch {}
     } finally {
       runningRef.current = false;
     }
