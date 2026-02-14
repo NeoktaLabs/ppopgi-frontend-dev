@@ -1,7 +1,6 @@
 // src/components/GlobalDataRefresher.tsx
 import { useEffect, useRef } from "react";
 import { refresh as refreshRaffleStore } from "../hooks/useRaffleStore";
-import { refresh as refreshActivityStore } from "../hooks/useActivityStore"; // <- you create this
 
 function isVisible() {
   try {
@@ -13,6 +12,7 @@ function isVisible() {
 
 export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number }) {
   const runningRef = useRef(false);
+  const lastRaffleRefreshAtRef = useRef(0);
 
   const tick = async (background = false) => {
     if (runningRef.current) return;
@@ -20,11 +20,20 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
 
     runningRef.current = true;
     try {
-      // ✅ ORDER: raffles first, then events
-      await refreshRaffleStore(true, true);
-      await refreshActivityStore(true, true);
+      // ✅ Always emit a lightweight "sync" tick (Home/Explore/Dashboard listeners decide what to do)
+      try {
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      } catch {}
 
-      window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      // ✅ Raffle store refresh: DO NOT do every 5s, it’s expensive.
+      // Throttle to e.g. 20s (tune as you like).
+      const now = Date.now();
+      const RAFFLE_REFRESH_MIN_GAP_MS = 20_000;
+
+      if (!background || now - lastRaffleRefreshAtRef.current >= RAFFLE_REFRESH_MIN_GAP_MS) {
+        lastRaffleRefreshAtRef.current = now;
+        await refreshRaffleStore(true, true);
+      }
     } finally {
       runningRef.current = false;
     }
@@ -32,10 +41,15 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
 
   useEffect(() => {
     void tick(false);
+
     const id = window.setInterval(() => void tick(true), intervalMs);
 
     const onFocus = () => void tick(false);
-    const onVis = () => document.visibilityState === "visible" && void tick(false);
+    const onVis = () => {
+      try {
+        if (document.visibilityState === "visible") void tick(false);
+      } catch {}
+    };
 
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVis);
@@ -49,3 +63,5 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
 
   return null;
 }
+
+export default GlobalDataRefresher;
