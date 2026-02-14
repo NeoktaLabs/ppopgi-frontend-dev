@@ -414,7 +414,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const isRefund = it.type === "REFUND";
 
-              // ownedNow is the ONLY thing that allows claimTicketRefund on-chain.
+              // ownedNow is the hook's view of ticketsOwned; can be stale/0 for a moment.
               const ownedNow = Number(it.userTicketsOwned || 0);
 
               // purchasedEver is only for display/history (badge, estimate, etc).
@@ -423,15 +423,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const ticketPriceU6 = safeBigInt(r.ticketPrice);
 
-              // ✅ Expected refund should be based on ownedNow (what can be converted into claimableFunds).
+              // Keep expected refund display conservative (what we believe can be converted to claimableFunds right now).
               const expectedRefundU6 = isRefund && ownedNow > 0 ? BigInt(ownedNow) * ticketPriceU6 : 0n;
 
               const claimableU6 = safeBigInt(it.claimableUsdc);
 
-              // ✅ Step 1 must be gated by ownedNow (otherwise contract reverts NothingToRefund).
-              const refundStep1Disabled = !isRefund || ownedNow <= 0 || data.isPending;
+              // ✅ FIX: do NOT gate Step 1 by ownedNow; let the contract be the source of truth.
+              const refundStep1Disabled = !isRefund || data.isPending;
 
-              // ✅ Step 2 only possible if claimableFunds is > 0
+              // Step 2 only possible if claimableFunds is > 0
               const refundStep2Disabled = !isRefund || claimableU6 <= 0n || data.isPending;
 
               const status = String(r.status || "").toUpperCase();
@@ -489,8 +489,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const showDual = !isRefund && hasUsdc && hasNative;
 
-              // if refund but we can't step1 (ownedNow=0) and step2 has nothing, disable single button route too
-              const refundDisabled = isRefund && ownedNow <= 0 && claimableU6 <= 0n;
+              // keep single-button route disabled if there is literally nothing actionable and we're not showing 2-step UI
+              const refundDisabled = isRefund && claimableU6 <= 0n && ownedNow <= 0;
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
@@ -509,8 +509,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                       {isRefund ? (
                         <div className="db-refund-layout">
                           <div className="db-refund-sub">
-                            Expected:{" "}
-                            <b>{expectedRefundU6 > 0n ? fmt(expectedRefundU6.toString(), 6) : "—"} USDC</b>
+                            Expected: <b>{expectedRefundU6 > 0n ? fmt(expectedRefundU6.toString(), 6) : "—"} USDC</b>
                             {displayTicketCount > 0 && (
                               <span style={{ opacity: 0.8 }}>
                                 {" "}
@@ -565,9 +564,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                             className="db-btn secondary"
                             disabled={refundStep1Disabled}
                             onClick={() => actions.withdraw(r.id, "claimTicketRefund")}
-                            title={ownedNow <= 0 ? "No on-chain tickets to reclaim (already reclaimed or none owned)." : undefined}
                           >
-                            {data.isPending ? "..." : ownedNow > 0 ? "1) Reclaim" : "1) Reclaimed"}
+                            {data.isPending ? "..." : "1) Reclaim"}
                           </button>
 
                           <button
@@ -582,12 +580,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                       ) : (
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                          disabled={
-                            data.isPending ||
-                            refundDisabled ||
-                            !primaryMethod ||
-                            primaryLabel === "Nothing to Claim"
-                          }
+                          disabled={data.isPending || refundDisabled || !primaryMethod || primaryLabel === "Nothing to Claim"}
                           onClick={() => primaryMethod && actions.withdraw(r.id, primaryMethod)}
                         >
                           {data.isPending ? "Processing..." : primaryLabel}
