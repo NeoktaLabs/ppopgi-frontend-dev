@@ -78,7 +78,7 @@ function dispatchRevalidateThrottledFactory() {
   let lastAt = 0;
   return () => {
     const now = Date.now();
-    if (now - lastAt < 1_000) return; // avoid spam
+    if (now - lastAt < 1_000) return;
     lastAt = now;
     try {
       window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
@@ -109,7 +109,6 @@ async function load(isBackground: boolean, refreshMs: number) {
 
     const real = (data ?? []) as LocalActivityItem[];
 
-    // Detect "new" real activity (new txHash not previously present in real items)
     const prevRealHashes = new Set(state.items.filter((x) => !x.pending).map((x) => x.txHash));
     const nextRealHashes = new Set(real.map((x) => x.txHash));
     let hasNew = false;
@@ -120,7 +119,6 @@ async function load(isBackground: boolean, refreshMs: number) {
       }
     }
 
-    // Keep optimistic pending items until they appear in real feed
     setState({
       items: (() => {
         const pending = state.items.filter((x) => x.pending);
@@ -135,10 +133,8 @@ async function load(isBackground: boolean, refreshMs: number) {
     backoffStep = 0;
     schedule(refreshMs, refreshMs);
 
-    // ✅ GLOBAL SYNC: when new activity appears, refresh the raffle store + revalidate listeners (Home, etc.)
     if (hasNew) {
       dispatchRevalidate();
-      // This is deduped by your store anyway; keep it "background-ish"
       void refreshRaffleStore(true, true);
     }
   } catch (e: any) {
@@ -165,10 +161,8 @@ function start(refreshMs: number) {
   if (started) return;
   started = true;
 
-  // initial
   void load(false, refreshMs);
 
-  // optimistic inserts
   const onOptimistic = (ev: Event) => {
     const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
     if (!d?.txHash) return;
@@ -190,15 +184,12 @@ function start(refreshMs: number) {
       items: [item, ...state.items.filter((x) => x.txHash !== item.txHash)].slice(0, MAX_ITEMS),
     });
 
-    // If we got an optimistic event, it usually means the user did an action.
-    // Trigger revalidate soon so other pages get nudged.
     dispatchRevalidate();
     void refreshRaffleStore(true, true);
   };
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
 
-  // focus/visibility refresh
   const onFocus = () => void load(true, refreshMs);
   const onVis = () => {
     if (!isHidden()) void load(true, refreshMs);
@@ -206,8 +197,6 @@ function start(refreshMs: number) {
 
   window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVis);
-
-  // cleanup is intentionally omitted because this is a singleton store
 }
 
 export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
@@ -232,4 +221,10 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
     }),
     [refreshMs, state.lastUpdatedMs]
   );
+}
+
+// ✅ ADD THIS: module-level refresh for GlobalDataRefresher / others
+export function refresh(background = true, _force = true, refreshMs = DEFAULT_REFRESH_MS) {
+  start(refreshMs);
+  return load(background, refreshMs);
 }
