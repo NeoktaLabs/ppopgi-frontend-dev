@@ -171,7 +171,9 @@ function RaffleCardPile({
     return c;
   }, [raffle]);
 
-  const pileClass = `db-card-pile card-hover-trigger${isWinner ? " is-winner" : ""}${hasShadows ? "" : " no-shadows"}`;
+  const pileClass = `db-card-pile card-hover-trigger${isWinner ? " is-winner" : ""}${
+    hasShadows ? "" : " no-shadows"
+  }`;
 
   return (
     <div className="db-card-pile-wrapper">
@@ -241,10 +243,19 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   const [copied, setCopied] = useState(false);
   const [nowS, setNowS] = useState(Math.floor(Date.now() / 1000));
 
+  // ✅ NEW: local per-session UI state so Step 1 can “complete” immediately
+  // and Step 2 becomes actionable without needing a full page refresh/recompute.
+  const [refundStep1Done, setRefundStep1Done] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     const t = setInterval(() => setNowS(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Reset UI state when wallet changes
+  useEffect(() => {
+    setRefundStep1Done({});
+  }, [account]);
 
   const handleCopy = () => {
     if (!account) return;
@@ -252,6 +263,29 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // ✅ NEW: wrapper so we can optimistically lock Step 1 after it succeeds
+  const onWithdraw = useCallback(
+    async (raffleId: string, method: WithdrawMethod) => {
+      const rid = normId(raffleId);
+
+      try {
+        // If Step 1 is already done locally, don't re-send it
+        if (method === "claimTicketRefund" && refundStep1Done[rid]) return;
+
+        // Send tx via hook action
+        await actions.withdraw(raffleId, method);
+
+        // Optimistic UI: once Step 1 succeeded, lock it immediately.
+        if (method === "claimTicketRefund") {
+          setRefundStep1Done((p) => ({ ...p, [rid]: true }));
+        }
+      } catch {
+        // actions.withdraw already sets msg; don't double-handle here
+      }
+    },
+    [actions, refundStep1Done]
+  );
 
   const { active: activeJoined, past: pastJoined } = useMemo(() => {
     const active: any[] = [];
@@ -401,6 +435,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <div className="db-grid">
             {data.claimables.map((it: any) => {
               const r = it.raffle;
+              const rid = normId(r.id);
 
               const acct = norm(account);
               const winner = norm(r.winner);
@@ -428,11 +463,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const claimableU6 = safeBigInt(it.claimableUsdc);
 
-              // ✅ FIX: do NOT gate Step 1 by ownedNow; let the contract be the source of truth.
-              const refundStep1Disabled = !isRefund || data.isPending;
+              // ✅ Step 1 is permissionless in UI (contract is source of truth).
+              // BUT once it succeeded, we lock it locally so user can proceed to Step 2 immediately.
+              const step1DoneLocal = !!refundStep1Done[rid];
+              const refundStep1Disabled = !isRefund || data.isPending || step1DoneLocal;
 
-              // Step 2 only possible if claimableFunds is > 0
-              const refundStep2Disabled = !isRefund || claimableU6 <= 0n || data.isPending;
+              // ✅ UX: if step1 is done (locally), enable step2 *immediately* even if claimableU6 is still 0 in UI.
+              // The contract will be source of truth; if it isn't ready, it will revert and show your msg.
+              const refundStep2Disabled = !isRefund || data.isPending || (!step1DoneLocal && claimableU6 <= 0n);
 
               const status = String(r.status || "").toUpperCase();
               const isCanceled = status === "CANCELED";
@@ -523,6 +561,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                               Available: <b>{fmt(claimableU6.toString(), 6)} USDC</b>
                             </div>
                           )}
+
+                          {step1DoneLocal && claimableU6 <= 0n && (
+                            <div className="db-refund-sub" style={{ marginTop: 6, opacity: 0.85 }}>
+                              Step 1 complete — waiting for your wallet/chain to show claimable funds…
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="db-win-layout">
@@ -546,14 +590,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                           <button
                             className="db-btn primary"
                             disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
+                            onClick={() => onWithdraw(r.id, "withdrawFunds")}
                           >
                             {data.isPending ? "..." : "Claim USDC"}
                           </button>
                           <button
                             className="db-btn secondary"
                             disabled={data.isPending}
-                            onClick={() => actions.withdraw(r.id, "withdrawNative")}
+                            onClick={() => onWithdraw(r.id, "withdrawNative")}
                           >
                             {data.isPending ? "..." : "Claim Native"}
                           </button>
@@ -563,16 +607,21 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                           <button
                             className="db-btn secondary"
                             disabled={refundStep1Disabled}
-                            onClick={() => actions.withdraw(r.id, "claimTicketRefund")}
+                            onClick={() => onWithdraw(r.id, "claimTicketRefund")}
+                            title={step1DoneLocal ? "Already reclaimed (this session)." : undefined}
                           >
-                            {data.isPending ? "..." : "1) Reclaim"}
+                            {data.isPending ? "..." : step1DoneLocal ? "1) Reclaimed" : "1) Reclaim"}
                           </button>
 
                           <button
                             className="db-btn primary"
                             disabled={refundStep2Disabled}
-                            onClick={() => actions.withdraw(r.id, "withdrawFunds")}
-                            title={claimableU6 <= 0n ? "No USDC available to withdraw yet." : undefined}
+                            onClick={() => onWithdraw(r.id, "withdrawFunds")}
+                            title={
+                              !step1DoneLocal && claimableU6 <= 0n
+                                ? "Run step 1 first (or wait until funds become claimable)."
+                                : undefined
+                            }
                           >
                             {data.isPending ? "..." : "2) Withdraw"}
                           </button>
@@ -581,7 +630,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
                           disabled={data.isPending || refundDisabled || !primaryMethod || primaryLabel === "Nothing to Claim"}
-                          onClick={() => primaryMethod && actions.withdraw(r.id, primaryMethod)}
+                          onClick={() => primaryMethod && onWithdraw(r.id, primaryMethod)}
                         >
                           {data.isPending ? "Processing..." : primaryLabel}
                         </button>
