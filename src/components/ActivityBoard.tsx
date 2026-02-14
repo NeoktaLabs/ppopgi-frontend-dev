@@ -7,13 +7,15 @@ import "./ActivityBoard.css";
 
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
-// ✅ Show last 15 items for the wider view
+// ✅ Show last items
 const MAX_ITEMS = 10;
 
 // ✅ New items stay "Fresh" for 30s
 const NEW_WINDOW_SEC = 30;
 
-const REFRESH_MS = 5_000;
+// ✅ IMPORTANT: remove fast polling.
+// Keep a slow safety poll so UI doesn't get stale if a revalidate tick is missed.
+const SAFETY_POLL_MS = 60_000;
 
 const shortAddr = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
 
@@ -59,28 +61,30 @@ export function ActivityBoard() {
   const [items, setItems] = useState<LocalActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Tick every second so "NEW" and time-ago update smoothly
+  // Tick every second so "NEW" + time-ago update smoothly
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(t);
   }, []);
 
+  // Global revalidate tick (ppopgi:revalidate)
   const rvTick = useRevalidate();
   const lastRvAtRef = useRef<number>(0);
+
   const seenRef = useRef<Set<string>>(new Set());
-  const timerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const backoffStepRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Safety poll timer (slow)
+  const timerRef = useRef<number | null>(null);
   const clearTimer = () => {
     if (timerRef.current != null) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
   };
-
   const scheduleNext = useCallback((ms: number) => {
     clearTimer();
     timerRef.current = window.setTimeout(() => {
@@ -119,8 +123,9 @@ export function ActivityBoard() {
 
   const load = useCallback(
     async (isBackground = false) => {
+      // If tab hidden, don't hammer. Keep slow retry.
       if (isBackground && isHidden()) {
-        scheduleNext(60_000);
+        scheduleNext(SAFETY_POLL_MS);
         return;
       }
 
@@ -137,7 +142,6 @@ export function ActivityBoard() {
 
       try {
         const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal });
-
         if (ac.signal.aborted) return;
 
         setItems((prev) => {
@@ -147,25 +151,30 @@ export function ActivityBoard() {
           const realHashes = new Set(real.map((x) => x.txHash));
           const stillPending = pending.filter((p) => !realHashes.has(p.txHash));
 
+          // Keep pending on top, then real
           return [...stillPending, ...real].slice(0, MAX_ITEMS);
         });
 
         setLoading(false);
         backoffStepRef.current = 0;
-        scheduleNext(REFRESH_MS);
+
+        // ✅ Only schedule a slow safety poll (not a fast poll)
+        scheduleNext(SAFETY_POLL_MS);
       } catch (e: any) {
         if (String(e?.name || "").toLowerCase().includes("abort")) return;
         if (String(e).toLowerCase().includes("abort")) return;
 
         console.error("[ActivityBoard] load failed", e);
 
+        // Backoff, but still keep it slow-ish (no 5s hammering)
         if (isRateLimitError(e)) {
           backoffStepRef.current = Math.min(backoffStepRef.current + 1, 5);
-          const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
+          const delays = [15_000, 30_000, 60_000, 120_000, 180_000, 180_000];
           scheduleNext(delays[backoffStepRef.current]);
         } else {
-          scheduleNext(isBackground ? 15_000 : 10_000);
+          scheduleNext(isBackground ? 30_000 : 20_000);
         }
+
         setLoading(false);
       } finally {
         inFlightRef.current = false;
@@ -174,8 +183,10 @@ export function ActivityBoard() {
     [items.length, scheduleNext]
   );
 
+  // Initial load + focus/visibility triggers (no fast polling)
   useEffect(() => {
     void load(false);
+
     const onFocus = () => void load(true);
     const onVis = () => {
       if (!isHidden()) void load(true);
@@ -194,11 +205,15 @@ export function ActivityBoard() {
     };
   }, [load]);
 
+  // ✅ Sync point: revalidate tick drives ActivityBoard refresh
   useEffect(() => {
     if (rvTick === 0) return;
+
+    // prevent thrash if multiple revalidates happen together
     const now = Date.now();
-    if (now - lastRvAtRef.current < 5_000) return;
+    if (now - lastRvAtRef.current < 1_500) return;
     lastRvAtRef.current = now;
+
     if (isHidden()) return;
     void load(true);
   }, [rvTick, load]);
