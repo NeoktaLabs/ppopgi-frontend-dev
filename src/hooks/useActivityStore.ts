@@ -1,3 +1,4 @@
+// src/hooks/useActivityStore.ts
 import { useEffect, useMemo, useState } from "react";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
 import { refresh as refreshRaffleStore } from "./useRaffleStore";
