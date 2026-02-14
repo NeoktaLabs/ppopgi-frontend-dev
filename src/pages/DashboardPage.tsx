@@ -263,17 +263,21 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ✅ UPDATED: respect boolean return from actions.withdraw()
   const onWithdraw = useCallback(
-    async (raffleId: string, method: WithdrawMethod) => {
+    async (raffleId: string, method: WithdrawMethod): Promise<boolean> => {
       try {
-        await actions.withdraw(raffleId, method);
+        const ok = await actions.withdraw(raffleId, method);
+        return !!ok;
       } catch {
-        // actions.withdraw already sets msg
+        // should not throw anymore, but fail safe
+        return false;
       }
     },
     [actions]
   );
 
+  // ✅ UPDATED: advance state only when tx truly succeeded
   const onRefundOneClick = useCallback(
     async (raffleId: string) => {
       const rid = normId(raffleId);
@@ -281,34 +285,25 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
       if (state === "NEEDS_WITHDRAW") {
         setRefundFlowState((p) => ({ ...p, [rid]: "STEP2_PENDING" }));
-        try {
-          await actions.withdraw(raffleId, "withdrawFunds");
-          setRefundFlowState((p) => ({ ...p, [rid]: "DONE" }));
-        } catch {
-          setRefundFlowState((p) => ({ ...p, [rid]: "NEEDS_WITHDRAW" }));
-        }
+        const ok2 = await onWithdraw(raffleId, "withdrawFunds");
+        setRefundFlowState((p) => ({ ...p, [rid]: ok2 ? "DONE" : "NEEDS_WITHDRAW" }));
         return;
       }
 
       if (state === "STEP1_PENDING" || state === "STEP2_PENDING") return;
 
       setRefundFlowState((p) => ({ ...p, [rid]: "STEP1_PENDING" }));
-      try {
-        await actions.withdraw(raffleId, "claimTicketRefund");
-      } catch {
+      const ok1 = await onWithdraw(raffleId, "claimTicketRefund");
+      if (!ok1) {
         setRefundFlowState((p) => ({ ...p, [rid]: "IDLE" }));
         return;
       }
 
       setRefundFlowState((p) => ({ ...p, [rid]: "STEP2_PENDING" }));
-      try {
-        await actions.withdraw(raffleId, "withdrawFunds");
-        setRefundFlowState((p) => ({ ...p, [rid]: "DONE" }));
-      } catch {
-        setRefundFlowState((p) => ({ ...p, [rid]: "NEEDS_WITHDRAW" }));
-      }
+      const ok2 = await onWithdraw(raffleId, "withdrawFunds");
+      setRefundFlowState((p) => ({ ...p, [rid]: ok2 ? "DONE" : "NEEDS_WITHDRAW" }));
     },
-    [actions, refundFlowState]
+    [onWithdraw, refundFlowState]
   );
 
   const { active: activeJoined, past: pastJoined } = useMemo(() => {
