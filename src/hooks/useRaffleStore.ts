@@ -455,7 +455,7 @@ function requestRevalidate(force = false) {
 
 export function startRaffleStore(consumerKey: string, pollMs: number) {
   subscribers += 1;
-  requestedPolls.set(consumerKey);
+  requestedPolls.set(consumerKey, pollMs);
 
   if (subscribers === 1) {
     const onFocus = () => requestRevalidate(true);
@@ -503,7 +503,7 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
 
   return () => {
     subscribers = Math.max(0, subscribers - 1);
-    requestedPolls.delete(consumerKey, pollMs);
+    requestedPolls.delete(consumerKey);
 
     if (subscribers <= 0) {
       clearTimer();
