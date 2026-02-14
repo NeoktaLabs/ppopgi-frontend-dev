@@ -1,45 +1,12 @@
 // src/components/ActivityBoard.tsx
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "ethers";
-import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
-import { useRevalidate } from "../hooks/useRevalidateTick";
+import { useActivityStore } from "../hooks/useActivityStore";
 import "./ActivityBoard.css";
 
-type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
-
-// ✅ Show last items
-const MAX_ITEMS = 10;
-
-// ✅ New items stay "Fresh" for 30s
 const NEW_WINDOW_SEC = 30;
 
-// ✅ IMPORTANT: remove fast polling.
-// Keep a slow safety poll so UI doesn't get stale if a revalidate tick is missed.
-const SAFETY_POLL_MS = 60_000;
-
 const shortAddr = (s: string) => (s ? `${s.slice(0, 4)}...${s.slice(-4)}` : "—");
-
-function isHidden() {
-  try {
-    return typeof document !== "undefined" && document.hidden;
-  } catch {
-    return false;
-  }
-}
-
-function parseHttpStatus(err: any): number | null {
-  const msg = String(err?.message || err || "");
-  const m = msg.match(/SUBGRAPH_HTTP_ERROR_(\d{3})/);
-  return m ? Number(m[1]) : null;
-}
-
-function isRateLimitError(err: any) {
-  const status = parseHttpStatus(err);
-  if (status === 429 || status === 503) return true;
-
-  const msg = String(err?.message ?? err ?? "").toLowerCase();
-  return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
-}
 
 function isFresh(ts: string, seconds = NEW_WINDOW_SEC) {
   const now = Math.floor(Date.now() / 1000);
@@ -58,8 +25,8 @@ function timeAgoFrom(nowSec: number, ts: string) {
 }
 
 export function ActivityBoard() {
-  const [items, setItems] = useState<LocalActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // ✅ Single source of truth (singleton store). It can poll every 5s globally.
+  const { items, isLoading } = useActivityStore(5_000);
 
   // Tick every second so "NEW" + time-ago update smoothly
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
@@ -68,170 +35,22 @@ export function ActivityBoard() {
     return () => window.clearInterval(t);
   }, []);
 
-  // Global revalidate tick (ppopgi:revalidate)
-  const rvTick = useRevalidate();
-  const lastRvAtRef = useRef<number>(0);
-
   const seenRef = useRef<Set<string>>(new Set());
-  const inFlightRef = useRef(false);
-  const backoffStepRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Safety poll timer (slow)
-  const timerRef = useRef<number | null>(null);
-  const clearTimer = () => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-  const scheduleNext = useCallback((ms: number) => {
-    clearTimer();
-    timerRef.current = window.setTimeout(() => {
-      void load(true);
-    }, ms);
-  }, []);
-
-  // Listen for optimistic activity inserts
-  useEffect(() => {
-    const onOptimistic = (ev: Event) => {
-      const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
-      if (!d?.txHash) return;
-
-      const now = Math.floor(Date.now() / 1000);
-      const item: LocalActivityItem = {
-        type: (d.type as any) ?? "BUY",
-        raffleId: String(d.raffleId ?? ""),
-        raffleName: String(d.raffleName ?? "Pending..."),
-        subject: String(d.subject ?? "0x"),
-        value: String(d.value ?? "0"),
-        timestamp: String(d.timestamp ?? now),
-        txHash: String(d.txHash),
-        pending: true,
-        pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
-      };
-
-      setItems((prev) => {
-        const next = [item, ...prev.filter((x) => x.txHash !== item.txHash)];
-        return next.slice(0, MAX_ITEMS);
-      });
-    };
-
-    window.addEventListener("ppopgi:activity", onOptimistic as any);
-    return () => window.removeEventListener("ppopgi:activity", onOptimistic as any);
-  }, []);
-
-  const load = useCallback(
-    async (isBackground = false) => {
-      // If tab hidden, don't hammer. Keep slow retry.
-      if (isBackground && isHidden()) {
-        scheduleNext(SAFETY_POLL_MS);
-        return;
-      }
-
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-
-      if (!isBackground && items.length === 0) setLoading(true);
-
-      try {
-        abortRef.current?.abort();
-      } catch {}
-      const ac = new AbortController();
-      abortRef.current = ac;
-
-      try {
-        const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal });
-        if (ac.signal.aborted) return;
-
-        setItems((prev) => {
-          const pending = prev.filter((x) => x.pending);
-          const real = (data ?? []) as LocalActivityItem[];
-
-          const realHashes = new Set(real.map((x) => x.txHash));
-          const stillPending = pending.filter((p) => !realHashes.has(p.txHash));
-
-          // Keep pending on top, then real
-          return [...stillPending, ...real].slice(0, MAX_ITEMS);
-        });
-
-        setLoading(false);
-        backoffStepRef.current = 0;
-
-        // ✅ Only schedule a slow safety poll (not a fast poll)
-        scheduleNext(SAFETY_POLL_MS);
-      } catch (e: any) {
-        if (String(e?.name || "").toLowerCase().includes("abort")) return;
-        if (String(e).toLowerCase().includes("abort")) return;
-
-        console.error("[ActivityBoard] load failed", e);
-
-        // Backoff, but still keep it slow-ish (no 5s hammering)
-        if (isRateLimitError(e)) {
-          backoffStepRef.current = Math.min(backoffStepRef.current + 1, 5);
-          const delays = [15_000, 30_000, 60_000, 120_000, 180_000, 180_000];
-          scheduleNext(delays[backoffStepRef.current]);
-        } else {
-          scheduleNext(isBackground ? 30_000 : 20_000);
-        }
-
-        setLoading(false);
-      } finally {
-        inFlightRef.current = false;
-      }
-    },
-    [items.length, scheduleNext]
-  );
-
-  // Initial load + focus/visibility triggers (no fast polling)
-  useEffect(() => {
-    void load(false);
-
-    const onFocus = () => void load(true);
-    const onVis = () => {
-      if (!isHidden()) void load(true);
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-      clearTimer();
-      try {
-        abortRef.current?.abort();
-      } catch {}
-    };
-  }, [load]);
-
-  // ✅ Sync point: revalidate tick drives ActivityBoard refresh
-  useEffect(() => {
-    if (rvTick === 0) return;
-
-    // prevent thrash if multiple revalidates happen together
-    const now = Date.now();
-    if (now - lastRvAtRef.current < 1_500) return;
-    lastRvAtRef.current = now;
-
-    if (isHidden()) return;
-    void load(true);
-  }, [rvTick, load]);
 
   const rowsWithFlags = useMemo(() => {
     return (items ?? []).map((it) => {
-      const stableKey = String(it.txHash || "");
+      const stableKey = String((it as any).txHash || "");
       const already = stableKey ? seenRef.current.has(stableKey) : false;
       const enter = stableKey ? !already : false;
 
       if (stableKey && !already) seenRef.current.add(stableKey);
 
-      const reactKey = stableKey || `${it.type}-${it.raffleId}-${it.timestamp}-${it.subject}`;
+      const reactKey = stableKey || `${(it as any).type}-${(it as any).raffleId}-${(it as any).timestamp}-${(it as any).subject}`;
       return { it, key: reactKey, enter };
     });
   }, [items]);
 
-  if (loading && items.length === 0) {
+  if (isLoading && (!items || items.length === 0)) {
     return (
       <div className="ab-board">
         <div className="ab-loading">Loading...</div>
@@ -239,7 +58,7 @@ export function ActivityBoard() {
     );
   }
 
-  if (items.length === 0) return null;
+  if (!items || items.length === 0) return null;
 
   return (
     <div className="ab-board">
@@ -252,9 +71,10 @@ export function ActivityBoard() {
 
       <div className="ab-list">
         {rowsWithFlags.map(({ it: item, key, enter }) => {
-          const isBuy = item.type === "BUY";
-          const isWin = item.type === "WIN";
-          const isCancel = item.type === "CANCEL";
+          const type = String((item as any).type || "");
+          const isBuy = type === "BUY";
+          const isWin = type === "WIN";
+          const isCancel = type === "CANCEL";
 
           let icon = "✨";
           let iconClass = "create";
@@ -271,16 +91,24 @@ export function ActivityBoard() {
             iconClass = "cancel";
           }
 
-          const fresh = isFresh(item.timestamp, NEW_WINDOW_SEC);
+          const fresh = isFresh(String((item as any).timestamp || "0"), NEW_WINDOW_SEC);
 
           const rowClass = [
             "ab-row",
             enter ? "ab-enter" : "",
             fresh ? `ab-fresh ab-fresh-${iconClass}` : "",
-            item.pending ? "ab-pending" : "",
+            (item as any).pending ? "ab-pending" : "",
           ]
             .filter(Boolean)
             .join(" ");
+
+          const raffleId = String((item as any).raffleId || "");
+          const raffleName = String((item as any).raffleName || "—");
+          const subject = String((item as any).subject || "");
+          const value = String((item as any).value || "0");
+          const timestamp = String((item as any).timestamp || "0");
+          const pendingLabel = String((item as any).pendingLabel || "PENDING");
+          const pending = !!(item as any).pending;
 
           return (
             <div key={key} className={rowClass}>
@@ -290,26 +118,26 @@ export function ActivityBoard() {
                 <div className="ab-main-text">
                   {isCancel ? (
                     <>
-                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
-                        {item.raffleName}
+                      <a href={`/?raffle=${raffleId}`} className="ab-link">
+                        {raffleName}
                       </a>{" "}
                       got <b style={{ color: "#991b1b" }}>canceled</b> (min not reached)
                     </>
                   ) : (
                     <>
                       <a
-                        href={`https://explorer.etherlink.com/address/${item.subject}`}
+                        href={`https://explorer.etherlink.com/address/${subject}`}
                         target="_blank"
                         rel="noreferrer"
                         className="ab-user"
                       >
-                        {shortAddr(item.subject)}
+                        {shortAddr(subject)}
                       </a>
 
                       {isBuy && (
                         <>
                           {" "}
-                          bought <b>{item.value} tix</b> in{" "}
+                          bought <b>{value} tix</b> in{" "}
                         </>
                       )}
 
@@ -322,8 +150,8 @@ export function ActivityBoard() {
                         </>
                       )}
 
-                      <a href={`/?raffle=${item.raffleId}`} className="ab-link">
-                        {item.raffleName}
+                      <a href={`/?raffle=${raffleId}`} className="ab-link">
+                        {raffleName}
                       </a>
                     </>
                   )}
@@ -331,14 +159,14 @@ export function ActivityBoard() {
 
                 <div className="ab-meta">
                   <span className="ab-time">
-                    {timeAgoFrom(nowSec, item.timestamp)}
+                    {timeAgoFrom(nowSec, timestamp)}
                     {fresh && <span className="ab-new-pill">NEW</span>}
-                    {item.pending && (
+                    {pending && (
                       <span
                         className="ab-new-pill"
                         style={{ marginLeft: 6, background: "rgba(2,132,199,.12)", color: "#075985" }}
                       >
-                        {item.pendingLabel || "PENDING"}
+                        {pendingLabel}
                       </span>
                     )}
                   </span>
@@ -346,7 +174,7 @@ export function ActivityBoard() {
                   {!isBuy && (
                     <span className={`ab-pot-tag ${isWin ? "win" : isCancel ? "cancel" : ""}`}>
                       {isWin ? "Won: " : isCancel ? "Refunded" : "Pot: "}
-                      {!isCancel && formatUnits(item.value, 6)}
+                      {!isCancel && formatUnits(value, 6)}
                     </span>
                   )}
                 </div>
