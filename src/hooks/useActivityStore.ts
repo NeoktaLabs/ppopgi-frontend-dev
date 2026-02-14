@@ -4,8 +4,11 @@ import { refresh as refreshRaffleStore } from "./useRaffleStore";
 
 type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
 
-const DEFAULT_REFRESH_MS = 5_000;
+const DEFAULT_REFRESH_MS = 5_000; // used for manual refresh + backoff calc
 const MAX_ITEMS = 10;
+
+// ✅ Safety poll only (prevents the store from having its own 5s loop)
+const SAFETY_POLL_MS = 60_000;
 
 function isHidden() {
   try {
@@ -89,7 +92,8 @@ const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
 async function load(isBackground: boolean, refreshMs: number) {
   if (isBackground && isHidden()) {
-    schedule(60_000, refreshMs);
+    // hidden tab: keep it slow
+    schedule(SAFETY_POLL_MS, refreshMs);
     return;
   }
   if (inFlight) return;
@@ -131,9 +135,14 @@ async function load(isBackground: boolean, refreshMs: number) {
     });
 
     backoffStep = 0;
-    schedule(refreshMs, refreshMs);
+
+    // ✅ IMPORTANT: no fast polling loop here.
+    // GlobalDataRefresher will drive cadence (5s).
+    // We only keep a slow safety poll in case the global tick is disabled/missed.
+    schedule(SAFETY_POLL_MS, refreshMs);
 
     if (hasNew) {
+      // activity changed -> nudge pages + refresh raffles (deduped anyway)
       dispatchRevalidate();
       void refreshRaffleStore(true, true);
     }
@@ -145,6 +154,7 @@ async function load(isBackground: boolean, refreshMs: number) {
 
     setState({ isLoading: false });
 
+    // ✅ Backoff on error; still not a constant 5s loop.
     if (isRateLimitError(e)) {
       backoffStep = Math.min(backoffStep + 1, 5);
       const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
@@ -190,6 +200,7 @@ function start(refreshMs: number) {
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
 
+  // focus/visibility refresh (helps even without global tick)
   const onFocus = () => void load(true, refreshMs);
   const onVis = () => {
     if (!isHidden()) void load(true, refreshMs);
@@ -223,7 +234,7 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
   );
 }
 
-// ✅ ADD THIS: module-level refresh for GlobalDataRefresher / others
+// ✅ module-level refresh for GlobalDataRefresher / others
 export function refresh(background = true, _force = true, refreshMs = DEFAULT_REFRESH_MS) {
   start(refreshMs);
   return load(background, refreshMs);
