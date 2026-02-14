@@ -92,6 +92,36 @@ export default function App() {
     };
   }, [account]);
 
+  // ✅ NEW: Global revalidate heartbeat (keeps Home + ActivityBoard + Explore in sync)
+  useEffect(() => {
+    const fire = () => {
+      try {
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      } catch {}
+    };
+
+    // align immediately
+    fire();
+
+    const t = window.setInterval(fire, 15_000); // 10–20s is a good range
+
+    const onFocus = () => fire();
+    window.addEventListener("focus", onFocus);
+
+    const onVis = () => {
+      try {
+        if (document.visibilityState === "visible") fire();
+      } catch {}
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
   // GATE STATE
   const [showGate, setShowGate] = useState(false);
 
