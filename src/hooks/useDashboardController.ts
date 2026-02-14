@@ -472,9 +472,7 @@ export function useDashboardController() {
           const cached = fundsClaimedCacheRef.current;
           const acct = account.toLowerCase();
 
-          const canceledCandidateIds = candidates
-            .filter((r) => r.status === "CANCELED")
-            .map((r) => normId(r.id));
+          const canceledCandidateIds = candidates.filter((r) => r.status === "CANCELED").map((r) => normId(r.id));
 
           if (cached && cached.account === acct && now - cached.ts < 60_000) {
             fundsClaimedSet = cached.ids;
@@ -513,20 +511,25 @@ export function useDashboardController() {
             feeRecipient: (r as any).feeRecipient?.toLowerCase() === myAddr,
           };
 
-          const isWinnerEligible =
-            r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
+          const isWinnerEligible = r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
 
           const isCanceled = r.status === "CANCELED";
 
           const alreadyWithdrewFunds = isCanceled && fundsClaimedSet.has(rid);
-          const refundFullySettledNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
 
-          const isParticipantRefundEligible =
-            isCanceled && !refundFullySettledNow && (participatedEver || ticketsOwned > 0n || cf > 0n || cn > 0n);
+          // ✅ "nothing left" guard (after successful withdraw)
+          const nothingLeftNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
+
+          // ✅ IMPORTANT: refunds are for participants; creator pot reclaim is NOT a refund.
+          const isCreatorOrFee = !!roles.created || !!roles.feeRecipient;
+          const isParticipant = !!roles.participated;
+
+          const isParticipantRefundEligible = isCanceled && isParticipant && !nothingLeftNow;
+          const isCreatorReclaimEligible = isCanceled && isCreatorOrFee && (cf > 0n || cn > 0n);
 
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
-          if (!isWinnerEligible && !isParticipantRefundEligible && !isAnythingClaimable) return;
+          if (!isWinnerEligible && !isParticipantRefundEligible && !isCreatorReclaimEligible && !isAnythingClaimable) return;
 
           if (isWinnerEligible) {
             newClaimables.push({
@@ -534,6 +537,19 @@ export function useDashboardController() {
               claimableUsdc: cf.toString(),
               claimableNative: cn.toString(),
               type: "WIN",
+              roles,
+              userTicketsOwned: ticketsOwned.toString(),
+            });
+            return;
+          }
+
+          // ✅ Creator/fee reclaim comes BEFORE refund classification
+          if (isCreatorReclaimEligible) {
+            newClaimables.push({
+              raffle: { ...r, id: rid },
+              claimableUsdc: cf.toString(),
+              claimableNative: cn.toString(),
+              type: "OTHER", // dashboard uses withdrawFunds/withdrawNative (single step)
               roles,
               userTicketsOwned: ticketsOwned.toString(),
             });
