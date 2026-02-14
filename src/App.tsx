@@ -21,12 +21,15 @@ import { CashierModal } from "./components/CashierModal";
 import { SafetyProofModal } from "./components/SafetyProofModal";
 import { DisclaimerGate } from "./components/DisclaimerGate";
 
+// ✅ NEW: global sync refresher (mounted once)
+import { GlobalDataRefresher } from "./components/GlobalDataRefresher";
+
 // --- Hooks ---
 import { useSession } from "./state/useSession";
 import { useAppRouting } from "./hooks/useAppRouting";
 import { useRaffleDetails } from "./hooks/useRaffleDetails";
 
-// ✅ NEW: bring the shared store into App so the modal can use the same data as cards
+// ✅ Shared store in App so the modal can use the same data as cards
 import { useRaffleStore } from "./hooks/useRaffleStore";
 
 type Page = "home" | "explore" | "dashboard" | "about" | "faq";
@@ -47,7 +50,6 @@ export default function App() {
   const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting();
 
   // ✅ Shared store subscription (gives us the same RaffleListItem as your cards)
-  // Poll doesn’t matter much here; it dedupes globally anyway.
   const store = useRaffleStore("app-modal", 20_000);
 
   const selectedRaffleFromStore = useMemo(() => {
@@ -91,36 +93,6 @@ export default function App() {
       window.removeEventListener("ppopgi:navigate", onNavigate as EventListener);
     };
   }, [account]);
-
-  // ✅ NEW: Global revalidate heartbeat (keeps Home + ActivityBoard + Explore in sync)
-  useEffect(() => {
-    const fire = () => {
-      try {
-        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-      } catch {}
-    };
-
-    // align immediately
-    fire();
-
-    const t = window.setInterval(fire, 15_000); // 10–20s is a good range
-
-    const onFocus = () => fire();
-    window.addEventListener("focus", onFocus);
-
-    const onVis = () => {
-      try {
-        if (document.visibilityState === "visible") fire();
-      } catch {}
-    };
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      window.clearInterval(t);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, []);
 
   // GATE STATE
   const [showGate, setShowGate] = useState(false);
@@ -167,6 +139,9 @@ export default function App() {
 
   return (
     <>
+      {/* ✅ single global sync point */}
+      <GlobalDataRefresher intervalMs={5000} />
+
       <DisclaimerGate open={showGate} onAccept={handleAcceptGate} />
 
       <MainLayout
@@ -204,7 +179,6 @@ export default function App() {
 
         <CashierModal open={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-        {/* ✅ IMPORTANT: pass the store item so modal matches cards (no more 0s) */}
         <RaffleDetailsModal
           open={!!selectedRaffleId}
           raffleId={selectedRaffleId}
