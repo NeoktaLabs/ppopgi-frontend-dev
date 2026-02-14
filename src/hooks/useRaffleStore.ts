@@ -44,6 +44,19 @@ let revalidateDebounceTimer: number | null = null;
 const appliedPatchIds = new Set<string>();
 let patchGcTimer: number | null = null;
 
+// ✅ Revalidate throttling (prevents 5s global tick from refetching raffles every time)
+const SOFT_REVALIDATE_MIN_GAP_MS = 20_000; // ignore frequent "sync" ticks
+const HARD_REVALIDATE_MIN_GAP_MS = 2_500; // allow quick refresh after user actions
+
+// ✅ Avoid replacing items array when nothing actually changed (prevents flicker)
+let lastItemsSig = "";
+function signature(items: RaffleListItem[] | null) {
+  if (!items || items.length === 0) return "";
+  return items
+    .map((r: any) => `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.lastUpdatedTimestamp)}`)
+    .join("|");
+}
+
 function emit() {
   listeners.forEach((fn) => fn());
 }
@@ -208,6 +221,9 @@ function applyOptimisticBuy(e: OptimisticEvent & { kind: "BUY" }) {
   // Optional: re-sort by lastUpdatedTimestamp desc to keep UI consistent
   next.sort((a: any, b: any) => Number(b.lastUpdatedTimestamp || 0) - Number(a.lastUpdatedTimestamp || 0));
 
+  // ✅ update signature too (so next fetch compare isn't confused)
+  lastItemsSig = signature(next as any);
+
   setState({ items: next });
 }
 
@@ -278,6 +294,9 @@ function applyOptimisticCreate(e: OptimisticEvent & { kind: "CREATE" }) {
   // keep it consistent with your list ordering
   next.sort((a: any, b: any) => Number(b.lastUpdatedTimestamp || 0) - Number(a.lastUpdatedTimestamp || 0));
 
+  // ✅ update signature too
+  lastItemsSig = signature(next as any);
+
   setState({ items: next });
 }
 
@@ -314,12 +333,25 @@ async function doFetch(isBackground: boolean) {
         signal: aborter.signal,
       });
 
-      setState({
-        items: data,
-        note: null,
-        isLoading: false,
-        lastUpdatedMs: Date.now(),
-      });
+      // ✅ Only replace items when something actually changed (prevents UI flash)
+      const nextSig = signature(data);
+      const prevSig = lastItemsSig;
+
+      if (nextSig !== prevSig) {
+        lastItemsSig = nextSig;
+        setState({
+          items: data,
+          note: null,
+          isLoading: false,
+          lastUpdatedMs: Date.now(),
+        });
+      } else {
+        // no change → don't touch items/lastUpdatedMs
+        setState({
+          note: null,
+          isLoading: false,
+        });
+      }
 
       resetBackoff();
     } catch (err) {
@@ -388,6 +420,10 @@ function clearRevalidateDebounce() {
  * When UI emits "ppopgi:revalidate", we:
  * - don’t spam (min gap)
  * - don’t overlap (if inFlight => queue one refresh)
+ *
+ * ✅ IMPORTANT:
+ * - soft revalidate (default) is throttled to 20s to avoid flashing from 5s global ticks
+ * - forced revalidate (detail.force=true) stays fast (2.5s min gap)
  */
 function requestRevalidate(force = false) {
   if (subscribers <= 0) return;
@@ -396,7 +432,7 @@ function requestRevalidate(force = false) {
   if (isHidden()) return;
 
   const now = Date.now();
-  const minGap = 2500;
+  const minGap = force ? HARD_REVALIDATE_MIN_GAP_MS : SOFT_REVALIDATE_MIN_GAP_MS;
 
   // already fetching => queue one refresh after it finishes
   if (inFlight) {
@@ -404,9 +440,9 @@ function requestRevalidate(force = false) {
     return;
   }
 
-  // burst dedupe (double ping from buy etc.)
+  // burst dedupe
   const since = now - lastFetchStartedMs;
-  if (!force && since >= 0 && since < minGap) {
+  if (since >= 0 && since < minGap) {
     clearRevalidateDebounce();
     revalidateDebounceTimer = window.setTimeout(() => {
       void refresh(true, true);
@@ -427,8 +463,11 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
       if (!isHidden()) requestRevalidate(true);
     };
 
-    // ✅ app-wide revalidate event
-    const onReval = () => requestRevalidate(false);
+    // ✅ app-wide revalidate event (soft by default, unless { detail: { force: true } })
+    const onReval = (e: Event) => {
+      const ce = e as CustomEvent<{ force?: boolean }>;
+      requestRevalidate(!!ce?.detail?.force);
+    };
 
     // ✅ optimistic event
     const onOpt = (e: Event) => {
@@ -464,7 +503,7 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
 
   return () => {
     subscribers = Math.max(0, subscribers - 1);
-    requestedPolls.delete(consumerKey);
+    requestedPolls.delete(consumerKey, pollMs);
 
     if (subscribers <= 0) {
       clearTimer();
