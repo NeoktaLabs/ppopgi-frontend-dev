@@ -1,4 +1,5 @@
 // src/components/ActivityBoard.tsx
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "ethers";
 import { useActivityStore } from "../hooks/useActivityStore";
@@ -25,10 +26,8 @@ function timeAgoFrom(nowSec: number, ts: string) {
 }
 
 export function ActivityBoard() {
-  // ✅ Single source of truth (singleton store). It can poll every 5s globally.
   const { items, isLoading } = useActivityStore();
 
-  // Tick every second so "NEW" + time-ago update smoothly
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     const t = window.setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
