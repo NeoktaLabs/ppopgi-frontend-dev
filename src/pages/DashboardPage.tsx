@@ -263,28 +263,33 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ✅ UPDATED: respect boolean return from actions.withdraw()
+  /**
+   * ✅ HARD GUARD:
+   * Prevent accidental multi-trigger (double click / bubbling / fast re-render timing).
+   * This stops the “it tries to process all claimables” experience.
+   */
+  const txLockRef = useRef(false);
+
   const onWithdraw = useCallback(
     async (raffleId: string, method: WithdrawMethod): Promise<boolean> => {
+      if (txLockRef.current) return false;
+      txLockRef.current = true;
+
       try {
         const ok = await actions.withdraw(raffleId, method);
         return !!ok;
       } catch {
-        // should not throw anymore, but fail safe
         return false;
+      } finally {
+        // tiny delay helps avoid immediate re-trigger from same click gesture on some UIs
+        setTimeout(() => {
+          txLockRef.current = false;
+        }, 250);
       }
     },
     [actions]
   );
 
-  /**
-   * ✅ Refund flow (participants only):
-   * - Step 1: claimTicketRefund
-   * - Step 2: withdrawFunds
-   *
-   * IMPORTANT:
-   * - Creator reclaim on canceled raffles is NOT a refund and should use withdrawFunds/withdrawNative directly.
-   */
   const onRefundOneClick = useCallback(
     async (raffleId: string) => {
       const rid = normId(raffleId);
@@ -463,7 +468,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const iAmWinner = !!acct && acct === winner;
               const iAmCreator = !!acct && acct === creator;
               const iAmFeeRecipient = !!acct && acct === feeRecipient;
-              const iAmCreatorOrFee = iAmCreator || iAmFeeRecipient;
 
               const hasUsdc = safeBigInt(it.claimableUsdc) > 0n;
               const hasNative = safeBigInt(it.claimableNative) > 0n;
@@ -473,8 +477,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const isSettled = status === "COMPLETED" || status === "SETTLED";
 
               // IMPORTANT: creator reclaim on canceled raffles should NOT be treated as refund flow.
-              // Fee-recipient reclaim on canceled raffles should also NOT be treated as refund flow.
-              const isRefund = it.type === "REFUND" && !(isCanceled && iAmCreatorOrFee);
+              const isRefund = it.type === "REFUND" && !(isCanceled && iAmCreator);
 
               const ownedNow = Number(it.userTicketsOwned || 0);
               const purchasedEver = getPurchasedEver(r.id);
@@ -485,10 +488,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               const claimableU6 = safeBigInt(it.claimableUsdc);
 
-              // Primary method:
-              // - refunds (participants) => claimTicketRefund (step 1)
-              // - creator/fee canceled reclaim => withdrawFunds/withdrawNative directly
-              // - winners/others => withdrawFunds/withdrawNative
               let primaryMethod: WithdrawMethod | null = null;
               if (isRefund) primaryMethod = "claimTicketRefund";
               else if (hasUsdc) primaryMethod = "withdrawFunds";
@@ -500,53 +499,51 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               let primaryLabel = "Claim";
               let badgeKind: "refund" | "winner" | "creator" | "claim" = "claim";
 
-              if (isCanceled && iAmCreatorOrFee) {
+              // ✅ Fee recipient label should NEVER fall into "Nothing to claim" if hasUsdc/hasNative
+              if (isCanceled && iAmCreator) {
                 badgeTitle = "Canceled";
                 badgeKind = "creator";
-                message = "Raffle canceled — reclaim your funds.";
-                primaryLabel = hasUsdc ? "Reclaim (USDC)" : hasNative ? "Reclaim (Native)" : "Reclaim";
-              } else if (isCanceled && isRefund) {
+                message = "Raffle canceled — reclaim your pot.";
+                primaryLabel = hasUsdc ? "Reclaim Pot (USDC)" : hasNative ? "Reclaim Pot (Native)" : "Reclaim Pot";
+              } else if (isRefund) {
                 badgeTitle = "Refund";
                 badgeKind = "refund";
-                message = "Raffle canceled — reclaim your ticket refund.";
+                message = "Raffle canceled — reclaim your refund.";
                 primaryLabel = "Reclaim Ticket Refund";
               } else if (isSettled && iAmWinner) {
                 badgeTitle = "Winner";
                 badgeKind = "winner";
                 message = "Congrats — you won! Reclaim your prize.";
                 primaryLabel = "Reclaim Prize";
-              } else if (isSettled && iAmCreatorOrFee) {
-                badgeTitle = iAmFeeRecipient ? "Fees" : "Creator";
+              } else if (isSettled && iAmCreator) {
+                badgeTitle = "Creator";
                 badgeKind = "creator";
-                message = iAmFeeRecipient
-                  ? "Raffle settled — reclaim your protocol fees."
-                  : "Raffle settled — reclaim your ticket sale pot.";
-                primaryLabel = iAmFeeRecipient ? "Reclaim Fees" : "Reclaim Ticket Sales";
-              } else if (isSettled && !iAmWinner && !iAmCreatorOrFee) {
+                message = "Raffle settled — reclaim your ticket sale pot.";
+                primaryLabel = "Reclaim Ticket Sales";
+              } else if ((isSettled || isCanceled) && iAmFeeRecipient) {
+                badgeTitle = "Fees";
+                badgeKind = "claim";
+                message = "Protocol fees available — reclaim them.";
+                primaryLabel = hasUsdc ? "Reclaim Fees (USDC)" : hasNative ? "Reclaim Fees (Native)" : "Reclaim Fees";
+              } else if (isSettled && !iAmWinner && !iAmCreator) {
                 badgeTitle = "Settled";
                 badgeKind = "claim";
                 message = "Raffle settled — nothing to claim.";
                 primaryLabel = "Nothing to Claim";
-              } else if (isRefund) {
-                badgeTitle = "Refund";
-                badgeKind = "refund";
-                message = "Raffle canceled — reclaim your refund.";
-                primaryLabel = "Reclaim Ticket Refund";
               } else if (iAmWinner) {
                 badgeTitle = "Winner";
                 badgeKind = "winner";
                 message = "Congrats — you won! Reclaim your prize.";
                 primaryLabel = "Reclaim Prize";
-              } else if (iAmCreatorOrFee) {
-                badgeTitle = iAmFeeRecipient ? "Fees" : "Creator";
+              } else if (iAmCreator) {
+                badgeTitle = "Creator";
                 badgeKind = "creator";
-                message = iAmFeeRecipient ? "Fees available to claim." : "Raffle settled — reclaim your ticket sale pot.";
-                primaryLabel = iAmFeeRecipient ? "Reclaim Fees" : "Reclaim Ticket Sales";
+                message = "Raffle settled — reclaim your ticket sale pot.";
+                primaryLabel = "Reclaim Ticket Sales";
               }
 
               const showDual = !isRefund && hasUsdc && hasNative;
 
-              // ✅ keep this only for non-refund single-button route
               const nothingToDoNonRefund =
                 !isRefund && !hasUsdc && !hasNative && (primaryLabel === "Nothing to Claim" || !primaryMethod);
 
@@ -563,7 +560,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                   ? "Done ✅"
                   : "Reclaim & Withdraw";
 
-              // ✅ IMPORTANT: do NOT disable refunds based on ownedNow/claimableU6 (can be stale).
               const refundBtnDisabled = data.isPending || refundBusy || flow === "DONE";
 
               return (
@@ -624,29 +620,53 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                       {showDual ? (
                         <>
                           <button
+                            type="button"
                             className="db-btn primary"
                             disabled={data.isPending}
-                            onClick={() => onWithdraw(r.id, "withdrawFunds")}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void onWithdraw(r.id, "withdrawFunds");
+                            }}
                           >
                             {data.isPending ? "..." : "Claim USDC"}
                           </button>
                           <button
+                            type="button"
                             className="db-btn secondary"
                             disabled={data.isPending}
-                            onClick={() => onWithdraw(r.id, "withdrawNative")}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void onWithdraw(r.id, "withdrawNative");
+                            }}
                           >
                             {data.isPending ? "..." : "Claim Native"}
                           </button>
                         </>
                       ) : isRefund ? (
-                        <button className="db-btn primary" disabled={refundBtnDisabled} onClick={() => onRefundOneClick(r.id)}>
+                        <button
+                          type="button"
+                          className="db-btn primary"
+                          disabled={refundBtnDisabled}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void onRefundOneClick(r.id);
+                          }}
+                        >
                           {data.isPending ? "Processing..." : refundBtnLabel}
                         </button>
                       ) : (
                         <button
+                          type="button"
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                          disabled={data.isPending || nothingToDoNonRefund || !primaryMethod}
-                          onClick={() => primaryMethod && onWithdraw(r.id, primaryMethod)}
+                          disabled={data.isPending || nothingToDoNonRefund || !primaryMethod || primaryLabel === "Nothing to Claim"}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (primaryMethod) void onWithdraw(r.id, primaryMethod);
+                          }}
                         >
                           {data.isPending ? "Processing..." : primaryLabel}
                         </button>
@@ -747,7 +767,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const iWon = completed && acct && winner === acct;
 
               const canceled = r.status === "CANCELED";
-
               const isCanceledParticipant = canceled && purchasedEver > 0;
 
               const participatedEver = purchasedEver > 0;
