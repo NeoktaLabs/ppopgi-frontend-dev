@@ -186,6 +186,7 @@ const RAFFLE_CARD_FIELDS = `
   name
   status
   creator
+  feeRecipient
   winningPot
   ticketPrice
   deadline

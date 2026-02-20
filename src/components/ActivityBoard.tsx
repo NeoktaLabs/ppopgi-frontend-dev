@@ -120,7 +120,7 @@ export function ActivityBoard() {
                       <a href={`/?raffle=${raffleId}`} className="ab-link">
                         {raffleName}
                       </a>{" "}
-                      got <b style={{ color: "#991b1b" }}>canceled</b> (min not reached)
+                      got <b style={{ color: "#991b1b" }}>canceled</b> (min tickets not reached)
                     </>
                   ) : (
                     <>
