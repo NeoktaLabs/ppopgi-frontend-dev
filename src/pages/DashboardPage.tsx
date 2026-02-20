@@ -458,9 +458,12 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const acct = norm(account);
               const winner = norm(r.winner);
               const creator = norm(r.creator);
+              const feeRecipient = norm(r.feeRecipient);
 
               const iAmWinner = !!acct && acct === winner;
               const iAmCreator = !!acct && acct === creator;
+              const iAmFeeRecipient = !!acct && acct === feeRecipient;
+              const iAmCreatorOrFee = iAmCreator || iAmFeeRecipient;
 
               const hasUsdc = safeBigInt(it.claimableUsdc) > 0n;
               const hasNative = safeBigInt(it.claimableNative) > 0n;
@@ -470,7 +473,8 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const isSettled = status === "COMPLETED" || status === "SETTLED";
 
               // IMPORTANT: creator reclaim on canceled raffles should NOT be treated as refund flow.
-              const isRefund = it.type === "REFUND" && !(isCanceled && iAmCreator);
+              // Fee-recipient reclaim on canceled raffles should also NOT be treated as refund flow.
+              const isRefund = it.type === "REFUND" && !(isCanceled && iAmCreatorOrFee);
 
               const ownedNow = Number(it.userTicketsOwned || 0);
               const purchasedEver = getPurchasedEver(r.id);
@@ -483,7 +487,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               // Primary method:
               // - refunds (participants) => claimTicketRefund (step 1)
-              // - creator canceled reclaim => withdrawFunds/withdrawNative directly
+              // - creator/fee canceled reclaim => withdrawFunds/withdrawNative directly
               // - winners/others => withdrawFunds/withdrawNative
               let primaryMethod: WithdrawMethod | null = null;
               if (isRefund) primaryMethod = "claimTicketRefund";
@@ -496,11 +500,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               let primaryLabel = "Claim";
               let badgeKind: "refund" | "winner" | "creator" | "claim" = "claim";
 
-              if (isCanceled && iAmCreator) {
+              if (isCanceled && iAmCreatorOrFee) {
                 badgeTitle = "Canceled";
                 badgeKind = "creator";
-                message = "Raffle canceled — reclaim your pot.";
-                primaryLabel = hasUsdc ? "Reclaim Pot (USDC)" : hasNative ? "Reclaim Pot (Native)" : "Reclaim Pot";
+                message = "Raffle canceled — reclaim your funds.";
+                primaryLabel = hasUsdc ? "Reclaim (USDC)" : hasNative ? "Reclaim (Native)" : "Reclaim";
               } else if (isCanceled && isRefund) {
                 badgeTitle = "Refund";
                 badgeKind = "refund";
@@ -511,12 +515,14 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 badgeKind = "winner";
                 message = "Congrats — you won! Reclaim your prize.";
                 primaryLabel = "Reclaim Prize";
-              } else if (isSettled && iAmCreator) {
-                badgeTitle = "Creator";
+              } else if (isSettled && iAmCreatorOrFee) {
+                badgeTitle = iAmFeeRecipient ? "Fees" : "Creator";
                 badgeKind = "creator";
-                message = "Raffle settled — reclaim your ticket sale pot.";
-                primaryLabel = "Reclaim Ticket Sales";
-              } else if (isSettled && !iAmWinner && !iAmCreator) {
+                message = iAmFeeRecipient
+                  ? "Raffle settled — reclaim your protocol fees."
+                  : "Raffle settled — reclaim your ticket sale pot.";
+                primaryLabel = iAmFeeRecipient ? "Reclaim Fees" : "Reclaim Ticket Sales";
+              } else if (isSettled && !iAmWinner && !iAmCreatorOrFee) {
                 badgeTitle = "Settled";
                 badgeKind = "claim";
                 message = "Raffle settled — nothing to claim.";
@@ -531,11 +537,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 badgeKind = "winner";
                 message = "Congrats — you won! Reclaim your prize.";
                 primaryLabel = "Reclaim Prize";
-              } else if (iAmCreator) {
-                badgeTitle = "Creator";
+              } else if (iAmCreatorOrFee) {
+                badgeTitle = iAmFeeRecipient ? "Fees" : "Creator";
                 badgeKind = "creator";
-                message = "Raffle settled — reclaim your ticket sale pot.";
-                primaryLabel = "Reclaim Ticket Sales";
+                message = iAmFeeRecipient ? "Fees available to claim." : "Raffle settled — reclaim your ticket sale pot.";
+                primaryLabel = iAmFeeRecipient ? "Reclaim Fees" : "Reclaim Ticket Sales";
               }
 
               const showDual = !isRefund && hasUsdc && hasNative;
@@ -639,7 +645,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                       ) : (
                         <button
                           className={`db-btn ${isRefund ? "secondary" : "primary"}`}
-                          disabled={data.isPending || nothingToDoNonRefund || !primaryMethod || primaryLabel === "Nothing to Claim"}
+                          disabled={data.isPending || nothingToDoNonRefund || !primaryMethod}
                           onClick={() => primaryMethod && onWithdraw(r.id, primaryMethod)}
                         >
                           {data.isPending ? "Processing..." : primaryLabel}
