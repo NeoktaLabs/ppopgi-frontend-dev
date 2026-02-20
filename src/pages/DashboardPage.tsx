@@ -251,7 +251,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return () => clearInterval(t);
   }, []);
 
-  // Reset UI state when wallet changes
   useEffect(() => {
     setRefundFlowState({});
   }, [account]);
@@ -265,25 +264,32 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
   /**
    * ✅ HARD GUARD:
-   * Prevent accidental multi-trigger (double click / bubbling / fast re-render timing).
-   * This stops the “it tries to process all claimables” experience.
+   * - global lock: prevents any “burst” of txs from one gesture
+   * - per-raffle lock: prevents duplicate calls for the same raffle
    */
   const txLockRef = useRef(false);
+  const perRaffleLockRef = useRef<Map<string, boolean>>(new Map());
 
   const onWithdraw = useCallback(
     async (raffleId: string, method: WithdrawMethod): Promise<boolean> => {
+      const rid = normId(raffleId);
+
       if (txLockRef.current) return false;
+      if (perRaffleLockRef.current.get(rid)) return false;
+
       txLockRef.current = true;
+      perRaffleLockRef.current.set(rid, true);
 
       try {
-        const ok = await actions.withdraw(raffleId, method);
+        const ok = await actions.withdraw(rid, method);
         return !!ok;
       } catch {
         return false;
       } finally {
-        // tiny delay helps avoid immediate re-trigger from same click gesture on some UIs
+        // small cooldown helps avoid “same click” re-trigger on some setups
         setTimeout(() => {
           txLockRef.current = false;
+          perRaffleLockRef.current.delete(rid);
         }, 250);
       }
     },
@@ -463,11 +469,9 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const acct = norm(account);
               const winner = norm(r.winner);
               const creator = norm(r.creator);
-              const feeRecipient = norm(r.feeRecipient);
 
               const iAmWinner = !!acct && acct === winner;
               const iAmCreator = !!acct && acct === creator;
-              const iAmFeeRecipient = !!acct && acct === feeRecipient;
 
               const hasUsdc = safeBigInt(it.claimableUsdc) > 0n;
               const hasNative = safeBigInt(it.claimableNative) > 0n;
@@ -476,7 +480,6 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const isCanceled = status === "CANCELED";
               const isSettled = status === "COMPLETED" || status === "SETTLED";
 
-              // IMPORTANT: creator reclaim on canceled raffles should NOT be treated as refund flow.
               const isRefund = it.type === "REFUND" && !(isCanceled && iAmCreator);
 
               const ownedNow = Number(it.userTicketsOwned || 0);
@@ -499,16 +502,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               let primaryLabel = "Claim";
               let badgeKind: "refund" | "winner" | "creator" | "claim" = "claim";
 
-              // ✅ Fee recipient label should NEVER fall into "Nothing to claim" if hasUsdc/hasNative
               if (isCanceled && iAmCreator) {
                 badgeTitle = "Canceled";
                 badgeKind = "creator";
                 message = "Raffle canceled — reclaim your pot.";
                 primaryLabel = hasUsdc ? "Reclaim Pot (USDC)" : hasNative ? "Reclaim Pot (Native)" : "Reclaim Pot";
-              } else if (isRefund) {
+              } else if (isCanceled && isRefund) {
                 badgeTitle = "Refund";
                 badgeKind = "refund";
-                message = "Raffle canceled — reclaim your refund.";
+                message = "Raffle canceled — reclaim your ticket refund.";
                 primaryLabel = "Reclaim Ticket Refund";
               } else if (isSettled && iAmWinner) {
                 badgeTitle = "Winner";
@@ -520,16 +522,16 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 badgeKind = "creator";
                 message = "Raffle settled — reclaim your ticket sale pot.";
                 primaryLabel = "Reclaim Ticket Sales";
-              } else if ((isSettled || isCanceled) && iAmFeeRecipient) {
-                badgeTitle = "Fees";
-                badgeKind = "claim";
-                message = "Protocol fees available — reclaim them.";
-                primaryLabel = hasUsdc ? "Reclaim Fees (USDC)" : hasNative ? "Reclaim Fees (Native)" : "Reclaim Fees";
               } else if (isSettled && !iAmWinner && !iAmCreator) {
                 badgeTitle = "Settled";
                 badgeKind = "claim";
                 message = "Raffle settled — nothing to claim.";
                 primaryLabel = "Nothing to Claim";
+              } else if (isRefund) {
+                badgeTitle = "Refund";
+                badgeKind = "refund";
+                message = "Raffle canceled — reclaim your refund.";
+                primaryLabel = "Reclaim Ticket Refund";
               } else if (iAmWinner) {
                 badgeTitle = "Winner";
                 badgeKind = "winner";
