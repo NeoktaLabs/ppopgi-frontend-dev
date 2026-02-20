@@ -9,7 +9,7 @@ import {
   fetchMyJoinedRaffleIdsFromEvents,
   fetchRafflesByIds,
   fetchRaffleParticipants,
-  fetchMyFundsClaimedRaffleIds, // ✅ NEW (from subgraph.ts change)
+  fetchMyFundsClaimedRaffleIds,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -42,7 +42,7 @@ const RAFFLE_DASH_ABI = [
     outputs: [{ type: "uint256" }],
   },
 
-  // ✅ optional but helpful for safer prechecks (matches your ABI)
+  // optional but helpful for safer prechecks (matches your ABI)
   {
     type: "function",
     name: "status",
@@ -103,14 +103,27 @@ function normId(v: string): string {
   return s.startsWith("0x") ? s : `0x${s}`;
 }
 
+function extractErrorMessage(e: any): string {
+  const parts = [
+    e?.reason,
+    e?.shortMessage,
+    e?.cause?.reason,
+    e?.cause?.shortMessage,
+    e?.cause?.message,
+    e?.message,
+    e?.toString?.(),
+  ]
+    .filter(Boolean)
+    .map((x) => String(x));
+
+  const joined = parts.join(" | ");
+  return (joined || "Unknown error").slice(0, 260);
+}
+
 /**
  * Simple concurrency pool to avoid hammering RPC.
  */
-async function mapPool<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  fn: (item: T, idx: number) => Promise<R>
-): Promise<R[]> {
+async function mapPool<T, R>(items: readonly T[], concurrency: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length) as any;
   let i = 0;
 
@@ -214,7 +227,7 @@ export function useDashboardController() {
   // cache for "tickets bought" lookups (per page load)
   const boughtCacheRef = useRef<Map<string, string>>(new Map());
 
-  // ✅ cache for "already withdrew USDC" (FUNDS_CLAIMED) per account
+  // cache for "already withdrew USDC" (FUNDS_CLAIMED) per account
   const fundsClaimedCacheRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
 
   // --- RPC read cache + throttles ---
@@ -321,6 +334,9 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
+      // ✅ reduce RPC spam while a tx is pending (prevents rate-limit during Ledger signing / estimate)
+      if (isBackground && txPending) return;
+
       if (isBackground) {
         const now = Date.now();
         if (now - lastBgRunRef.current < 6_000) return;
@@ -348,8 +364,7 @@ export function useDashboardController() {
 
         const joinedIdArr = Array.from(joinedIds);
 
-        const joinedBaseFromStore =
-          joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+        const joinedBaseFromStore = joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
         setCreated(myCreated);
 
@@ -465,7 +480,7 @@ export function useDashboardController() {
 
         const candidates = uniqueCandidates.slice(0, 600);
 
-        // ✅ NEW: prefetch which CANCELED raffles already had FUNDS_CLAIMED by this user
+        // Prefetch which CANCELED raffles already had FUNDS_CLAIMED by this user
         let fundsClaimedSet: Set<string> = new Set();
         try {
           const now = Date.now();
@@ -511,16 +526,16 @@ export function useDashboardController() {
             feeRecipient: (r as any).feeRecipient?.toLowerCase() === myAddr,
           };
 
-          const isWinnerEligible = r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
+          const isWinnerEligible =
+            r.status === "COMPLETED" && r.winner?.toLowerCase() === myAddr && (cf > 0n || cn > 0n);
 
           const isCanceled = r.status === "CANCELED";
-
           const alreadyWithdrewFunds = isCanceled && fundsClaimedSet.has(rid);
 
-          // ✅ "nothing left" guard (after successful withdraw)
+          // "nothing left" guard (after successful withdraw)
           const nothingLeftNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
 
-          // ✅ IMPORTANT: refunds are for participants; creator pot reclaim is NOT a refund.
+          // refunds are for participants; creator pot reclaim is NOT a refund.
           const isCreatorOrFee = !!roles.created || !!roles.feeRecipient;
           const isParticipant = !!roles.participated;
 
@@ -543,13 +558,13 @@ export function useDashboardController() {
             return;
           }
 
-          // ✅ Creator/fee reclaim comes BEFORE refund classification
+          // Creator/fee reclaim comes BEFORE refund classification
           if (isCreatorReclaimEligible) {
             newClaimables.push({
               raffle: { ...r, id: rid },
               claimableUsdc: cf.toString(),
               claimableNative: cn.toString(),
-              type: "OTHER", // dashboard uses withdrawFunds/withdrawNative (single step)
+              type: "OTHER",
               roles,
               userTicketsOwned: ticketsOwned.toString(),
             });
@@ -601,7 +616,7 @@ export function useDashboardController() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [account, allRaffles, getJoinedIds, store.items, created.length, joined.length, claimables.length]
+    [account, allRaffles, getJoinedIds, store.items, created.length, joined.length, claimables.length, txPending]
   );
 
   useEffect(() => {
@@ -673,15 +688,13 @@ export function useDashboardController() {
     } catch {}
   }
 
-  // ✅ UPDATED: return boolean so UI can reliably know if tx succeeded
+  // return boolean so UI can reliably know if tx succeeded
   const withdraw = async (raffleId: string, method: DashTxMethod): Promise<boolean> => {
     if (!account) return false;
     setMsg(null);
 
     const rid = normId(raffleId);
 
-    // IMPORTANT: do NOT "hide claimable card" for step-1 refund.
-    // Only hide when we've actually withdrawn everything (or the card truly becomes empty).
     setTxPending(true);
 
     try {
@@ -706,20 +719,16 @@ export function useDashboardController() {
       // Always revalidate other pages/widgets
       emitRevalidate();
 
-      // ✅ If this was the refund "step 1", keep card visible.
-      // The UI should now show claimableFunds > 0 (step 2 enabled) after refresh/recompute.
+      // If this was the refund "step 1", keep card visible.
       if (method === "claimTicketRefund") {
         setMsg("✅ Reclaimed. Now withdraw.");
-        // Refresh data so step 2 lights up
         fundsClaimedCacheRef.current = null;
         await refreshRaffleStore(true, true);
         await recompute(true);
         return true;
       }
 
-      // ✅ For withdrawFunds / withdrawNative:
-      // Only hide the card if there is truly nothing left to claim.
-      // (Important for WIN cases where USDC+Native can both exist.)
+      // For withdrawFunds / withdrawNative:
       let stillHasSomething = true;
       try {
         const v = await readDashboardValues({
@@ -735,7 +744,6 @@ export function useDashboardController() {
 
         stillHasSomething = cf > 0n || cn > 0n || owned > 0n;
       } catch {
-        // fail-open: don't aggressively hide
         stillHasSomething = true;
       }
 
@@ -752,9 +760,18 @@ export function useDashboardController() {
       await refreshRaffleStore(true, true);
       await recompute(true);
       return true;
-    } catch (e) {
+    } catch (e: any) {
       console.error("Withdraw failed", e);
-      setMsg("Claim failed or rejected.");
+      const reason = extractErrorMessage(e);
+
+      if (String(reason).toLowerCase().includes("too many requests")) {
+        setMsg("RPC rate-limited. Please wait ~10s and try again.");
+      } else if (String(reason).toLowerCase().includes("resolution")) {
+        setMsg("Ledger signing needs resolution/blind-signing. Enable Blind signing in Ledger Ethereum app settings.");
+      } else {
+        setMsg(`Claim failed: ${reason}`);
+      }
+
       return false;
     } finally {
       setTxPending(false);
