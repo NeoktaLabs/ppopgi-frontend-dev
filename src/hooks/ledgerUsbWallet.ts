@@ -5,6 +5,15 @@ import type { ThirdwebClient } from "thirdweb";
 import type { Chain } from "thirdweb/chains";
 import { Transaction, Signature, hexlify, getBytes } from "ethers";
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isRateLimitMessage(msg: string) {
+  const m = (msg || "").toLowerCase();
+  return m.includes("too many requests") || m.includes("rate limit") || m.includes("call rate limit");
+}
+
 async function rpcRequest(rpcUrl: string, method: string, params: any[] = []) {
   const res = await fetch(rpcUrl, {
     method: "POST",
@@ -17,6 +26,23 @@ async function rpcRequest(rpcUrl: string, method: string, params: any[] = []) {
     throw new Error(json?.error?.message || `RPC_ERROR_${res.status}`);
   }
   return json.result;
+}
+
+async function rpcRequestWithRetry(rpcUrl: string, method: string, params: any[] = [], maxRetries = 3) {
+  let lastErr: any = null;
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await rpcRequest(rpcUrl, method, params);
+    } catch (e: any) {
+      lastErr = e;
+      const msg = String(e?.message || e);
+      if (!isRateLimitMessage(msg) || i === maxRetries) throw e;
+      // backoff: 0.5s, 1s, 2s, 4s (cap)
+      const wait = Math.min(4000, 500 * 2 ** i);
+      await sleep(wait);
+    }
+  }
+  throw lastErr ?? new Error("RPC retry exhausted");
 }
 
 function pickRpcUrl(chain: Chain): string {
@@ -37,6 +63,19 @@ function asHexQuantity(v: any): string | undefined {
   }
 }
 
+function toBigIntSafe(v: any): bigint {
+  try {
+    if (v == null) return 0n;
+    if (typeof v === "bigint") return v;
+    if (typeof v === "number") return BigInt(v);
+    const s = String(v);
+    if (!s) return 0n;
+    return BigInt(s);
+  } catch {
+    return 0n;
+  }
+}
+
 type LedgerSession = {
   transport: any;
   eth: any;
@@ -45,7 +84,6 @@ type LedgerSession = {
 };
 
 async function openLedgerSession(): Promise<LedgerSession> {
-  // dynamic import => keeps bundle smaller + avoids running Ledger libs until needed
   const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
     import("@ledgerhq/hw-app-eth"),
@@ -84,13 +122,22 @@ async function createLedgerEip1193Provider(opts: {
     return s;
   }
 
-  // no-op event methods (thirdweb checks they exist)
-  const on: MinimalEip1193Provider["on"] = () => {
-    return undefined;
-  };
-  const removeListener: MinimalEip1193Provider["removeListener"] = () => {
-    return undefined;
-  };
+  const on: MinimalEip1193Provider["on"] = () => undefined;
+  const removeListener: MinimalEip1193Provider["removeListener"] = () => undefined;
+
+  // build a Ledger resolution object when possible (new Ledger requirement)
+  async function resolveLedgerTx(payloadHex: string) {
+    try {
+      const { ledgerService } = await import("@ledgerhq/hw-app-eth");
+      // Some versions expose ledgerService; if not, this import fails and we fallback.
+      const resolution = await (ledgerService as any).resolveTransaction(payloadHex);
+      return resolution ?? {};
+    } catch (e) {
+      // If it fails (including that 404), we fall back to empty resolution.
+      // This still works when Ledger is set to allow blind signing.
+      return {};
+    }
+  }
 
   return {
     on,
@@ -121,47 +168,59 @@ async function createLedgerEip1193Provider(opts: {
 
           const s = await getSession();
 
-          const from = String(tx.from || "").toLowerCase();
-          if (!from) throw new Error("Transaction missing from.");
+          // ✅ tolerate missing from
+          const fromRaw = tx.from ? String(tx.from) : s.address;
+          const from = fromRaw.toLowerCase();
+
           if (from !== s.address.toLowerCase()) {
-            throw new Error(`Ledger USB: tx.from must be the Ledger address (${s.address}).`);
+            throw new Error(`Ledger USB: tx.from must be the Ledger address (${s.address}). Got ${fromRaw}`);
           }
 
           const to = tx.to ? String(tx.to) : undefined;
           const data = tx.data ? String(tx.data) : "0x";
-          const value = tx.value != null ? BigInt(tx.value) : 0n;
+          const value = toBigIntSafe(tx.value);
 
           const nonceHex =
             tx.nonce != null
               ? asHexQuantity(tx.nonce)
-              : await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
+              : await rpcRequestWithRetry(rpcUrl, "eth_getTransactionCount", [s.address, "pending"], 4);
 
+          // gas estimation (retry on rate limit)
           const gasHex =
             tx.gas != null || tx.gasLimit != null
               ? asHexQuantity(tx.gas ?? tx.gasLimit)
-              : await rpcRequest(rpcUrl, "eth_estimateGas", [{ from: tx.from, to, data, value: tx.value ?? "0x0" }]);
+              : await rpcRequestWithRetry(
+                  rpcUrl,
+                  "eth_estimateGas",
+                  [
+                    {
+                      from: s.address,
+                      to,
+                      data,
+                      value: asHexQuantity(value) ?? "0x0",
+                    },
+                  ],
+                  4
+                );
 
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
           if (!gasHex) throw new Error("Failed to resolve gas.");
 
-          // Fees
+          // Fees (retry on rate limit)
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
           let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
           let gasPriceHex = asHexQuantity(tx.gasPrice);
 
           if (!maxFeePerGasHex && !gasPriceHex) {
-            gasPriceHex = await rpcRequest(rpcUrl, "eth_gasPrice", []);
+            gasPriceHex = await rpcRequestWithRetry(rpcUrl, "eth_gasPrice", [], 4);
           }
 
           const is1559 = !!(maxFeePerGasHex || maxPriorityFeePerGasHex);
 
-          // ✅ Force definite strings before BigInt (Cloudflare TS is stricter)
           const gasPriceHexResolved = gasPriceHex ?? "0x0";
           const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
           const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei fallback
 
-          // ✅ Do NOT set `type` here (avoids TS complaining about 2)
-          // ethers will infer type=2 when maxFeePerGas/maxPriorityFeePerGas exist.
           const unsignedTx = Transaction.from({
             chainId,
             to,
@@ -183,8 +242,10 @@ async function createLedgerEip1193Provider(opts: {
             ? unsignedTx.unsignedSerialized.slice(2)
             : unsignedTx.unsignedSerialized;
 
-          // Ledger signature
-          const sig = await s.eth.signTransaction(s.path, payloadHex);
+          // ✅ New Ledger API: provide resolution parameter (or {})
+          const resolution = await resolveLedgerTx(payloadHex);
+
+          const sig = await s.eth.signTransaction(s.path, payloadHex, resolution);
 
           const v = BigInt("0x" + sig.v);
           const r = "0x" + sig.r;
@@ -193,7 +254,7 @@ async function createLedgerEip1193Provider(opts: {
           const signature = Signature.from({ v, r, s: sSig });
           const signedTx = Transaction.from({ ...unsignedTx, signature }).serialized;
 
-          const txHash = await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
+          const txHash = await rpcRequestWithRetry(rpcUrl, "eth_sendRawTransaction", [signedTx], 4);
           return txHash;
         }
 
@@ -240,7 +301,6 @@ export function useLedgerUsbWallet() {
 
         const wallet = EIP1193.fromProvider({
           walletId: "io.metamask",
-          // ✅ provider must accept optional params, and must return an EIP1193Provider with on/removeListener
           provider: async (_params?: { chainId?: number }) => {
             return await createLedgerEip1193Provider({
               chainId: opts.chain.id,
