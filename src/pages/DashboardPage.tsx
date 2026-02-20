@@ -469,12 +469,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               const acct = norm(account);
               const winner = norm(r.winner);
               const creator = norm(r.creator);
+              const feeRecipient = norm((r as any).feeRecipient);
 
               const iAmWinner = !!acct && acct === winner;
               const iAmCreator = !!acct && acct === creator;
+              const iAmFeeRecipient = !!acct && acct === feeRecipient;
 
               const hasUsdc = safeBigInt(it.claimableUsdc) > 0n;
               const hasNative = safeBigInt(it.claimableNative) > 0n;
+              const hasAnything = hasUsdc || hasNative;
 
               const status = String(r.status || "").toUpperCase();
               const isCanceled = status === "CANCELED";
@@ -502,7 +505,13 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
               let primaryLabel = "Claim";
               let badgeKind: "refund" | "winner" | "creator" | "claim" = "claim";
 
-              if (isCanceled && iAmCreator) {
+              // ✅ Fee recipient must be handled BEFORE generic "settled => nothing"
+              if ((isSettled || isCanceled) && iAmFeeRecipient && hasAnything && !isRefund) {
+                badgeTitle = "Fees";
+                badgeKind = "claim";
+                message = "Protocol fees available — reclaim them.";
+                primaryLabel = hasUsdc ? "Reclaim Fees (USDC)" : hasNative ? "Reclaim Fees (Native)" : "Reclaim Fees";
+              } else if (isCanceled && iAmCreator) {
                 badgeTitle = "Canceled";
                 badgeKind = "creator";
                 message = "Raffle canceled — reclaim your pot.";
@@ -522,26 +531,22 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
                 badgeKind = "creator";
                 message = "Raffle settled — reclaim your ticket sale pot.";
                 primaryLabel = "Reclaim Ticket Sales";
-              } else if (isSettled && !iAmWinner && !iAmCreator) {
-                badgeTitle = "Settled";
-                badgeKind = "claim";
-                message = "Raffle settled — nothing to claim.";
-                primaryLabel = "Nothing to Claim";
               } else if (isRefund) {
                 badgeTitle = "Refund";
                 badgeKind = "refund";
                 message = "Raffle canceled — reclaim your refund.";
                 primaryLabel = "Reclaim Ticket Refund";
-              } else if (iAmWinner) {
-                badgeTitle = "Winner";
-                badgeKind = "winner";
-                message = "Congrats — you won! Reclaim your prize.";
-                primaryLabel = "Reclaim Prize";
-              } else if (iAmCreator) {
-                badgeTitle = "Creator";
-                badgeKind = "creator";
-                message = "Raffle settled — reclaim your ticket sale pot.";
-                primaryLabel = "Reclaim Ticket Sales";
+              } else if (hasAnything) {
+                // ✅ if controller says it's claimable, never show "Nothing to Claim"
+                badgeTitle = "Claim";
+                badgeKind = "claim";
+                message = "Funds available to claim.";
+                primaryLabel = hasUsdc ? "Claim USDC" : hasNative ? "Claim Native" : "Claim";
+              } else {
+                badgeTitle = "Settled";
+                badgeKind = "claim";
+                message = "Raffle settled — nothing to claim.";
+                primaryLabel = "Nothing to Claim";
               }
 
               const showDual = !isRefund && hasUsdc && hasNative;
@@ -758,15 +763,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             )}
 
             {pastJoined.map((r: any) => {
-              const acct = norm(account);
-              const winner = norm(r.winner);
+              const acct2 = norm(account);
+              const winner2 = norm(r.winner);
 
               const ownedNow = Number(r.userEntry?.count ?? 0);
               const purchasedEver = getPurchasedEver(r.id);
               const ticketCount = ownedNow > 0 ? ownedNow : purchasedEver;
 
               const completed = r.status === "COMPLETED";
-              const iWon = completed && acct && winner === acct;
+              const iWon = completed && acct2 && winner2 === acct2;
 
               const canceled = r.status === "CANCELED";
               const isCanceledParticipant = canceled && purchasedEver > 0;
