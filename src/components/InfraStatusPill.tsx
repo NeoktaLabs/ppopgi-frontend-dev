@@ -125,7 +125,7 @@ export function InfraStatusPill() {
                 <span className="isp-tip" role="tooltip">
                   Auto-finalizes ended raffles.
                   <br />
-                  Runs every ~5 mins.
+                  Runs every ~3 mins.
                 </span>
               </span>
             </div>
