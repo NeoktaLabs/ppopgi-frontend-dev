@@ -296,6 +296,75 @@ export async function fetchRafflesByCreator(
 }
 
 /**
+ * ✅ NEW: Fetch raffles by fee recipient (for feeRecipient claimables backfill)
+ */
+export async function fetchRafflesByFeeRecipient(
+  feeRecipient: string,
+  opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
+): Promise<RaffleListItem[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const first = Math.min(Math.max(opts.first ?? 200, 1), 1000);
+  const skip = Math.max(opts.skip ?? 0, 0);
+
+  const query = `
+    query RafflesByFeeRecipient($feeRecipient: Bytes!, $first: Int!, $skip: Int!) {
+      raffles(
+        first: $first
+        skip: $skip
+        where: { feeRecipient: $feeRecipient }
+        orderBy: lastUpdatedTimestamp
+        orderDirection: desc
+      ) {
+        ${RAFFLE_FIELDS}
+      }
+    }
+  `;
+
+  type Resp = { raffles: RaffleListItem[] };
+  const data = await gqlFetch<Resp>(
+    url,
+    query,
+    { feeRecipient: feeRecipient.toLowerCase(), first, skip },
+    opts.signal
+  );
+
+  return (data.raffles ?? []).map((r) => normalizeRaffle(r));
+}
+
+/**
+ * ✅ NEW (optional but recommended): Fetch ALL raffles by fee recipient (paged).
+ * Useful for dashboard claimables so old fee-recipient raffles aren't missed.
+ */
+export async function fetchAllRafflesByFeeRecipientPaged(
+  feeRecipient: string,
+  opts: { signal?: AbortSignal; pageSize?: number; maxPages?: number } = {}
+): Promise<RaffleListItem[]> {
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 1000, 50), 1000);
+  const maxPages = Math.min(Math.max(opts.maxPages ?? 10, 1), 50); // safety cap
+
+  const out: RaffleListItem[] = [];
+  let skip = 0;
+
+  for (let pageN = 0; pageN < maxPages; pageN++) {
+    const page = await fetchRafflesByFeeRecipient(feeRecipient, {
+      first: pageSize,
+      skip,
+      signal: opts.signal,
+    });
+
+    out.push(...page);
+
+    if (page.length < pageSize) break;
+    skip += pageSize;
+  }
+
+  // Dedup by id just in case
+  const byId = new Map<string, RaffleListItem>();
+  for (const r of out) byId.set(r.id, r);
+  return Array.from(byId.values());
+}
+
+/**
  * ✅ FETCH PARTICIPANTS for a raffle (leaderboard)
  */
 export async function fetchRaffleParticipants(
