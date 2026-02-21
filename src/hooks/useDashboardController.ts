@@ -10,6 +10,9 @@ import {
   fetchRafflesByIds,
   fetchRaffleParticipants,
   fetchMyFundsClaimedRaffleIds,
+  // ✅ NEW (from your updated subgraph.ts)
+  // If your function name differs, rename this import to match subgraph.ts exactly.
+  fetchRafflesByFeeRecipientPaged,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -123,7 +126,11 @@ function extractErrorMessage(e: any): string {
 /**
  * Simple concurrency pool to avoid hammering RPC.
  */
-async function mapPool<T, R>(items: readonly T[], concurrency: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+async function mapPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, idx: number) => Promise<R>
+): Promise<R[]> {
   const out: R[] = new Array(items.length) as any;
   let i = 0;
 
@@ -230,6 +237,11 @@ export function useDashboardController() {
   // cache for "already withdrew USDC" (FUNDS_CLAIMED) per account
   const fundsClaimedCacheRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
 
+  // ✅ NEW: feeRecipient raffles fetch cache + single-flight
+  const feeRafflesCacheRef = useRef<{ ts: number; account: string; raffles: RaffleListItem[] } | null>(null);
+  const feeRafflesPromiseRef = useRef<Promise<RaffleListItem[]> | null>(null);
+  const feeRafflesBackoffMsRef = useRef(0);
+
   // --- RPC read cache + throttles ---
   const rpcCacheRef = useRef<Map<string, { ts: number; cf: string; cn: string; owned: string }>>(new Map());
   const lastBgRunRef = useRef(0);
@@ -240,6 +252,11 @@ export function useDashboardController() {
     lastJoinedIdsRef.current = null;
     joinedIdsPromiseRef.current = null;
     joinedBackoffMsRef.current = 0;
+
+    feeRafflesCacheRef.current = null;
+    feeRafflesPromiseRef.current = null;
+    feeRafflesBackoffMsRef.current = 0;
+
     boughtCacheRef.current = new Map();
     fundsClaimedCacheRef.current = null;
     rpcCacheRef.current = new Map();
@@ -320,6 +337,54 @@ export function useDashboardController() {
     return await joinedIdsPromiseRef.current;
   }, [account]);
 
+  // ✅ NEW: fetch all raffles where this account is feeRecipient (paged), cached + single-flight
+  const getFeeRecipientRaffles = useCallback(async (): Promise<RaffleListItem[]> => {
+    if (!account) return [];
+    const acct = account.toLowerCase();
+    const now = Date.now();
+
+    // Respect backoff if we recently got rate-limited
+    const backoff = feeRafflesBackoffMsRef.current || 0;
+    const cached = feeRafflesCacheRef.current;
+    if (backoff > 0 && cached && cached.account === acct) {
+      // If within backoff window, just serve cache
+      if (now - cached.ts < backoff) return cached.raffles;
+    }
+
+    if (cached && cached.account === acct && now - cached.ts < 2 * 60_000) {
+      return cached.raffles;
+    }
+    if (feeRafflesPromiseRef.current) return await feeRafflesPromiseRef.current;
+
+    feeRafflesPromiseRef.current = (async () => {
+      try {
+        // Conservative caps to protect the indexer; adjust in subgraph.ts if desired.
+        // This should return raffles including full RAFFLE_FIELDS.
+        const raffles = await fetchRafflesByFeeRecipientPaged(acct, {
+          pageSize: 200,
+          maxPages: 10,
+        });
+
+        const normalized = (raffles ?? []).map((r) => ({ ...r, id: normId(r.id) }));
+        feeRafflesCacheRef.current = { ts: Date.now(), account: acct, raffles: normalized };
+        feeRafflesBackoffMsRef.current = 0;
+        return normalized;
+      } catch (e) {
+        if (isRateLimitError(e)) {
+          const cur = feeRafflesBackoffMsRef.current || 0;
+          feeRafflesBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
+          setMsg("Indexer rate-limited. Retrying shortly…");
+        }
+        // Fail-open: return cached if exists
+        return cached?.account === acct ? cached.raffles : [];
+      } finally {
+        feeRafflesPromiseRef.current = null;
+      }
+    })();
+
+    return await feeRafflesPromiseRef.current;
+  }, [account]);
+
   const recompute = useCallback(
     async (isBackground = false) => {
       const runId = ++runIdRef.current;
@@ -357,14 +422,35 @@ export function useDashboardController() {
         const myAddr = account.toLowerCase();
 
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
-        const myFeeRaffles = allRaffles.filter((r) => (r as any).feeRecipient?.toLowerCase() === myAddr);
+
+        // ✅ NEW: combine feeRecipient raffles from:
+        // - fast path: store (recent)
+        // - slow path: paged subgraph scan (older)
+        const myFeeFromStore = allRaffles.filter((r) => (r as any).feeRecipient?.toLowerCase() === myAddr);
+
+        // Only run the paged scan when visible (and not too chatty)
+        // (Still okay in background if visible; your existing bg throttle applies.)
+        let myFeeFromSubgraph: RaffleListItem[] = [];
+        if (isVisible()) {
+          myFeeFromSubgraph = await getFeeRecipientRaffles();
+        }
+
+        if (runId !== runIdRef.current) return;
+
+        const myFeeRaffles = (() => {
+          const m = new Map<string, RaffleListItem>();
+          for (const r of myFeeFromStore) m.set(normId(r.id), { ...r, id: normId(r.id) });
+          for (const r of myFeeFromSubgraph) m.set(normId(r.id), { ...r, id: normId(r.id) });
+          return Array.from(m.values());
+        })();
 
         const joinedIds = await getJoinedIds();
         if (runId !== runIdRef.current) return;
 
         const joinedIdArr = Array.from(joinedIds);
 
-        const joinedBaseFromStore = joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+        const joinedBaseFromStore =
+          joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
         setCreated(myCreated);
 
@@ -464,7 +550,7 @@ export function useDashboardController() {
           return prev;
         });
 
-        // Claimables: include feeRecipient raffles too
+        // Claimables: include created + joined + feeRecipient (paged) raffles
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
@@ -535,7 +621,7 @@ export function useDashboardController() {
           // "nothing left" guard (after successful withdraw)
           const nothingLeftNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
 
-          // refunds are for participants; creator pot reclaim is NOT a refund.
+          // refunds are for participants; creator/fee reclaim is NOT a refund.
           const isCreatorOrFee = !!roles.created || !!roles.feeRecipient;
           const isParticipant = !!roles.participated;
 
@@ -616,7 +702,17 @@ export function useDashboardController() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [account, allRaffles, getJoinedIds, store.items, created.length, joined.length, claimables.length, txPending]
+    [
+      account,
+      allRaffles,
+      getJoinedIds,
+      getFeeRecipientRaffles,
+      store.items,
+      created.length,
+      joined.length,
+      claimables.length,
+      txPending,
+    ]
   );
 
   useEffect(() => {
@@ -757,6 +853,9 @@ export function useDashboardController() {
       joinedBackoffMsRef.current = 0;
       fundsClaimedCacheRef.current = null;
 
+      // ✅ Important: feeRecipient results can change too (fees claimed)
+      feeRafflesCacheRef.current = null;
+
       await refreshRaffleStore(true, true);
       await recompute(true);
       return true;
@@ -784,6 +883,10 @@ export function useDashboardController() {
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
     fundsClaimedCacheRef.current = null;
+
+    // ✅ also reset feeRecipient scan cache
+    feeRafflesCacheRef.current = null;
+    feeRafflesBackoffMsRef.current = 0;
 
     await refreshRaffleStore(false, true);
     await recompute(false);
