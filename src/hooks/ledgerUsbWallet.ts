@@ -84,7 +84,7 @@ function emptyLedgerResolution() {
 
     // these two are the ones that often crash if not iterable
     externalPlugin: [] as any[],
-    plugin: [] as any[], // ✅ FIX: was null -> must be iterable
+    plugin: [] as any[], // ✅ must be iterable for some ledgerjs versions
   };
 }
 
@@ -152,13 +152,35 @@ async function createLedgerEip1193Provider(opts: {
               ? asHexQuantity(tx.nonce)
               : await rpcRequest(rpcUrl, "eth_getTransactionCount", [s.address, "pending"]);
 
-          const gasHex =
-            tx.gas != null || tx.gasLimit != null
-              ? asHexQuantity(tx.gas ?? tx.gasLimit)
-              : await rpcRequest(rpcUrl, "eth_estimateGas", [{ from: tx.from, to, data, value: tx.value ?? "0x0" }]);
-
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
-          if (!gasHex) throw new Error("Failed to resolve gas.");
+
+          // --- GAS ---
+          // thirdweb can sometimes pass gas/gasLimit as 0x0. If we sign with gasLimit=0, RPC rejects it.
+          const providedGasHex = asHexQuantity(tx.gas ?? tx.gasLimit);
+          const providedGasBi = providedGasHex && providedGasHex !== "0x0" ? BigInt(providedGasHex) : 0n;
+
+          let gasHex: string;
+
+          if (providedGasBi > 0n) {
+            gasHex = providedGasHex as string;
+          } else {
+            const est = await rpcRequest(rpcUrl, "eth_estimateGas", [
+              {
+                from: tx.from,
+                to,
+                data,
+                value: tx.value ?? "0x0",
+              },
+            ]);
+
+            const estHex = String(est || "0x0");
+            const estBi = estHex && estHex !== "0x0" ? BigInt(estHex) : 0n;
+            if (estBi === 0n) throw new Error("eth_estimateGas returned 0");
+
+            // add buffer (20%) + 10k to avoid underestimates
+            const buffered = (estBi * 120n) / 100n + 10_000n;
+            gasHex = "0x" + buffered.toString(16);
+          }
 
           // Fees
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
