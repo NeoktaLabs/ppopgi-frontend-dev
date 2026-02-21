@@ -11,10 +11,20 @@ async function rpcRequest(rpcUrl: string, method: string, params: any[] = []) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   });
 
-  const json = await res.json().catch(() => null);
-  if (!res.ok || json?.error) {
-    throw new Error(json?.error?.message || `RPC_ERROR_${res.status}`);
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    // non-json body
   }
+
+  if (!res.ok || json?.error) {
+    const msg = json?.error?.message || `RPC_ERROR_${res.status}`;
+    // include method so you can see *which* call is failing
+    throw new Error(`${msg} (rpc:${method})`);
+  }
+
   return json.result;
 }
 
@@ -27,7 +37,7 @@ function pickRpcUrl(chain: Chain): string {
 
 function asHexQuantity(v: any): string | undefined {
   if (v == null) return undefined;
-  if (typeof v === "string") return v; // assume already 0x...
+  if (typeof v === "string") return v;
   try {
     const bi = typeof v === "bigint" ? v : BigInt(v);
     return "0x" + bi.toString(16);
@@ -40,8 +50,7 @@ function hexToBigInt(v?: string | null): bigint {
   try {
     if (!v) return 0n;
     const s = String(v);
-    if (!s) return 0n;
-    if (s === "0x" || s === "0x0") return 0n;
+    if (!s || s === "0x" || s === "0x0" || s === "0") return 0n;
     return BigInt(s);
   } catch {
     return 0n;
@@ -49,7 +58,6 @@ function hexToBigInt(v?: string | null): bigint {
 }
 
 function bumpGas(gas: bigint, bumpBps = 1200n): bigint {
-  // bumpBps=1200 => +12%
   if (gas <= 0n) return gas;
   return (gas * (10_000n + bumpBps)) / 10_000n;
 }
@@ -70,24 +78,17 @@ function isZeroHex(v: any): boolean {
 }
 
 /**
- * ✅ Some RPC nodes will ERROR if you pass gas/gasLimit=0 in eth_estimateGas.
- * thirdweb sometimes does that in pre-flight.
- *
- * We sanitize the tx object for eth_estimateGas:
- * - remove gas / gasLimit if 0
- * - normalize value/data
+ * ✅ Some RPC nodes error if gas/gasLimit=0 is provided to eth_estimateGas.
+ * Also ensure value/data are present.
  */
 function sanitizeTxForEstimate(tx: any): any {
   const t = { ...(tx ?? {}) };
 
-  // remove 0 gas fields (this is the actual fix for your error)
   if ("gas" in t && isZeroHex(t.gas)) delete t.gas;
   if ("gasLimit" in t && isZeroHex(t.gasLimit)) delete t.gasLimit;
 
-  // data default
   if (!t.data) t.data = "0x";
 
-  // value: if it is 0 or missing, prefer 0x0
   if (t.value == null || isZeroHex(t.value)) t.value = "0x0";
 
   return t;
@@ -115,7 +116,7 @@ async function openLedgerSession(): Promise<LedgerSession> {
   return { transport, eth, address, path };
 }
 
-type Eip1193RequestArgs = { method: string; params?: any[] };
+type Eip1193RequestArgs = { method: string; params?: any };
 
 type MinimalEip1193Provider = {
   request: (args: Eip1193RequestArgs) => Promise<any>;
@@ -123,10 +124,6 @@ type MinimalEip1193Provider = {
   removeListener: (event: string, listener: (...args: any[]) => void) => any;
 };
 
-/**
- * Ledger ETH app / ledgerjs requires an explicit "resolution" param in some versions.
- * Some fields must be iterable (arrays), otherwise you get "resolution.<field> is not iterable".
- */
 function emptyLedgerResolution() {
   return {
     domains: [] as any[],
@@ -135,6 +132,21 @@ function emptyLedgerResolution() {
     externalPlugin: [] as any[],
     plugin: [] as any[],
   };
+}
+
+/**
+ * ✅ IMPORTANT FIX:
+ * thirdweb may pass params as an OBJECT (not array) for some methods.
+ * We normalize:
+ *   - array -> array
+ *   - object -> [object]
+ *   - null/undefined -> []
+ */
+function normalizeParams(params: any): any[] {
+  if (Array.isArray(params)) return params;
+  if (params == null) return [];
+  if (typeof params === "object") return [params];
+  return [];
 }
 
 async function createLedgerEip1193Provider(opts: {
@@ -155,8 +167,8 @@ async function createLedgerEip1193Provider(opts: {
   const on: MinimalEip1193Provider["on"] = () => undefined;
   const removeListener: MinimalEip1193Provider["removeListener"] = () => undefined;
 
-  const passthrough = async (method: string, params?: any[]) => {
-    const p = Array.isArray(params) ? params : [];
+  const passthrough = async (method: string, params?: any) => {
+    const p = normalizeParams(params);
     return await rpcRequest(rpcUrl, method, p);
   };
 
@@ -165,7 +177,7 @@ async function createLedgerEip1193Provider(opts: {
     removeListener,
 
     async request({ method, params }: Eip1193RequestArgs) {
-      const p = Array.isArray(params) ? params : [];
+      const p = normalizeParams(params);
 
       switch (method) {
         case "eth_requestAccounts":
@@ -185,16 +197,9 @@ async function createLedgerEip1193Provider(opts: {
           return null;
         }
 
-        /**
-         * ✅ CRITICAL FIX:
-         * thirdweb calls eth_estimateGas before sending.
-         * If it includes gas=0x0, some RPCs throw:
-         * "provided gas limit (0) is insufficient..."
-         */
         case "eth_estimateGas": {
           const [tx, blockTag] = p as any[];
           const clean = sanitizeTxForEstimate(tx);
-          // preserve blockTag if passed
           return await rpcRequest(rpcUrl, "eth_estimateGas", blockTag != null ? [clean, blockTag] : [clean]);
         }
 
@@ -203,7 +208,6 @@ async function createLedgerEip1193Provider(opts: {
           if (!txRaw) throw new Error("Missing transaction object.");
 
           const tx = sanitizeTxForEstimate(txRaw);
-
           const s = await getSession();
 
           const from = String(tx.from || "").toLowerCase();
@@ -223,7 +227,7 @@ async function createLedgerEip1193Provider(opts: {
 
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
 
-          // ---- fee fields (treat 0 as missing) ----
+          // fees (treat 0 as missing)
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
           let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
           let gasPriceHex = asHexQuantity(tx.gasPrice);
@@ -241,7 +245,7 @@ async function createLedgerEip1193Provider(opts: {
           const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
           const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei
 
-          // ---- always estimate gas ourselves (never 0) ----
+          // ALWAYS estimate ourselves (never 0)
           const estimateCall: any = {
             from: tx.from,
             to,
@@ -261,11 +265,11 @@ async function createLedgerEip1193Provider(opts: {
             const estHex = await rpcRequest(rpcUrl, "eth_estimateGas", [estimateCall]);
             estimatedGasBI = hexToBigInt(estHex);
           } catch {
-            estimatedGasBI = 650_000n; // safe fallback for your withdraws
+            estimatedGasBI = 650_000n;
           }
 
           if (estimatedGasBI <= 0n) estimatedGasBI = 650_000n;
-          const finalGas = bumpGas(estimatedGasBI, 1200n); // +12%
+          const finalGas = bumpGas(estimatedGasBI, 1200n);
 
           const unsignedTx = Transaction.from({
             chainId,
@@ -298,8 +302,7 @@ async function createLedgerEip1193Provider(opts: {
           const signature = Signature.from({ v, r, s: sSig });
           const signedTx = Transaction.from({ ...unsignedTx, signature }).serialized;
 
-          const txHash = await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
-          return txHash;
+          return await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
         }
 
         case "personal_sign": {
@@ -321,9 +324,8 @@ async function createLedgerEip1193Provider(opts: {
         }
 
         default: {
-          // Let thirdweb/RPC do reads + chain metadata calls normally
           if (method.startsWith("eth_") || method.startsWith("net_") || method.startsWith("web3_")) {
-            return await passthrough(method, p);
+            return await passthrough(method, params);
           }
           throw new Error(`Unsupported method: ${method}`);
         }
