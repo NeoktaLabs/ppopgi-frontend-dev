@@ -15,13 +15,10 @@ async function rpcRequest(rpcUrl: string, method: string, params: any[] = []) {
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;
-  } catch {
-    // non-json body
-  }
+  } catch {}
 
   if (!res.ok || json?.error) {
     const msg = json?.error?.message || `RPC_ERROR_${res.status}`;
-    // include method so you can see *which* call is failing
     throw new Error(`${msg} (rpc:${method})`);
   }
 
@@ -77,10 +74,6 @@ function isZeroHex(v: any): boolean {
   }
 }
 
-/**
- * ✅ Some RPC nodes error if gas/gasLimit=0 is provided to eth_estimateGas.
- * Also ensure value/data are present.
- */
 function sanitizeTxForEstimate(tx: any): any {
   const t = { ...(tx ?? {}) };
 
@@ -88,7 +81,6 @@ function sanitizeTxForEstimate(tx: any): any {
   if ("gasLimit" in t && isZeroHex(t.gasLimit)) delete t.gasLimit;
 
   if (!t.data) t.data = "0x";
-
   if (t.value == null || isZeroHex(t.value)) t.value = "0x0";
 
   return t;
@@ -134,14 +126,6 @@ function emptyLedgerResolution() {
   };
 }
 
-/**
- * ✅ IMPORTANT FIX:
- * thirdweb may pass params as an OBJECT (not array) for some methods.
- * We normalize:
- *   - array -> array
- *   - object -> [object]
- *   - null/undefined -> []
- */
 function normalizeParams(params: any): any[] {
   if (Array.isArray(params)) return params;
   if (params == null) return [];
@@ -227,7 +211,6 @@ async function createLedgerEip1193Provider(opts: {
 
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
 
-          // fees (treat 0 as missing)
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
           let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
           let gasPriceHex = asHexQuantity(tx.gasPrice);
@@ -243,9 +226,8 @@ async function createLedgerEip1193Provider(opts: {
           const is1559 = !!(maxFeePerGasHex || maxPriorityFeePerGasHex);
           const gasPriceHexResolved = gasPriceHex ?? "0x0";
           const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
-          const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei
+          const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00";
 
-          // ALWAYS estimate ourselves (never 0)
           const estimateCall: any = {
             from: tx.from,
             to,
@@ -300,7 +282,11 @@ async function createLedgerEip1193Provider(opts: {
           const sSig = "0x" + sig.s;
 
           const signature = Signature.from({ v, r, s: sSig });
-          const signedTx = Transaction.from({ ...unsignedTx, signature }).serialized;
+
+          // ✅ CRITICAL FIX: don’t spread a Transaction instance.
+          // Convert to plain object so gasLimit/nonce/fees are preserved.
+          const txData = unsignedTx.toJSON();
+          const signedTx = Transaction.from({ ...txData, signature }).serialized;
 
           return await rpcRequest(rpcUrl, "eth_sendRawTransaction", [signedTx]);
         }
