@@ -68,25 +68,41 @@ type MinimalEip1193Provider = {
 };
 
 /**
- * ✅ IMPORTANT:
  * Ledger ETH app / ledgerjs requires an explicit "resolution" param in some versions.
  * If you pass nothing or a malformed object, you can get:
  *   "resolution.<field> is not iterable"
- *
- * This "empty resolution" is safe and avoids plugin/network fetching.
  */
 function emptyLedgerResolution() {
   return {
-    // arrays must be arrays (iterables)
     domains: [] as any[],
     erc20Tokens: [] as any[],
     nfts: [] as any[],
-
-    // these two are the ones that often crash if not iterable
     externalPlugin: [] as any[],
-    plugin: [] as any[], // ✅ must be iterable for some ledgerjs versions
+    plugin: [] as any[], // must be iterable in some versions
   };
 }
+
+/**
+ * Forward-only methods to RPC (thirdweb often calls these on the wallet provider).
+ * If these are missing, thirdweb can fail to estimate gas and end up sending gas=0.
+ */
+const RPC_FORWARD_METHODS = new Set<string>([
+  "eth_estimateGas",
+  "eth_call",
+  "eth_gasPrice",
+  "eth_maxPriorityFeePerGas",
+  "eth_feeHistory",
+  "eth_getBalance",
+  "eth_getCode",
+  "eth_getStorageAt",
+  "eth_getBlockByNumber",
+  "eth_getTransactionByHash",
+  "eth_getTransactionReceipt",
+  "eth_getTransactionCount",
+  "eth_blockNumber",
+  "net_version",
+  "web3_clientVersion",
+]);
 
 async function createLedgerEip1193Provider(opts: {
   chainId: number;
@@ -112,6 +128,11 @@ async function createLedgerEip1193Provider(opts: {
 
     async request({ method, params }: Eip1193RequestArgs) {
       const p = Array.isArray(params) ? params : [];
+
+      // ✅ Forward common read/estimate methods to RPC so thirdweb can function normally.
+      if (RPC_FORWARD_METHODS.has(method)) {
+        return await rpcRequest(rpcUrl, method, p);
+      }
 
       switch (method) {
         case "eth_requestAccounts":
@@ -155,14 +176,15 @@ async function createLedgerEip1193Provider(opts: {
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
 
           // --- GAS ---
-          // thirdweb can sometimes pass gas/gasLimit as 0x0. If we sign with gasLimit=0, RPC rejects it.
+          // thirdweb may pass gas/gasLimit as 0x0 if estimate step failed.
+          // We enforce an estimate if missing/zero.
           const providedGasHex = asHexQuantity(tx.gas ?? tx.gasLimit);
           const providedGasBi = providedGasHex && providedGasHex !== "0x0" ? BigInt(providedGasHex) : 0n;
 
-          let gasHex: string;
+          let gasLimitBi: bigint;
 
           if (providedGasBi > 0n) {
-            gasHex = providedGasHex as string;
+            gasLimitBi = providedGasBi;
           } else {
             const est = await rpcRequest(rpcUrl, "eth_estimateGas", [
               {
@@ -170,6 +192,10 @@ async function createLedgerEip1193Provider(opts: {
                 to,
                 data,
                 value: tx.value ?? "0x0",
+                // include fees if present to match actual tx type
+                ...(tx.maxFeePerGas != null ? { maxFeePerGas: tx.maxFeePerGas } : {}),
+                ...(tx.maxPriorityFeePerGas != null ? { maxPriorityFeePerGas: tx.maxPriorityFeePerGas } : {}),
+                ...(tx.gasPrice != null ? { gasPrice: tx.gasPrice } : {}),
               },
             ]);
 
@@ -177,9 +203,8 @@ async function createLedgerEip1193Provider(opts: {
             const estBi = estHex && estHex !== "0x0" ? BigInt(estHex) : 0n;
             if (estBi === 0n) throw new Error("eth_estimateGas returned 0");
 
-            // add buffer (20%) + 10k to avoid underestimates
-            const buffered = (estBi * 120n) / 100n + 10_000n;
-            gasHex = "0x" + buffered.toString(16);
+            // add buffer (20%) + 10k
+            gasLimitBi = (estBi * 120n) / 100n + 10_000n;
           }
 
           // Fees
@@ -201,7 +226,7 @@ async function createLedgerEip1193Provider(opts: {
             chainId,
             to,
             nonce: Number(BigInt(nonceHex)),
-            gasLimit: BigInt(gasHex),
+            gasLimit: gasLimitBi,
             data,
             value,
             ...(is1559
@@ -218,7 +243,6 @@ async function createLedgerEip1193Provider(opts: {
             ? unsignedTx.unsignedSerialized.slice(2)
             : unsignedTx.unsignedSerialized;
 
-          // ✅ Pass explicit resolution with iterable fields
           const resolution = emptyLedgerResolution();
           const sig = await s.eth.signTransaction(s.path, payloadHex, resolution);
 
