@@ -296,9 +296,10 @@ export async function fetchRafflesByCreator(
 }
 
 /**
- * ✅ NEW: Fetch raffles by fee recipient (for feeRecipient claimables backfill)
+ * ✅ NEW: Fetch raffles by feeRecipient (paged) — THIS MATCHES YOUR CONTROLLER IMPORT.
+ * Use this to backfill fee-recipient raffles for dashboard claimables.
  */
-export async function fetchRafflesByFeeRecipient(
+export async function fetchRafflesByFeeRecipientPaged(
   feeRecipient: string,
   opts: { first?: number; skip?: number; signal?: AbortSignal } = {}
 ): Promise<RaffleListItem[]> {
@@ -329,39 +330,6 @@ export async function fetchRafflesByFeeRecipient(
   );
 
   return (data.raffles ?? []).map((r) => normalizeRaffle(r));
-}
-
-/**
- * ✅ NEW (optional but recommended): Fetch ALL raffles by fee recipient (paged).
- * Useful for dashboard claimables so old fee-recipient raffles aren't missed.
- */
-export async function fetchAllRafflesByFeeRecipientPaged(
-  feeRecipient: string,
-  opts: { signal?: AbortSignal; pageSize?: number; maxPages?: number } = {}
-): Promise<RaffleListItem[]> {
-  const pageSize = Math.min(Math.max(opts.pageSize ?? 1000, 50), 1000);
-  const maxPages = Math.min(Math.max(opts.maxPages ?? 10, 1), 50); // safety cap
-
-  const out: RaffleListItem[] = [];
-  let skip = 0;
-
-  for (let pageN = 0; pageN < maxPages; pageN++) {
-    const page = await fetchRafflesByFeeRecipient(feeRecipient, {
-      first: pageSize,
-      skip,
-      signal: opts.signal,
-    });
-
-    out.push(...page);
-
-    if (page.length < pageSize) break;
-    skip += pageSize;
-  }
-
-  // Dedup by id just in case
-  const byId = new Map<string, RaffleListItem>();
-  for (const r of out) byId.set(r.id, r);
-  return Array.from(byId.values());
 }
 
 /**
