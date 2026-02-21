@@ -1,4 +1,3 @@
-// src/hooks/ledgerUsbWallet.ts
 import { useCallback, useMemo, useRef, useState } from "react";
 import { EIP1193 } from "thirdweb/wallets";
 import type { ThirdwebClient } from "thirdweb";
@@ -37,16 +36,22 @@ function asHexQuantity(v: any): string | undefined {
   }
 }
 
-function hexToBigInt(h?: string | null): bigint {
+function hexToBigInt(v?: string | null): bigint {
   try {
-    if (!h) return 0n;
-    const s = String(h);
+    if (!v) return 0n;
+    const s = String(v);
     if (!s) return 0n;
     if (s === "0x" || s === "0x0") return 0n;
     return BigInt(s);
   } catch {
     return 0n;
   }
+}
+
+function bumpGas(gas: bigint, bumpBps = 1200n): bigint {
+  // bumpBps=1200 => +12%
+  if (gas <= 0n) return gas;
+  return (gas * (10_000n + bumpBps)) / 10_000n;
 }
 
 type LedgerSession = {
@@ -80,12 +85,8 @@ type MinimalEip1193Provider = {
 };
 
 /**
- * ✅ IMPORTANT:
  * Ledger ETH app / ledgerjs requires an explicit "resolution" param in some versions.
- * If you pass nothing or a malformed object, you can get:
- *   "resolution.<field> is not iterable"
- *
- * This "empty resolution" is safe and avoids plugin/network fetching.
+ * Some fields must be iterable (arrays), otherwise you get "resolution.<field> is not iterable".
  */
 function emptyLedgerResolution() {
   return {
@@ -93,7 +94,7 @@ function emptyLedgerResolution() {
     erc20Tokens: [] as any[],
     nfts: [] as any[],
     externalPlugin: [] as any[],
-    plugin: [] as any[], // must be iterable for some ledgerjs versions
+    plugin: [] as any[],
   };
 }
 
@@ -161,7 +162,6 @@ async function createLedgerEip1193Provider(opts: {
           const data = tx.data ? String(tx.data) : "0x";
           const value = tx.value != null ? BigInt(tx.value) : 0n;
 
-          // Nonce: allow 0 nonce (valid), but if missing, query RPC
           const nonceHex =
             tx.nonce != null
               ? asHexQuantity(tx.nonce)
@@ -169,28 +169,7 @@ async function createLedgerEip1193Provider(opts: {
 
           if (!nonceHex) throw new Error("Failed to resolve nonce.");
 
-          // ✅ GAS: if provided gas is 0/0x0, IGNORE and estimate
-          const providedGas = tx.gas ?? tx.gasLimit;
-          const providedGasHex = asHexQuantity(providedGas);
-          const providedGasBI = hexToBigInt(providedGasHex);
-
-          const gasHex =
-            providedGasHex && providedGasBI > 0n
-              ? providedGasHex
-              : await rpcRequest(rpcUrl, "eth_estimateGas", [
-                  {
-                    from: tx.from,
-                    to,
-                    data,
-                    value: tx.value ?? "0x0",
-                  },
-                ]);
-
-          if (!gasHex || hexToBigInt(gasHex) <= 0n) {
-            throw new Error("Failed to resolve gas (estimateGas returned 0).");
-          }
-
-          // Fees: treat 0 as missing and fetch from RPC
+          // ---- fee fields (treat 0 as missing) ----
           let maxFeePerGasHex = asHexQuantity(tx.maxFeePerGas);
           let maxPriorityFeePerGasHex = asHexQuantity(tx.maxPriorityFeePerGas);
           let gasPriceHex = asHexQuantity(tx.gasPrice);
@@ -199,21 +178,59 @@ async function createLedgerEip1193Provider(opts: {
           if (hexToBigInt(maxPriorityFeePerGasHex) === 0n) maxPriorityFeePerGasHex = undefined;
           if (hexToBigInt(gasPriceHex) === 0n) gasPriceHex = undefined;
 
+          // If none provided, fetch gasPrice as fallback
           if (!maxFeePerGasHex && !gasPriceHex) {
             gasPriceHex = await rpcRequest(rpcUrl, "eth_gasPrice", []);
           }
 
           const is1559 = !!(maxFeePerGasHex || maxPriorityFeePerGasHex);
-
           const gasPriceHexResolved = gasPriceHex ?? "0x0";
           const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
-          const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei fallback
+          const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei
+
+          // ---- robust gas handling ----
+          // thirdweb sometimes passes gas/gasLimit=0 — NEVER use that.
+          const providedGasHex = asHexQuantity(tx.gas ?? tx.gasLimit);
+          const providedGasBI = hexToBigInt(providedGasHex);
+
+          // Build the estimate call including fee fields if present (some RPCs need this)
+          const estimateCall: any = {
+            from: tx.from,
+            to,
+            data,
+            value: tx.value ?? "0x0",
+          };
+
+          if (is1559) {
+            estimateCall.maxFeePerGas = maxFeeHexResolved;
+            estimateCall.maxPriorityFeePerGas = maxPrioHexResolved;
+          } else {
+            estimateCall.gasPrice = gasPriceHexResolved;
+          }
+
+          let estimatedGasBI = 0n;
+          try {
+            const estHex = await rpcRequest(rpcUrl, "eth_estimateGas", [estimateCall]);
+            estimatedGasBI = hexToBigInt(estHex);
+          } catch {
+            // if estimate fails, still never use 0
+            estimatedGasBI = 650_000n; // safe fallback for your withdraws (tune if needed)
+          }
+
+          // choose gas = max(estimate, providedGas if >0), then bump
+          let finalGas = estimatedGasBI;
+          if (providedGasBI > finalGas) finalGas = providedGasBI;
+
+          // never allow 0
+          if (finalGas <= 0n) finalGas = 650_000n;
+
+          finalGas = bumpGas(finalGas, 1200n); // +12%
 
           const unsignedTx = Transaction.from({
             chainId,
             to,
             nonce: Number(BigInt(nonceHex)),
-            gasLimit: BigInt(gasHex),
+            gasLimit: finalGas,
             data,
             value,
             ...(is1559
@@ -262,17 +279,11 @@ async function createLedgerEip1193Provider(opts: {
           return "0x" + res.r + res.s + res.v.toString(16).padStart(2, "0");
         }
 
-        // ✅ Let thirdweb/RPC do their thing for read + metadata calls
         default: {
-          // Forward common RPC methods that thirdweb uses for prep/estimation
-          if (
-            method.startsWith("eth_") ||
-            method.startsWith("net_") ||
-            method.startsWith("web3_")
-          ) {
+          // Let thirdweb/RPC do reads + chain metadata calls normally
+          if (method.startsWith("eth_") || method.startsWith("net_") || method.startsWith("web3_")) {
             return await passthrough(method, p);
           }
-
           throw new Error(`Unsupported method: ${method}`);
         }
       }
