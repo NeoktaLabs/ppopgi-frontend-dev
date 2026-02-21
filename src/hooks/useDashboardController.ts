@@ -10,9 +10,8 @@ import {
   fetchRafflesByIds,
   fetchRaffleParticipants,
   fetchMyFundsClaimedRaffleIds,
-  // ✅ MUST exist in subgraph.ts (fix your import mismatch)
-  // If your subgraph exports `fetchAllRafflesByFeeRecipientPaged`, import that name instead.
-  fetchRafflesByFeeRecipientPaged,
+  // ✅ IMPORTANT: match your subgraph.ts export
+  fetchAllRafflesByFeeRecipientPaged as fetchRafflesByFeeRecipientPaged,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -117,15 +116,13 @@ async function mapPool<T, R>(
   const out: R[] = new Array(items.length) as any;
   let i = 0;
 
-  const workers = new Array(Math.min(concurrency, items.length))
-    .fill(0)
-    .map(async () => {
-      while (true) {
-        const idx = i++;
-        if (idx >= items.length) return;
-        out[idx] = await fn(items[idx], idx);
-      }
-    });
+  const workers = new Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
+    while (true) {
+      const idx = i++;
+      if (idx >= items.length) return;
+      out[idx] = await fn(items[idx], idx);
+    }
+  });
 
   await Promise.all(workers);
   return out;
@@ -145,7 +142,7 @@ function scoreForClaimScan(r: RaffleListItem): number {
 
 /**
  * Read claimableFunds/claimableNative/ticketsOwned with a short-lived cache.
- * Keeps existing logic: failures become 0, and we never throw.
+ * Failures become 0; never throws.
  */
 async function readDashboardValues(args: {
   raffleId: string;
@@ -206,10 +203,7 @@ export function useDashboardController() {
   const [claimables, setClaimables] = useState<ClaimableItem[]>([]);
   const [localPending, setLocalPending] = useState(true);
   const [txPending, setTxPending] = useState(false);
-
-  // ✅ message banner removed
-  // const [msg, setMsg] = useState<string | null>(null);
-
+  const [msg, setMsg] = useState<string | null>(null);
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
   // Cache + single-flight joinedIds
@@ -225,7 +219,7 @@ export function useDashboardController() {
   // cache for "already withdrew USDC" (FUNDS_CLAIMED) per account
   const fundsClaimedCacheRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
 
-  // ✅ feeRecipient raffles fetch cache + single-flight
+  // feeRecipient raffles fetch cache + single-flight
   const feeRafflesCacheRef = useRef<{ ts: number; account: string; raffles: RaffleListItem[] } | null>(null);
   const feeRafflesPromiseRef = useRef<Promise<RaffleListItem[]> | null>(null);
   const feeRafflesBackoffMsRef = useRef(0);
@@ -250,8 +244,8 @@ export function useDashboardController() {
     rpcCacheRef.current = new Map();
     lastBgRunRef.current = 0;
     rpcConcurrencyRef.current = { joinedOwned: 12, claimScan: 10 };
-
     setHiddenClaimables({});
+    setMsg(null);
     setCreated([]);
     setJoined([]);
     setClaimables([]);
@@ -324,7 +318,7 @@ export function useDashboardController() {
     return await joinedIdsPromiseRef.current;
   }, [account]);
 
-  // ✅ fetch all raffles where this account is feeRecipient (paged), cached + single-flight
+  // fetch all raffles where this account is feeRecipient (paged), cached + single-flight
   const getFeeRecipientRaffles = useCallback(async (): Promise<RaffleListItem[]> => {
     if (!account) return [];
     const acct = account.toLowerCase();
@@ -380,8 +374,6 @@ export function useDashboardController() {
       }
 
       if (isBackground && !isVisible()) return;
-
-      // ✅ reduce RPC spam while a tx is pending
       if (isBackground && txPending) return;
 
       if (isBackground) {
@@ -526,7 +518,7 @@ export function useDashboardController() {
           return prev;
         });
 
-        // Claimables: include created + joined + feeRecipient (paged) raffles
+        // Claimables: include created + joined + feeRecipient raffles
         const candidateById = new Map<string, RaffleListItem>();
         myCreated.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
         joinedBase.forEach((r) => candidateById.set(normId(r.id), { ...r, id: normId(r.id) }));
@@ -669,7 +661,8 @@ export function useDashboardController() {
           };
         }
 
-        // ✅ message banner removed: no setMsg here
+        // ✅ no special user-facing error details
+        if (!isBackground) setMsg("Failed to load dashboard data.");
       } finally {
         if (!isBackground) setLocalPending(false);
       }
@@ -760,6 +753,7 @@ export function useDashboardController() {
   // return boolean so UI can reliably know if tx succeeded
   const withdraw = async (raffleId: string, method: DashTxMethod): Promise<boolean> => {
     if (!account) return false;
+    setMsg(null);
 
     const rid = normId(raffleId);
     setTxPending(true);
@@ -780,28 +774,24 @@ export function useDashboardController() {
         })
       );
 
-      // Clear cached reads so immediate post-tx checks aren't stale
       clearRpcCacheFor(rid, account);
-
-      // Always revalidate other pages/widgets
       emitRevalidate();
 
-      // If this was the refund "step 1", keep card visible.
       if (method === "claimTicketRefund") {
+        setMsg("✅ Reclaimed. Now withdraw.");
         fundsClaimedCacheRef.current = null;
         await refreshRaffleStore(true, true);
         await recompute(true);
         return true;
       }
 
-      // For withdrawFunds / withdrawNative:
       let stillHasSomething = true;
       try {
         const v = await readDashboardValues({
           raffleId: rid,
           account,
           cache: rpcCacheRef.current,
-          ttlMs: 0, // force read
+          ttlMs: 0,
         });
 
         const cf = BigInt(v.cf);
@@ -817,6 +807,8 @@ export function useDashboardController() {
         setHiddenClaimables((p) => ({ ...p, [rid]: true }));
       }
 
+      setMsg("Claim successful.");
+
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
       fundsClaimedCacheRef.current = null;
@@ -827,8 +819,9 @@ export function useDashboardController() {
       await refreshRaffleStore(true, true);
       await recompute(true);
       return true;
-    } catch (e) {
+    } catch (e: any) {
       console.error("Withdraw failed", e);
+      setMsg("Transaction failed.");
       return false;
     } finally {
       setTxPending(false);
@@ -836,12 +829,12 @@ export function useDashboardController() {
   };
 
   const refresh = async () => {
+    setMsg(null);
     setHiddenClaimables({});
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
     fundsClaimedCacheRef.current = null;
 
-    // reset feeRecipient scan cache
     feeRafflesCacheRef.current = null;
     feeRafflesBackoffMsRef.current = 0;
 
@@ -858,8 +851,7 @@ export function useDashboardController() {
       created: createdSorted,
       joined: joinedSorted,
       claimables: claimablesSorted,
-      // ✅ msg removed
-      // msg,
+      msg,
       isPending: txPending || localPending || store.isLoading,
       isColdLoading,
       isRefreshing,
