@@ -11,7 +11,7 @@ import {
   fetchRaffleParticipants,
   fetchMyFundsClaimedRaffleIds,
   // ✅ IMPORTANT: match your subgraph.ts export
-  fetchAllRafflesByFeeRecipientPaged as fetchRafflesByFeeRecipientPaged,
+  fetchRafflesByFeeRecipientPaged as fetchRafflesByFeeRecipientPaged,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
