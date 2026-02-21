@@ -69,19 +69,22 @@ type MinimalEip1193Provider = {
 
 /**
  * ✅ IMPORTANT:
- * Newer Ledger ETH app / ledgerjs versions require an explicit "resolution" param.
- * If you pass nothing (or a malformed object), you'll get:
- *   "resolution.domains is not iterable"
+ * Ledger ETH app / ledgerjs requires an explicit "resolution" param in some versions.
+ * If you pass nothing or a malformed object, you can get:
+ *   "resolution.<field> is not iterable"
  *
- * This "empty resolution" is safe and avoids network plugin fetching.
+ * This "empty resolution" is safe and avoids plugin/network fetching.
  */
 function emptyLedgerResolution() {
   return {
+    // arrays must be arrays (iterables)
     domains: [] as any[],
     erc20Tokens: [] as any[],
     nfts: [] as any[],
+
+    // these two are the ones that often crash if not iterable
     externalPlugin: [] as any[],
-    plugin: null as any,
+    plugin: [] as any[], // ✅ FIX: was null -> must be iterable
   };
 }
 
@@ -108,6 +111,8 @@ async function createLedgerEip1193Provider(opts: {
     removeListener,
 
     async request({ method, params }: Eip1193RequestArgs) {
+      const p = Array.isArray(params) ? params : [];
+
       switch (method) {
         case "eth_requestAccounts":
         case "eth_accounts": {
@@ -119,7 +124,7 @@ async function createLedgerEip1193Provider(opts: {
           return hexChainId;
 
         case "wallet_switchEthereumChain": {
-          const [{ chainId: requested }] = (params ?? []) as any[];
+          const [{ chainId: requested } = {} as any] = p as any[];
           if (requested && requested !== hexChainId) {
             throw new Error(`Ledger USB: chain ${requested} not supported (expected ${hexChainId}).`);
           }
@@ -127,7 +132,7 @@ async function createLedgerEip1193Provider(opts: {
         }
 
         case "eth_sendTransaction": {
-          const [tx] = (params ?? []) as any[];
+          const [tx] = p as any[];
           if (!tx) throw new Error("Missing transaction object.");
 
           const s = await getSession();
@@ -191,7 +196,7 @@ async function createLedgerEip1193Provider(opts: {
             ? unsignedTx.unsignedSerialized.slice(2)
             : unsignedTx.unsignedSerialized;
 
-          // ✅ Pass explicit resolution (prevents "domains is not iterable")
+          // ✅ Pass explicit resolution with iterable fields
           const resolution = emptyLedgerResolution();
           const sig = await s.eth.signTransaction(s.path, payloadHex, resolution);
 
@@ -208,7 +213,7 @@ async function createLedgerEip1193Provider(opts: {
 
         case "personal_sign": {
           const s = await getSession();
-          const [message, address] = (params ?? []) as any[];
+          const [message, address] = p as any[];
 
           const addr = String(address || "").toLowerCase();
           if (addr && addr !== s.address.toLowerCase()) {
@@ -249,7 +254,7 @@ export function useLedgerUsbWallet() {
 
         const wallet = EIP1193.fromProvider({
           walletId: "io.metamask",
-          provider: async (_params?: { chainId?: number }) => {
+          provider: async () => {
             return await createLedgerEip1193Provider({
               chainId: opts.chain.id,
               rpcUrl,
