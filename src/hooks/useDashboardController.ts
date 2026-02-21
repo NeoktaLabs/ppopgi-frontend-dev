@@ -10,8 +10,8 @@ import {
   fetchRafflesByIds,
   fetchRaffleParticipants,
   fetchMyFundsClaimedRaffleIds,
-  // ✅ IMPORTANT: match your subgraph.ts export
-  fetchRafflesByFeeRecipientPaged as fetchRafflesByFeeRecipientPaged,
+  // ✅ OPTION 2: paged wrapper that accepts { pageSize, maxPages }
+  fetchAllRafflesByFeeRecipientPaged,
   type RaffleListItem,
 } from "../indexer/subgraph";
 import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
@@ -318,7 +318,7 @@ export function useDashboardController() {
     return await joinedIdsPromiseRef.current;
   }, [account]);
 
-  // fetch all raffles where this account is feeRecipient (paged), cached + single-flight
+  // ✅ fetch all raffles where this account is feeRecipient (paged), cached + single-flight
   const getFeeRecipientRaffles = useCallback(async (): Promise<RaffleListItem[]> => {
     if (!account) return [];
     const acct = account.toLowerCase();
@@ -338,7 +338,7 @@ export function useDashboardController() {
 
     feeRafflesPromiseRef.current = (async () => {
       try {
-        const raffles = await fetchRafflesByFeeRecipientPaged(acct, {
+        const raffles = await fetchAllRafflesByFeeRecipientPaged(acct, {
           pageSize: 200,
           maxPages: 10,
         });
@@ -418,7 +418,8 @@ export function useDashboardController() {
 
         const joinedIdArr = Array.from(joinedIds);
 
-        const joinedBaseFromStore = joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+        const joinedBaseFromStore =
+          joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
         setCreated(myCreated);
 
@@ -513,7 +514,8 @@ export function useDashboardController() {
           for (let i = 0; i < prev.length; i++) {
             if (normId(prev[i].id) !== normId(nextJoined[i].id)) return nextJoined;
             if (String(prev[i].userTicketsOwned) !== String(nextJoined[i].userTicketsOwned)) return nextJoined;
-            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? "")) return nextJoined;
+            if (String(prev[i].userTicketsBought ?? "") !== String(nextJoined[i].userTicketsBought ?? ""))
+              return nextJoined;
           }
           return prev;
         });
@@ -596,7 +598,8 @@ export function useDashboardController() {
 
           const isAnythingClaimable = cf > 0n || cn > 0n;
 
-          if (!isWinnerEligible && !isParticipantRefundEligible && !isCreatorReclaimEligible && !isAnythingClaimable) return;
+          if (!isWinnerEligible && !isParticipantRefundEligible && !isCreatorReclaimEligible && !isAnythingClaimable)
+            return;
 
           if (isWinnerEligible) {
             newClaimables.push({
@@ -730,10 +733,10 @@ export function useDashboardController() {
     [joined]
   );
 
-  const claimablesSorted = useMemo(
-    () => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]),
-    [claimables, hiddenClaimables]
-  );
+  const claimablesSorted = useMemo(() => claimables.filter((c) => !hiddenClaimables[normId(c.raffle.id)]), [
+    claimables,
+    hiddenClaimables,
+  ]);
 
   function emitRevalidate() {
     try {
