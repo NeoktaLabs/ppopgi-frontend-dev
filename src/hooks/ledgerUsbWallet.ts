@@ -54,6 +54,45 @@ function bumpGas(gas: bigint, bumpBps = 1200n): bigint {
   return (gas * (10_000n + bumpBps)) / 10_000n;
 }
 
+function isZeroHex(v: any): boolean {
+  if (v == null) return true;
+  if (typeof v === "number") return v === 0;
+  if (typeof v === "bigint") return v === 0n;
+  if (typeof v === "string") {
+    const s = v.toLowerCase();
+    return s === "0x0" || s === "0x" || s === "0";
+  }
+  try {
+    return BigInt(v) === 0n;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * ✅ Some RPC nodes will ERROR if you pass gas/gasLimit=0 in eth_estimateGas.
+ * thirdweb sometimes does that in pre-flight.
+ *
+ * We sanitize the tx object for eth_estimateGas:
+ * - remove gas / gasLimit if 0
+ * - normalize value/data
+ */
+function sanitizeTxForEstimate(tx: any): any {
+  const t = { ...(tx ?? {}) };
+
+  // remove 0 gas fields (this is the actual fix for your error)
+  if ("gas" in t && isZeroHex(t.gas)) delete t.gas;
+  if ("gasLimit" in t && isZeroHex(t.gasLimit)) delete t.gasLimit;
+
+  // data default
+  if (!t.data) t.data = "0x";
+
+  // value: if it is 0 or missing, prefer 0x0
+  if (t.value == null || isZeroHex(t.value)) t.value = "0x0";
+
+  return t;
+}
+
 type LedgerSession = {
   transport: any;
   eth: any;
@@ -146,9 +185,24 @@ async function createLedgerEip1193Provider(opts: {
           return null;
         }
 
+        /**
+         * ✅ CRITICAL FIX:
+         * thirdweb calls eth_estimateGas before sending.
+         * If it includes gas=0x0, some RPCs throw:
+         * "provided gas limit (0) is insufficient..."
+         */
+        case "eth_estimateGas": {
+          const [tx, blockTag] = p as any[];
+          const clean = sanitizeTxForEstimate(tx);
+          // preserve blockTag if passed
+          return await rpcRequest(rpcUrl, "eth_estimateGas", blockTag != null ? [clean, blockTag] : [clean]);
+        }
+
         case "eth_sendTransaction": {
-          const [tx] = p as any[];
-          if (!tx) throw new Error("Missing transaction object.");
+          const [txRaw] = p as any[];
+          if (!txRaw) throw new Error("Missing transaction object.");
+
+          const tx = sanitizeTxForEstimate(txRaw);
 
           const s = await getSession();
 
@@ -178,7 +232,6 @@ async function createLedgerEip1193Provider(opts: {
           if (hexToBigInt(maxPriorityFeePerGasHex) === 0n) maxPriorityFeePerGasHex = undefined;
           if (hexToBigInt(gasPriceHex) === 0n) gasPriceHex = undefined;
 
-          // If none provided, fetch gasPrice as fallback
           if (!maxFeePerGasHex && !gasPriceHex) {
             gasPriceHex = await rpcRequest(rpcUrl, "eth_gasPrice", []);
           }
@@ -188,12 +241,7 @@ async function createLedgerEip1193Provider(opts: {
           const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
           const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00"; // 1 gwei
 
-          // ---- robust gas handling ----
-          // thirdweb sometimes passes gas/gasLimit=0 — NEVER use that.
-          const providedGasHex = asHexQuantity(tx.gas ?? tx.gasLimit);
-          const providedGasBI = hexToBigInt(providedGasHex);
-
-          // Build the estimate call including fee fields if present (some RPCs need this)
+          // ---- always estimate gas ourselves (never 0) ----
           const estimateCall: any = {
             from: tx.from,
             to,
@@ -213,18 +261,11 @@ async function createLedgerEip1193Provider(opts: {
             const estHex = await rpcRequest(rpcUrl, "eth_estimateGas", [estimateCall]);
             estimatedGasBI = hexToBigInt(estHex);
           } catch {
-            // if estimate fails, still never use 0
-            estimatedGasBI = 650_000n; // safe fallback for your withdraws (tune if needed)
+            estimatedGasBI = 650_000n; // safe fallback for your withdraws
           }
 
-          // choose gas = max(estimate, providedGas if >0), then bump
-          let finalGas = estimatedGasBI;
-          if (providedGasBI > finalGas) finalGas = providedGasBI;
-
-          // never allow 0
-          if (finalGas <= 0n) finalGas = 650_000n;
-
-          finalGas = bumpGas(finalGas, 1200n); // +12%
+          if (estimatedGasBI <= 0n) estimatedGasBI = 650_000n;
+          const finalGas = bumpGas(estimatedGasBI, 1200n); // +12%
 
           const unsignedTx = Transaction.from({
             chainId,
