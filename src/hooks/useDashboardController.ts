@@ -10,8 +10,8 @@ import {
   fetchRafflesByIds,
   fetchRaffleParticipants,
   fetchMyFundsClaimedRaffleIds,
-  // ✅ NEW (from your updated subgraph.ts)
-  // If your function name differs, rename this import to match subgraph.ts exactly.
+  // ✅ MUST exist in subgraph.ts (fix your import mismatch)
+  // If your subgraph exports `fetchAllRafflesByFeeRecipientPaged`, import that name instead.
   fetchRafflesByFeeRecipientPaged,
   type RaffleListItem,
 } from "../indexer/subgraph";
@@ -106,23 +106,6 @@ function normId(v: string): string {
   return s.startsWith("0x") ? s : `0x${s}`;
 }
 
-function extractErrorMessage(e: any): string {
-  const parts = [
-    e?.reason,
-    e?.shortMessage,
-    e?.cause?.reason,
-    e?.cause?.shortMessage,
-    e?.cause?.message,
-    e?.message,
-    e?.toString?.(),
-  ]
-    .filter(Boolean)
-    .map((x) => String(x));
-
-  const joined = parts.join(" | ");
-  return (joined || "Unknown error").slice(0, 260);
-}
-
 /**
  * Simple concurrency pool to avoid hammering RPC.
  */
@@ -134,13 +117,15 @@ async function mapPool<T, R>(
   const out: R[] = new Array(items.length) as any;
   let i = 0;
 
-  const workers = new Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
-    while (true) {
-      const idx = i++;
-      if (idx >= items.length) return;
-      out[idx] = await fn(items[idx], idx);
-    }
-  });
+  const workers = new Array(Math.min(concurrency, items.length))
+    .fill(0)
+    .map(async () => {
+      while (true) {
+        const idx = i++;
+        if (idx >= items.length) return;
+        out[idx] = await fn(items[idx], idx);
+      }
+    });
 
   await Promise.all(workers);
   return out;
@@ -221,7 +206,10 @@ export function useDashboardController() {
   const [claimables, setClaimables] = useState<ClaimableItem[]>([]);
   const [localPending, setLocalPending] = useState(true);
   const [txPending, setTxPending] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+
+  // ✅ message banner removed
+  // const [msg, setMsg] = useState<string | null>(null);
+
   const [hiddenClaimables, setHiddenClaimables] = useState<Record<string, boolean>>({});
 
   // Cache + single-flight joinedIds
@@ -237,7 +225,7 @@ export function useDashboardController() {
   // cache for "already withdrew USDC" (FUNDS_CLAIMED) per account
   const fundsClaimedCacheRef = useRef<{ ts: number; account: string; ids: Set<string> } | null>(null);
 
-  // ✅ NEW: feeRecipient raffles fetch cache + single-flight
+  // ✅ feeRecipient raffles fetch cache + single-flight
   const feeRafflesCacheRef = useRef<{ ts: number; account: string; raffles: RaffleListItem[] } | null>(null);
   const feeRafflesPromiseRef = useRef<Promise<RaffleListItem[]> | null>(null);
   const feeRafflesBackoffMsRef = useRef(0);
@@ -262,8 +250,8 @@ export function useDashboardController() {
     rpcCacheRef.current = new Map();
     lastBgRunRef.current = 0;
     rpcConcurrencyRef.current = { joinedOwned: 12, claimScan: 10 };
+
     setHiddenClaimables({});
-    setMsg(null);
     setCreated([]);
     setJoined([]);
     setClaimables([]);
@@ -326,7 +314,6 @@ export function useDashboardController() {
         if (isRateLimitError(e)) {
           const cur = joinedBackoffMsRef.current || 0;
           joinedBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
-          setMsg("Indexer rate-limited. Retrying shortly…");
         }
         return cached?.account === acct ? cached.ids : new Set<string>();
       } finally {
@@ -337,7 +324,7 @@ export function useDashboardController() {
     return await joinedIdsPromiseRef.current;
   }, [account]);
 
-  // ✅ NEW: fetch all raffles where this account is feeRecipient (paged), cached + single-flight
+  // ✅ fetch all raffles where this account is feeRecipient (paged), cached + single-flight
   const getFeeRecipientRaffles = useCallback(async (): Promise<RaffleListItem[]> => {
     if (!account) return [];
     const acct = account.toLowerCase();
@@ -347,7 +334,6 @@ export function useDashboardController() {
     const backoff = feeRafflesBackoffMsRef.current || 0;
     const cached = feeRafflesCacheRef.current;
     if (backoff > 0 && cached && cached.account === acct) {
-      // If within backoff window, just serve cache
       if (now - cached.ts < backoff) return cached.raffles;
     }
 
@@ -358,8 +344,6 @@ export function useDashboardController() {
 
     feeRafflesPromiseRef.current = (async () => {
       try {
-        // Conservative caps to protect the indexer; adjust in subgraph.ts if desired.
-        // This should return raffles including full RAFFLE_FIELDS.
         const raffles = await fetchRafflesByFeeRecipientPaged(acct, {
           pageSize: 200,
           maxPages: 10,
@@ -373,9 +357,7 @@ export function useDashboardController() {
         if (isRateLimitError(e)) {
           const cur = feeRafflesBackoffMsRef.current || 0;
           feeRafflesBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
-          setMsg("Indexer rate-limited. Retrying shortly…");
         }
-        // Fail-open: return cached if exists
         return cached?.account === acct ? cached.raffles : [];
       } finally {
         feeRafflesPromiseRef.current = null;
@@ -399,7 +381,7 @@ export function useDashboardController() {
 
       if (isBackground && !isVisible()) return;
 
-      // ✅ reduce RPC spam while a tx is pending (prevents rate-limit during Ledger signing / estimate)
+      // ✅ reduce RPC spam while a tx is pending
       if (isBackground && txPending) return;
 
       if (isBackground) {
@@ -423,13 +405,8 @@ export function useDashboardController() {
 
         const myCreated = allRaffles.filter((r) => r.creator?.toLowerCase() === myAddr);
 
-        // ✅ NEW: combine feeRecipient raffles from:
-        // - fast path: store (recent)
-        // - slow path: paged subgraph scan (older)
         const myFeeFromStore = allRaffles.filter((r) => (r as any).feeRecipient?.toLowerCase() === myAddr);
 
-        // Only run the paged scan when visible (and not too chatty)
-        // (Still okay in background if visible; your existing bg throttle applies.)
         let myFeeFromSubgraph: RaffleListItem[] = [];
         if (isVisible()) {
           myFeeFromSubgraph = await getFeeRecipientRaffles();
@@ -449,8 +426,7 @@ export function useDashboardController() {
 
         const joinedIdArr = Array.from(joinedIds);
 
-        const joinedBaseFromStore =
-          joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
+        const joinedBaseFromStore = joinedIdArr.length === 0 ? [] : allRaffles.filter((r) => joinedIds.has(normId(r.id)));
 
         setCreated(myCreated);
 
@@ -618,10 +594,8 @@ export function useDashboardController() {
           const isCanceled = r.status === "CANCELED";
           const alreadyWithdrewFunds = isCanceled && fundsClaimedSet.has(rid);
 
-          // "nothing left" guard (after successful withdraw)
           const nothingLeftNow = alreadyWithdrewFunds && cf === 0n && cn === 0n && ticketsOwned === 0n;
 
-          // refunds are for participants; creator/fee reclaim is NOT a refund.
           const isCreatorOrFee = !!roles.created || !!roles.feeRecipient;
           const isParticipant = !!roles.participated;
 
@@ -644,7 +618,6 @@ export function useDashboardController() {
             return;
           }
 
-          // Creator/fee reclaim comes BEFORE refund classification
           if (isCreatorReclaimEligible) {
             newClaimables.push({
               raffle: { ...r, id: rid },
@@ -696,7 +669,7 @@ export function useDashboardController() {
           };
         }
 
-        if (!isBackground) setMsg("Failed to load dashboard data.");
+        // ✅ message banner removed: no setMsg here
       } finally {
         if (!isBackground) setLocalPending(false);
       }
@@ -787,10 +760,8 @@ export function useDashboardController() {
   // return boolean so UI can reliably know if tx succeeded
   const withdraw = async (raffleId: string, method: DashTxMethod): Promise<boolean> => {
     if (!account) return false;
-    setMsg(null);
 
     const rid = normId(raffleId);
-
     setTxPending(true);
 
     try {
@@ -817,7 +788,6 @@ export function useDashboardController() {
 
       // If this was the refund "step 1", keep card visible.
       if (method === "claimTicketRefund") {
-        setMsg("✅ Reclaimed. Now withdraw.");
         fundsClaimedCacheRef.current = null;
         await refreshRaffleStore(true, true);
         await recompute(true);
@@ -847,30 +817,18 @@ export function useDashboardController() {
         setHiddenClaimables((p) => ({ ...p, [rid]: true }));
       }
 
-      setMsg("Claim successful.");
-
       lastJoinedIdsRef.current = null;
       joinedBackoffMsRef.current = 0;
       fundsClaimedCacheRef.current = null;
 
-      // ✅ Important: feeRecipient results can change too (fees claimed)
+      // feeRecipient results can change too (fees claimed)
       feeRafflesCacheRef.current = null;
 
       await refreshRaffleStore(true, true);
       await recompute(true);
       return true;
-    } catch (e: any) {
+    } catch (e) {
       console.error("Withdraw failed", e);
-      const reason = extractErrorMessage(e);
-
-      if (String(reason).toLowerCase().includes("too many requests")) {
-        setMsg("RPC rate-limited. Please wait ~10s and try again.");
-      } else if (String(reason).toLowerCase().includes("resolution")) {
-        setMsg("Ledger signing needs resolution/blind-signing. Enable Blind signing in Ledger Ethereum app settings.");
-      } else {
-        setMsg(`Claim failed: ${reason}`);
-      }
-
       return false;
     } finally {
       setTxPending(false);
@@ -878,13 +836,12 @@ export function useDashboardController() {
   };
 
   const refresh = async () => {
-    setMsg(null);
     setHiddenClaimables({});
     lastJoinedIdsRef.current = null;
     joinedBackoffMsRef.current = 0;
     fundsClaimedCacheRef.current = null;
 
-    // ✅ also reset feeRecipient scan cache
+    // reset feeRecipient scan cache
     feeRafflesCacheRef.current = null;
     feeRafflesBackoffMsRef.current = 0;
 
@@ -901,7 +858,8 @@ export function useDashboardController() {
       created: createdSorted,
       joined: joinedSorted,
       claimables: claimablesSorted,
-      msg,
+      // ✅ msg removed
+      // msg,
       isPending: txPending || localPending || store.isLoading,
       isColdLoading,
       isRefreshing,
