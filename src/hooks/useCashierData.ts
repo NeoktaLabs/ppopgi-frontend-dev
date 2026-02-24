@@ -7,7 +7,12 @@ import { getWalletBalance } from "thirdweb/wallets";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 
-const USDC_ADDRESS = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
+// Prefer env override; fallback to your current address.
+const DEFAULT_USDC_ADDRESS = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
+function getUsdcAddress(): string {
+  const v = (import.meta as any).env?.VITE_USDC_ADDRESS;
+  return (typeof v === "string" && v.trim() ? v.trim() : DEFAULT_USDC_ADDRESS).toLowerCase();
+}
 
 // Minimal ERC20 ABI (only what we use)
 const ERC20_ABI = [
@@ -33,6 +38,17 @@ function fmtMax4(raw: bigint, decimals: number) {
   }
 }
 
+function toBigIntSafe(v: unknown): bigint {
+  try {
+    if (typeof v === "bigint") return v;
+    if (typeof v === "number") return BigInt(Math.trunc(v));
+    if (typeof v === "string" && v.trim() !== "") return BigInt(v);
+    return 0n;
+  } catch {
+    return 0n;
+  }
+}
+
 export function useCashierData(isOpen: boolean) {
   const activeAccount = useActiveAccount();
   const me = activeAccount?.address ?? null;
@@ -42,14 +58,14 @@ export function useCashierData(isOpen: boolean) {
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  // guards against stale async responses (open/close, account switching)
+  // Guards against stale async responses (open/close, account switching)
   const reqIdRef = useRef(0);
 
   const usdcContract = useMemo(() => {
     return getContract({
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
-      address: USDC_ADDRESS,
+      address: getUsdcAddress(),
       abi: ERC20_ABI,
     });
   }, []);
@@ -58,6 +74,9 @@ export function useCashierData(isOpen: boolean) {
     const reqId = ++reqIdRef.current;
 
     setNote(null);
+
+    // If modal is closed, don't even start work
+    if (!isOpen) return;
 
     if (!me) {
       setXtz(null);
@@ -82,27 +101,27 @@ export function useCashierData(isOpen: boolean) {
         }),
       ]);
 
-      // ignore stale responses
-      if (reqId !== reqIdRef.current) return;
+      // Ignore stale responses or closed modal
+      if (reqId !== reqIdRef.current || !isOpen) return;
 
-      setXtz(BigInt((native as any).value ?? 0n));
-      setUsdc(BigInt(token ?? 0n));
+      setXtz(toBigIntSafe((native as { value?: bigint }).value));
+      setUsdc(toBigIntSafe(token));
     } catch {
-      if (reqId !== reqIdRef.current) return;
+      if (reqId !== reqIdRef.current || !isOpen) return;
       setXtz(null);
       setUsdc(null);
       setNote("Could not load balances. Try refreshing.");
     } finally {
-      if (reqId === reqIdRef.current) setLoading(false);
+      if (reqId === reqIdRef.current && isOpen) setLoading(false);
     }
-  }, [me, usdcContract]);
+  }, [me, usdcContract, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     refresh();
 
-    // invalidate any in-flight request when modal closes/unmounts
+    // Invalidate any in-flight request when modal closes/unmounts
     return () => {
       reqIdRef.current++;
     };
