@@ -1,4 +1,4 @@
-// src/hooks/useCreateRaffleForm.ts
+// src/hooks/useCreateLotteryForm.ts
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { parseUnits } from "ethers";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
@@ -46,8 +46,8 @@ const ERC20_ABI = [
   },
 ] as const;
 
-// ✅ Factory ABI (typed) — prevents “no function defined” wallet UI + encoding issues
-const FACTORY_ABI = [
+// Deployer ABI (typed)
+const DEPLOYER_ABI = [
   {
     type: "function",
     name: "createSingleWinnerLottery",
@@ -61,32 +61,27 @@ const FACTORY_ABI = [
       { name: "durationSeconds", type: "uint64" },
       { name: "minPurchaseAmount", type: "uint32" },
     ],
-    outputs: [{ name: "raffle", type: "address" }],
+    outputs: [{ name: "lottery", type: "address" }],
   },
 ] as const;
 
-// ✅ optimistic + revalidate events (Home responsiveness without hammering indexer)
-type OptimisticCreateDetail = {
-  kind: "CREATE";
-  patchId?: string;
-  raffleId: string;
-  name: string;
-  creator: string;
-  createdAtTimestamp: string;
-  creationTx?: string | null;
-  winningPot: string;
-  ticketPrice: string;
-  deadline: string;
-  minTickets: string;
-  maxTickets: string;
-  sold: string;
-  lastUpdatedTimestamp: string;
+// -------------------- App events --------------------
+
+type ActivityDetail = {
+  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
+  lotteryId: string;
+  lotteryName: string;
+  subject: string; // creator/buyer/winner
+  value: string; // count or pot
+  timestamp: string; // seconds
+  txHash: string;
+  pendingLabel?: string;
 };
 
-function emitOptimisticCreate(detail: OptimisticCreateDetail) {
+function emitActivity(detail: ActivityDetail) {
   try {
     if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent("ppopgi:optimistic", { detail }));
+    window.dispatchEvent(new CustomEvent("ppopgi:activity", { detail }));
   } catch {
     // ignore
   }
@@ -100,17 +95,32 @@ function emitRevalidate(withDelayedPing = true) {
 
   if (!withDelayedPing) return;
 
+  // Delayed ping helps catch up if indexer ingestion is slightly behind.
   try {
-    if (typeof window === "undefined") return;
     window.setTimeout(() => {
       try {
         window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
       } catch {}
-    }, 7000); // give indexer time to ingest
+    }, 7000);
   } catch {}
 }
 
-export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string) => void) {
+// -------------------- Helpers --------------------
+
+function isHexAddressTopic(topic: unknown): topic is string {
+  if (typeof topic !== "string") return false;
+  // 0x + 64 hex chars (32 bytes)
+  return /^0x[0-9a-fA-F]{64}$/.test(topic);
+}
+
+function topicToAddress(topic: string): string {
+  // last 20 bytes
+  return ("0x" + topic.slice(26)).toLowerCase();
+}
+
+// -------------------- Hook --------------------
+
+export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string) => void) {
   const account = useActiveAccount();
   const me = account?.address ?? null;
   const { mutateAsync: sendAndConfirm, isPending } = useSendAndConfirmTransaction();
@@ -136,14 +146,13 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
   // stale-response guard
   const reqIdRef = useRef(0);
 
-  // --- Contracts ---
-  const factoryContract = useMemo(
+  const deployerContract = useMemo(
     () =>
       getContract({
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.SingleWinnerDeployer,
-        abi: FACTORY_ABI, // ✅ important
+        abi: DEPLOYER_ABI,
       }),
     []
   );
@@ -187,7 +196,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
   const minPurchaseU32 = Math.max(1, toInt(minPurchaseAmount, 1));
 
   // --- Validation ---
-  const durOk = durationSecondsN >= 60; // Min 1 min (UI); your modal enforces 10m separately
+  const durOk = durationSecondsN >= 60;
   const hasEnoughAllowance = allowance !== null && allowance >= winningPotU;
   const hasEnoughBalance = usdcBal !== null && usdcBal >= winningPotU;
 
@@ -223,7 +232,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       setUsdcBal(BigInt(bal ?? 0n));
       setAllowance(BigInt(a ?? 0n));
     } catch (e) {
-      console.error("USDC refresh failed", e);
+      console.error("[useCreateLotteryForm] USDC refresh failed", e);
     } finally {
       if (reqId === reqIdRef.current) setAllowLoading(false);
     }
@@ -249,7 +258,7 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
 
       emitRevalidate(false);
     } catch (e) {
-      console.error("Approve failed", e);
+      console.error("[useCreateLotteryForm] approve failed", e);
       setMsg("Approval failed.");
     }
   };
@@ -262,9 +271,8 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
     try {
       setMsg("Please confirm creation in wallet...");
 
-      // ✅ method by NAME (typed), not signature string
       const tx = prepareContractCall({
-        contract: factoryContract,
+        contract: deployerContract,
         method: "createSingleWinnerLottery",
         params: [
           name.trim(),
@@ -279,60 +287,55 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
 
       const receipt = await sendAndConfirm(tx);
 
-      // Try to derive new address from logs (best-effort)
+      // Best-effort: derive new lottery address from logs
       let newAddr = "";
       const logs: any[] = (receipt as any)?.logs ?? [];
       for (const log of logs) {
-        if (String(log?.address || "").toLowerCase() !== ADDRESSES.SingleWinnerDeployer.toLowerCase()) continue;
-        const topics: string[] = log?.topics ?? [];
-        if (topics[1]) {
-          newAddr = "0x" + topics[1].slice(26);
+        const addr = String(log?.address ?? "").toLowerCase();
+        if (addr !== ADDRESSES.SingleWinnerDeployer.toLowerCase()) continue;
+
+        const topics: unknown[] = log?.topics ?? [];
+        // many factories emit: topic[1] = indexed lottery address
+        const t1 = topics[1];
+        if (isHexAddressTopic(t1)) {
+          newAddr = topicToAddress(t1);
           break;
         }
       }
 
-      // ✅ optimistic Home update: show new raffle immediately
-      if (newAddr && me) {
+      // ✅ optimistic ActivityBoard update (immediate UX)
+      if (me) {
         const nowSec = Math.floor(Date.now() / 1000);
         const deadlineSec = nowSec + Math.max(0, durationSecondsN);
 
-        emitOptimisticCreate({
-          kind: "CREATE",
-          patchId: `create:${newAddr}:${nowSec}`,
-          raffleId: newAddr.toLowerCase(),
-          name: name.trim(),
-          creator: me.toLowerCase(),
-          createdAtTimestamp: String(nowSec),
-          creationTx: null,
-          winningPot: String(winningPotU.toString()),
-          ticketPrice: String(ticketPriceU.toString()),
-          deadline: String(deadlineSec),
-          minTickets: String(minT.toString()),
-          maxTickets: String(maxT.toString()),
-          sold: "0",
-          lastUpdatedTimestamp: String(nowSec),
+        emitActivity({
+          type: "CREATE",
+          lotteryId: (newAddr || "0x").toLowerCase(),
+          lotteryName: name.trim() || "New lottery",
+          subject: me.toLowerCase(),
+          value: winningPotU.toString(), // pot
+          timestamp: String(nowSec),
+          txHash: String((receipt as any)?.transactionHash ?? `create:${nowSec}:${me}`),
+          pendingLabel: "Indexing…",
         });
+
+        // Optional: you can also emit a second optimistic BUY/whatever elsewhere
+        // depending on your UX.
+        void deadlineSec; // keep computed if you want to use it in UI later
       }
 
       setMsg("🎉 Success!");
       await refreshAllowance();
 
       emitRevalidate(true);
-
       onCreated?.(newAddr || undefined);
     } catch (e) {
-      console.error("Create failed", e);
+      console.error("[useCreateLotteryForm] create failed", e);
       setMsg("Creation failed.");
     }
   };
 
-  /**
-   * Reduced polling strategy:
-   * - refresh immediately on open
-   * - refresh on focus / visibility changes
-   * - light polling every 15s only while open AND only if not ready yet
-   * - stop polling once allowance is sufficient
-   */
+  // --- Lifecycle ---
   useEffect(() => {
     if (!isOpen) return;
 
@@ -395,7 +398,6 @@ export function useCreateRaffleForm(isOpen: boolean, onCreated?: (addr?: string)
       minT,
       maxT,
       me,
-      configData: { feeRecipient: ADDRESSES.SingleWinnerDeployer, protocolFeePercent: 5 },
     },
     status: {
       msg,
