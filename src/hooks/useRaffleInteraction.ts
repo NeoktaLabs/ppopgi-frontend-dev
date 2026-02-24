@@ -104,24 +104,37 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
   }, []);
 
   // ✅ optimistic store patch (instant UI list bump)
+  // IMPORTANT: your updated store expects { lotteryId }, not { raffleId }.
   const emitOptimisticBuy = useCallback(
     (deltaSold: number, patchId?: string) => {
       try {
         if (typeof window === "undefined" || !lotteryId) return;
+
+        // Optional: store supports deltaRevenue if you want ticketRevenue to bump instantly too
+        const deltaRevenue = (() => {
+          try {
+            const price = BigInt((data as any)?.ticketPrice || "0");
+            return (price * BigInt(Math.max(0, Math.floor(deltaSold)))).toString();
+          } catch {
+            return undefined;
+          }
+        })();
+
         window.dispatchEvent(
           new CustomEvent("ppopgi:optimistic", {
             detail: {
               kind: "BUY",
               patchId,
-              raffleId: lotteryId, // store currently expects raffleId; keep for compatibility
+              lotteryId, // ✅ correct key
               deltaSold,
+              deltaRevenue, // ✅ optional
               tsMs: Date.now(),
             },
           })
         );
       } catch {}
     },
-    [lotteryId]
+    [lotteryId, data]
   );
 
   useEffect(() => {
@@ -139,11 +152,11 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
     return () => clearInterval(t);
   }, [isOpen]);
 
-  const soldNow = Number(data?.sold || "0");
-  const maxTicketsN = Number(data?.maxTickets || "0");
+  const soldNow = Number((data as any)?.sold || "0");
+  const maxTicketsN = Number((data as any)?.maxTickets || "0");
   const maxReached = maxTicketsN > 0 && soldNow >= maxTicketsN;
 
-  const deadlineMs = Number(data?.deadline || "0") * 1000;
+  const deadlineMs = Number((data as any)?.deadline || "0") * 1000;
   const deadlinePassed = deadlineMs > 0 && nowMs >= deadlineMs;
 
   const remainingTickets = maxTicketsN > 0 ? Math.max(0, maxTicketsN - soldNow) : null;
@@ -163,7 +176,7 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
 
   const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
 
-  const ticketPriceU = BigInt(data?.ticketPrice || "0");
+  const ticketPriceU = BigInt((data as any)?.ticketPrice || "0");
   const totalCostU = BigInt(ticketCount) * ticketPriceU;
 
   const lotteryContract = useMemo(() => {
@@ -190,8 +203,8 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
   const isConnected = !!account?.address;
 
   const lotteryIsOpen =
-    data?.status === "OPEN" &&
-    !(data as any).paused &&
+    (data as any)?.status === "OPEN" &&
+    !(data as any)?.paused &&
     !deadlinePassed &&
     !maxReached &&
     (maxTicketsN === 0 || (remainingTickets ?? 0) > 0);
@@ -287,7 +300,7 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
       const txh = safeTxHash(receipt);
       const patchId = `buy:${lotteryId}:${txh || Date.now()}:${ticketCount}`;
 
-      // ✅ instant list bump
+      // ✅ instant list bump (+ revenue bump if store uses deltaRevenue)
       emitOptimisticBuy(ticketCount, patchId);
 
       // ✅ activity board instant UX
@@ -328,8 +341,10 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
 
   const handleShare = useCallback(async () => {
     if (!lotteryId) return;
-    // If your router still uses `?raffle=`, change back. Otherwise this matches “lottery” naming.
+
+    // Keep your router convention. If your app still uses `?raffle=`, switch back.
     const url = `${window.location.origin}/?lottery=${lotteryId}`;
+
     try {
       await navigator.clipboard.writeText(url);
       setCopyMsg("Link copied!");
