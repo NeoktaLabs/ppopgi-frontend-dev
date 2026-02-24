@@ -1,11 +1,12 @@
 // src/hooks/useRaffleDetails.ts
+// (You can rename later to useLotteryDetails.ts if you want.)
 import { useEffect, useMemo, useState } from "react";
 import { getContract, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { getAddress } from "ethers";
 
-export type RaffleStatus =
+export type LotteryStatus =
   | "FUNDING_PENDING"
   | "OPEN"
   | "DRAWING"
@@ -13,7 +14,7 @@ export type RaffleStatus =
   | "CANCELED"
   | "UNKNOWN";
 
-function statusFromUint8(n: number): RaffleStatus {
+function statusFromUint8(n: number): LotteryStatus {
   if (n === 0) return "FUNDING_PENDING";
   if (n === 1) return "OPEN";
   if (n === 2) return "DRAWING";
@@ -22,7 +23,13 @@ function statusFromUint8(n: number): RaffleStatus {
   return "UNKNOWN";
 }
 
-function statusFromSubgraph(v: any): RaffleStatus {
+// Your indexer/subgraph stores status as an int; some tooling might return a string.
+// Accept both.
+function statusFromSubgraph(v: any): LotteryStatus {
+  if (typeof v === "number") return statusFromUint8(v);
+  const n = Number(v);
+  if (Number.isFinite(n)) return statusFromUint8(n);
+
   const s = String(v || "").toUpperCase().trim();
   if (s === "FUNDING_PENDING") return "FUNDING_PENDING";
   if (s === "OPEN") return "OPEN";
@@ -34,32 +41,37 @@ function statusFromSubgraph(v: any): RaffleStatus {
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 
-type RaffleHistory = {
-  status?: string | null;
+type LotteryHistory = {
+  status?: string | number | null;
 
-  createdAtTimestamp?: string | null;
-  creationTx?: string | null;
+  // creation-ish
+  createdAt?: string | null;
+  deployedAt?: string | null;
+  deployedTx?: string | null;
 
-  finalizedAt?: string | null;
-  completedAt?: string | null;
+  // drawing-ish
+  drawingRequestedAt?: string | null;
+  soldAtDrawing?: string | null;
+  entropyRequestId?: string | null;
+  selectedProvider?: string | null;
+  winner?: string | null;
 
+  // cancel-ish
   canceledAt?: string | null;
-  canceledReason?: string | null;
   soldAtCancel?: string | null;
+  cancelReason?: string | null;
+  creatorPotRefunded?: boolean | null;
 
-  lastUpdatedTimestamp?: string | null;
-
-  registry?: string | null;
+  // registry-ish
   registryIndex?: string | null;
-  isRegistered?: boolean | null;
   registeredAt?: string | null;
 };
 
-export type RaffleDetails = {
+export type LotteryDetails = {
   address: string;
 
   name: string;
-  status: RaffleStatus;
+  status: LotteryStatus;
 
   sold: string;
   ticketRevenue: string;
@@ -70,28 +82,32 @@ export type RaffleDetails = {
   minTickets: string;
   maxTickets: string;
   deadline: string;
+
+  // this may not exist on-chain; keep best-effort
   paused: boolean;
 
   minPurchaseAmount: string;
 
-  finalizeRequestId: string;
-  callbackGasLimit: string;
-
-  usdcToken: string;
-  creator: string;
-
-  winner: string;
-  winningTicketIndex: string;
-
-  feeRecipient: string;
-  protocolFeePercent: string;
-
+  // entropy/draw config
   entropy: string;
   entropyProvider: string;
   entropyRequestId: string;
   selectedProvider: string;
+  callbackGasLimit: string;
 
-  history?: RaffleHistory;
+  // token/creator config
+  usdcToken: string;
+  creator: string;
+
+  // fee config
+  feeRecipient: string;
+  protocolFeePercent: string;
+
+  // outcome
+  winner: string;
+  winningTicketIndex: string;
+
+  history?: LotteryHistory;
 };
 
 async function readFirst(
@@ -147,30 +163,32 @@ async function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T
   }
 }
 
-async function fetchRaffleHistoryFromSubgraph(id: string, signal?: AbortSignal): Promise<RaffleHistory | null> {
-  const raffleId = id.toLowerCase();
+async function fetchLotteryHistoryFromSubgraph(id: string, signal?: AbortSignal): Promise<LotteryHistory | null> {
+  const lotteryId = id.toLowerCase();
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
+  // NOTE: your subgraph schema shows lottery(id: Bytes!) and these fields exist on LotteryListItem
   const query = `
-    query RaffleById($id: ID!) {
-      raffle(id: $id) {
+    query LotteryById($id: Bytes!) {
+      lottery(id: $id) {
         status
 
-        createdAtTimestamp
-        creationTx
+        createdAt
+        deployedAt
+        deployedTx
 
-        finalizedAt
-        completedAt
+        drawingRequestedAt
+        soldAtDrawing
+        entropyRequestId
+        selectedProvider
+        winner
 
         canceledAt
-        canceledReason
         soldAtCancel
+        cancelReason
+        creatorPotRefunded
 
-        lastUpdatedTimestamp
-
-        registry
         registryIndex
-        isRegistered
         registeredAt
       }
     }
@@ -179,52 +197,53 @@ async function fetchRaffleHistoryFromSubgraph(id: string, signal?: AbortSignal):
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, variables: { id: raffleId } }),
+    body: JSON.stringify({ query, variables: { id: lotteryId } }),
     signal,
   });
 
   if (!res.ok) throw new Error("SUBGRAPH_HTTP_ERROR");
-  const json = await res.json();
+  const json = await res.json().catch(() => null);
   if (json?.errors?.length) throw new Error("SUBGRAPH_GQL_ERROR");
 
-  const r = json.data?.raffle;
+  const r = json?.data?.lottery;
   if (!r) return null;
 
   return {
     status: r.status ?? null,
 
-    createdAtTimestamp: r.createdAtTimestamp ?? null,
-    creationTx: r.creationTx ?? null,
+    createdAt: r.createdAt ?? null,
+    deployedAt: r.deployedAt ?? null,
+    deployedTx: r.deployedTx ?? null,
 
-    finalizedAt: r.finalizedAt ?? null,
-    completedAt: r.completedAt ?? null,
+    drawingRequestedAt: r.drawingRequestedAt ?? null,
+    soldAtDrawing: r.soldAtDrawing ?? null,
+    entropyRequestId: r.entropyRequestId ?? null,
+    selectedProvider: r.selectedProvider ?? null,
+    winner: r.winner ?? null,
 
     canceledAt: r.canceledAt ?? null,
-    canceledReason: r.canceledReason ?? null,
     soldAtCancel: r.soldAtCancel ?? null,
+    cancelReason: r.cancelReason ?? null,
+    creatorPotRefunded: typeof r.creatorPotRefunded === "boolean" ? r.creatorPotRefunded : null,
 
-    lastUpdatedTimestamp: r.lastUpdatedTimestamp ?? null,
-
-    registry: r.registry ?? null,
     registryIndex: r.registryIndex ?? null,
-    isRegistered: typeof r.isRegistered === "boolean" ? r.isRegistered : null,
     registeredAt: r.registeredAt ?? null,
   };
 }
 
-export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
-  const [data, setData] = useState<RaffleDetails | null>(null);
+export function useRaffleDetails(lotteryAddress: string | null, open: boolean) {
+  const [data, setData] = useState<LotteryDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   const normalizedAddress = useMemo(() => {
-    if (!raffleAddress) return null;
+    if (!lotteryAddress) return null;
     try {
-      return getAddress(raffleAddress);
+      return getAddress(lotteryAddress);
     } catch {
-      return raffleAddress;
+      return lotteryAddress;
     }
-  }, [raffleAddress]);
+  }, [lotteryAddress]);
 
   const contract = useMemo(() => {
     if (!normalizedAddress) return null;
@@ -245,19 +264,17 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
       setLoading(true);
       setNote(null);
 
-      // ✅ Start subgraph fetch, but DO NOT let it block on-chain values
+      // Start subgraph fetch, but DO NOT block the on-chain values.
       const historyPromise = withTimeout(
-        fetchRaffleHistoryFromSubgraph(normalizedAddress, ac.signal).catch(() => null),
+        fetchLotteryHistoryFromSubgraph(normalizedAddress, ac.signal).catch(() => null),
         2500,
         null
       );
 
       try {
         // ---- On-chain reads first (buy depends on these) ----
-        const name = await readFirstOr(contract, "name", ["function name() view returns (string)"], "Unknown raffle");
+        const name = await readFirstOr(contract, "name", ["function name() view returns (string)"], "Unknown lottery");
         const statusU8 = await readFirstOr(contract, "status", ["function status() view returns (uint8)"], 255);
-
-        // ✅ Determine on-chain status early (used to gate some reads)
         const onchainStatus = statusFromUint8(Number(statusU8));
 
         const sold = await readFirstOr(
@@ -267,25 +284,15 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           0n
         );
 
-        const ticketPrice = await readFirstOr(
-          contract,
-          "ticketPrice",
-          ["function ticketPrice() view returns (uint256)"],
-          0n
-        );
-        const winningPot = await readFirstOr(
-          contract,
-          "winningPot",
-          ["function winningPot() view returns (uint256)"],
-          0n
-        );
+        const ticketPrice = await readFirstOr(contract, "ticketPrice", ["function ticketPrice() view returns (uint256)"], 0n);
+        const winningPot = await readFirstOr(contract, "winningPot", ["function winningPot() view returns (uint256)"], 0n);
 
         const minTickets = await readFirstOr(contract, "minTickets", ["function minTickets() view returns (uint64)"], 0);
         const maxTickets = await readFirstOr(contract, "maxTickets", ["function maxTickets() view returns (uint64)"], 0);
 
         const deadline = await readFirstOr(contract, "deadline", ["function deadline() view returns (uint64)"], 0);
 
-        // Note: SingleWinnerLottery doesn't have paused(), so keep this as best-effort + default false.
+        // Some versions may not have paused(); keep best-effort.
         const paused = await readFirstOr(contract, "paused", ["function paused() view returns (bool)"], false);
 
         const usdcToken = await readFirstOr(
@@ -304,24 +311,13 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
 
         const winner = await readFirstOr(contract, "winner", ["function winner() view returns (address)"], ZERO);
 
-        // ✅ FIX: many contracts revert for winningTicketIndex until settled.
-        // Gate the read to avoid noisy console warnings + unnecessary RPC calls.
+        // Many contracts revert for winningTicketIndex until settled; gate it.
         const winningTicketIndex =
           onchainStatus === "COMPLETED"
-            ? await readFirstOr(
-                contract,
-                "winningTicketIndex",
-                ["function winningTicketIndex() view returns (uint256)"],
-                0n
-              )
+            ? await readFirstOr(contract, "winningTicketIndex", ["function winningTicketIndex() view returns (uint256)"], 0n)
             : 0n;
 
-        const feeRecipient = await readFirstOr(
-          contract,
-          "feeRecipient",
-          ["function feeRecipient() view returns (address)"],
-          ZERO
-        );
+        const feeRecipient = await readFirstOr(contract, "feeRecipient", ["function feeRecipient() view returns (address)"], ZERO);
 
         const protocolFeePercent = await readFirstOr(
           contract,
@@ -330,12 +326,7 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           0n
         );
 
-        const ticketRevenue = await readFirstOr(
-          contract,
-          "ticketRevenue",
-          ["function ticketRevenue() view returns (uint256)"],
-          0n
-        );
+        const ticketRevenue = await readFirstOr(contract, "ticketRevenue", ["function ticketRevenue() view returns (uint256)"], 0n);
 
         const minPurchaseAmount = await readFirstOr(
           contract,
@@ -344,27 +335,11 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           1
         );
 
-        const finalizeRequestId = await readFirstOr(
-          contract,
-          "finalizeRequestId",
-          ["function finalizeRequestId() view returns (uint64)", "function entropyRequestId() view returns (uint64)"],
-          0
-        );
-
-        const callbackGasLimit = await readFirstOr(
-          contract,
-          "callbackGasLimit",
-          ["function callbackGasLimit() view returns (uint32)"],
-          0
-        );
+        // Entropy-related values (best-effort across versions)
+        const callbackGasLimit = await readFirstOr(contract, "callbackGasLimit", ["function callbackGasLimit() view returns (uint32)"], 0);
 
         const entropy = await readFirstOr(contract, "entropy", ["function entropy() view returns (address)"], ZERO);
-        const entropyProvider = await readFirstOr(
-          contract,
-          "entropyProvider",
-          ["function entropyProvider() view returns (address)"],
-          ZERO
-        );
+        const entropyProvider = await readFirstOr(contract, "entropyProvider", ["function entropyProvider() view returns (address)"], ZERO);
 
         const entropyRequestId = await readFirstOr(
           contract,
@@ -382,7 +357,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
 
         if (!alive) return;
 
-        // ✅ Set data immediately from RPC (buy UI will work even if subgraph is slow/down)
         setData({
           address: normalizedAddress,
           name: String(name),
@@ -401,7 +375,6 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
 
           minPurchaseAmount: String(minPurchaseAmount),
 
-          finalizeRequestId: String(finalizeRequestId),
           callbackGasLimit: String(callbackGasLimit),
 
           usdcToken: String(usdcToken),
@@ -421,20 +394,19 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           history: undefined,
         });
 
-        // Helpful hint if critical values are still 0
         if (BigInt(String(ticketPrice || "0")) === 0n) {
           setNote("Live ticket price is still syncing. If it stays 0, check RPC response body (JSON-RPC error).");
         } else {
           setNote(null);
         }
 
-        // ✅ Attach subgraph history later (never blocks buy flow)
+        // Attach subgraph history later (never blocks buy flow)
         const history = await historyPromise;
         if (!alive) return;
 
         if (history) {
           const subgraphStatus = statusFromSubgraph(history?.status);
-          const finalStatus: RaffleStatus =
+          const finalStatus: LotteryStatus =
             subgraphStatus === "CANCELED" || subgraphStatus === "COMPLETED" || subgraphStatus === "DRAWING"
               ? subgraphStatus
               : onchainStatus;
@@ -444,10 +416,10 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
             return { ...prev, history, status: finalStatus };
           });
         }
-      } catch (e: any) {
+      } catch {
         if (!alive) return;
         setData(null);
-        setNote("Could not load this raffle right now. Please refresh (and check console logs).");
+        setNote("Could not load this lottery right now. Please refresh (and check console logs).");
       } finally {
         if (!alive) return;
         setLoading(false);
