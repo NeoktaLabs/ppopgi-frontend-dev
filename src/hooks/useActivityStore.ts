@@ -8,14 +8,16 @@ type LocalActivityItem = GlobalActivityItem & {
   pendingLabel?: string;
 };
 
-const DEFAULT_REFRESH_MS = 5_000;
 const MAX_ITEMS = 10;
 
-// Safety poll only (store does NOT do 5s polling itself)
+// Safety poll only (store does NOT do fast polling itself)
 const SAFETY_POLL_MS = 60_000;
 
-// After a user action, do a small "force-fresh" burst
+// After a user action, do a small "force-fresh" burst (catches indexer lag)
 const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
+
+// Backoff when rate-limited
+const RATE_LIMIT_BACKOFF_MS = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
 
 function isHidden() {
   try {
@@ -29,6 +31,12 @@ function parseHttpStatus(err: unknown): number | null {
   const msg = String((err as any)?.message || err || "");
   const m = msg.match(/SUBGRAPH_HTTP_ERROR_(\d{3})/);
   return m ? Number(m[1]) : null;
+}
+
+function isAbortError(err: unknown) {
+  const name = String((err as any)?.name ?? "");
+  const msg = String((err as any)?.message ?? err ?? "");
+  return name === "AbortError" || msg.toLowerCase().includes("abort");
 }
 
 function isRateLimitError(err: unknown) {
@@ -79,9 +87,9 @@ function clearTimer() {
   }
 }
 
-function schedule(ms: number, refreshMs: number) {
+function schedule(ms: number, forceFresh: boolean) {
   clearTimer();
-  timer = window.setTimeout(() => void load(true, refreshMs), ms);
+  timer = window.setTimeout(() => void load(true, forceFresh), ms);
 }
 
 function dispatchRevalidateThrottledFactory() {
@@ -97,9 +105,9 @@ function dispatchRevalidateThrottledFactory() {
 }
 const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
-async function load(isBackground: boolean, refreshMs: number, forceFresh = false) {
+async function load(isBackground: boolean, forceFresh = false) {
   if (isBackground && isHidden()) {
-    schedule(SAFETY_POLL_MS, refreshMs);
+    schedule(SAFETY_POLL_MS, false);
     return;
   }
   if (inFlight) return;
@@ -108,11 +116,11 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
   try {
     abortRef?.abort();
   } catch {}
-
   const ac = new AbortController();
   abortRef = ac;
 
   try {
+    // Only show spinner if we truly have nothing
     if (state.items.length === 0) setState({ isLoading: true });
 
     const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh });
@@ -120,6 +128,7 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
 
     const real = (data ?? []) as LocalActivityItem[];
 
+    // detect "new real item" to poke other stores
     const prevRealHashes = new Set(state.items.filter((x) => !x.pending).map((x) => x.txHash));
     const nextRealHashes = new Set(real.map((x) => x.txHash));
 
@@ -131,54 +140,59 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
       }
     }
 
+    // merge: keep pending items that haven't appeared as real yet
+    const pending = state.items.filter((x) => x.pending);
+    const realHashes = new Set(real.map((x) => x.txHash));
+    const stillPending = pending.filter((p) => !realHashes.has(p.txHash));
+
     setState({
-      items: (() => {
-        const pending = state.items.filter((x) => x.pending);
-        const realHashes = new Set(real.map((x) => x.txHash));
-        const stillPending = pending.filter((p) => !realHashes.has(p.txHash));
-        return [...stillPending, ...real].slice(0, MAX_ITEMS);
-      })(),
+      items: [...stillPending, ...real].slice(0, MAX_ITEMS),
       isLoading: false,
       note: null,
     });
 
     backoffStep = 0;
-    schedule(SAFETY_POLL_MS, refreshMs);
+    schedule(SAFETY_POLL_MS, false);
 
     if (hasNew) {
       dispatchRevalidate();
       void refreshLotteryStore(true, true);
     }
   } catch (e: any) {
-    if (String(e?.name || "").toLowerCase().includes("abort")) return;
-    if (String(e).toLowerCase().includes("abort")) return;
+    if (isAbortError(e)) return;
 
     console.error("[useActivityStore] load failed", e);
-    setState({ isLoading: false });
 
-    if (isRateLimitError(e)) {
-      backoffStep = Math.min(backoffStep + 1, 5);
-      const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
-      schedule(delays[backoffStep], refreshMs);
+    // surface note
+    const rateLimited = isRateLimitError(e);
+    setState({
+      isLoading: false,
+      note: rateLimited ? "Activity feed rate-limited. Retrying shortly…" : "Activity feed temporarily unavailable.",
+    });
+
+    if (rateLimited) {
+      backoffStep = Math.min(backoffStep + 1, RATE_LIMIT_BACKOFF_MS.length - 1);
+      schedule(RATE_LIMIT_BACKOFF_MS[backoffStep], false);
     } else {
-      schedule(isBackground ? 15_000 : 10_000, refreshMs);
+      // retry sooner if user initiated; otherwise wait a bit
+      schedule(isBackground ? 15_000 : 10_000, false);
     }
   } finally {
     inFlight = false;
   }
 }
 
-function triggerForceFreshBurst(refreshMs: number) {
+function triggerForceFreshBurst() {
   for (const ms of FORCE_FRESH_BURST_MS) {
-    window.setTimeout(() => void load(true, refreshMs, true), ms);
+    window.setTimeout(() => void load(true, true), ms);
   }
 }
 
-function start(refreshMs: number) {
+function start() {
   if (started) return;
   started = true;
 
-  void load(false, refreshMs);
+  void load(false, false);
 
   const onOptimistic = (ev: Event) => {
     const d = (ev as CustomEvent).detail as Partial<LocalActivityItem> | null;
@@ -195,38 +209,39 @@ function start(refreshMs: number) {
       timestamp: String(d.timestamp ?? now),
       txHash: String(d.txHash),
       pending: true,
-      pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
+      pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Indexing…",
     };
 
     setState({
       items: [item, ...state.items.filter((x) => x.txHash !== item.txHash)].slice(0, MAX_ITEMS),
     });
 
+    // poke the rest of the app + run a small force-fresh burst
     dispatchRevalidate();
     void refreshLotteryStore(true, true);
-    triggerForceFreshBurst(refreshMs);
+    triggerForceFreshBurst();
   };
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
 
-  const onFocus = () => void load(true, refreshMs);
+  const onFocus = () => void load(true, false);
   const onVis = () => {
-    if (!isHidden()) void load(true, refreshMs);
+    if (!isHidden()) void load(true, false);
   };
 
   window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVis);
 }
 
-export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
+export function useActivityStore() {
   const [, force] = useState(0);
 
   useEffect(() => {
-    start(refreshMs);
+    start();
     const sub = () => force((x) => x + 1);
     subs.add(sub);
     return () => subs.delete(sub);
-  }, [refreshMs]);
+  }, []);
 
   return useMemo(
     () => ({
@@ -234,19 +249,20 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
       isLoading: state.isLoading,
       note: state.note,
       lastUpdatedMs: state.lastUpdatedMs,
-      refresh: () => void load(false, refreshMs),
-      refreshForceFresh: () => void load(false, refreshMs, true),
+      refresh: () => void load(false, false),
+      refreshForceFresh: () => void load(false, true),
     }),
-    [refreshMs, state.lastUpdatedMs]
+    [state.lastUpdatedMs]
   );
 }
 
-export function refresh(background = true, _force = true, refreshMs = DEFAULT_REFRESH_MS) {
-  start(refreshMs);
-  return load(background, refreshMs);
+// Imperative refresh helpers (optional)
+export function refresh(background = true, forceFresh = false) {
+  start();
+  return load(background, forceFresh);
 }
 
-export function refreshForceFresh(background = true, refreshMs = DEFAULT_REFRESH_MS) {
-  start(refreshMs);
-  return load(background, refreshMs, true);
+export function refreshForceFresh(background = true) {
+  start();
+  return load(background, true);
 }
