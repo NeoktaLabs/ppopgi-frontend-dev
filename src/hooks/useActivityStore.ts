@@ -3,19 +3,19 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
 import { refresh as refreshRaffleStore } from "./useRaffleStore";
 
-type LocalActivityItem = GlobalActivityItem & {
+export type LocalActivityItem = GlobalActivityItem & {
   pending?: boolean;
   pendingLabel?: string;
 };
 
-const DEFAULT_REFRESH_MS = 5_000; // used for manual refresh + backoff calc
+const DEFAULT_REFRESH_MS = 5_000;
 const MAX_ITEMS = 10;
 
 // ✅ Safety poll only (prevents the store from having its own 5s loop)
 const SAFETY_POLL_MS = 60_000;
 
-// After a user action, try a small "force-fresh" burst to converge quickly
-// (assumes indexer is up to date or nearly so).
+// After a user action, try a small "force-fresh" burst to converge quickly.
+// (Assumes indexer is up to date or nearly so.)
 const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
 
 function isHidden() {
@@ -38,18 +38,6 @@ function isRateLimitError(err: any) {
 
   const msg = String(err?.message ?? err ?? "").toLowerCase();
   return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
-}
-
-function getStableItemKey(it: any): string {
-  return String(it?.txHash || "");
-}
-
-// Support both new and legacy shapes
-function getLotteryId(it: any): string {
-  return String(it?.lotteryId || it?.raffleId || "");
-}
-function getLotteryName(it: any): string {
-  return String(it?.lotteryName || it?.raffleName || "—");
 }
 
 // ---------- module-level singleton store (deduped across app) ----------
@@ -110,13 +98,6 @@ function dispatchRevalidateThrottledFactory() {
 }
 const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
-/**
- * forceFresh:
- * - Tells your cache worker to bypass edge cache (x-force-fresh: 1) on this request.
- * - Your fetchGlobalActivity implementation can choose to forward that header.
- *
- * We pass it as an extra option via `as any` so it won’t break older function signatures.
- */
 async function load(isBackground: boolean, refreshMs: number, forceFresh = false) {
   if (isBackground && isHidden()) {
     schedule(SAFETY_POLL_MS, refreshMs);
@@ -134,7 +115,12 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
   try {
     if (state.items.length === 0) setState({ isLoading: true });
 
-    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh } as any);
+    const data = await fetchGlobalActivity({
+      first: MAX_ITEMS,
+      signal: ac.signal,
+      forceFresh,
+    });
+
     if (ac.signal.aborted) return;
 
     const real = (data ?? []) as LocalActivityItem[];
@@ -164,11 +150,12 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
 
     backoffStep = 0;
 
-    // No fast polling loop here; keep only a slow safety poll.
+    // ✅ No fast polling loop here; keep only a slow safety poll.
     schedule(SAFETY_POLL_MS, refreshMs);
 
     if (hasNew) {
       dispatchRevalidate();
+      // NOTE: later you’ll likely rename this to refreshLotteryStore()
       void refreshRaffleStore(true, true);
     }
   } catch (e: any) {
@@ -194,7 +181,6 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
 function triggerForceFreshBurst(refreshMs: number) {
   for (const ms of FORCE_FRESH_BURST_MS) {
     window.setTimeout(() => {
-      // background + forceFresh
       void load(true, refreshMs, true);
     }, ms);
   }
@@ -212,24 +198,18 @@ function start(refreshMs: number) {
 
     const now = Math.floor(Date.now() / 1000);
 
-    // Support both new + legacy payloads from the optimistic event
-    const lotteryId = String((d as any).lotteryId ?? (d as any).raffleId ?? "");
-    const lotteryName = String((d as any).lotteryName ?? (d as any).raffleName ?? "Pending...");
-
     const item: LocalActivityItem = {
       type: (d.type as any) ?? "BUY",
-      // keep legacy fields if present; UI reads both
-      ...(d as any),
-      lotteryId,
-      lotteryName,
-
-      subject: String((d as any).subject ?? "0x"),
-      value: String((d as any).value ?? "0"),
-      timestamp: String((d as any).timestamp ?? now),
+      lotteryId: String(d.lotteryId ?? ""),
+      lotteryName: String(d.lotteryName ?? "Pending..."),
+      subject: String(d.subject ?? "0x"),
+      value: String(d.value ?? "0"),
+      timestamp: String(d.timestamp ?? now),
       txHash: String(d.txHash),
+
       pending: true,
-      pendingLabel: (d as any).pendingLabel ? String((d as any).pendingLabel) : "Pending",
-    } as any;
+      pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
+    };
 
     setState({
       items: [item, ...state.items.filter((x) => x.txHash !== item.txHash)].slice(0, MAX_ITEMS),
@@ -238,7 +218,7 @@ function start(refreshMs: number) {
     dispatchRevalidate();
     void refreshRaffleStore(true, true);
 
-    // ✅ try to converge to subgraph within 1–3s if indexer is up to date
+    // ✅ Converge to subgraph within 1–3s if indexer is up to date
     triggerForceFreshBurst(refreshMs);
   };
 
