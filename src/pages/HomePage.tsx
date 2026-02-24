@@ -1,7 +1,7 @@
 // src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { formatUnits } from "ethers";
-import { useHomeRaffles } from "../hooks/useHomeRaffles";
+import { useHomeRaffles } from "../hooks/useHomeRaffles"; // (you can rename later)
 import { useInfraStatus } from "../hooks/useInfraStatus";
 import { RaffleCard } from "../components/RaffleCard";
 import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
@@ -10,7 +10,7 @@ import "./HomePage.css";
 
 type Props = {
   nowMs: number;
-  onOpenRaffle: (id: string) => void;
+  onOpenRaffle: (id: string) => void; // you can rename later to onOpenLottery
   onOpenSafety: (id: string) => void;
 };
 
@@ -65,7 +65,7 @@ function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "fa
   } catch {}
 }
 
-// ✅ 1. NEW SLIDING BANNER COMPONENT
+// Sliding banner
 const BANNER_MESSAGES = [
   {
     id: "cashier",
@@ -74,7 +74,7 @@ const BANNER_MESSAGES = [
   },
   {
     id: "explore",
-    text: "🔎 Discover all raffles from the Explore page",
+    text: "🔎 Discover all lotteries from the Explore page",
     action: () => navigateFromHome("explore"),
   },
   {
@@ -98,7 +98,6 @@ function BannerSlider() {
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    // 3000ms (3s) per slide for readability
     const timer = setInterval(() => {
       setIdx((prev) => (prev + 1) % BANNER_MESSAGES.length);
     }, 3000);
@@ -137,16 +136,6 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     [infra.bot?.running, infra.bot?.secondsToNextRun, infra.tsMs]
   );
 
-  /**
-   * ✅ IMPORTANT CHANGE (to reduce 5s flashing):
-   * Remove "ppopgi:revalidate -> refetch()" listener.
-   *
-   * GlobalDataRefresher already emits ppopgi:revalidate every 5s, but
-   * the raffle store refresh is throttled (~20s). Calling refetch here
-   * forces mode resets/loading churn and can cause visible flashes.
-   *
-   * If you still want a manual kick, keep "refresh on focus" only.
-   */
   useEffect(() => {
     const onFocus = () => {
       try {
@@ -171,7 +160,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
     setSettledEdges(computeEdges(settledRef.current));
   }, []);
 
-  // Podium Logic
+  // Podium
   const podium = useMemo(() => {
     if (!bigPrizes || bigPrizes.length === 0) return { gold: null, silver: null, bronze: null };
     const sorted = [...bigPrizes].sort((a, b) => {
@@ -209,29 +198,26 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
 
   return (
     <>
-      {/* ✅ New Sliding Banner */}
       <div className="hp-announcement-bar">
         <BannerSlider />
       </div>
 
-      {/* Activity Board */}
       <div className="hp-board-section">
         <ActivityBoard />
       </div>
 
       <div className="hp-container">
-        {/* 1. HERO */}
         <div className="hp-hero">
           <h1 className="hp-hero-title">Welcome to Ppopgi (뽑기)</h1>
           <div className="hp-hero-sub">
-            Where fun meets fairness. Experience the thrill of fully transparent, on-chain raffles. No tricks — just luck.
+            Where fun meets fairness. Experience the thrill of fully transparent, on-chain lotteries. No tricks — just
+            luck.
           </div>
 
-          {/* STATS BAR */}
           <div className="hp-stats-bar">
             <div className="hp-stat-item">
-              <div className="hp-stat-val">{isLoading ? "..." : stats.totalRaffles}</div>
-              <div className="hp-stat-lbl">Raffles Created</div>
+              <div className="hp-stat-val">{isLoading ? "..." : stats.totalLotteries}</div>
+              <div className="hp-stat-lbl">Lotteries Created</div>
             </div>
             <div className="hp-stat-sep" />
             <div className="hp-stat-item">
@@ -246,7 +232,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
           </div>
         </div>
 
-        {/* 2. PODIUM */}
+        {/* PODIUM */}
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 50 }}>
             <div className="hp-section-title">🏆 Top Active Prizepools</div>
@@ -271,7 +257,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               <div className="pp-silver-wrapper">
                 <div className="pp-rank-badge silver">2</div>
                 <RaffleCard
-                  raffle={podium.silver}
+                  lottery={podium.silver}
                   onOpen={onOpenRaffle}
                   onOpenSafety={onOpenSafety}
                   ribbon="silver"
@@ -284,7 +270,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               <div className="pp-gold-wrapper">
                 <div className="pp-rank-badge gold">1</div>
                 <RaffleCard
-                  raffle={podium.gold}
+                  lottery={podium.gold}
                   onOpen={onOpenRaffle}
                   onOpenSafety={onOpenSafety}
                   ribbon="gold"
@@ -297,7 +283,7 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               <div className="pp-bronze-wrapper">
                 <div className="pp-rank-badge bronze">3</div>
                 <RaffleCard
-                  raffle={podium.bronze}
+                  lottery={podium.bronze}
                   onOpen={onOpenRaffle}
                   onOpenSafety={onOpenSafety}
                   ribbon="bronze"
@@ -309,13 +295,13 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
               <div className="hp-empty-msg">
                 <div className="hp-empty-icon">🍃</div>
-                <div>No active raffles to display.</div>
+                <div>No active lotteries to display.</div>
               </div>
             )}
           </div>
         </div>
 
-        {/* 3. ENDING SOON */}
+        {/* ENDING SOON */}
         <div>
           <div className="hp-section-header">
             <div className="hp-section-title">⏳ Ending Soon</div>
@@ -341,29 +327,25 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                     <RaffleCardSkeleton />
                   </div>
                 ))}
+
               {!isLoading &&
                 endingSoonSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
-                    <RaffleCard
-                      raffle={r}
-                      onOpen={onOpenRaffle}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowMs}
-                      finalizer={finalizerForCards}
-                    />
+                    <RaffleCard lottery={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
                   </div>
                 ))}
+
               {!isLoading && endingSoonSorted.length === 0 && (
                 <div className="hp-empty-msg">
                   <div className="hp-empty-icon">😴</div>
-                  <div>No raffles ending soon.</div>
+                  <div>No lotteries ending soon.</div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* 4. RECENTLY SETTLED */}
+        {/* RECENTLY SETTLED */}
         <div>
           <div className="hp-section-header">
             <div className="hp-section-title">✅ Recently Settled</div>
@@ -389,22 +371,18 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
                     <RaffleCardSkeleton />
                   </div>
                 ))}
+
               {!isLoading &&
                 recentlySettledSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
-                    <RaffleCard
-                      raffle={r}
-                      onOpen={onOpenRaffle}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowMs}
-                      finalizer={finalizerForCards}
-                    />
+                    <RaffleCard lottery={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
                   </div>
                 ))}
+
               {!isLoading && recentlySettledSorted.length === 0 && (
                 <div className="hp-empty-msg">
                   <div className="hp-empty-icon">📂</div>
-                  <div>No recently settled raffles yet.</div>
+                  <div>No recently settled lotteries yet.</div>
                 </div>
               )}
             </div>
