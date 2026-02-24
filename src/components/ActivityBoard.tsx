@@ -1,5 +1,4 @@
 // src/components/ActivityBoard.tsx
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "ethers";
 import { useActivityStore } from "../hooks/useActivityStore";
@@ -25,6 +24,14 @@ function timeAgoFrom(nowSec: number, ts: string) {
   return `${Math.floor(diff / 3600)}h`;
 }
 
+// Support both new + legacy item shapes
+function getLotteryId(item: any): string {
+  return String(item?.lotteryId || item?.raffleId || "");
+}
+function getLotteryName(item: any): string {
+  return String(item?.lotteryName || item?.raffleName || "—");
+}
+
 export function ActivityBoard() {
   const { items, isLoading } = useActivityStore();
 
@@ -44,7 +51,10 @@ export function ActivityBoard() {
 
       if (stableKey && !already) seenRef.current.add(stableKey);
 
-      const reactKey = stableKey || `${(it as any).type}-${(it as any).raffleId}-${(it as any).timestamp}-${(it as any).subject}`;
+      const reactKey =
+        stableKey ||
+        `${(it as any).type}-${getLotteryId(it)}-${String((it as any).timestamp)}-${String((it as any).subject)}`;
+
       return { it, key: reactKey, enter };
     });
   }, [items]);
@@ -90,7 +100,8 @@ export function ActivityBoard() {
             iconClass = "cancel";
           }
 
-          const fresh = isFresh(String((item as any).timestamp || "0"), NEW_WINDOW_SEC);
+          const timestamp = String((item as any).timestamp || "0");
+          const fresh = isFresh(timestamp, NEW_WINDOW_SEC);
 
           const rowClass = [
             "ab-row",
@@ -101,13 +112,18 @@ export function ActivityBoard() {
             .filter(Boolean)
             .join(" ");
 
-          const raffleId = String((item as any).raffleId || "");
-          const raffleName = String((item as any).raffleName || "—");
+          const lotteryId = getLotteryId(item);
+          const lotteryName = getLotteryName(item);
+
           const subject = String((item as any).subject || "");
           const value = String((item as any).value || "0");
-          const timestamp = String((item as any).timestamp || "0");
+
           const pendingLabel = String((item as any).pendingLabel || "PENDING");
           const pending = !!(item as any).pending;
+
+          // Keep your existing routing param so nothing breaks.
+          // If/when you migrate, change "raffle" -> "lottery" here once.
+          const detailHref = `/?raffle=${lotteryId}`;
 
           return (
             <div key={key} className={rowClass}>
@@ -117,8 +133,8 @@ export function ActivityBoard() {
                 <div className="ab-main-text">
                   {isCancel ? (
                     <>
-                      <a href={`/?raffle=${raffleId}`} className="ab-link">
-                        {raffleName}
+                      <a href={detailHref} className="ab-link">
+                        {lotteryName}
                       </a>{" "}
                       got <b style={{ color: "#991b1b" }}>canceled</b> (min tickets not reached)
                     </>
@@ -149,8 +165,8 @@ export function ActivityBoard() {
                         </>
                       )}
 
-                      <a href={`/?raffle=${raffleId}`} className="ab-link">
-                        {raffleName}
+                      <a href={detailHref} className="ab-link">
+                        {lotteryName}
                       </a>
                     </>
                   )}
