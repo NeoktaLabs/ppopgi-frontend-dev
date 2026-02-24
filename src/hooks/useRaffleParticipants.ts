@@ -1,5 +1,5 @@
 // src/hooks/useRaffleParticipants.ts
-// (If you’re migrating naming, feel free to rename this file to useLotteryParticipants.ts later.)
+// (You can rename later to useLotteryParticipants.ts if you want.)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchUserLotteriesByLottery, type UserLotteryItem } from "../indexer/subgraph";
@@ -39,7 +39,7 @@ function isHidden() {
 
 /**
  * Participants = userLotteries(where: { lottery: <id> }, orderBy: ticketsPurchased desc)
- * This is effectively your "holders" list.
+ * This is your "holders" list.
  */
 export function useRaffleParticipants(lotteryId: string | null, totalSold: number) {
   const [raw, setRaw] = useState<UserLotteryItem[]>([]);
@@ -86,7 +86,6 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
       if (!hasSomething) setIsLoading(true);
 
       try {
-        // Your subgraph helper already accepts { signal }
         const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
 
         if (ac.signal.aborted) return;
@@ -96,12 +95,10 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
       } catch (err: any) {
         if (isAbortError(err)) return;
 
-        // ✅ Keep showing cached/previous data on error (don’t “blank” the holders list)
+        // Keep showing cached/previous data on error (don’t blank the list)
         console.error("Failed to load participants", err);
 
-        if (cached?.data?.length) {
-          setRaw(cached.data);
-        }
+        if (cached?.data?.length) setRaw(cached.data);
       } finally {
         if (!ac.signal.aborted) setIsLoading(false);
       }
@@ -109,7 +106,7 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
     [lotteryId, totalSold, raw.length]
   );
 
-  // ✅ Fetch when lotteryId changes
+  // Fetch when lotteryId changes
   useEffect(() => {
     if (!lotteryId) {
       setRaw([]);
@@ -125,13 +122,12 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
     };
   }, [lotteryId, load]);
 
-  // ✅ Refresh holders after buy/create (you already emit "ppopgi:revalidate")
+  // Refresh holders after buy/create (ppopgi:revalidate)
   useEffect(() => {
     const onRevalidate = () => {
       if (!lotteryId) return;
       if (isHidden()) return;
 
-      // Light: only refetch if cache is stale-ish OR sold moved a lot
       void load({ force: false, reason: "revalidate" });
     };
 
@@ -139,7 +135,7 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
     return () => window.removeEventListener("ppopgi:revalidate", onRevalidate as any);
   }, [lotteryId, load]);
 
-  // ✅ Recompute percentages locally when totalSold changes (no refetch)
+  // Recompute percentages locally when totalSold changes (no refetch)
   const participants: ParticipantUI[] = useMemo(() => {
     const sold = Number.isFinite(totalSold) ? totalSold : 0;
 
