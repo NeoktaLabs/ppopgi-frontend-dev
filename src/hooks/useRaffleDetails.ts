@@ -267,13 +267,25 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           0n
         );
 
-        const ticketPrice = await readFirstOr(contract, "ticketPrice", ["function ticketPrice() view returns (uint256)"], 0n);
-        const winningPot = await readFirstOr(contract, "winningPot", ["function winningPot() view returns (uint256)"], 0n);
+        const ticketPrice = await readFirstOr(
+          contract,
+          "ticketPrice",
+          ["function ticketPrice() view returns (uint256)"],
+          0n
+        );
+        const winningPot = await readFirstOr(
+          contract,
+          "winningPot",
+          ["function winningPot() view returns (uint256)"],
+          0n
+        );
 
         const minTickets = await readFirstOr(contract, "minTickets", ["function minTickets() view returns (uint64)"], 0);
         const maxTickets = await readFirstOr(contract, "maxTickets", ["function maxTickets() view returns (uint64)"], 0);
 
         const deadline = await readFirstOr(contract, "deadline", ["function deadline() view returns (uint64)"], 0);
+
+        // Note: SingleWinnerLottery doesn't have paused(), so keep this as best-effort + default false.
         const paused = await readFirstOr(contract, "paused", ["function paused() view returns (bool)"], false);
 
         const usdcToken = await readFirstOr(
@@ -304,7 +316,12 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
               )
             : 0n;
 
-        const feeRecipient = await readFirstOr(contract, "feeRecipient", ["function feeRecipient() view returns (address)"], ZERO);
+        const feeRecipient = await readFirstOr(
+          contract,
+          "feeRecipient",
+          ["function feeRecipient() view returns (address)"],
+          ZERO
+        );
 
         const protocolFeePercent = await readFirstOr(
           contract,
@@ -313,7 +330,12 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           0n
         );
 
-        const ticketRevenue = await readFirstOr(contract, "ticketRevenue", ["function ticketRevenue() view returns (uint256)"], 0n);
+        const ticketRevenue = await readFirstOr(
+          contract,
+          "ticketRevenue",
+          ["function ticketRevenue() view returns (uint256)"],
+          0n
+        );
 
         const minPurchaseAmount = await readFirstOr(
           contract,
@@ -337,13 +359,20 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
         );
 
         const entropy = await readFirstOr(contract, "entropy", ["function entropy() view returns (address)"], ZERO);
-        const entropyProvider = await readFirstOr(contract, "entropyProvider", ["function entropyProvider() view returns (address)"], ZERO);
+        const entropyProvider = await readFirstOr(
+          contract,
+          "entropyProvider",
+          ["function entropyProvider() view returns (address)"],
+          ZERO
+        );
+
         const entropyRequestId = await readFirstOr(
           contract,
           "entropyRequestId",
           ["function entropyRequestId() view returns (uint64)"],
           0
         );
+
         const selectedProvider = await readFirstOr(
           contract,
           "selectedProvider",
@@ -371,6 +400,7 @@ export function useRaffleDetails(raffleAddress: string | null, open: boolean) {
           paused: Boolean(paused),
 
           minPurchaseAmount: String(minPurchaseAmount),
+
           finalizeRequestId: String(finalizeRequestId),
           callbackGasLimit: String(callbackGasLimit),
 
