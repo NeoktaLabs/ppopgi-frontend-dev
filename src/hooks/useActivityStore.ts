@@ -3,13 +3,20 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
 import { refresh as refreshRaffleStore } from "./useRaffleStore";
 
-type LocalActivityItem = GlobalActivityItem & { pending?: boolean; pendingLabel?: string };
+type LocalActivityItem = GlobalActivityItem & {
+  pending?: boolean;
+  pendingLabel?: string;
+};
 
 const DEFAULT_REFRESH_MS = 5_000; // used for manual refresh + backoff calc
 const MAX_ITEMS = 10;
 
 // ✅ Safety poll only (prevents the store from having its own 5s loop)
 const SAFETY_POLL_MS = 60_000;
+
+// After a user action, try a small "force-fresh" burst to converge quickly
+// (assumes indexer is up to date or nearly so).
+const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
 
 function isHidden() {
   try {
@@ -31,6 +38,18 @@ function isRateLimitError(err: any) {
 
   const msg = String(err?.message ?? err ?? "").toLowerCase();
   return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
+}
+
+function getStableItemKey(it: any): string {
+  return String(it?.txHash || "");
+}
+
+// Support both new and legacy shapes
+function getLotteryId(it: any): string {
+  return String(it?.lotteryId || it?.raffleId || "");
+}
+function getLotteryName(it: any): string {
+  return String(it?.lotteryName || it?.raffleName || "—");
 }
 
 // ---------- module-level singleton store (deduped across app) ----------
@@ -91,9 +110,15 @@ function dispatchRevalidateThrottledFactory() {
 }
 const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
-async function load(isBackground: boolean, refreshMs: number) {
+/**
+ * forceFresh:
+ * - Tells your cache worker to bypass edge cache (x-force-fresh: 1) on this request.
+ * - Your fetchGlobalActivity implementation can choose to forward that header.
+ *
+ * We pass it as an extra option via `as any` so it won’t break older function signatures.
+ */
+async function load(isBackground: boolean, refreshMs: number, forceFresh = false) {
   if (isBackground && isHidden()) {
-    // hidden tab: keep it slow
     schedule(SAFETY_POLL_MS, refreshMs);
     return;
   }
@@ -109,13 +134,15 @@ async function load(isBackground: boolean, refreshMs: number) {
   try {
     if (state.items.length === 0) setState({ isLoading: true });
 
-    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal });
+    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh } as any);
     if (ac.signal.aborted) return;
 
     const real = (data ?? []) as LocalActivityItem[];
 
+    // Dedup logic based on txHash (stable) and keep optimistic items until they appear in real feed
     const prevRealHashes = new Set(state.items.filter((x) => !x.pending).map((x) => x.txHash));
     const nextRealHashes = new Set(real.map((x) => x.txHash));
+
     let hasNew = false;
     for (const h of nextRealHashes) {
       if (h && !prevRealHashes.has(h)) {
@@ -137,13 +164,10 @@ async function load(isBackground: boolean, refreshMs: number) {
 
     backoffStep = 0;
 
-    // ✅ IMPORTANT: no fast polling loop here.
-    // GlobalDataRefresher will drive cadence (5s).
-    // We only keep a slow safety poll in case the global tick is disabled/missed.
+    // No fast polling loop here; keep only a slow safety poll.
     schedule(SAFETY_POLL_MS, refreshMs);
 
     if (hasNew) {
-      // activity changed -> nudge pages + refresh raffles (deduped anyway)
       dispatchRevalidate();
       void refreshRaffleStore(true, true);
     }
@@ -155,7 +179,6 @@ async function load(isBackground: boolean, refreshMs: number) {
 
     setState({ isLoading: false });
 
-    // ✅ Backoff on error; still not a constant 5s loop.
     if (isRateLimitError(e)) {
       backoffStep = Math.min(backoffStep + 1, 5);
       const delays = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
@@ -165,6 +188,15 @@ async function load(isBackground: boolean, refreshMs: number) {
     }
   } finally {
     inFlight = false;
+  }
+}
+
+function triggerForceFreshBurst(refreshMs: number) {
+  for (const ms of FORCE_FRESH_BURST_MS) {
+    window.setTimeout(() => {
+      // background + forceFresh
+      void load(true, refreshMs, true);
+    }, ms);
   }
 }
 
@@ -179,17 +211,25 @@ function start(refreshMs: number) {
     if (!d?.txHash) return;
 
     const now = Math.floor(Date.now() / 1000);
+
+    // Support both new + legacy payloads from the optimistic event
+    const lotteryId = String((d as any).lotteryId ?? (d as any).raffleId ?? "");
+    const lotteryName = String((d as any).lotteryName ?? (d as any).raffleName ?? "Pending...");
+
     const item: LocalActivityItem = {
       type: (d.type as any) ?? "BUY",
-      raffleId: String(d.raffleId ?? ""),
-      raffleName: String(d.raffleName ?? "Pending..."),
-      subject: String(d.subject ?? "0x"),
-      value: String(d.value ?? "0"),
-      timestamp: String(d.timestamp ?? now),
+      // keep legacy fields if present; UI reads both
+      ...(d as any),
+      lotteryId,
+      lotteryName,
+
+      subject: String((d as any).subject ?? "0x"),
+      value: String((d as any).value ?? "0"),
+      timestamp: String((d as any).timestamp ?? now),
       txHash: String(d.txHash),
       pending: true,
-      pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
-    };
+      pendingLabel: (d as any).pendingLabel ? String((d as any).pendingLabel) : "Pending",
+    } as any;
 
     setState({
       items: [item, ...state.items.filter((x) => x.txHash !== item.txHash)].slice(0, MAX_ITEMS),
@@ -197,6 +237,9 @@ function start(refreshMs: number) {
 
     dispatchRevalidate();
     void refreshRaffleStore(true, true);
+
+    // ✅ try to converge to subgraph within 1–3s if indexer is up to date
+    triggerForceFreshBurst(refreshMs);
   };
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
@@ -230,6 +273,7 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
       note: state.note,
       lastUpdatedMs: state.lastUpdatedMs,
       refresh: () => void load(false, refreshMs),
+      refreshForceFresh: () => void load(false, refreshMs, true),
     }),
     [refreshMs, state.lastUpdatedMs]
   );
@@ -239,4 +283,10 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
 export function refresh(background = true, _force = true, refreshMs = DEFAULT_REFRESH_MS) {
   start(refreshMs);
   return load(background, refreshMs);
+}
+
+// Optional: module-level “fast refresh” that bypasses cache worker
+export function refreshForceFresh(background = true, refreshMs = DEFAULT_REFRESH_MS) {
+  start(refreshMs);
+  return load(background, refreshMs, true);
 }
