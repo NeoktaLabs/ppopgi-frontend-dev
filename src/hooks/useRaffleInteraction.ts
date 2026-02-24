@@ -1,4 +1,6 @@
 // src/hooks/useRaffleInteraction.ts
+// (If you’re migrating naming, feel free to rename this file to useLotteryInteraction.ts later.)
+
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { formatUnits } from "ethers";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
@@ -40,9 +42,33 @@ function safeTxHash(receipt: any): string {
   ).toLowerCase();
 }
 
-export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
-  const { data, loading, note } = useRaffleDetails(raffleId, isOpen);
+// -------------------- App events --------------------
+
+type ActivityDetail = {
+  type: "BUY" | "CREATE" | "WIN" | "CANCEL";
+  lotteryId: string;
+  lotteryName: string;
+  subject: string; // buyer/creator/winner
+  value: string; // ticket count OR winningPot OR "0"
+  timestamp: string; // seconds
+  txHash: string;
+  pendingLabel?: string;
+};
+
+function emitActivity(detail: ActivityDetail) {
+  try {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("ppopgi:activity", { detail }));
+  } catch {}
+}
+
+export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) {
+  // NOTE: this hook still consumes useRaffleDetails; rename later if you like
+  const { data, loading, note } = useRaffleDetails(lotteryId, isOpen);
+
   const account = useActiveAccount();
+  const me = account?.address ?? null;
+
   const { mutateAsync: sendAndConfirm, isPending } = useSendAndConfirmTransaction();
   const { fireConfetti } = useConfetti();
 
@@ -77,17 +103,17 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     } catch {}
   }, []);
 
-  // ✅ optimistic store patch (instant UI)
+  // ✅ optimistic store patch (instant UI list bump)
   const emitOptimisticBuy = useCallback(
     (deltaSold: number, patchId?: string) => {
       try {
-        if (typeof window === "undefined" || !raffleId) return;
+        if (typeof window === "undefined" || !lotteryId) return;
         window.dispatchEvent(
           new CustomEvent("ppopgi:optimistic", {
             detail: {
               kind: "BUY",
               patchId,
-              raffleId,
+              raffleId: lotteryId, // store currently expects raffleId; keep for compatibility
               deltaSold,
               tsMs: Date.now(),
             },
@@ -95,7 +121,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         );
       } catch {}
     },
-    [raffleId]
+    [lotteryId]
   );
 
   useEffect(() => {
@@ -140,21 +166,20 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const ticketPriceU = BigInt(data?.ticketPrice || "0");
   const totalCostU = BigInt(ticketCount) * ticketPriceU;
 
-  const raffleContract = useMemo(() => {
-    if (!raffleId) return null;
-    return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: raffleId });
-  }, [raffleId]);
+  const lotteryContract = useMemo(() => {
+    if (!lotteryId) return null;
+    return getContract({ client: thirdwebClient, chain: ETHERLINK_CHAIN, address: lotteryId });
+  }, [lotteryId]);
 
   /**
    * ✅ IMPORTANT:
-   * Use the raffle's on-chain usdcToken() when available, otherwise fall back to global config.
-   * This fixes "balance shows 0 / not enough" when a raffle uses a different token address.
+   * Use the lottery's indexed usdcToken when available, otherwise fall back to global config.
    */
   const paymentTokenAddr = useMemo(() => {
-    const onchain = String(data?.usdcToken || "").trim();
+    const onchain = String((data as any)?.usdcToken || "").trim();
     if (onchain && !isZeroAddr(onchain)) return onchain;
     return ADDRESSES.USDC;
-  }, [data?.usdcToken]);
+  }, [data]);
 
   const usdcContract = useMemo(() => {
     const addr = paymentTokenAddr;
@@ -164,9 +189,9 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
 
   const isConnected = !!account?.address;
 
-  const raffleIsOpen =
+  const lotteryIsOpen =
     data?.status === "OPEN" &&
-    !data.paused &&
+    !(data as any).paused &&
     !deadlinePassed &&
     !maxReached &&
     (maxTicketsN === 0 || (remainingTickets ?? 0) > 0);
@@ -180,7 +205,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
   const refreshAllowance = useCallback(
     async (reason: "open" | "postTx" | "manual" = "manual") => {
       if (!isOpen) return;
-      if (!account?.address || !usdcContract || !raffleId) return;
+      if (!account?.address || !usdcContract || !lotteryId) return;
 
       const now = Date.now();
       const minGap = reason === "postTx" ? 0 : 2500;
@@ -202,7 +227,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
           readContract({
             contract: usdcContract,
             method: "function allowance(address,address) view returns (uint256)",
-            params: [account.address, raffleId],
+            params: [account.address, lotteryId],
           }),
         ]);
 
@@ -216,13 +241,13 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
         allowInFlight.current = false;
       }
     },
-    [isOpen, account?.address, usdcContract, raffleId]
+    [isOpen, account?.address, usdcContract, lotteryId]
   );
 
   const approve = useCallback(async () => {
     setBuyMsg(null);
 
-    if (!account?.address || !raffleId) return;
+    if (!account?.address || !lotteryId) return;
 
     if (!usdcContract) {
       setBuyMsg("Payment token unavailable. Please retry.");
@@ -233,7 +258,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "function approve(address,uint256) returns (bool)",
-        params: [raffleId, totalCostU],
+        params: [lotteryId, totalCostU],
       });
       await sendAndConfirm(tx);
 
@@ -244,15 +269,15 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     } catch {
       setBuyMsg("Prepare wallet failed.");
     }
-  }, [account?.address, usdcContract, raffleId, totalCostU, sendAndConfirm, refreshAllowance, emitRevalidate]);
+  }, [account?.address, usdcContract, lotteryId, totalCostU, sendAndConfirm, refreshAllowance, emitRevalidate]);
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
-    if (!account?.address || !raffleContract) return;
+    if (!account?.address || !lotteryContract || !lotteryId) return;
 
     try {
       const tx = prepareContractCall({
-        contract: raffleContract,
+        contract: lotteryContract,
         method: "function buyTickets(uint256)",
         params: [BigInt(ticketCount)],
       });
@@ -260,8 +285,23 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       const receipt = await sendAndConfirm(tx);
 
       const txh = safeTxHash(receipt);
-      const patchId = `buy:${raffleId}:${txh || Date.now()}:${ticketCount}`;
+      const patchId = `buy:${lotteryId}:${txh || Date.now()}:${ticketCount}`;
+
+      // ✅ instant list bump
       emitOptimisticBuy(ticketCount, patchId);
+
+      // ✅ activity board instant UX
+      const nowSec = Math.floor(Date.now() / 1000);
+      emitActivity({
+        type: "BUY",
+        lotteryId: lotteryId.toLowerCase(),
+        lotteryName: String((data as any)?.name ?? "Lottery"),
+        subject: (me || "").toLowerCase(),
+        value: String(ticketCount),
+        timestamp: String(nowSec),
+        txHash: txh || patchId,
+        pendingLabel: "Indexing…",
+      });
 
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
@@ -274,19 +314,22 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     }
   }, [
     account?.address,
-    raffleContract,
+    lotteryContract,
     ticketCount,
     sendAndConfirm,
     fireConfetti,
     refreshAllowance,
     emitRevalidate,
     emitOptimisticBuy,
-    raffleId,
+    lotteryId,
+    data,
+    me,
   ]);
 
   const handleShare = useCallback(async () => {
-    if (!raffleId) return;
-    const url = `${window.location.origin}/?raffle=${raffleId}`;
+    if (!lotteryId) return;
+    // If your router still uses `?raffle=`, change back. Otherwise this matches “lottery” naming.
+    const url = `${window.location.origin}/?lottery=${lotteryId}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopyMsg("Link copied!");
@@ -294,7 +337,7 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       setCopyMsg("Could not copy.");
     }
     setTimeout(() => setCopyMsg(null), 1500);
-  }, [raffleId]);
+  }, [lotteryId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -302,12 +345,12 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     setTickets("1");
     setBuyMsg(null);
 
-    // reset displayed balances when switching raffles / token
+    // reset displayed balances when switching lotteries / token
     setUsdcBal(null);
     setAllowance(null);
 
     refreshAllowance("open");
-  }, [isOpen, raffleId, account?.address, paymentTokenAddr, refreshAllowance]);
+  }, [isOpen, lotteryId, account?.address, paymentTokenAddr, refreshAllowance]);
 
   return {
     state: {
@@ -323,7 +366,6 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
       allowLoading,
       usdcBal,
       allowance,
-      // optional: helpful for debugging in the modal
       paymentTokenAddr,
     },
     math: {
@@ -341,8 +383,8 @@ export function useRaffleInteraction(raffleId: string | null, isOpen: boolean) {
     flags: {
       hasEnoughAllowance,
       hasEnoughBalance,
-      raffleIsOpen,
-      canBuy: isConnected && raffleIsOpen && hasEnoughAllowance && hasEnoughBalance,
+      lotteryIsOpen,
+      canBuy: isConnected && lotteryIsOpen && hasEnoughAllowance && hasEnoughBalance,
     },
     actions: {
       setTickets,
