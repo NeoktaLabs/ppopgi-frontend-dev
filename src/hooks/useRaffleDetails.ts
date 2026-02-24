@@ -41,6 +41,10 @@ function statusFromSubgraph(v: any): LotteryStatus {
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 
+function normHex(v: unknown): string {
+  return String(v || "").toLowerCase();
+}
+
 type LotteryHistory = {
   status?: string | number | null;
 
@@ -163,7 +167,10 @@ async function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T
   }
 }
 
-async function fetchLotteryHistoryFromSubgraph(id: string, signal?: AbortSignal): Promise<LotteryHistory | null> {
+async function fetchLotteryHistoryFromSubgraph(
+  id: string,
+  signal?: AbortSignal
+): Promise<LotteryHistory | null> {
   const lotteryId = id.toLowerCase();
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
@@ -200,7 +207,8 @@ async function fetchLotteryHistoryFromSubgraph(id: string, signal?: AbortSignal)
     signal,
   });
 
-  if (!res.ok) throw new Error("SUBGRAPH_HTTP_ERROR");
+  if (!res.ok) throw new Error(`SUBGRAPH_HTTP_ERROR_${res.status}`);
+
   const json = await res.json().catch(() => null);
   if (json?.errors?.length) throw new Error("SUBGRAPH_GQL_ERROR");
 
@@ -212,13 +220,13 @@ async function fetchLotteryHistoryFromSubgraph(id: string, signal?: AbortSignal)
 
     createdAt: r.createdAt ?? null,
     deployedAt: r.deployedAt ?? null,
-    deployedTx: r.deployedTx ?? null,
+    deployedTx: r.deployedTx != null ? normHex(r.deployedTx) : null,
 
     drawingRequestedAt: r.drawingRequestedAt ?? null,
     soldAtDrawing: r.soldAtDrawing ?? null,
     entropyRequestId: r.entropyRequestId ?? null,
-    selectedProvider: r.selectedProvider ?? null,
-    winner: r.winner ?? null,
+    selectedProvider: r.selectedProvider != null ? normHex(r.selectedProvider) : null,
+    winner: r.winner != null ? normHex(r.winner) : null,
 
     canceledAt: r.canceledAt ?? null,
     soldAtCancel: r.soldAtCancel ?? null,
@@ -271,7 +279,6 @@ export function useRaffleDetails(lotteryAddress: string | null, open: boolean) {
       );
 
       try {
-        // ---- On-chain reads first (buy depends on these) ----
         const name = await readFirstOr(contract, "name", ["function name() view returns (string)"], "Unknown lottery");
         const statusU8 = await readFirstOr(contract, "status", ["function status() view returns (uint8)"], 255);
         const onchainStatus = statusFromUint8(Number(statusU8));
@@ -310,7 +317,6 @@ export function useRaffleDetails(lotteryAddress: string | null, open: boolean) {
 
         const winner = await readFirstOr(contract, "winner", ["function winner() view returns (address)"], ZERO);
 
-        // Many contracts revert for winningTicketIndex until settled; gate it.
         const winningTicketIndex =
           onchainStatus === "COMPLETED"
             ? await readFirstOr(contract, "winningTicketIndex", ["function winningTicketIndex() view returns (uint256)"], 0n)
@@ -334,7 +340,6 @@ export function useRaffleDetails(lotteryAddress: string | null, open: boolean) {
           1
         );
 
-        // Entropy-related values (best-effort across versions)
         const callbackGasLimit = await readFirstOr(contract, "callbackGasLimit", ["function callbackGasLimit() view returns (uint32)"], 0);
 
         const entropy = await readFirstOr(contract, "entropy", ["function entropy() view returns (address)"], ZERO);
