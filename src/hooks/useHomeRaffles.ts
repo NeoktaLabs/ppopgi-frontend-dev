@@ -1,9 +1,9 @@
 // src/hooks/useHomeRaffles.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RaffleListItem } from "../indexer/subgraph";
-import { fetchRafflesOnChainFallback } from "../onchain/fallbackRaffles";
+import type { LotteryListItem } from "../indexer/subgraph";
+import { fetchLotteriesOnChainFallback } from "../onchain/fallbackLotteries";
 
-import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
+import { useRaffleStore, refresh as refreshLotteryStore } from "./useRaffleStore";
 import { useRevalidate } from "../hooks/useRevalidateTick";
 
 type Mode = "indexer" | "live";
@@ -26,13 +26,7 @@ function shouldFallback(note: string | null) {
   // For rate-limits, better to wait/backoff than hammer on-chain + indexer.
   if (isRateLimitNote(note)) return false;
 
-  return (
-    s.includes("failed") ||
-    s.includes("unavailable") ||
-    s.includes("could not") ||
-    s.includes("error") ||
-    s.includes("timeout")
-  );
+  return s.includes("failed") || s.includes("unavailable") || s.includes("could not") || s.includes("error") || s.includes("timeout");
 }
 
 export function useHomeRaffles() {
@@ -45,7 +39,7 @@ export function useHomeRaffles() {
   // Local override (live fallback)
   const [mode, setMode] = useState<Mode>("indexer");
   const [note, setNote] = useState<string | null>(null);
-  const [liveItems, setLiveItems] = useState<RaffleListItem[] | null>(null);
+  const [liveItems, setLiveItems] = useState<LotteryListItem[] | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
 
   // Prevent hammering live fallback
@@ -67,7 +61,7 @@ export function useHomeRaffles() {
    * - does NOT reset mode/live/note (prevents UI "snapping")
    */
   const softRefetch = useCallback(() => {
-    void refreshRaffleStore(true, true);
+    void refreshLotteryStore(true, true);
   }, []);
 
   /**
@@ -79,7 +73,7 @@ export function useHomeRaffles() {
     setLiveLoading(false);
     setMode("indexer");
     setNote(null);
-    void refreshRaffleStore(false, true);
+    void refreshLotteryStore(false, true);
   }, []);
 
   // ✅ Background refresh on revalidate tick (throttled) — use soft refresh to avoid UI snapping
@@ -135,17 +129,17 @@ export function useHomeRaffles() {
     setMode("live");
     setNote("Indexer unavailable. Showing live blockchain data.");
 
-    fetchRafflesOnChainFallback(50)
+    fetchLotteriesOnChainFallback(50)
       .then((data) => setLiveItems(data))
       .catch((e) => {
         console.error("Home fallback failed", e);
-        setNote("Could not load raffles. Please refresh.");
+        setNote("Could not load lotteries. Please refresh.");
       })
       .finally(() => setLiveLoading(false));
   }, [indexerItems, isIndexerLoading, indexerNote]);
 
   // Final items/loading state exposed to UI
-  const items: RaffleListItem[] | null = mode === "live" ? liveItems : indexerItems;
+  const items: LotteryListItem[] | null = mode === "live" ? liveItems : indexerItems;
   const isLoading = mode === "live" ? liveLoading : isIndexerLoading;
 
   // ----------------- Derived lists -----------------
@@ -177,7 +171,7 @@ export function useHomeRaffles() {
    * ✅ Recently Finalized (Settled + Canceled)
    * - Indexer only (live mode returns [])
    * - Sorted by the most recent "final action" timestamp we can find:
-   *   completedAt -> finalizedAt -> lastUpdatedTimestamp
+   *   drawingRequestedAt -> canceledAt -> registeredAt
    * - Shows the 5 most recent
    */
   const recentlyFinalized = useMemo(() => {
@@ -188,14 +182,14 @@ export function useHomeRaffles() {
     return [...finalized]
       .sort((a, b) => {
         const aKey =
-          numOr0((a as any).completedAt) ||
-          numOr0((a as any).finalizedAt) ||
-          numOr0((a as any).lastUpdatedTimestamp);
+          numOr0((a as any).drawingRequestedAt) ||
+          numOr0((a as any).canceledAt) ||
+          numOr0((a as any).registeredAt);
 
         const bKey =
-          numOr0((b as any).completedAt) ||
-          numOr0((b as any).finalizedAt) ||
-          numOr0((b as any).lastUpdatedTimestamp);
+          numOr0((b as any).drawingRequestedAt) ||
+          numOr0((b as any).canceledAt) ||
+          numOr0((b as any).registeredAt);
 
         return bKey - aKey;
       })
@@ -203,7 +197,7 @@ export function useHomeRaffles() {
   }, [all, mode]);
 
   const stats = useMemo(() => {
-    const totalRaffles = all.length;
+    const totalLotteries = all.length;
 
     const settledVolume = all.reduce((acc, r) => {
       if (r.status === "COMPLETED") return acc + BigInt(r.winningPot || "0");
@@ -212,7 +206,7 @@ export function useHomeRaffles() {
 
     const activeVolume = active.reduce((acc, r) => acc + BigInt(r.winningPot || "0"), 0n);
 
-    return { totalRaffles, settledVolume, activeVolume };
+    return { totalLotteries, settledVolume, activeVolume };
   }, [all, active]);
 
   return {
