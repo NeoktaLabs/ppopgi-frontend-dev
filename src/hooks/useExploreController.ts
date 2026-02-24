@@ -44,15 +44,13 @@ export function useExploreController() {
 
     const query = norm(q);
     if (query) {
-      filtered = filtered.filter((r) =>
-        `${r.name || ""} ${r.id || ""}`.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter((r) => `${r.name || ""} ${r.id || ""}`.toLowerCase().includes(query));
     }
 
     // IMPORTANT: don’t mutate the original array
     return [...filtered].sort((a, b) => {
       if (sort === "newest") {
-        const timeDiff = safeNum(b.lastUpdatedTimestamp) - safeNum(a.lastUpdatedTimestamp);
+        const timeDiff = safeNum((b as any).lastUpdatedTimestamp) - safeNum((a as any).lastUpdatedTimestamp);
         return timeDiff !== 0 ? timeDiff : String(b.id).localeCompare(String(a.id));
       }
       if (sort === "endingSoon") return safeNum(a.deadline) - safeNum(b.deadline);
