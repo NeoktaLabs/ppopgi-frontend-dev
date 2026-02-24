@@ -1,4 +1,6 @@
 // src/hooks/useRaffleStore.ts
+// (You can rename later to useLotteryStore.ts if you want.)
+
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { fetchLotteriesFromSubgraph, type LotteryListItem, type LotteryStatus } from "../indexer/subgraph";
 
@@ -35,26 +37,29 @@ let backoffStep = 0;
 // Each consumer requests a poll interval; we use the minimum
 const requestedPolls = new Map<string, number>();
 
-// ✅ Revalidate burst control
+// Revalidate burst control
 let lastFetchStartedMs = 0;
 let pendingRefreshAfterFlight = false;
 let revalidateDebounceTimer: number | null = null;
 
-// ✅ Optimistic patch dedupe (don’t apply same patch twice)
+// Optimistic patch dedupe (don’t apply same patch twice)
 const appliedPatchIds = new Set<string>();
 let patchGcTimer: number | null = null;
 
-// ✅ Revalidate throttling
-const SOFT_REVALIDATE_MIN_GAP_MS = 20_000; // ignore frequent "sync" ticks
+// Revalidate throttling
+const SOFT_REVALIDATE_MIN_GAP_MS = 20_000; // ignore frequent ticks
 const HARD_REVALIDATE_MIN_GAP_MS = 2_500; // allow quick refresh after user actions
 
-// ✅ Avoid replacing items array when nothing actually changed (prevents flicker)
+// Avoid replacing items array when nothing actually changed (prevents flicker)
 let lastItemsSig = "";
 function signature(items: LotteryListItem[] | null) {
   if (!items || items.length === 0) return "";
-  // Your list query sorts by registeredAt desc, and the main live-changing fields are status/sold/ticketRevenue.
+  // List query sorts by registeredAt desc; most live-changing fields are status/sold/ticketRevenue.
   return items
-    .map((r) => `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.ticketRevenue)}:${String(r.registeredAt)}`)
+    .map(
+      (r) =>
+        `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.ticketRevenue)}:${String(r.registeredAt)}`
+    )
     .join("|");
 }
 
@@ -163,7 +168,7 @@ function resetBackoff() {
 }
 
 // -----------------------------
-// ✅ Optimistic patch helpers
+// Optimistic patch helpers
 // -----------------------------
 type OptimisticEvent =
   | {
@@ -171,8 +176,7 @@ type OptimisticEvent =
       patchId?: string;
       lotteryId: string;
       deltaSold: number;
-      // Optional: if your UI knows revenue delta (deltaSold * ticketPrice), pass it.
-      deltaRevenue?: string | number;
+      deltaRevenue?: string | number; // optional
       tsMs?: number;
     }
   | {
@@ -189,9 +193,7 @@ function normHex(v: string) {
 function ensurePatchGc() {
   if (patchGcTimer != null) return;
   patchGcTimer = window.setInterval(() => {
-    if (appliedPatchIds.size > 500) {
-      appliedPatchIds.clear();
-    }
+    if (appliedPatchIds.size > 500) appliedPatchIds.clear();
   }, 60_000);
 }
 
@@ -233,11 +235,7 @@ function applyOptimisticBuy(e: OptimisticEvent & { kind: "BUY" }) {
       }
     }
 
-    return {
-      ...r,
-      sold: nextSold,
-      ticketRevenue: nextRev,
-    };
+    return { ...r, sold: nextSold, ticketRevenue: nextRev };
   });
 
   lastItemsSig = signature(next);
@@ -256,8 +254,9 @@ function applyOptimisticCreate(e: OptimisticEvent & { kind: "CREATE" }) {
 
   const newItem: LotteryListItem = {
     id,
+
     // Canonical registry metadata
-    typeId: String(r.typeId ?? "1"), // single-winner default if unknown
+    typeId: String(r.typeId ?? "1"),
     creator,
     registeredAt: String(r.registeredAt ?? nowSec),
     registryIndex: r.registryIndex != null ? String(r.registryIndex) : null,
@@ -307,11 +306,11 @@ function applyOptimisticCreate(e: OptimisticEvent & { kind: "CREATE" }) {
   };
 
   const items = state.items ?? [];
-  const exists = items.some((x) => normHex(x.id) === id);
-  if (exists) return;
+  if (items.some((x) => normHex(x.id) === id)) return;
 
-  // Keep consistent with your fetch ordering (registeredAt desc)
-  const next = [newItem, ...items].sort((a, b) => Number(b.registeredAt || "0") - Number(a.registeredAt || "0"));
+  const next = [newItem, ...items].sort(
+    (a, b) => Number(b.registeredAt || "0") - Number(a.registeredAt || "0")
+  );
 
   lastItemsSig = signature(next);
   setState({ items: next });
@@ -345,8 +344,9 @@ async function doFetch(isBackground: boolean) {
     lastFetchStartedMs = Date.now();
 
     try {
+      // fetchLotteriesFromSubgraph clamps "first" internally; keep it reasonable here
       const data = await fetchLotteriesFromSubgraph({
-        first: 1000,
+        first: 200,
         signal: aborter.signal,
       } as any);
 
@@ -362,10 +362,7 @@ async function doFetch(isBackground: boolean) {
           lastUpdatedMs: Date.now(),
         });
       } else {
-        setState({
-          note: null,
-          isLoading: false,
-        });
+        setState({ note: null, isLoading: false });
       }
 
       resetBackoff();
@@ -436,7 +433,6 @@ function clearRevalidateDebounce() {
  */
 function requestRevalidate(force = false) {
   if (subscribers <= 0) return;
-
   if (isHidden()) return;
 
   const now = Date.now();
@@ -451,6 +447,7 @@ function requestRevalidate(force = false) {
   if (since >= 0 && since < minGap) {
     clearRevalidateDebounce();
     revalidateDebounceTimer = window.setTimeout(() => {
+      revalidateDebounceTimer = null;
       void refresh(true, true);
     }, minGap - since);
     return;
