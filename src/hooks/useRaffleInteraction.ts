@@ -103,18 +103,19 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
     } catch {}
   }, []);
 
-  // ✅ optimistic store patch (instant UI list bump)
-  // IMPORTANT: your updated store expects { lotteryId }, not { raffleId }.
+  // ✅ optimistic store patch (instant list bump)
+  // IMPORTANT: updated store expects { lotteryId } (not raffleId)
   const emitOptimisticBuy = useCallback(
     (deltaSold: number, patchId?: string) => {
       try {
         if (typeof window === "undefined" || !lotteryId) return;
 
-        // Optional: store supports deltaRevenue if you want ticketRevenue to bump instantly too
+        // Optional: store supports deltaRevenue (lets ticketRevenue bump instantly too)
         const deltaRevenue = (() => {
           try {
             const price = BigInt((data as any)?.ticketPrice || "0");
-            return (price * BigInt(Math.max(0, Math.floor(deltaSold)))).toString();
+            const d = BigInt(Math.max(0, Math.floor(deltaSold)));
+            return (price * d).toString();
           } catch {
             return undefined;
           }
@@ -125,9 +126,9 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
             detail: {
               kind: "BUY",
               patchId,
-              lotteryId, // ✅ correct key
+              lotteryId,
               deltaSold,
-              deltaRevenue, // ✅ optional
+              deltaRevenue,
               tsMs: Date.now(),
             },
           })
@@ -300,7 +301,7 @@ export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) 
       const txh = safeTxHash(receipt);
       const patchId = `buy:${lotteryId}:${txh || Date.now()}:${ticketCount}`;
 
-      // ✅ instant list bump (+ revenue bump if store uses deltaRevenue)
+      // ✅ instant list bump
       emitOptimisticBuy(ticketCount, patchId);
 
       // ✅ activity board instant UX
