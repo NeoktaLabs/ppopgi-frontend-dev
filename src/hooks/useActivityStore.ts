@@ -1,9 +1,9 @@
 // src/hooks/useActivityStore.ts
 import { useEffect, useMemo, useState } from "react";
 import { fetchGlobalActivity, type GlobalActivityItem } from "../indexer/subgraph";
-import { refresh as refreshRaffleStore } from "./useRaffleStore";
+import { refresh as refreshLotteryStore } from "./useRaffleStore";
 
-export type LocalActivityItem = GlobalActivityItem & {
+type LocalActivityItem = GlobalActivityItem & {
   pending?: boolean;
   pendingLabel?: string;
 };
@@ -11,11 +11,10 @@ export type LocalActivityItem = GlobalActivityItem & {
 const DEFAULT_REFRESH_MS = 5_000;
 const MAX_ITEMS = 10;
 
-// ✅ Safety poll only (prevents the store from having its own 5s loop)
+// Safety poll only (store does NOT do 5s polling itself)
 const SAFETY_POLL_MS = 60_000;
 
-// After a user action, try a small "force-fresh" burst to converge quickly.
-// (Assumes indexer is up to date or nearly so.)
+// After a user action, do a small "force-fresh" burst
 const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
 
 function isHidden() {
@@ -26,21 +25,21 @@ function isHidden() {
   }
 }
 
-function parseHttpStatus(err: any): number | null {
-  const msg = String(err?.message || err || "");
+function parseHttpStatus(err: unknown): number | null {
+  const msg = String((err as any)?.message || err || "");
   const m = msg.match(/SUBGRAPH_HTTP_ERROR_(\d{3})/);
   return m ? Number(m[1]) : null;
 }
 
-function isRateLimitError(err: any) {
+function isRateLimitError(err: unknown) {
   const status = parseHttpStatus(err);
   if (status === 429 || status === 503) return true;
 
-  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  const msg = String((err as any)?.message ?? err ?? "").toLowerCase();
   return msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit");
 }
 
-// ---------- module-level singleton store (deduped across app) ----------
+// ---------- module-level singleton store ----------
 type State = {
   items: LocalActivityItem[];
   isLoading: boolean;
@@ -109,23 +108,18 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
   try {
     abortRef?.abort();
   } catch {}
+
   const ac = new AbortController();
   abortRef = ac;
 
   try {
     if (state.items.length === 0) setState({ isLoading: true });
 
-    const data = await fetchGlobalActivity({
-      first: MAX_ITEMS,
-      signal: ac.signal,
-      forceFresh,
-    });
-
+    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh });
     if (ac.signal.aborted) return;
 
     const real = (data ?? []) as LocalActivityItem[];
 
-    // Dedup logic based on txHash (stable) and keep optimistic items until they appear in real feed
     const prevRealHashes = new Set(state.items.filter((x) => !x.pending).map((x) => x.txHash));
     const nextRealHashes = new Set(real.map((x) => x.txHash));
 
@@ -149,21 +143,17 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
     });
 
     backoffStep = 0;
-
-    // ✅ No fast polling loop here; keep only a slow safety poll.
     schedule(SAFETY_POLL_MS, refreshMs);
 
     if (hasNew) {
       dispatchRevalidate();
-      // NOTE: later you’ll likely rename this to refreshLotteryStore()
-      void refreshRaffleStore(true, true);
+      void refreshLotteryStore(true, true);
     }
   } catch (e: any) {
     if (String(e?.name || "").toLowerCase().includes("abort")) return;
     if (String(e).toLowerCase().includes("abort")) return;
 
     console.error("[useActivityStore] load failed", e);
-
     setState({ isLoading: false });
 
     if (isRateLimitError(e)) {
@@ -180,9 +170,7 @@ async function load(isBackground: boolean, refreshMs: number, forceFresh = false
 
 function triggerForceFreshBurst(refreshMs: number) {
   for (const ms of FORCE_FRESH_BURST_MS) {
-    window.setTimeout(() => {
-      void load(true, refreshMs, true);
-    }, ms);
+    window.setTimeout(() => void load(true, refreshMs, true), ms);
   }
 }
 
@@ -206,7 +194,6 @@ function start(refreshMs: number) {
       value: String(d.value ?? "0"),
       timestamp: String(d.timestamp ?? now),
       txHash: String(d.txHash),
-
       pending: true,
       pendingLabel: d.pendingLabel ? String(d.pendingLabel) : "Pending",
     };
@@ -216,15 +203,12 @@ function start(refreshMs: number) {
     });
 
     dispatchRevalidate();
-    void refreshRaffleStore(true, true);
-
-    // ✅ Converge to subgraph within 1–3s if indexer is up to date
+    void refreshLotteryStore(true, true);
     triggerForceFreshBurst(refreshMs);
   };
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
 
-  // focus/visibility refresh (helps even without global tick)
   const onFocus = () => void load(true, refreshMs);
   const onVis = () => {
     if (!isHidden()) void load(true, refreshMs);
@@ -241,9 +225,7 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
     start(refreshMs);
     const sub = () => force((x) => x + 1);
     subs.add(sub);
-    return () => {
-      subs.delete(sub);
-    };
+    return () => subs.delete(sub);
   }, [refreshMs]);
 
   return useMemo(
@@ -259,13 +241,11 @@ export function useActivityStore(refreshMs = DEFAULT_REFRESH_MS) {
   );
 }
 
-// ✅ module-level refresh for GlobalDataRefresher / others
 export function refresh(background = true, _force = true, refreshMs = DEFAULT_REFRESH_MS) {
   start(refreshMs);
   return load(background, refreshMs);
 }
 
-// Optional: module-level “fast refresh” that bypasses cache worker
 export function refreshForceFresh(background = true, refreshMs = DEFAULT_REFRESH_MS) {
   start(refreshMs);
   return load(background, refreshMs, true);
