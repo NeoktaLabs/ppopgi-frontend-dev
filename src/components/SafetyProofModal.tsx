@@ -1,11 +1,12 @@
-import type { RaffleDetails } from "../hooks/useRaffleDetails";
+// src/components/SafetyProofModal.tsx
+import type { LotteryDetails } from "../hooks/useRaffleDetails"; // ✅ updated type name
 import { useSafetyBreakdown } from "../hooks/useSafetyBreakdown";
 import "./SafetyProofModal.css";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  raffle: RaffleDetails;
+  raffle: LotteryDetails; // ✅ updated type
 };
 
 // Helper: Clickable Link
@@ -47,9 +48,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
             <div className="sp-shield-icon">🛡️</div>
             <div>
               <h3 className="sp-title">Verified & Fair Randomness</h3>
-              <div className="sp-subtitle">
-                Immutable • Non-custodial • Publicly verifiable
-              </div>
+              <div className="sp-subtitle">Immutable • Non-custodial • Publicly verifiable</div>
             </div>
           </div>
           <button className="sp-close-btn" onClick={onClose}>
@@ -69,10 +68,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
 
             <div className="sp-data-box">
               <div className="sp-lbl">Raffle address</div>
-              <ExplorerLink
-                addr={raffle.address}
-                label={short(raffle.address)}
-              />
+              <ExplorerLink addr={raffle.address} label={short(raffle.address)} />
             </div>
 
             <div className="sp-data-box">
@@ -82,10 +78,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
 
             <div className="sp-data-box">
               <div className="sp-lbl">Creator</div>
-              <ExplorerLink
-                addr={raffle.creator}
-                label={short(raffle.creator)}
-              />
+              <ExplorerLink addr={raffle.creator} label={short(raffle.creator)} />
             </div>
           </div>
 
@@ -100,12 +93,9 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-step">
                 <div className="sp-step-num">1</div>
                 <div>
-                  <div className="sp-step-title">
-                    Raffle requests randomness
-                  </div>
+                  <div className="sp-step-title">Raffle requests randomness</div>
                   <div className="sp-step-text">
-                    Once ticket sales end, the raffle smart contract sends a
-                    randomness request to the entropy network.
+                    Once ticket sales end, the raffle smart contract sends a randomness request to the entropy network.
                   </div>
                 </div>
               </div>
@@ -113,12 +103,10 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-step">
                 <div className="sp-step-num">2</div>
                 <div>
-                  <div className="sp-step-title">
-                    Entropy network generates randomness
-                  </div>
+                  <div className="sp-step-title">Entropy network generates randomness</div>
                   <div className="sp-step-text">
-                    The entropy provider produces randomness off-chain and
-                    publishes it back on-chain with cryptographic proof.
+                    The entropy provider produces randomness off-chain and publishes it back on-chain with cryptographic
+                    proof.
                   </div>
                 </div>
               </div>
@@ -126,20 +114,16 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-step">
                 <div className="sp-step-num">3</div>
                 <div>
-                  <div className="sp-step-title">
-                    Winner is selected automatically
-                  </div>
+                  <div className="sp-step-title">Winner is selected automatically</div>
                   <div className="sp-step-text">
-                    The raffle contract uses the returned randomness to select a
-                    winner. No one — not the creator, not Ppopgi — can interfere.
+                    The raffle contract uses the returned randomness to select a winner. No one — not the creator, not
+                    Ppopgi — can interfere.
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="sp-mini-note">
-              This entire process is on-chain and publicly auditable.
-            </div>
+            <div className="sp-mini-note">This entire process is on-chain and publicly auditable.</div>
           </div>
 
           {/* VERIFY YOURSELF */}
@@ -168,17 +152,13 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
                 <div className="sp-v">
                   <div className="sp-inline">
                     <span className="sp-mono">{raffle.address}</span>
-                    <button
-                      className="sp-copy-btn"
-                      onClick={() => copy(raffle.address)}
-                      title="Copy sender address"
-                    >
+                    <button className="sp-copy-btn" onClick={() => copy(raffle.address)} title="Copy sender address">
                       📋
                     </button>
                   </div>
                   <div className="sp-tech-note">
-                    In the entropy explorer, look for a request where the{" "}
-                    <strong>sender</strong> equals this raffle address.
+                    In the entropy explorer, look for a request where the <strong>sender</strong> equals this raffle
+                    address.
                   </div>
                 </div>
               </div>
@@ -186,18 +166,14 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-tech-row">
                 <div className="sp-k">Entropy provider</div>
                 <div className="sp-v">
-                  <ExplorerLink
-                    addr={raffle.entropyProvider}
-                    label={short(raffle.entropyProvider)}
-                  />
+                  <ExplorerLink addr={raffle.entropyProvider} label={short(raffle.entropyProvider)} />
                 </div>
               </div>
             </div>
 
             <div className="sp-footnote">
-              Anyone can independently confirm that the randomness used to select
-              the winner originated from the entropy network and was not
-              manipulated.
+              Anyone can independently confirm that the randomness used to select the winner originated from the entropy
+              network and was not manipulated.
             </div>
           </div>
         </div>
