@@ -1,5 +1,5 @@
 // src/components/CashierModal.tsx
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useCashierData } from "../hooks/useCashierData";
 import "./CashierModal.css";
 
@@ -15,20 +15,36 @@ type Props = {
 
 type Tab = "buy_usdc" | "buy_xtz" | "bridge";
 
+function getUsdcAddress(): string {
+  const v = (import.meta as any).env?.VITE_USDC_ADDRESS;
+  const fallback = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
+  return (typeof v === "string" && v.trim() ? v.trim() : fallback).toLowerCase();
+}
+
 export function CashierModal({ open, onClose }: Props) {
   const { state, actions, display } = useCashierData(open);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<Tab>("buy_usdc");
 
-  const handleCopy = () => {
-    if (state.me) {
-      navigator.clipboard.writeText(state.me);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  // ✅ Single source of truth for USDC address (matches hook env convention)
+  const USDC_ADDRESS = useMemo(() => getUsdcAddress(), []);
 
-  const USDC_ADDRESS = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
+  const handleCopy = useCallback(() => {
+    const addr = state.me;
+    if (!addr) return;
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(addr);
+      } else {
+        window.prompt("Copy address:", addr);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }, [state.me]);
 
   // ✅ Provide explicit token info so the widget doesn't need to fetch metadata
   const supportedTokens = useMemo(() => {
@@ -38,7 +54,7 @@ export function CashierModal({ open, onClose }: Props) {
         { address: USDC_ADDRESS, symbol: "USDC", name: "USD Coin" },
       ],
     };
-  }, []);
+  }, [USDC_ADDRESS]);
 
   const ETHERLINK_BRIDGE_URL = "https://bridge.etherlink.com/";
 
@@ -49,7 +65,9 @@ export function CashierModal({ open, onClose }: Props) {
       <div className="cm-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="cm-header">
           <h3 className="cm-title">Cashier</h3>
-          <button className="cm-close-btn" onClick={onClose}>✕</button>
+          <button className="cm-close-btn" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         <div className="cm-body">
@@ -66,9 +84,9 @@ export function CashierModal({ open, onClose }: Props) {
 
             <div className="cm-address-info">
               <div className="cm-label">Connected Account</div>
-              <div className="cm-addr-val" onClick={handleCopy} title="Click to Copy">
+              <div className="cm-addr-val" onClick={handleCopy} title={state.me ? "Click to Copy" : ""}>
                 {display.shortAddr}
-                <span className="cm-copy-icon">{copied ? "Copied" : "Copy"}</span>
+                {state.me && <span className="cm-copy-icon">{copied ? "Copied" : "Copy"}</span>}
               </div>
             </div>
 
@@ -162,7 +180,8 @@ export function CashierModal({ open, onClose }: Props) {
 
                 <div className="cm-bridge-title">Deposit Funds</div>
                 <div className="cm-bridge-text">
-                  Already have funds on Ethereum Mainnet? Use the official bridge to move <b>USDC</b> or <b>XTZ</b> over to Etherlink.
+                  Already have funds on Ethereum Mainnet? Use the official bridge to move <b>USDC</b> or <b>XTZ</b> over
+                  to Etherlink.
                 </div>
 
                 <a className="cm-bridge-btn" href={ETHERLINK_BRIDGE_URL} target="_blank" rel="noreferrer">
