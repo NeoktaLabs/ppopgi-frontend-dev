@@ -11,18 +11,18 @@ export type LotteryStatus =
 export type LotteryListItem = {
   id: string; // lottery address (Bytes as hex string)
 
-  // registry metadata
+  // Canonical registry metadata
   typeId: string;
   creator: string;
   registeredAt: string;
   registryIndex: string | null;
 
-  // deploy snapshot
+  // Creation snapshot from Deployer event
   deployedBy: string | null;
   deployedAt: string | null;
   deployedTx: string | null;
 
-  // config
+  // Config / constants per lottery
   name: string | null;
   usdcToken: string | null;
   feeRecipient: string | null;
@@ -31,7 +31,6 @@ export type LotteryListItem = {
   callbackGasLimit: string | null;
   protocolFeePercent: string | null;
 
-  // constants
   createdAt: string | null;
   deadline: string | null;
   ticketPrice: string | null;
@@ -40,35 +39,39 @@ export type LotteryListItem = {
   maxTickets: string | null;
   minPurchaseAmount: string | null;
 
-  // live state
+  // Live state
   status: LotteryStatus;
   sold: string;
   ticketRevenue: string;
 
-  // drawing
+  // Drawing state
   winner: string | null;
   selectedProvider: string | null;
   entropyRequestId: string | null;
   drawingRequestedAt: string | null;
   soldAtDrawing: string | null;
 
-  // cancel
+  // Cancel state
   canceledAt: string | null;
   soldAtCancel: string | null;
   cancelReason: string | null;
   creatorPotRefunded: boolean | null;
 
-  // accounting
+  // Accounting snapshots
   totalReservedUSDC: string | null;
 };
 
-export type LotteryParticipantItem = {
+export type UserLotteryItem = {
   id: string; // `${lottery}-${user}`
+  lottery: string; // lottery id (string)
   user: string;
+
   ticketsPurchased: string;
   usdcSpent: string;
+
   ticketRefundAmount: string;
   fundsClaimedAmount: string;
+
   updatedAt: string;
   updatedTx: string;
 };
@@ -77,8 +80,8 @@ export type GlobalActivityItem = {
   type: "BUY" | "CREATE" | "WIN" | "CANCEL";
   lotteryId: string;
   lotteryName: string;
-  subject: string; // buyer/creator/winner
-  value: string; // tickets count OR winningPot OR "0"
+  subject: string; // buyer/creator/winner (empty allowed)
+  value: string; // ticket count OR winningPot OR "0"
   timestamp: string;
   txHash: string; // unique key for UI animations
 };
@@ -91,6 +94,7 @@ function mustEnv(name: string): string {
   return v;
 }
 
+/** Normalize hex strings (addresses/tx hashes/bytes IDs) for safe comparisons in UI */
 function normHex(v: unknown): string | null {
   if (v == null) return null;
   if (typeof v !== "string") return String(v).toLowerCase();
@@ -106,7 +110,6 @@ async function gqlFetch<T>(
   opts: FetchOpts = {}
 ): Promise<T> {
   const headers: Record<string, string> = { "content-type": "application/json" };
-  // ✅ Integrate your cache worker bypass
   if (opts.forceFresh) headers["x-force-fresh"] = "1";
 
   const res = await fetch(url, {
@@ -163,6 +166,7 @@ function statusFromInt(s: any): LotteryStatus {
 
 const LOTTERY_FIELDS = `
   id
+
   typeId
   creator
   registeredAt
@@ -273,14 +277,18 @@ function normalizeLottery(r: any): LotteryListItem {
   };
 }
 
-function normalizeParticipant(p: any): LotteryParticipantItem {
+function normalizeUserLottery(p: any): UserLotteryItem {
   return {
     id: normHex(p.id) as string,
+    lottery: normHex(p.lottery?.id ?? p.lottery) as string, // depending on subgraph response shape
     user: normHex(p.user) as string,
+
     ticketsPurchased: String(p.ticketsPurchased ?? "0"),
     usdcSpent: String(p.usdcSpent ?? "0"),
+
     ticketRefundAmount: String(p.ticketRefundAmount ?? "0"),
     fundsClaimedAmount: String(p.fundsClaimedAmount ?? "0"),
+
     updatedAt: String(p.updatedAt ?? "0"),
     updatedTx: normHex(p.updatedTx) as string,
   };
@@ -381,16 +389,16 @@ export async function fetchLotteriesByFeeRecipient(
   return (data.lotteries ?? []).map(normalizeLottery);
 }
 
-export async function fetchLotteryParticipants(
+export async function fetchUserLotteriesByLottery(
   lotteryId: string,
   opts: { first?: number; skip?: number } & FetchOpts = {}
-): Promise<LotteryParticipantItem[]> {
+): Promise<UserLotteryItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
   const first = Math.min(Math.max(opts.first ?? 50, 1), 1000);
   const skip = Math.max(opts.skip ?? 0, 0);
 
   const query = `
-    query LotteryParticipants($lottery: ID!, $first: Int!, $skip: Int!) {
+    query UserLotteriesByLottery($lottery: ID!, $first: Int!, $skip: Int!) {
       userLotteries(
         first: $first
         skip: $skip
@@ -399,6 +407,7 @@ export async function fetchLotteryParticipants(
         orderDirection: desc
       ) {
         id
+        lottery { id }
         user
         ticketsPurchased
         usdcSpent
@@ -411,17 +420,55 @@ export async function fetchLotteryParticipants(
   `;
 
   type Resp = { userLotteries: any[] };
-  // NOTE: lottery in UserLottery is `Lottery!` -> Graph stores as the Lottery entity ID (string)
   const data = await gqlFetch<Resp>(url, query, { lottery: lotteryId.toLowerCase(), first, skip }, opts);
-  return (data.userLotteries ?? []).map(normalizeParticipant);
+  return (data.userLotteries ?? []).map(normalizeUserLottery);
+}
+
+export async function fetchUserLotteriesByUser(
+  user: string,
+  opts: { first?: number; skip?: number } & FetchOpts = {}
+): Promise<UserLotteryItem[]> {
+  const url = mustEnv("VITE_SUBGRAPH_URL");
+  const first = Math.min(Math.max(opts.first ?? 200, 1), 1000);
+  const skip = Math.max(opts.skip ?? 0, 0);
+
+  const query = `
+    query UserLotteriesByUser($user: Bytes!, $first: Int!, $skip: Int!) {
+      userLotteries(
+        first: $first
+        skip: $skip
+        where: { user: $user }
+        orderBy: updatedAt
+        orderDirection: desc
+      ) {
+        id
+        lottery { id }
+        user
+        ticketsPurchased
+        usdcSpent
+        ticketRefundAmount
+        fundsClaimedAmount
+        updatedAt
+        updatedTx
+      }
+    }
+  `;
+
+  type Resp = { userLotteries: any[] };
+  const data = await gqlFetch<Resp>(url, query, { user: user.toLowerCase(), first, skip }, opts);
+  return (data.userLotteries ?? []).map(normalizeUserLottery);
 }
 
 /**
- * ✅ Global Activity (BUY + CREATE + WIN + CANCEL)
+ * ✅ Global Activity stream from your real entities:
  * - BUY: TicketPurchaseEvent
- * - CREATE: RegistryEvent(kind=LotteryRegistered) (fallback if you don't have deployer events)
  * - WIN: WinnerPickedEvent
  * - CANCEL: LotteryCanceledEvent
+ * - CREATE: Prefer DeployerEvent(kind="LotteryDeployed"), fallback RegistryEvent(kind="LotteryRegistered")
+ *
+ * Note: CREATE name may be unknown depending on which source is used:
+ * - DeployerEvent includes name
+ * - RegistryEvent does not include name
  */
 export async function fetchGlobalActivity(
   opts: { first?: number } & FetchOpts = {}
@@ -436,21 +483,9 @@ export async function fetchGlobalActivity(
         orderBy: timestamp
         orderDirection: desc
       ) {
-        lottery { id name winningPot }
+        lottery { id name }
         buyer
         count
-        timestamp
-        txHash
-      }
-
-      creates: registryEvents(
-        first: $first
-        orderBy: timestamp
-        orderDirection: desc
-        where: { kind: "LotteryRegistered" }
-      ) {
-        lottery
-        creator
         timestamp
         txHash
       }
@@ -471,7 +506,35 @@ export async function fetchGlobalActivity(
         orderBy: timestamp
         orderDirection: desc
       ) {
-        lottery { id name }
+        lottery { id name creator }
+        timestamp
+        txHash
+      }
+
+      // Preferred creation source (if you emit these)
+      createsDeployer: deployerEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { kind: "LotteryDeployed" }
+      ) {
+        lottery
+        creator
+        name
+        winningPot
+        timestamp
+        txHash
+      }
+
+      // Fallback creation source
+      createsRegistry: registryEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { kind: "LotteryRegistered" }
+      ) {
+        lottery
+        creator
         timestamp
         txHash
       }
@@ -480,9 +543,10 @@ export async function fetchGlobalActivity(
 
   type Resp = {
     buys: any[];
-    creates: any[];
     wins: any[];
     cancels: any[];
+    createsDeployer: any[];
+    createsRegistry: any[];
   };
 
   const data = await gqlFetch<Resp>(url, query, { first }, opts);
@@ -493,17 +557,6 @@ export async function fetchGlobalActivity(
     lotteryName: String(e.lottery?.name ?? "Unknown Lottery"),
     subject: normHex(e.buyer) as string,
     value: String(e.count ?? "0"),
-    timestamp: String(e.timestamp ?? "0"),
-    txHash: normHex(e.txHash) as string,
-  }));
-
-  // RegistryEvent doesn't join Lottery entity, so best-effort: name is unknown until next query.
-  const creates = (data.creates ?? []).map((e) => ({
-    type: "CREATE" as const,
-    lotteryId: normHex(e.lottery) as string,
-    lotteryName: "New lottery",
-    subject: normHex(e.creator) as string,
-    value: "0",
     timestamp: String(e.timestamp ?? "0"),
     txHash: normHex(e.txHash) as string,
   }));
@@ -522,11 +575,41 @@ export async function fetchGlobalActivity(
     type: "CANCEL" as const,
     lotteryId: normHex(e.lottery?.id) as string,
     lotteryName: String(e.lottery?.name ?? "Unknown Lottery"),
-    subject: "", // your UI doesn’t display it on cancel
+    subject: normHex(e.lottery?.creator) ?? "",
     value: "0",
     timestamp: String(e.timestamp ?? "0"),
     txHash: normHex(e.txHash) as string,
   }));
+
+  const createsDeployer = (data.createsDeployer ?? []).map((e) => ({
+    type: "CREATE" as const,
+    lotteryId: normHex(e.lottery) as string,
+    lotteryName: String(e.name ?? "New Lottery"),
+    subject: normHex(e.creator) as string,
+    value: String(e.winningPot ?? "0"),
+    timestamp: String(e.timestamp ?? "0"),
+    txHash: normHex(e.txHash) as string,
+  }));
+
+  const createsRegistry = (data.createsRegistry ?? []).map((e) => ({
+    type: "CREATE" as const,
+    lotteryId: normHex(e.lottery) as string,
+    lotteryName: "New Lottery",
+    subject: normHex(e.creator) as string,
+    value: "0",
+    timestamp: String(e.timestamp ?? "0"),
+    txHash: normHex(e.txHash) as string,
+  }));
+
+  // Prefer deployer creates when available (dedup by txHash if both show up)
+  const createCombined = [...createsDeployer, ...createsRegistry];
+  const seen = new Set<string>();
+  const creates = createCombined.filter((x) => {
+    const k = x.txHash || `${x.lotteryId}:${x.timestamp}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 
   const combined = [...buys, ...creates, ...wins, ...cancels].sort(
     (a, b) => Number(b.timestamp) - Number(a.timestamp)
