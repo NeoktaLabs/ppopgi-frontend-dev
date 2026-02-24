@@ -109,6 +109,13 @@ export const TopNav = memo(function TopNav({
     };
   }, []);
 
+  // (optional UX) close mobile menu when tab loses focus
+  useEffect(() => {
+    const onBlur = () => setMenuOpen(false);
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, []);
+
   const closeMenu = () => setMenuOpen(false);
 
   const handleNav = (action: () => void, targetPage?: Page) => {
@@ -131,12 +138,15 @@ export const TopNav = memo(function TopNav({
     } as any
   );
 
+  const usdcTokenAddr =
+    (ADDRESSES as any).USDC?.toLowerCase?.() ?? (ADDRESSES as any).USDC;
+
   const usdcBal = useWalletBalance(
     {
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN as any,
       address: account ?? undefined,
-      tokenAddress: (ADDRESSES as any).USDC,
+      tokenAddress: usdcTokenAddr,
     },
     {
       enabled: !!account && pollEnabled,
@@ -170,18 +180,12 @@ export const TopNav = memo(function TopNav({
         </div>
 
         <nav className="topnav-desktop-links">
-          <button
-            className={`nav-link ${page === "explore" ? "active" : ""}`}
-            onClick={() => handleNav(onOpenExplore, "explore")}
-          >
+          <button className={`nav-link ${page === "explore" ? "active" : ""}`} onClick={() => handleNav(onOpenExplore, "explore")}>
             Explore
           </button>
 
           {account && (
-            <button
-              className={`nav-link ${page === "dashboard" ? "active" : ""}`}
-              onClick={() => handleNav(onOpenDashboard, "dashboard")}
-            >
+            <button className={`nav-link ${page === "dashboard" ? "active" : ""}`} onClick={() => handleNav(onOpenDashboard, "dashboard")}>
               Dashboard
             </button>
           )}
@@ -194,7 +198,6 @@ export const TopNav = memo(function TopNav({
         <div className="topnav-right">
           <div className="desktop-actions">
             {account ? (
-              // If logged in, show Balances Pill (acts as cashier button)
               <button className="balances-pill" onClick={() => handleNav(onOpenCashier)} title="Open Cashier" type="button">
                 <div className="balances-rows">
                   <div className="bal-row">
@@ -208,7 +211,6 @@ export const TopNav = memo(function TopNav({
                 </div>
               </button>
             ) : (
-              // If logged out, show generic Cashier button
               <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
                 🏦 Cashier
               </button>
@@ -219,13 +221,7 @@ export const TopNav = memo(function TopNav({
                 Sign In
               </button>
             ) : (
-              // ✅ Updated Sign Out button to match Sign In style
-              <button
-                type="button"
-                className="nav-link primary-pill-btn"
-                onClick={() => handleNav(onSignOut)}
-                title="Log Off"
-              >
+              <button type="button" className="nav-link primary-pill-btn" onClick={() => handleNav(onSignOut)} title="Log Off">
                 <div className="acct-stack">
                   <div className="acct-top">Log Off</div>
                   <div className="acct-bottom">{short(account)}</div>
