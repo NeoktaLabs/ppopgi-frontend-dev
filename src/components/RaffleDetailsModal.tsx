@@ -3,7 +3,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
 import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
-import { fetchRaffleMetadata, type RaffleListItem } from "../indexer/subgraph";
+
+// ✅ Updated type + fetch name (new “Lottery” model)
+import { fetchLotteryMetadata, type LotteryListItem } from "../indexer/subgraph";
+
 import "./RaffleDetailsModal.css";
 
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
@@ -56,6 +59,8 @@ function mustEnv(name: string): string {
   return v;
 }
 
+// NOTE: Keeping the existing entity/event names in GraphQL.
+// If your subgraph renamed raffleEvents -> lotteryEvents, update the query accordingly.
 async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
   const query = `
@@ -97,9 +102,14 @@ async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
 
 type Props = {
   open: boolean;
+
+  // ✅ Keep prop name so existing router/query (?raffle=) keeps working
   raffleId: string | null;
+
   onClose: () => void;
-  initialRaffle?: RaffleListItem | null;
+
+  // ✅ Updated type
+  initialRaffle?: LotteryListItem | null;
 };
 
 function clampPct(p: number) {
@@ -136,7 +146,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   const account = useActiveAccount();
 
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
-  const [metadata, setMetadata] = useState<Partial<RaffleListItem> | null>(null);
+
+  // ✅ Updated type
+  const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
+
   const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
 
   useEffect(() => {
@@ -147,13 +160,15 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
       return;
     }
 
-    if (initialRaffle?.createdAtTimestamp) setMetadata(initialRaffle);
+    // Keep this optimization if your list item includes it; otherwise it’s harmless.
+    if ((initialRaffle as any)?.createdAtTimestamp) setMetadata(initialRaffle as any);
 
     let active = true;
 
-    if (!initialRaffle?.createdAtTimestamp) {
-      fetchRaffleMetadata(raffleId).then((data) => {
-        if (active && data) setMetadata(data);
+    if (!(initialRaffle as any)?.createdAtTimestamp) {
+      // ✅ NEW: fetchLotteryMetadata
+      fetchLotteryMetadata(raffleId).then((data) => {
+        if (active && data) setMetadata(data as any);
       });
     }
 
@@ -323,6 +338,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     if (String(clampedUiTicket) !== String(state.tickets)) {
       actions.setTickets(String(clampedUiTicket));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, raffleId, uiMaxForStepper]);
 
   if (!open) return null;
@@ -358,19 +374,15 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* ✅ Physical Notches at the tear line */}
         <div className="rdm-notch left" />
         <div className="rdm-notch right" />
 
-        {/* --- TOP: Ticket Body (Pink/Gradient) --- */}
         <div className="rdm-ticket-body">
           <div className="rdm-header">
             <button className="rdm-icon-btn" onClick={actions.handleShare} title="Copy Link">
               🔗
             </button>
-            <div className="rdm-ticket-id">
-              TICKET #{raffleId?.slice(2, 8).toUpperCase()}
-            </div>
+            <div className="rdm-ticket-id">TICKET #{raffleId?.slice(2, 8).toUpperCase()}</div>
             <button className="rdm-icon-btn" onClick={onClose}>
               ✕
             </button>
@@ -385,7 +397,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             <div className="rdm-hero-meta">
               <div className="rdm-host">
                 <span>Created by</span>
-                <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
+                <ExplorerLink
+                  addr={String(displayData?.creator || "")}
+                  label={math.short(String(displayData?.creator || ""))}
+                />
               </div>
               <div className="rdm-createdon">
                 <span>on</span>
@@ -414,21 +429,16 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           )}
         </div>
 
-        {/* ✅ Perforation Line */}
         <div className="rdm-perforation-line" />
 
-        {/* --- BOTTOM: Ticket Stub (Paper) --- */}
         <div className="rdm-ticket-stub">
-          {/* BUY SECTION */}
           <div className="rdm-buy-section">
             {!flags.raffleIsOpen ? (
               <div className="rdm-closed-msg">
                 {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
               </div>
             ) : isCreator ? (
-              <div className="rdm-buy-disabled">
-                Creator cannot participate.
-              </div>
+              <div className="rdm-buy-disabled">Creator cannot participate.</div>
             ) : (
               <div className={`rdm-buy-inner ${blurBuy ? "blurred" : ""}`}>
                 <div className="rdm-balance-row">
@@ -442,11 +452,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   </div>
                 )}
 
-                {showBalanceWarn && (
-                  <div className="rdm-warn-box">
-                    Insufficient balance.
-                  </div>
-                )}
+                {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
 
                 <div className="rdm-stepper">
                   <button
@@ -485,11 +491,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                     {state.isPending ? "Preparing..." : "1. Prepare Wallet"}
                   </button>
                 ) : (
-                  <button
-                    className="rdm-cta primary"
-                    onClick={actions.buy}
-                    disabled={!flags.canBuy || state.isPending}
-                  >
+                  <button className="rdm-cta primary" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
                     {state.isPending ? "Processing..." : `Buy ${clampedUiTicket} Ticket${clampedUiTicket !== 1 ? "s" : ""}`}
                   </button>
                 )}
@@ -505,7 +507,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             )}
           </div>
 
-          {/* DETAILS (RESTORED & ADDED MIN REQUIRED) */}
           <div className="rdm-dist-section">
             <div className="rdm-dist-header">Raffle Specs</div>
             <div className="rdm-dist-note">{expectedOutcome}</div>
@@ -514,18 +515,19 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
               <div className="rdm-spec-row">
                 <span>Status</span> <b>{prettyStatus(displayData?.status)}</b>
               </div>
-              {/* ✅ ADDED: Explicitly show Min Required to explain potential cancellation */}
+
               <div className="rdm-spec-row">
                 <span>Min Required</span> <b>{minTicketsN > 0 ? minTicketsN.toLocaleString("en-US") : "None"}</b>
               </div>
+
               <div className="rdm-spec-row">
                 <span>Sold / Max</span> <b>{soldNow} / {hasMax ? maxTicketsN : "∞"}</b>
               </div>
+
               <div className="rdm-spec-row">
                 <span>Deadline</span> <b>{formatDate(displayData?.deadline || "0")}</b>
               </div>
-              
-              {/* ✅ ADDED: Progress to minimum if relevant */}
+
               {!minReached && minTicketsN > 0 && (
                 <div className="rdm-spec-row">
                   <span>Progress to Min</span>
@@ -535,7 +537,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             </div>
           </div>
 
-          {/* DISTRIBUTION (RESTORED as "Payout Slip") */}
           {distribution && (
             <div className="rdm-dist-section">
               <div className="rdm-dist-header">Payout Distribution</div>
@@ -552,8 +553,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   <div className="rdm-slip-row">
                     <span>Fee</span> <span>{fmtNum(distribution.platformPrizeFee)} USDC</span>
                   </div>
+
                   <div className="rdm-slip-divider" />
-                  
+
                   <div className="rdm-slip-row head" style={{ marginTop: 8 }}>
                     <span>Sales Breakdown</span>
                   </div>
@@ -568,7 +570,6 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
             </div>
           )}
 
-          {/* TABS (Receipt Style) */}
           <div className="rdm-tabs">
             <button className={`rdm-tab ${tab === "receipt" ? "active" : ""}`} onClick={() => setTab("receipt")}>
               Receipt Log
@@ -590,7 +591,10 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                       <div className="rdm-tl-sub">
                         {step.tx && <TxLink hash={step.tx} />}
                         {step.winner && (
-                          <div className="rdm-winner-hl">Winner: {<ExplorerLink addr={step.winner} label={step.winner.slice(0,6)+'...'} />}</div>
+                          <div className="rdm-winner-hl">
+                            Winner:{" "}
+                            <ExplorerLink addr={step.winner} label={String(step.winner).slice(0, 6) + "..."} />
+                          </div>
                         )}
                       </div>
                     </div>
@@ -610,7 +614,9 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
                   participants.map((p, i) => (
                     <div key={i} className="rdm-holder-row">
                       <ExplorerLink addr={p.buyer} />
-                      <b>{p.ticketsPurchased} ({p.percentage}%)</b>
+                      <b>
+                        {p.ticketsPurchased} ({p.percentage}%)
+                      </b>
                     </div>
                   ))
                 )}
