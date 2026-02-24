@@ -2,16 +2,16 @@
 // (If you’re migrating naming, feel free to rename this file to useLotteryParticipants.ts later.)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchLotteryParticipants, type LotteryParticipantItem } from "../indexer/subgraph";
+import { fetchUserLotteriesByLottery, type UserLotteryItem } from "../indexer/subgraph";
 
-export type ParticipantUI = LotteryParticipantItem & {
+export type ParticipantUI = UserLotteryItem & {
   percentage: string;
 };
 
 // --- lightweight in-memory cache (per page load) ---
 type CacheEntry = {
   at: number;
-  data: LotteryParticipantItem[];
+  data: UserLotteryItem[];
   soldAtFetch: number; // helps decide if cache is too stale
 };
 
@@ -37,12 +37,15 @@ function isHidden() {
   }
 }
 
+/**
+ * Participants = userLotteries(where: { lottery: <id> }, orderBy: ticketsPurchased desc)
+ * This is effectively your "holders" list.
+ */
 export function useRaffleParticipants(lotteryId: string | null, totalSold: number) {
-  const [raw, setRaw] = useState<LotteryParticipantItem[]>([]);
+  const [raw, setRaw] = useState<UserLotteryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
-  const lastLotteryKeyRef = useRef<string | null>(null);
 
   const load = useCallback(
     async (opts?: { force?: boolean; reason?: "id_change" | "revalidate" | "manual" }) => {
@@ -83,7 +86,8 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
       if (!hasSomething) setIsLoading(true);
 
       try {
-        const data = await fetchLotteryParticipants(key, { signal: ac.signal });
+        // Your subgraph helper already accepts { signal }
+        const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
 
         if (ac.signal.aborted) return;
 
@@ -111,9 +115,6 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
       setRaw([]);
       return;
     }
-
-    const key = lotteryId.toLowerCase();
-    lastLotteryKeyRef.current = key;
 
     void load({ force: false, reason: "id_change" });
 
@@ -143,9 +144,9 @@ export function useRaffleParticipants(lotteryId: string | null, totalSold: numbe
     const sold = Number.isFinite(totalSold) ? totalSold : 0;
 
     return (raw ?? []).map((p) => {
-      const count = Number((p as any).ticketsPurchased || "0");
+      const count = Number(p.ticketsPurchased || "0");
       const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
-      return { ...(p as any), percentage: pct };
+      return { ...p, percentage: pct };
     });
   }, [raw, totalSold]);
 
