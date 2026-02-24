@@ -6,7 +6,7 @@ import { useExploreController, type SortMode } from "../hooks/useExploreControll
 import "./ExplorePage.css";
 
 type Props = {
-  onOpenRaffle: (id: string) => void;
+  onOpenRaffle: (id: string) => void; // can rename later to onOpenLottery
   onOpenSafety: (id: string) => void;
 };
 
@@ -21,19 +21,19 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
   const showSkeletons = meta.isLoading && !hasAnyItems;
 
   const isSearching = !!state.q;
-  const isMyRaffles = state.myRafflesOnly;
+  const isMyLotteries = state.myLotteriesOnly;
 
   return (
     <div className="xp-container">
       {/* 1. Header Section */}
       <div className="xp-header">
-        <h1 className="xp-title">Explore Raffles</h1>
-        <div className="xp-subtitle">
-          Discover active prize pools, verify fairness, and try your luck.
-        </div>
-        
+        <h1 className="xp-title">Explore Lotteries</h1>
+        <div className="xp-subtitle">Discover active prize pools, verify fairness, and try your luck.</div>
+
         <div className="xp-stats-pill">
-          {meta.isLoading && !hasAnyItems ? "Syncing..." : (
+          {meta.isLoading && !hasAnyItems ? (
+            "Syncing..."
+          ) : (
             <>
               <strong>{meta.totalCount}</strong> Total • <strong>{meta.shownCount}</strong> Shown
             </>
@@ -41,7 +41,7 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
         </div>
       </div>
 
-      {/* 2. Control Toolbar (Glassmorphism) */}
+      {/* 2. Control Toolbar */}
       <div className="xp-toolbar-wrapper">
         <div className="xp-toolbar">
           {/* Top Row: Search & Sort */}
@@ -62,8 +62,8 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
             </div>
 
             <div className="xp-select-group">
-               {/* Status Select */}
-               <div className="xp-select-wrapper">
+              {/* Status Select */}
+              <div className="xp-select-wrapper">
                 <select
                   className="xp-select"
                   value={state.status}
@@ -79,11 +79,7 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
 
               {/* Sort Select */}
               <div className="xp-select-wrapper">
-                <select
-                  className="xp-select"
-                  value={state.sort}
-                  onChange={(e) => actions.setSort(e.target.value as SortMode)}
-                >
+                <select className="xp-select" value={state.sort} onChange={(e) => actions.setSort(e.target.value as SortMode)}>
                   <option value="endingSoon">⏳ Ending Soon</option>
                   <option value="bigPrize">🏆 Big Prize</option>
                   <option value="newest">✨ Newest</option>
@@ -104,17 +100,16 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
               </button>
 
               <button
-                className={`xp-toggle-btn ${state.myRafflesOnly ? "active" : ""}`}
-                onClick={() => actions.setMyRafflesOnly(!state.myRafflesOnly)}
+                className={`xp-toggle-btn ${state.myLotteriesOnly ? "active" : ""}`}
+                onClick={() => actions.setMyLotteriesOnly(!state.myLotteriesOnly)}
                 disabled={!state.me}
-                title={!state.me ? "Sign in to view your raffles" : ""}
+                title={!state.me ? "Sign in to view your lotteries" : ""}
               >
-                {state.myRafflesOnly ? "👤 My Raffles" : "🌏 Everyone"}
+                {state.myLotteriesOnly ? "👤 My Lotteries" : "🌏 Everyone"}
               </button>
             </div>
-            
-            {/* Quick Reset if filters are dirty */}
-            {(state.q || state.status !== "ALL" || state.openOnly || state.myRafflesOnly) && (
+
+            {(state.q || state.status !== "ALL" || state.openOnly || state.myLotteriesOnly) && (
               <button className="xp-reset-link" onClick={actions.resetFilters}>
                 Reset Filters
               </button>
@@ -136,35 +131,25 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
           </>
         )}
 
-        {/* Real Cards (With Staggered Delay) */}
+        {/* Real Cards */}
         {state.list.map((r, i) => (
-          <div 
-            key={r.id} 
-            className="xp-card-shell"
-            style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}
-          >
-            <RaffleCard
-              raffle={r}
-              onOpen={onOpenRaffle}
-              onOpenSafety={onOpenSafety}
-            />
+          <div key={r.id} className="xp-card-shell" style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}>
+            <RaffleCard lottery={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} />
           </div>
         ))}
 
-        {/* Empty States */}
+        {/* Empty State */}
         {!meta.isLoading && state.list.length === 0 && (
           <div className="xp-empty-state">
-            <div className="xp-empty-icon">
-              {isSearching ? "🔍" : isMyRaffles ? "📂" : "🍃"}
-            </div>
+            <div className="xp-empty-icon">{isSearching ? "🔍" : isMyLotteries ? "📂" : "🍃"}</div>
             <div className="xp-empty-title">
-              {isSearching ? "No results found" : isMyRaffles ? "No raffles found" : "No active raffles"}
+              {isSearching ? "No results found" : isMyLotteries ? "No lotteries found" : "No active lotteries"}
             </div>
             <div className="xp-empty-sub">
-              {isSearching 
-                ? `We couldn't find anything matching "${state.q}".` 
-                : isMyRaffles 
-                  ? "You haven't created any raffles matching these filters." 
+              {isSearching
+                ? `We couldn't find anything matching "${state.q}".`
+                : isMyLotteries
+                  ? "You haven't created any lotteries matching these filters."
                   : "Try adjusting your filters to see more results."}
             </div>
             <button className="xp-empty-action" onClick={actions.resetFilters}>
