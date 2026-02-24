@@ -1,15 +1,17 @@
 // src/hooks/useRaffleParticipants.ts
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchRaffleParticipants, type RaffleParticipantItem } from "../indexer/subgraph";
+// (If you’re migrating naming, feel free to rename this file to useLotteryParticipants.ts later.)
 
-export type ParticipantUI = RaffleParticipantItem & {
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchLotteryParticipants, type LotteryParticipantItem } from "../indexer/subgraph";
+
+export type ParticipantUI = LotteryParticipantItem & {
   percentage: string;
 };
 
 // --- lightweight in-memory cache (per page load) ---
 type CacheEntry = {
   at: number;
-  data: RaffleParticipantItem[];
+  data: LotteryParticipantItem[];
   soldAtFetch: number; // helps decide if cache is too stale
 };
 
@@ -35,21 +37,21 @@ function isHidden() {
   }
 }
 
-export function useRaffleParticipants(raffleId: string | null, totalSold: number) {
-  const [raw, setRaw] = useState<RaffleParticipantItem[]>([]);
+export function useRaffleParticipants(lotteryId: string | null, totalSold: number) {
+  const [raw, setRaw] = useState<LotteryParticipantItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
-  const lastRaffleKeyRef = useRef<string | null>(null);
+  const lastLotteryKeyRef = useRef<string | null>(null);
 
   const load = useCallback(
     async (opts?: { force?: boolean; reason?: "id_change" | "revalidate" | "manual" }) => {
-      if (!raffleId) {
+      if (!lotteryId) {
         setRaw([]);
         return;
       }
 
-      const key = raffleId.toLowerCase();
+      const key = lotteryId.toLowerCase();
       const now = Date.now();
       const soldNow = Number.isFinite(totalSold) ? totalSold : 0;
 
@@ -81,7 +83,7 @@ export function useRaffleParticipants(raffleId: string | null, totalSold: number
       if (!hasSomething) setIsLoading(true);
 
       try {
-        const data = await fetchRaffleParticipants(key, { signal: ac.signal });
+        const data = await fetchLotteryParticipants(key, { signal: ac.signal });
 
         if (ac.signal.aborted) return;
 
@@ -100,18 +102,18 @@ export function useRaffleParticipants(raffleId: string | null, totalSold: number
         if (!ac.signal.aborted) setIsLoading(false);
       }
     },
-    [raffleId, totalSold, raw.length]
+    [lotteryId, totalSold, raw.length]
   );
 
-  // ✅ Fetch when raffleId changes
+  // ✅ Fetch when lotteryId changes
   useEffect(() => {
-    if (!raffleId) {
+    if (!lotteryId) {
       setRaw([]);
       return;
     }
 
-    const key = raffleId.toLowerCase();
-    lastRaffleKeyRef.current = key;
+    const key = lotteryId.toLowerCase();
+    lastLotteryKeyRef.current = key;
 
     void load({ force: false, reason: "id_change" });
 
@@ -120,12 +122,12 @@ export function useRaffleParticipants(raffleId: string | null, totalSold: number
         abortRef.current?.abort();
       } catch {}
     };
-  }, [raffleId, load]);
+  }, [lotteryId, load]);
 
   // ✅ Refresh holders after buy/create (you already emit "ppopgi:revalidate")
   useEffect(() => {
     const onRevalidate = () => {
-      if (!raffleId) return;
+      if (!lotteryId) return;
       if (isHidden()) return;
 
       // Light: only refetch if cache is stale-ish OR sold moved a lot
@@ -134,16 +136,16 @@ export function useRaffleParticipants(raffleId: string | null, totalSold: number
 
     window.addEventListener("ppopgi:revalidate", onRevalidate as any);
     return () => window.removeEventListener("ppopgi:revalidate", onRevalidate as any);
-  }, [raffleId, load]);
+  }, [lotteryId, load]);
 
   // ✅ Recompute percentages locally when totalSold changes (no refetch)
   const participants: ParticipantUI[] = useMemo(() => {
     const sold = Number.isFinite(totalSold) ? totalSold : 0;
 
     return (raw ?? []).map((p) => {
-      const count = Number(p.ticketsPurchased || "0");
+      const count = Number((p as any).ticketsPurchased || "0");
       const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
-      return { ...p, percentage: pct };
+      return { ...(p as any), percentage: pct };
     });
   }, [raw, totalSold]);
 
