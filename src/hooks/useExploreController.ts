@@ -8,6 +8,7 @@ import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore"
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 
 const norm = (s: string) => (s || "").trim().toLowerCase();
+
 const safeNum = (v: any) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -35,12 +36,13 @@ export function useExploreController() {
   // --- Filtering Logic (Memoized) ---
   const list = useMemo(() => {
     const all = items ?? [];
+
     let filtered = status === "ALL" ? all : all.filter((r) => r.status === status);
 
     if (openOnly) filtered = filtered.filter((r) => isActiveStatus(r.status));
 
     if (myLotteriesOnly && me) {
-      filtered = filtered.filter((r: any) => (r.creator ? norm(String(r.creator)) : null) === me);
+      filtered = filtered.filter((r) => (r.creator ? norm(String(r.creator)) : null) === me);
     }
 
     const query = norm(q);
@@ -56,7 +58,16 @@ export function useExploreController() {
         return timeDiff !== 0 ? timeDiff : String(b.id).localeCompare(String(a.id));
       }
 
-      if (sort === "endingSoon") return safeNum(a.deadline) - safeNum(b.deadline);
+      if (sort === "endingSoon") {
+        // Push missing/0 deadlines to the bottom
+        const ad = safeNum(a.deadline);
+        const bd = safeNum(b.deadline);
+
+        const aKey = ad > 0 ? ad : Number.MAX_SAFE_INTEGER;
+        const bKey = bd > 0 ? bd : Number.MAX_SAFE_INTEGER;
+
+        return aKey - bKey;
+      }
 
       if (sort === "bigPrize") {
         const A = BigInt(a.winningPot || "0");
