@@ -1,9 +1,9 @@
 // src/hooks/useRaffleStore.ts
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { fetchRafflesFromSubgraph, type RaffleListItem } from "../indexer/subgraph";
+import { fetchLotteriesFromSubgraph, type LotteryListItem, type LotteryStatus } from "../indexer/subgraph";
 
 export type StoreState = {
-  items: RaffleListItem[] | null;
+  items: LotteryListItem[] | null;
   isLoading: boolean;
   note: string | null;
   lastUpdatedMs: number;
@@ -44,16 +44,17 @@ let revalidateDebounceTimer: number | null = null;
 const appliedPatchIds = new Set<string>();
 let patchGcTimer: number | null = null;
 
-// ✅ Revalidate throttling (prevents 5s global tick from refetching raffles every time)
+// ✅ Revalidate throttling
 const SOFT_REVALIDATE_MIN_GAP_MS = 20_000; // ignore frequent "sync" ticks
 const HARD_REVALIDATE_MIN_GAP_MS = 2_500; // allow quick refresh after user actions
 
 // ✅ Avoid replacing items array when nothing actually changed (prevents flicker)
 let lastItemsSig = "";
-function signature(items: RaffleListItem[] | null) {
+function signature(items: LotteryListItem[] | null) {
   if (!items || items.length === 0) return "";
+  // Your list query sorts by registeredAt desc, and the main live-changing fields are status/sold/ticketRevenue.
   return items
-    .map((r: any) => `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.lastUpdatedTimestamp)}`)
+    .map((r) => `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.ticketRevenue)}:${String(r.registeredAt)}`)
     .join("|");
 }
 
@@ -168,14 +169,16 @@ type OptimisticEvent =
   | {
       kind: "BUY";
       patchId?: string;
-      raffleId: string;
+      lotteryId: string;
       deltaSold: number;
+      // Optional: if your UI knows revenue delta (deltaSold * ticketPrice), pass it.
+      deltaRevenue?: string | number;
       tsMs?: number;
     }
   | {
       kind: "CREATE";
       patchId?: string;
-      raffle: Partial<RaffleListItem> & { id: string; name: string; creator: string };
+      lottery: Partial<LotteryListItem> & { id: string; name: string; creator: string };
       tsMs?: number;
     };
 
@@ -186,7 +189,6 @@ function normHex(v: string) {
 function ensurePatchGc() {
   if (patchGcTimer != null) return;
   patchGcTimer = window.setInterval(() => {
-    // Cheap “GC”: just cap set size
     if (appliedPatchIds.size > 500) {
       appliedPatchIds.clear();
     }
@@ -194,109 +196,124 @@ function ensurePatchGc() {
 }
 
 function applyOptimisticBuy(e: OptimisticEvent & { kind: "BUY" }) {
-  const rid = normHex(e.raffleId);
+  const lid = normHex(e.lotteryId);
   const delta = Math.max(0, Math.floor(Number(e.deltaSold || 0)));
-  if (!rid || delta <= 0) return;
+  if (!lid || delta <= 0) return;
 
   const items = state.items;
   if (!items || items.length === 0) return;
 
-  const next = items.map((r) => {
-    if (normHex(r.id) !== rid) return r;
+  const deltaRev =
+    e.deltaRevenue == null
+      ? 0n
+      : (() => {
+          try {
+            return BigInt(e.deltaRevenue as any);
+          } catch {
+            try {
+              return BigInt(String(e.deltaRevenue));
+            } catch {
+              return 0n;
+            }
+          }
+        })();
 
-    const soldN = Number((r as any).sold || 0);
+  const next = items.map((r) => {
+    if (normHex(r.id) !== lid) return r;
+
+    const soldN = Number(r.sold || 0);
     const nextSold = String(Math.max(0, soldN + delta));
 
-    // bump lastUpdatedTimestamp so it floats up (your query sorts by lastUpdatedTimestamp desc)
-    const nowSec = Math.floor(Date.now() / 1000);
-    const bumpedTs = String(Math.max(nowSec, Number((r as any).lastUpdatedTimestamp || 0)));
+    let nextRev = r.ticketRevenue || "0";
+    if (deltaRev > 0n) {
+      try {
+        nextRev = (BigInt(r.ticketRevenue || "0") + deltaRev).toString();
+      } catch {
+        // ignore
+      }
+    }
 
     return {
       ...r,
       sold: nextSold,
-      lastUpdatedTimestamp: bumpedTs,
-    } as any;
+      ticketRevenue: nextRev,
+    };
   });
 
-  // Optional: re-sort by lastUpdatedTimestamp desc to keep UI consistent
-  next.sort((a: any, b: any) => Number(b.lastUpdatedTimestamp || 0) - Number(a.lastUpdatedTimestamp || 0));
-
-  // ✅ update signature too (so next fetch compare isn't confused)
-  lastItemsSig = signature(next as any);
-
+  lastItemsSig = signature(next);
   setState({ items: next });
 }
 
 function applyOptimisticCreate(e: OptimisticEvent & { kind: "CREATE" }) {
-  const r = e.raffle;
+  const r = e.lottery;
   if (!r?.id || !r?.name) return;
 
   const id = normHex(r.id);
   const creator = normHex(r.creator || "");
   if (!id || !creator) return;
 
-  const nowSec = String(Math.floor(Date.now() / 1000));
+  const nowSec = String(Math.floor((e.tsMs ?? Date.now()) / 1000));
 
-  const newItem: RaffleListItem = {
-    // required fields — fill best-effort defaults
+  const newItem: LotteryListItem = {
     id,
-    name: String(r.name),
-    status: (r.status as any) ?? "FUNDING_PENDING",
-
-    deployer: (r.deployer as any) ?? null,
-    registry: (r.registry as any) ?? null,
-    typeId: (r.typeId as any) ?? null,
-    registryIndex: (r.registryIndex as any) ?? null,
-    isRegistered: Boolean((r as any).isRegistered ?? false),
-    registeredAt: (r.registeredAt as any) ?? null,
-
+    // Canonical registry metadata
+    typeId: String(r.typeId ?? "1"), // single-winner default if unknown
     creator,
-    createdAtBlock: String((r as any).createdAtBlock ?? "0"),
-    createdAtTimestamp: String((r as any).createdAtTimestamp ?? nowSec),
-    creationTx: String((r as any).creationTx ?? "0x"),
+    registeredAt: String(r.registeredAt ?? nowSec),
+    registryIndex: r.registryIndex != null ? String(r.registryIndex) : null,
 
-    usdc: String((r as any).usdc ?? "0x"),
-    entropy: String((r as any).entropy ?? "0x"),
-    entropyProvider: String((r as any).entropyProvider ?? "0x"),
-    feeRecipient: String((r as any).feeRecipient ?? "0x"),
-    protocolFeePercent: String((r as any).protocolFeePercent ?? "0"),
-    callbackGasLimit: String((r as any).callbackGasLimit ?? "0"),
-    minPurchaseAmount: String((r as any).minPurchaseAmount ?? "1"),
+    // Deployer snapshot (best-effort)
+    deployedBy: r.deployedBy != null ? String(r.deployedBy).toLowerCase() : null,
+    deployedAt: r.deployedAt != null ? String(r.deployedAt) : nowSec,
+    deployedTx: r.deployedTx != null ? String(r.deployedTx).toLowerCase() : null,
 
-    winningPot: String((r as any).winningPot ?? "0"),
-    ticketPrice: String((r as any).ticketPrice ?? "0"),
-    deadline: String((r as any).deadline ?? "0"),
-    minTickets: String((r as any).minTickets ?? "1"),
-    maxTickets: String((r as any).maxTickets ?? "0"),
-    sold: String((r as any).sold ?? "0"),
-    ticketRevenue: String((r as any).ticketRevenue ?? "0"),
-    paused: Boolean((r as any).paused ?? false),
+    // Config / constants
+    name: String(r.name ?? "New Lottery"),
+    usdcToken: r.usdcToken != null ? String(r.usdcToken).toLowerCase() : null,
+    feeRecipient: r.feeRecipient != null ? String(r.feeRecipient).toLowerCase() : null,
+    entropy: r.entropy != null ? String(r.entropy).toLowerCase() : null,
+    entropyProvider: r.entropyProvider != null ? String(r.entropyProvider).toLowerCase() : null,
+    callbackGasLimit: r.callbackGasLimit != null ? String(r.callbackGasLimit) : null,
+    protocolFeePercent: r.protocolFeePercent != null ? String(r.protocolFeePercent) : null,
 
-    finalizeRequestId: (r.finalizeRequestId as any) ?? null,
-    finalizedAt: (r.finalizedAt as any) ?? null,
-    selectedProvider: (r.selectedProvider as any) ?? null,
-    winner: (r.winner as any) ?? null,
-    winningTicketIndex: (r.winningTicketIndex as any) ?? null,
-    completedAt: (r.completedAt as any) ?? null,
-    canceledReason: (r.canceledReason as any) ?? null,
-    canceledAt: (r.canceledAt as any) ?? null,
-    soldAtCancel: (r.soldAtCancel as any) ?? null,
+    createdAt: r.createdAt != null ? String(r.createdAt) : nowSec,
+    deadline: r.deadline != null ? String(r.deadline) : null,
+    ticketPrice: r.ticketPrice != null ? String(r.ticketPrice) : null,
+    winningPot: r.winningPot != null ? String(r.winningPot) : null,
+    minTickets: r.minTickets != null ? String(r.minTickets) : null,
+    maxTickets: r.maxTickets != null ? String(r.maxTickets) : null,
+    minPurchaseAmount: r.minPurchaseAmount != null ? String(r.minPurchaseAmount) : null,
 
-    lastUpdatedBlock: String((r as any).lastUpdatedBlock ?? "0"),
-    lastUpdatedTimestamp: String((r as any).lastUpdatedTimestamp ?? nowSec),
+    // Live state
+    status: (r.status as LotteryStatus) ?? "FUNDING_PENDING",
+    sold: String(r.sold ?? "0"),
+    ticketRevenue: String(r.ticketRevenue ?? "0"),
+
+    // Drawing state
+    winner: r.winner != null ? String(r.winner).toLowerCase() : null,
+    selectedProvider: r.selectedProvider != null ? String(r.selectedProvider).toLowerCase() : null,
+    entropyRequestId: r.entropyRequestId != null ? String(r.entropyRequestId) : null,
+    drawingRequestedAt: r.drawingRequestedAt != null ? String(r.drawingRequestedAt) : null,
+    soldAtDrawing: r.soldAtDrawing != null ? String(r.soldAtDrawing) : null,
+
+    // Cancel state
+    canceledAt: r.canceledAt != null ? String(r.canceledAt) : null,
+    soldAtCancel: r.soldAtCancel != null ? String(r.soldAtCancel) : null,
+    cancelReason: r.cancelReason != null ? String(r.cancelReason) : null,
+    creatorPotRefunded: typeof r.creatorPotRefunded === "boolean" ? r.creatorPotRefunded : null,
+
+    // Accounting snapshots
+    totalReservedUSDC: r.totalReservedUSDC != null ? String(r.totalReservedUSDC) : null,
   };
 
   const items = state.items ?? [];
   const exists = items.some((x) => normHex(x.id) === id);
   if (exists) return;
 
-  const next = [newItem, ...items];
-  // keep it consistent with your list ordering
-  next.sort((a: any, b: any) => Number(b.lastUpdatedTimestamp || 0) - Number(a.lastUpdatedTimestamp || 0));
+  // Keep consistent with your fetch ordering (registeredAt desc)
+  const next = [newItem, ...items].sort((a, b) => Number(b.registeredAt || "0") - Number(a.registeredAt || "0"));
 
-  // ✅ update signature too
-  lastItemsSig = signature(next as any);
-
+  lastItemsSig = signature(next);
   setState({ items: next });
 }
 
@@ -328,12 +345,11 @@ async function doFetch(isBackground: boolean) {
     lastFetchStartedMs = Date.now();
 
     try {
-      const data = await fetchRafflesFromSubgraph({
+      const data = await fetchLotteriesFromSubgraph({
         first: 1000,
         signal: aborter.signal,
-      });
+      } as any);
 
-      // ✅ Only replace items when something actually changed (prevents UI flash)
       const nextSig = signature(data);
       const prevSig = lastItemsSig;
 
@@ -346,7 +362,6 @@ async function doFetch(isBackground: boolean) {
           lastUpdatedMs: Date.now(),
         });
       } else {
-        // no change → don't touch items/lastUpdatedMs
         setState({
           note: null,
           isLoading: false,
@@ -366,10 +381,8 @@ async function doFetch(isBackground: boolean) {
     } finally {
       inFlight = null;
 
-      // ✅ if something requested refresh during flight, do one more (once)
       if (pendingRefreshAfterFlight) {
         pendingRefreshAfterFlight = false;
-        // background refresh, but forced
         void refresh(true, true);
       } else {
         scheduleNext();
@@ -420,27 +433,20 @@ function clearRevalidateDebounce() {
  * When UI emits "ppopgi:revalidate", we:
  * - don’t spam (min gap)
  * - don’t overlap (if inFlight => queue one refresh)
- *
- * ✅ IMPORTANT:
- * - soft revalidate (default) is throttled to 20s to avoid flashing from 5s global ticks
- * - forced revalidate (detail.force=true) stays fast (2.5s min gap)
  */
 function requestRevalidate(force = false) {
   if (subscribers <= 0) return;
 
-  // if hidden, don’t thrash — let normal background polling handle it
   if (isHidden()) return;
 
   const now = Date.now();
   const minGap = force ? HARD_REVALIDATE_MIN_GAP_MS : SOFT_REVALIDATE_MIN_GAP_MS;
 
-  // already fetching => queue one refresh after it finishes
   if (inFlight) {
     pendingRefreshAfterFlight = true;
     return;
   }
 
-  // burst dedupe
   const since = now - lastFetchStartedMs;
   if (since >= 0 && since < minGap) {
     clearRevalidateDebounce();
@@ -463,13 +469,11 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
       if (!isHidden()) requestRevalidate(true);
     };
 
-    // ✅ app-wide revalidate event (soft by default, unless { detail: { force: true } })
     const onReval = (e: Event) => {
       const ce = e as CustomEvent<{ force?: boolean }>;
       requestRevalidate(!!ce?.detail?.force);
     };
 
-    // ✅ optimistic event
     const onOpt = (e: Event) => {
       const ce = e as CustomEvent;
       const detail = ce?.detail;
@@ -494,7 +498,6 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
       }
     };
 
-    // initial fetch
     void refresh(false, true);
   } else {
     if (!state.items) void refresh(false, true);
