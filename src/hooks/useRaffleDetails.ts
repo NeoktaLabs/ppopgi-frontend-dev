@@ -125,7 +125,7 @@ async function readFirst(
     }
   }
   // eslint-disable-next-line no-console
-  console.warn(`[useRaffleDetails] Failed to read ${label}. Tried:`, candidates, lastErr);
+  console.warn(`[useLotteryDetails] Failed to read ${label}. Tried:`, candidates, lastErr);
   throw lastErr;
 }
 
@@ -167,7 +167,6 @@ async function fetchLotteryHistoryFromSubgraph(id: string, signal?: AbortSignal)
   const lotteryId = id.toLowerCase();
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
-  // NOTE: your subgraph schema shows lottery(id: Bytes!) and these fields exist on LotteryListItem
   const query = `
     query LotteryById($id: Bytes!) {
       lottery(id: $id) {
