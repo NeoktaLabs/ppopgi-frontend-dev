@@ -6,13 +6,7 @@ import { getContract, readContract } from "thirdweb";
 import { getWalletBalance } from "thirdweb/wallets";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-
-// Prefer env override; fallback to your current address.
-const DEFAULT_USDC_ADDRESS = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
-function getUsdcAddress(): string {
-  const v = (import.meta as any).env?.VITE_USDC_ADDRESS;
-  return (typeof v === "string" && v.trim() ? v.trim() : DEFAULT_USDC_ADDRESS).toLowerCase();
-}
+import { ADDRESSES } from "../config/contracts";
 
 // Minimal ERC20 ABI (only what we use)
 const ERC20_ABI = [
@@ -61,11 +55,12 @@ export function useCashierData(isOpen: boolean) {
   // Guards against stale async responses (open/close, account switching)
   const reqIdRef = useRef(0);
 
+  // ✅ Single source of truth for USDC address
   const usdcContract = useMemo(() => {
     return getContract({
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
-      address: getUsdcAddress(),
+      address: ADDRESSES.USDC.toLowerCase(),
       abi: ERC20_ABI,
     });
   }, []);
