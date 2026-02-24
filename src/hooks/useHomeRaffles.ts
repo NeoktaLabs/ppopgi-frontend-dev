@@ -1,4 +1,5 @@
 // src/hooks/useHomeRaffles.ts
+// (You can rename later to useHomeLotteries.ts if you want.)
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LotteryListItem } from "../indexer/subgraph";
 import { fetchLotteriesOnChainFallback } from "../onchain/fallbackLotteries";
@@ -11,6 +12,12 @@ type Mode = "indexer" | "live";
 function numOr0(v?: string | null) {
   const n = Number(v || "0");
   return Number.isFinite(n) ? n : 0;
+}
+
+// Sort helper: treat 0 / missing deadlines as "far future" so they don't appear as "ending soon"
+function deadlineSortKey(deadline?: string | null) {
+  const d = numOr0(deadline);
+  return d > 0 ? d : Number.MAX_SAFE_INTEGER;
 }
 
 function isRateLimitNote(note: string) {
@@ -26,7 +33,13 @@ function shouldFallback(note: string | null) {
   // For rate-limits, better to wait/backoff than hammer on-chain + indexer.
   if (isRateLimitNote(note)) return false;
 
-  return s.includes("failed") || s.includes("unavailable") || s.includes("could not") || s.includes("error") || s.includes("timeout");
+  return (
+    s.includes("failed") ||
+    s.includes("unavailable") ||
+    s.includes("could not") ||
+    s.includes("error") ||
+    s.includes("timeout")
+  );
 }
 
 export function useHomeRaffles() {
@@ -163,7 +176,7 @@ export function useHomeRaffles() {
   const endingSoon = useMemo(() => {
     return [...active]
       .filter((r) => r.status === "OPEN")
-      .sort((a, b) => numOr0(a.deadline) - numOr0(b.deadline))
+      .sort((a, b) => deadlineSortKey(a.deadline) - deadlineSortKey(b.deadline))
       .slice(0, 5);
   }, [active]);
 
