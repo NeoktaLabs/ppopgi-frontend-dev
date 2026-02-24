@@ -1,6 +1,6 @@
 // src/components/RaffleCard.tsx
 import React, { useMemo } from "react";
-import type { RaffleListItem } from "../indexer/subgraph";
+import type { LotteryListItem } from "../indexer/subgraph"; // ✅ updated type
 import { useRaffleCard } from "../hooks/useRaffleCard";
 import "./RaffleCard.css";
 
@@ -28,7 +28,7 @@ type FinalizerInfo = {
 };
 
 type Props = {
-  raffle: RaffleListItem;
+  raffle: LotteryListItem; // ✅ still named "raffle" for now, but type is LotteryListItem
   onOpen: (id: string) => void;
   onOpenSafety?: (id: string) => void;
   ribbon?: "gold" | "silver" | "bronze";
@@ -79,9 +79,8 @@ export function RaffleCard({
   const endConditionReached = isOpenStatus && (maxReached || deadlinePassed);
 
   const minTicketsN = Number((raffle as any).minTickets ?? 0);
-  const hasMin = (ui as any)?.hasMin ?? (minTicketsN > 0);
-  const minReached =
-    (ui as any)?.minReached ?? (hasMin ? soldN >= Math.max(0, minTicketsN) : true);
+  const hasMin = (ui as any)?.hasMin ?? minTicketsN > 0;
+  const minReached = (ui as any)?.minReached ?? (hasMin ? soldN >= Math.max(0, minTicketsN) : true);
 
   type EndMode = "CANCELING" | "DRAWING";
   const endMode: EndMode | null = endConditionReached ? (minReached ? "DRAWING" : "CANCELING") : null;
@@ -96,16 +95,36 @@ export function RaffleCard({
   const endChipNode = useMemo(() => {
     if (!endMode) return null;
     const title = endMode === "CANCELING" ? "Canceling" : "Drawing winner";
-    if (finalizer?.running) return <>{title}<br />~ now</>;
-    if (endCountdownSec === null) return <>{title}<br />~ soon</>;
-    return <>{title}<br />~ {fmtMinSec(endCountdownSec)}</>;
+    if (finalizer?.running) return (
+      <>
+        {title}
+        <br />
+        ~ now
+      </>
+    );
+    if (endCountdownSec === null) return (
+      <>
+        {title}
+        <br />
+        ~ soon
+      </>
+    );
+    return (
+      <>
+        {title}
+        <br />
+        ~ {fmtMinSec(endCountdownSec)}
+      </>
+    );
   }, [endMode, finalizer?.running, endCountdownSec]);
 
   const displayStatus = endMode ? (endMode === "CANCELING" ? "Canceling" : "Drawing") : ui.displayStatus;
   const isLiveForCard = ui.isLive && !endConditionReached;
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
-  const hostAddr = (raffle as any).owner || (raffle as any).creator;
+
+  // ✅ Prefer creator (new data), keep owner fallback only if you still have legacy rows somewhere.
+  const hostAddr = (raffle as any).creator || (raffle as any).owner;
 
   const winRateLabel = useMemo(() => {
     const max = Number((raffle as any).maxTickets ?? 0);
@@ -121,7 +140,11 @@ export function RaffleCard({
       return (
         <div className="rc-end-note">
           <div style={{ marginBottom: 6 }}>Canceling raffle</div>
-          <div className="rc-end-sub">Min tickets not reached.<br/>Reclaim available.</div>
+          <div className="rc-end-sub">
+            Min tickets not reached.
+            <br />
+            Reclaim available.
+          </div>
         </div>
       );
     }
@@ -129,7 +152,11 @@ export function RaffleCard({
     return (
       <div className="rc-end-note">
         <div style={{ marginBottom: 6 }}>Drawing Winner ({reason})</div>
-        <div className="rc-end-sub">Selection pending...<br/>Check back soon.</div>
+        <div className="rc-end-sub">
+          Selection pending...
+          <br />
+          Check back soon.
+        </div>
       </div>
     );
   }, [endMode, maxReached]);
@@ -143,11 +170,16 @@ export function RaffleCard({
       {/* --- HEADER SECTION --- */}
       <div className="rc-header">
         <div className={`rc-chip ${statusClass}`}>{endMode ? endChipNode : ui.displayStatus}</div>
-        <div className="rc-winrate-badge" title="Win chance per ticket">🎲 Win: {winRateLabel}</div>
+        <div className="rc-winrate-badge" title="Win chance per ticket">
+          🎲 Win: {winRateLabel}
+        </div>
         <div className="rc-actions">
           <button
             className="rc-shield-btn"
-            onClick={(e) => { e.stopPropagation(); onOpenSafety?.(raffle.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSafety?.(raffle.id);
+            }}
             title="Verified Contract"
             disabled={!onOpenSafety}
           >
@@ -155,7 +187,10 @@ export function RaffleCard({
           </button>
           <button
             className="rc-btn-icon"
-            onClick={(e) => { e.stopPropagation(); actions.handleShare(e); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.handleShare(e);
+            }}
             title="Share"
           >
             🔗
@@ -172,13 +207,23 @@ export function RaffleCard({
       <div className="rc-host">
         <span>Created by</span>
         {hostAddr ? (
-          <a href={`${EXPLORER_URL}${hostAddr}`} target="_blank" rel="noreferrer" className="rc-host-link" onClick={(e) => e.stopPropagation()}>
+          <a
+            href={`${EXPLORER_URL}${hostAddr}`}
+            target="_blank"
+            rel="noreferrer"
+            className="rc-host-link"
+            onClick={(e) => e.stopPropagation()}
+          >
             {short(hostAddr)}
           </a>
-        ) : <span>PPOPGI</span>}
+        ) : (
+          <span>PPOPGI</span>
+        )}
       </div>
 
-      <div className="rc-title" title={raffle.name}>{raffle.name}</div>
+      <div className="rc-title" title={raffle.name}>
+        {raffle.name}
+      </div>
 
       {/* --- PRIZE (Holographic) --- */}
       <div className="rc-prize-section">
@@ -197,7 +242,9 @@ export function RaffleCard({
         </div>
         <div className="rc-stat">
           <div className="rc-stat-lbl">Tickets Sold</div>
-          <div className="rc-stat-val">{ui.sold} {ui.hasMax && `/ ${ui.max}`}</div>
+          <div className="rc-stat-val">
+            {ui.sold} {ui.hasMax && `/ ${ui.max}`}
+          </div>
         </div>
       </div>
 
@@ -208,7 +255,9 @@ export function RaffleCard({
             <>
               <div className="rc-bar-row">
                 <span>Min Target</span>
-                <span>{ui.sold} / {ui.min}</span>
+                <span>
+                  {ui.sold} / {ui.min}
+                </span>
               </div>
               <div className="rc-track">
                 <div className="rc-fill blue" style={{ width: ui.progressMinPct }} />
@@ -241,7 +290,11 @@ export function RaffleCard({
             <span>⚠️ Emergency</span>
             <span>{hatch.label}</span>
           </div>
-          <button className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`} disabled={hatch.disabled || hatch.busy} onClick={hatch.onClick}>
+          <button
+            className={`rc-hatch-btn ${hatch.ready ? "ready" : ""}`}
+            disabled={hatch.disabled || hatch.busy}
+            onClick={hatch.onClick}
+          >
             {hatch.busy ? "..." : hatch.ready ? "HATCH (CANCEL)" : "LOCKED"}
           </button>
         </div>
@@ -250,11 +303,17 @@ export function RaffleCard({
       {/* --- TEAR-OFF STUB (Footer Action) --- */}
       <div className="rc-stub-container">
         <div className="rc-perforation-line" />
-        
+
         <div className="rc-stub-content">
           {/* Action Button */}
           {isLiveForCard ? (
-            <button className="rc-quick-buy-btn" onClick={(e) => { e.stopPropagation(); onOpen(raffle.id); }}>
+            <button
+              className="rc-quick-buy-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(raffle.id);
+              }}
+            >
               ⚡ Buy Ticket
             </button>
           ) : (
