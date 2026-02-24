@@ -32,6 +32,18 @@ function getLotteryName(item: any): string {
   return String(item?.lotteryName || item?.raffleName || "—");
 }
 
+function buildDetailHref(lotteryId: string) {
+  // ✅ Works with both router conventions:
+  // - new: ?lottery=
+  // - legacy: ?raffle=
+  const u = new URL("/", window.location.origin);
+  if (lotteryId) {
+    u.searchParams.set("lottery", lotteryId);
+    u.searchParams.set("raffle", lotteryId);
+  }
+  return u.toString();
+}
+
 export function ActivityBoard() {
   const { items, isLoading } = useActivityStore();
 
@@ -121,9 +133,7 @@ export function ActivityBoard() {
           const pendingLabel = String((item as any).pendingLabel || "PENDING");
           const pending = !!(item as any).pending;
 
-          // Keep your existing routing param so nothing breaks.
-          // If/when you migrate, change "raffle" -> "lottery" here once.
-          const detailHref = `/?raffle=${lotteryId}`;
+          const detailHref = buildDetailHref(lotteryId);
 
           return (
             <div key={key} className={rowClass}>
