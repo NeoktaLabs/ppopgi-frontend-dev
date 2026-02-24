@@ -7,6 +7,7 @@ import { BuyWidget } from "thirdweb/react";
 import { NATIVE_TOKEN_ADDRESS } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
+import { ADDRESSES } from "../config/contracts";
 
 type Props = {
   open: boolean;
@@ -15,19 +16,13 @@ type Props = {
 
 type Tab = "buy_usdc" | "buy_xtz" | "bridge";
 
-function getUsdcAddress(): string {
-  const v = (import.meta as any).env?.VITE_USDC_ADDRESS;
-  const fallback = "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9";
-  return (typeof v === "string" && v.trim() ? v.trim() : fallback).toLowerCase();
-}
-
 export function CashierModal({ open, onClose }: Props) {
   const { state, actions, display } = useCashierData(open);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<Tab>("buy_usdc");
 
-  // ✅ Single source of truth for USDC address (matches hook env convention)
-  const USDC_ADDRESS = useMemo(() => getUsdcAddress(), []);
+  // ✅ Single source of truth (src/config/contracts.ts)
+  const USDC_ADDRESS = useMemo(() => ADDRESSES.USDC.toLowerCase(), []);
 
   const handleCopy = useCallback(() => {
     const addr = state.me;
