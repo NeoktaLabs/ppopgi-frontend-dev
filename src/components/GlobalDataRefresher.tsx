@@ -19,20 +19,30 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
     if (background && !isVisible()) return;
 
     runningRef.current = true;
-    try {
-      // ✅ 1) Activity refresh every 5s (keeps feed synced)
-      await refreshActivityStore(true, true);
 
-      // ✅ 2) Raffles refresh is heavier — throttle it (e.g. 20s)
+    try {
       const now = Date.now();
       const RAFFLE_REFRESH_MIN_GAP_MS = 20_000;
 
-      if (!background || now - lastRaffleRefreshAtRef.current >= RAFFLE_REFRESH_MIN_GAP_MS) {
-        lastRaffleRefreshAtRef.current = now;
-        await refreshRaffleStore(true, true);
+      const shouldRefreshRaffles = !background || now - lastRaffleRefreshAtRef.current >= RAFFLE_REFRESH_MIN_GAP_MS;
+
+      if (shouldRefreshRaffles) lastRaffleRefreshAtRef.current = now;
+
+      // ✅ Run in parallel; don't let Activity block everything else.
+      const tasks: Promise<any>[] = [];
+
+      // Activity: light + frequent
+      tasks.push(refreshActivityStore(true, true));
+
+      // Raffles: heavier + throttled
+      if (shouldRefreshRaffles) {
+        tasks.push(refreshRaffleStore(true, true));
       }
 
-      // ✅ 3) Then notify listeners (Home/Explore/Dashboard)
+      // Never throw from refresher (stores already handle their own errors/backoff)
+      await Promise.allSettled(tasks);
+
+      // Notify listeners to recompute derived UI state
       try {
         window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
       } catch {}
