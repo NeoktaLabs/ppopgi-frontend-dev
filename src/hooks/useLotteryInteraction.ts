@@ -11,7 +11,7 @@ import { useConfetti } from "./useConfetti";
 import { ADDRESSES } from "../config/contracts";
 
 // ✅ Use your ABI files (from src/config/abis/index.ts)
-import { USDC_ABI, SINGLE_WINNER_LOTTERY_ABI } from "../config/abis";
+import { USDC, SingleWinnerLottery } from "../config/abis";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 const isZeroAddr = (a: any) => String(a || "").toLowerCase() === ZERO;
@@ -198,7 +198,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: lotteryId,
-      abi: SINGLE_WINNER_LOTTERY_ABI,
+      abi: SingleWinnerLottery,
     });
   }, [lotteryId]);
 
@@ -220,7 +220,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: addr,
-      abi: USDC_ABI,
+      abi: USDC,
     });
   }, [paymentTokenAddr]);
 

@@ -1,7 +1,7 @@
 // src/onchain/fallbackLotteries.ts
 import { Contract, JsonRpcProvider, ZeroAddress } from "ethers";
 import { ADDRESSES } from "../config/contracts";
-import { LotteryRegistryAbi, SingleWinnerLotteryAbi } from "../config/abis";
+import { LotteryRegistry, SingleWinnerLottery } from "../config/abis";
 import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
 function mustEnv(name: string): string {
@@ -41,7 +41,7 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
   const rpcUrl = mustEnv("VITE_ETHERLINK_RPC_URL");
 
   const rpc = new JsonRpcProvider(rpcUrl);
-  const reg = new Contract(ADDRESSES.LotteryRegistry, LotteryRegistryAbi as any, rpc);
+  const reg = new Contract(ADDRESSES.LotteryRegistry, LotteryRegistry as any, rpc);
 
   const [countBn, latestBlock] = await Promise.all([reg.getAllLotteriesCount(), rpc.getBlockNumber()]);
 
@@ -64,7 +64,7 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
   // -----------------------------
   // ✅ Minimal per-lottery reads
   // -----------------------------
-  const lotteries = addrs.map((addr) => new Contract(addr, SingleWinnerLotteryAbi as any, rpc));
+  const lotteries = addrs.map((addr) => new Contract(addr, SingleWinnerLottery as any, rpc));
 
   // status() for all
   const statuses = await Promise.all(lotteries.map((c) => safeCall<unknown>(c.status?.(), 0)));
