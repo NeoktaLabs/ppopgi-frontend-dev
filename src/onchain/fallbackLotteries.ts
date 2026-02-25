@@ -1,8 +1,7 @@
 // src/onchain/fallbackLotteries.ts
 import { Contract, JsonRpcProvider, ZeroAddress } from "ethers";
 import { ADDRESSES } from "../config/contracts";
-import LotteryRegistryAbi from "../config/abis/LotteryRegistry.json";
-import SingleWinnerLotteryAbi from "../config/abis/SingleWinnerLottery.json";
+import { LotteryRegistryAbi, SingleWinnerLotteryAbi } from "../config/abis";
 import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
 function mustEnv(name: string): string {
@@ -18,9 +17,6 @@ function statusFromUint8(x: number): LotteryStatus {
   if (x === 3) return "COMPLETED";
   return "CANCELED";
 }
-
-const ZERO_TX =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * ✅ RPC-minimal fallback
@@ -45,12 +41,9 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
   const rpcUrl = mustEnv("VITE_ETHERLINK_RPC_URL");
 
   const rpc = new JsonRpcProvider(rpcUrl);
-  const reg = new Contract(ADDRESSES.LotteryRegistry, LotteryRegistryAbi, rpc);
+  const reg = new Contract(ADDRESSES.LotteryRegistry, LotteryRegistryAbi as any, rpc);
 
-  const [countBn, latestBlock] = await Promise.all([
-    reg.getAllLotteriesCount(),
-    rpc.getBlockNumber(),
-  ]);
+  const [countBn, latestBlock] = await Promise.all([reg.getAllLotteriesCount(), rpc.getBlockNumber()]);
 
   const count = Number(countBn);
   const pageSize = 25;
@@ -68,30 +61,26 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
   // show newest first
   addrs.reverse();
 
-  const nowSec = String(Math.floor(Date.now() / 1000));
-  const nowBlock = String(latestBlock);
-
   // -----------------------------
   // ✅ Minimal per-lottery reads
   // -----------------------------
-  // Do them in parallel to reduce wall-clock time.
-  const lotteries = addrs.map((addr) => new Contract(addr, SingleWinnerLotteryAbi, rpc));
+  const lotteries = addrs.map((addr) => new Contract(addr, SingleWinnerLotteryAbi as any, rpc));
 
   // status() for all
-  const statuses = await Promise.all(
-    lotteries.map((c) => safeCall<unknown>(c.status?.(), 0))
-  );
+  const statuses = await Promise.all(lotteries.map((c) => safeCall<unknown>(c.status?.(), 0)));
 
   // sold() for all (prefer getSold() if present)
   const solds = await Promise.all(
     lotteries.map((c) =>
       safeCall<unknown>(
-        // Some ABIs have getSold(), some have sold()
         (c.getSold ? c.getSold() : c.sold?.()) as Promise<unknown>,
         0n
       )
     )
   );
+
+  // optional: keep for debugging (unused in returned type)
+  void latestBlock;
 
   const out: LotteryListItem[] = [];
 
@@ -101,7 +90,6 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
     const statusU8 = Number(statuses[i] as any);
     const sold = solds[i] as any;
 
-    // ✅ Map to your NEW list item shape with placeholders for non-trusted fields
     out.push({
       id: addr.toLowerCase(),
 
@@ -153,17 +141,7 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
       creatorPotRefunded: null,
 
       totalReservedUSDC: null,
-
-      // NOTE: these fields aren't in your LotteryListItem type anymore,
-      // so we do NOT include: paused/finalizedAt/creationTx/lastUpdatedBlock...
-      // If your UI relies on them, prefer to derive them in UI from nowSec/nowBlock instead.
     } as LotteryListItem);
-
-    // If you still want to show "updated at" somewhere in UI, do it outside the type:
-    // - nowBlock / nowSec already computed above.
-    void nowBlock;
-    void nowSec;
-    void ZERO_TX;
   }
 
   return out;
