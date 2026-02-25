@@ -34,7 +34,15 @@ type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 
 export default function App() {
   // 1) Thirdweb
-  useAutoConnect({ client: thirdwebClient, chain: ETHERLINK_CHAIN, wallets: [createWallet("io.metamask")] });
+  // ✅ Include Ledger USB custom wallet id so thirdweb can attempt to restore it on refresh.
+  useAutoConnect({
+    client: thirdwebClient,
+    chain: ETHERLINK_CHAIN,
+    wallets: [
+      createWallet("io.metamask"),
+      createWallet("ppopgi-ledger-usb"), // ✅ matches walletId in ledgerUsbWallet.ts
+    ],
+  });
 
   // 2) Global session
   const activeAccount = useActiveAccount();
