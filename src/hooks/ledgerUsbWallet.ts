@@ -101,7 +101,7 @@ async function openLedgerSession(): Promise<LedgerSession> {
 
   let transport: any = null;
 
-  // ✅ Silent reconnect after refresh (if user previously granted WebHID permission)
+  // ✅ Silent reconnect after refresh if the user previously granted WebHID permission
   try {
     const hid: any = (navigator as any)?.hid;
     if (hid?.getDevices) {
@@ -112,7 +112,7 @@ async function openLedgerSession(): Promise<LedgerSession> {
     }
   } catch {}
 
-  // ❗ Fallback: prompts user (requires click)
+  // Fallback (will require a user gesture/prompt)
   if (!transport) {
     transport = await TransportWebHID.create();
   }
@@ -300,8 +300,7 @@ async function createLedgerEip1193Provider(opts: {
 
           const signature = Signature.from({ v, r, s: sSig });
 
-          // ✅ CRITICAL FIX: don’t spread a Transaction instance.
-          // Convert to plain object so gasLimit/nonce/fees are preserved.
+          // ✅ don’t spread a Transaction instance
           const txData = unsignedTx.toJSON();
           const signedTx = Transaction.from({ ...txData, signature }).serialized;
 
@@ -343,8 +342,7 @@ export function useLedgerUsbWallet() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ Keep Ledger session alive across component unmounts (best-effort)
-  // In dev/hot-reload this also helps prevent losing state.
+  // ✅ keep session alive within the same tab lifetime
   const sessionRef = useRef<LedgerSession | null>((globalThis as any).__ppopgiLedgerSession ?? null);
   (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
@@ -358,7 +356,7 @@ export function useLedgerUsbWallet() {
         const rpcUrl = pickRpcUrl(opts.chain);
 
         const wallet = EIP1193.fromProvider({
-          // ✅ IMPORTANT: unique walletId so thirdweb can restore it (and doesn’t collide with MetaMask)
+          // ✅ unique walletId so thirdweb can try to restore it
           walletId: "ppopgi-ledger-usb",
           provider: async () => {
             return await createLedgerEip1193Provider({
@@ -371,7 +369,6 @@ export function useLedgerUsbWallet() {
 
         await wallet.connect({ client: opts.client, chain: opts.chain });
 
-        // keep latest session in global
         (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
         return wallet;
