@@ -17,6 +17,40 @@ function toInt(raw: string, fallback = 0) {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
+function isAbortError(err: unknown) {
+  const name = String((err as any)?.name ?? "");
+  const msg = String((err as any)?.message ?? err ?? "");
+  return name === "AbortError" || msg.toLowerCase().includes("abort");
+}
+
+function pickErrMessage(e: any): string {
+  const msg =
+    e?.shortMessage ||
+    e?.message ||
+    e?.cause?.shortMessage ||
+    e?.cause?.message ||
+    e?.details ||
+    e?.reason ||
+    "";
+  return String(msg || "").trim();
+}
+
+function prettyCreateError(e: any): string {
+  const msg = pickErrMessage(e).toLowerCase();
+
+  // common buckets
+  if (msg.includes("insufficient funds")) return "Not enough XTZ for gas on Etherlink.";
+  if (msg.includes("user rejected") || msg.includes("rejected")) return "You rejected the transaction in your wallet.";
+  if (msg.includes("wrong network") || msg.includes("chain")) return "Wallet is on the wrong network. Switch to Etherlink.";
+  if (msg.includes("execution reverted") || msg.includes("revert")) return "Transaction would revert (contract rejected inputs).";
+  if (msg.includes("estimate gas") || msg.includes("gas")) return "Gas estimation failed (often due to a revert).";
+  if (msg.includes("invalid") && msg.includes("address")) return "Invalid contract/address configuration.";
+  if (msg.includes("timeout")) return "Request timed out. Try again.";
+
+  const raw = pickErrMessage(e);
+  return raw ? `Creation failed: ${raw}` : "Creation failed.";
+}
+
 /* -------------------- minimal ABIs -------------------- */
 
 const ERC20_ABI = [
@@ -128,6 +162,10 @@ type AllowanceSnapshot = { bal: bigint; allowance: bigint; ts: number };
 
 const SNAPSHOT_TTL_MS = 12_000; // small TTL: prevents spam when typing or re-opening quickly
 
+// bounds
+const U64_MAX = (1n << 64n) - 1n;
+const U32_MAX = (1n << 32n) - 1n;
+
 export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string) => void) {
   const account = useActiveAccount();
   const me = account?.address ?? null;
@@ -183,12 +221,13 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const unitSeconds = durationUnit === "minutes" ? 60 : durationUnit === "hours" ? 3600 : 86400;
   const durationSecondsN = toInt(durationValue, 0) * unitSeconds;
 
+  // NOTE: you’re currently only allowing integer USDC amounts (sanitizeInt). That’s fine.
   const ticketPriceU = useMemo(() => parseUnits(String(toInt(ticketPrice, 0)), 6), [ticketPrice]);
   const winningPotU = useMemo(() => parseUnits(String(toInt(winningPot, 0)), 6), [winningPot]);
 
   const minT = BigInt(Math.max(1, toInt(minTickets, 1)));
   const maxT = BigInt(Math.max(0, toInt(maxTickets, 0)));
-  const minPurchaseU32 = Math.max(1, toInt(minPurchaseAmount, 1));
+  const minPurchaseU32N = Math.max(1, toInt(minPurchaseAmount, 1));
 
   const durOk = durationSecondsN >= 60;
   const hasEnoughAllowance = allowance !== null && allowance >= winningPotU;
@@ -267,8 +306,10 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       await refreshAllowance({ force: true });
 
       emitRevalidate(false);
-    } catch {
-      setMsg("Approval failed.");
+    } catch (e: any) {
+      if (isAbortError(e)) return;
+      console.error("APPROVE_FAILED full error:", e);
+      setMsg(pickErrMessage(e) ? `Approval failed: ${pickErrMessage(e)}` : "Approval failed.");
     }
   };
 
@@ -277,6 +318,21 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const create = async () => {
     setMsg(null);
     if (!canSubmit) return;
+
+    // --- Cast + validate bounded ints (avoid encoding failures) ---
+    const minTicketsU64 = minT;
+    const maxTicketsU64 = maxT;
+    const durationU64 = BigInt(Math.max(0, Math.floor(durationSecondsN)));
+    const minPurchaseU32 = BigInt(Math.max(1, Math.floor(minPurchaseU32N)));
+
+    if (minTicketsU64 > U64_MAX || maxTicketsU64 > U64_MAX || durationU64 > U64_MAX) {
+      setMsg("Creation failed: one of the numeric inputs is too large.");
+      return;
+    }
+    if (minPurchaseU32 > U32_MAX) {
+      setMsg("Creation failed: Min Purchase is too large.");
+      return;
+    }
 
     try {
       setMsg("Confirm creation in wallet...");
@@ -288,11 +344,23 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
           name.trim(),
           ticketPriceU,
           winningPotU,
-          minT,
-          maxT,
-          BigInt(durationSecondsN),
+          minTicketsU64,
+          maxTicketsU64,
+          durationU64,
           minPurchaseU32,
         ],
+      });
+
+      // Helpful debug (shows whether we even got to “send”)
+      console.log("CREATE tx prepared:", {
+        deployer: ADDRESSES.SingleWinnerDeployer,
+        name: name.trim(),
+        ticketPriceU: ticketPriceU.toString(),
+        winningPotU: winningPotU.toString(),
+        minTicketsU64: minTicketsU64.toString(),
+        maxTicketsU64: maxTicketsU64.toString(),
+        durationU64: durationU64.toString(),
+        minPurchaseU32: minPurchaseU32.toString(),
       });
 
       const receipt = await sendAndConfirm(tx);
@@ -326,10 +394,10 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
           registeredAt: String(nowSec),
           ticketPrice: ticketPriceU.toString(),
           winningPot: winningPotU.toString(),
-          minTickets: String(minT),
-          maxTickets: String(maxT),
+          minTickets: String(minTicketsU64),
+          maxTickets: String(maxTicketsU64),
           minPurchaseAmount: String(minPurchaseU32),
-          deadline: String(nowSec + durationSecondsN),
+          deadline: String(nowSec + Number(durationU64)),
           usdcToken: ADDRESSES.USDC.toLowerCase(),
         },
       });
@@ -352,8 +420,12 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
       emitRevalidate(true);
       onCreated?.(newAddr || undefined);
-    } catch {
-      setMsg("Creation failed.");
+    } catch (e: any) {
+      if (isAbortError(e)) return;
+      console.error("CREATE_FAILED full error:", e);
+      console.error("CREATE_FAILED message:", e?.message);
+      console.error("CREATE_FAILED cause:", e?.cause);
+      setMsg(prettyCreateError(e));
     }
   };
 
