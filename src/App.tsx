@@ -34,14 +34,16 @@ type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 
 export default function App() {
   // 1) Thirdweb
-  // ✅ Include Ledger USB custom wallet id so thirdweb can attempt to restore it on refresh.
+  /**
+   * ✅ IMPORTANT:
+   * Do NOT add the Ledger USB "walletId" here.
+   * - createWallet(...) only accepts thirdweb-known WalletId values
+   * - WebHID Ledger cannot be auto-restored on refresh anyway (requires user gesture)
+   */
   useAutoConnect({
     client: thirdwebClient,
     chain: ETHERLINK_CHAIN,
-    wallets: [
-      createWallet("io.metamask"),
-      createWallet("ppopgi-ledger-usb"), // ✅ matches walletId in ledgerUsbWallet.ts
-    ],
+    wallets: [createWallet("io.metamask")],
   });
 
   // 2) Global session
