@@ -99,7 +99,24 @@ async function openLedgerSession(): Promise<LedgerSession> {
     import("@ledgerhq/hw-app-eth"),
   ]);
 
-  const transport = await TransportWebHID.create();
+  let transport: any = null;
+
+  // ✅ Silent reconnect after refresh (if user previously granted WebHID permission)
+  try {
+    const hid: any = (navigator as any)?.hid;
+    if (hid?.getDevices) {
+      const devices = await hid.getDevices();
+      if (devices && devices.length > 0) {
+        transport = await (TransportWebHID as any).open(devices[0]);
+      }
+    }
+  } catch {}
+
+  // ❗ Fallback: prompts user (requires click)
+  if (!transport) {
+    transport = await TransportWebHID.create();
+  }
+
   const eth = new Eth(transport);
 
   const path = "44'/60'/0'/0/0";
@@ -325,7 +342,11 @@ export function useLedgerUsbWallet() {
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState("");
-  const sessionRef = useRef<LedgerSession | null>(null);
+
+  // ✅ Keep Ledger session alive across component unmounts (best-effort)
+  // In dev/hot-reload this also helps prevent losing state.
+  const sessionRef = useRef<LedgerSession | null>((globalThis as any).__ppopgiLedgerSession ?? null);
+  (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
   const connectLedgerUsb = useCallback(
     async (opts: { client: ThirdwebClient; chain: Chain }) => {
@@ -337,7 +358,8 @@ export function useLedgerUsbWallet() {
         const rpcUrl = pickRpcUrl(opts.chain);
 
         const wallet = EIP1193.fromProvider({
-          walletId: "io.metamask",
+          // ✅ IMPORTANT: unique walletId so thirdweb can restore it (and doesn’t collide with MetaMask)
+          walletId: "ppopgi-ledger-usb",
           provider: async () => {
             return await createLedgerEip1193Provider({
               chainId: opts.chain.id,
@@ -348,6 +370,10 @@ export function useLedgerUsbWallet() {
         });
 
         await wallet.connect({ client: opts.client, chain: opts.chain });
+
+        // keep latest session in global
+        (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
+
         return wallet;
       } catch (e: any) {
         setError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
