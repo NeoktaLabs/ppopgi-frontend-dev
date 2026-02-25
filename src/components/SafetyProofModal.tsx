@@ -6,7 +6,7 @@ import "./SafetyProofModal.css";
 type Props = {
   open: boolean;
   onClose: () => void;
-  raffle: LotteryDetails; // ✅ updated type
+  lottery: LotteryDetails; // ✅ updated type
 };
 
 // Helper: Clickable Link
@@ -34,8 +34,8 @@ const copy = (v?: string) => {
   navigator.clipboard.writeText(v);
 };
 
-export function SafetyProofModal({ open, onClose, raffle }: Props) {
-  useSafetyBreakdown(raffle); // kept for consistency / future use
+export function SafetyProofModal({ open, onClose, lottery }: Props) {
+  useSafetyBreakdown(lottery); // kept for consistency / future use
 
   if (!open) return null;
 
@@ -61,24 +61,24 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
           <div className="sp-section-grid">
             <div className="sp-data-box">
               <div className="sp-lbl">Contract status</div>
-              <span className={`sp-status-pill ${raffle.status.toLowerCase()}`}>
-                {raffle.status.replace("_", " ")}
+              <span className={`sp-status-pill ${lottery.status.toLowerCase()}`}>
+                {lottery.status.replace("_", " ")}
               </span>
             </div>
 
             <div className="sp-data-box">
               <div className="sp-lbl">Lottery address</div>
-              <ExplorerLink addr={raffle.address} label={short(raffle.address)} />
+              <ExplorerLink addr={lottery.address} label={short(lottery.address)} />
             </div>
 
             <div className="sp-data-box">
               <div className="sp-lbl">Asset token</div>
-              <ExplorerLink addr={raffle.usdcToken} label="USDC (ERC-20)" />
+              <ExplorerLink addr={lottery.usdcToken} label="USDC (ERC-20)" />
             </div>
 
             <div className="sp-data-box">
               <div className="sp-lbl">Creator</div>
-              <ExplorerLink addr={raffle.creator} label={short(raffle.creator)} />
+              <ExplorerLink addr={lottery.creator} label={short(lottery.creator)} />
             </div>
           </div>
 
@@ -95,7 +95,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
                 <div>
                   <div className="sp-step-title">Lottery requests randomness</div>
                   <div className="sp-step-text">
-                    Once ticket sales end, the raffle smart contract sends a randomness request to the entropy network.
+                    Once ticket sales end, the lottery smart contract sends a randomness request to the entropy network.
                   </div>
                 </div>
               </div>
@@ -116,7 +116,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
                 <div>
                   <div className="sp-step-title">Winner is selected automatically</div>
                   <div className="sp-step-text">
-                    The raffle contract uses the returned randomness to select a winner. No one — not the creator, not
+                    The lottery contract uses the returned randomness to select a winner. No one — not the creator, not
                     Ppopgi — can interfere.
                   </div>
                 </div>
@@ -151,13 +151,13 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
                 <div className="sp-k">Sender address</div>
                 <div className="sp-v">
                   <div className="sp-inline">
-                    <span className="sp-mono">{raffle.address}</span>
-                    <button className="sp-copy-btn" onClick={() => copy(raffle.address)} title="Copy sender address">
+                    <span className="sp-mono">{lottery.address}</span>
+                    <button className="sp-copy-btn" onClick={() => copy(lottery.address)} title="Copy sender address">
                       📋
                     </button>
                   </div>
                   <div className="sp-tech-note">
-                    In the entropy explorer, look for a request where the <strong>sender</strong> equals this raffle
+                    In the entropy explorer, look for a request where the <strong>sender</strong> equals this lottery
                     address.
                   </div>
                 </div>
@@ -166,7 +166,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-tech-row">
                 <div className="sp-k">Entropy provider</div>
                 <div className="sp-v">
-                  <ExplorerLink addr={raffle.entropyProvider} label={short(raffle.entropyProvider)} />
+                  <ExplorerLink addr={lottery.entropyProvider} label={short(lottery.entropyProvider)} />
                 </div>
               </div>
             </div>

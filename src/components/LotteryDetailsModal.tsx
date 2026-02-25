@@ -60,16 +60,16 @@ function mustEnv(name: string): string {
 }
 
 // NOTE: Keeping the existing entity/event names in GraphQL.
-// If your subgraph renamed raffleEvents -> lotteryEvents, update the query accordingly.
-async function fetchLotteryEvents(raffleId: string): Promise<LotteryEventRow[]> {
+// If your subgraph renamed lotteryEvents -> lotteryEvents, update the query accordingly.
+async function fetchLotteryEvents(lotteryId: string): Promise<LotteryEventRow[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
   const query = `
     query LotteryJourney($id: Bytes!, $first: Int!) {
-      raffleEvents(
+      lotteryEvents(
         first: $first
         orderBy: blockTimestamp
         orderDirection: asc
-        where: { raffle: $id }
+        where: { lottery: $id }
       ) {
         type
         blockTimestamp
@@ -89,12 +89,12 @@ async function fetchLotteryEvents(raffleId: string): Promise<LotteryEventRow[]> 
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query, variables: { id: raffleId.toLowerCase(), first: 200 } }),
+      body: JSON.stringify({ query, variables: { id: lotteryId.toLowerCase(), first: 200 } }),
     });
 
     const json = await res.json();
     if (!res.ok || json?.errors?.length) return [];
-    return (json.data?.raffleEvents ?? []) as LotteryEventRow[];
+    return (json.data?.lotteryEvents ?? []) as LotteryEventRow[];
   } catch {
     return [];
   }
@@ -103,8 +103,8 @@ async function fetchLotteryEvents(raffleId: string): Promise<LotteryEventRow[]> 
 type Props = {
   open: boolean;
 
-  // ✅ Keep prop name so existing router/query (?raffle=) keeps working
-  raffleId: string | null;
+  // ✅ Keep prop name so existing router/query (?lottery=) keeps working
+  lotteryId: string | null;
 
   onClose: () => void;
 
@@ -141,8 +141,8 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
-export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }: Props) {
-  const { state, math, flags, actions } = useLotteryInteraction(raffleId, open);
+export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }: Props) {
+  const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
@@ -153,7 +153,7 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
   const [events, setEvents] = useState<LotteryEventRow[] | null>(null);
 
   useEffect(() => {
-    if (!raffleId || !open) {
+    if (!lotteryId || !open) {
       setMetadata(null);
       setEvents(null);
       setTab("receipt");
@@ -167,12 +167,12 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
 
     if (!(initialLottery as any)?.createdAtTimestamp) {
       // ✅ NEW: fetchLotteryMetadata
-      fetchLotteryMetadata(raffleId).then((data) => {
+      fetchLotteryMetadata(lotteryId).then((data) => {
         if (active && data) setMetadata(data as any);
       });
     }
 
-    fetchLotteryEvents(raffleId).then((rows) => {
+    fetchLotteryEvents(lotteryId).then((rows) => {
       if (!active) return;
       setEvents(rows);
     });
@@ -180,12 +180,12 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
     return () => {
       active = false;
     };
-  }, [raffleId, open, initialLottery]);
+  }, [lotteryId, open, initialLottery]);
 
   const displayData = (state.data || initialLottery || metadata) as any;
 
   const soldForPct = Number(displayData?.sold || 0);
-  const { participants, isLoading: loadingPart } = useLotteryParticipants(raffleId, soldForPct);
+  const { participants, isLoading: loadingPart } = useLotteryParticipants(lotteryId, soldForPct);
 
   const timeline = useMemo(() => {
     if (!displayData) return [];
@@ -334,12 +334,12 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
   const clampedUiTicket = Math.min(uiTicket, uiMaxForStepper);
 
   useEffect(() => {
-    if (!open || !raffleId) return;
+    if (!open || !lotteryId) return;
     if (String(clampedUiTicket) !== String(state.tickets)) {
       actions.setTickets(String(clampedUiTicket));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, raffleId, uiMaxForStepper]);
+  }, [open, lotteryId, uiMaxForStepper]);
 
   if (!open) return null;
 
@@ -358,8 +358,8 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
 
   const expectedOutcome = (() => {
     const st = String(displayData?.status || "").toUpperCase();
-    if (st === "CANCELED") return "This raffle is canceled.";
-    if (st === "COMPLETED") return "This raffle is completed.";
+    if (st === "CANCELED") return "This lottery is canceled.";
+    if (st === "COMPLETED") return "This lottery is completed.";
     if (st === "DRAWING") return "Winner selection is in progress.";
     if (!minReached) {
       if (minTicketsN <= 0) return "A winner will be selected at the deadline.";
@@ -382,7 +382,7 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
             <button className="rdm-icon-btn" onClick={actions.handleShare} title="Copy Link">
               🔗
             </button>
-            <div className="rdm-ticket-id">TICKET #{raffleId?.slice(2, 8).toUpperCase()}</div>
+            <div className="rdm-ticket-id">TICKET #{lotteryId?.slice(2, 8).toUpperCase()}</div>
             <button className="rdm-icon-btn" onClick={onClose}>
               ✕
             </button>
@@ -433,7 +433,7 @@ export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }:
 
         <div className="rdm-ticket-stub">
           <div className="rdm-buy-section">
-            {!flags.raffleIsOpen ? (
+            {!flags.lotteryIsOpen ? (
               <div className="rdm-closed-msg">
                 {state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}
               </div>

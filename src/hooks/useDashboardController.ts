@@ -236,8 +236,8 @@ export function useDashboardController() {
   const userLotsPromiseRef = useRef<Promise<UserLotteryItem[]> | null>(null);
   const userLotsBackoffMsRef = useRef(0);
 
-  // feeRecipient raffles cache
-  const feeLotsCacheRef = useRef<{ ts: number; account: string; raffles: LotteryListItem[] } | null>(null);
+  // feeRecipient lotteries cache
+  const feeLotsCacheRef = useRef<{ ts: number; account: string; lotteries: LotteryListItem[] } | null>(null);
   const feeLotsPromiseRef = useRef<Promise<LotteryListItem[]> | null>(null);
   const feeLotsBackoffMsRef = useRef(0);
 
@@ -318,24 +318,24 @@ export function useDashboardController() {
 
     const backoff = feeLotsBackoffMsRef.current || 0;
     if (backoff > 0 && cached && cached.account === acct) {
-      if (now - cached.ts < backoff) return cached.raffles;
+      if (now - cached.ts < backoff) return cached.lotteries;
     }
 
-    if (cached && cached.account === acct && now - cached.ts < 2 * 60_000) return cached.raffles;
+    if (cached && cached.account === acct && now - cached.ts < 2 * 60_000) return cached.lotteries;
     if (feeLotsPromiseRef.current) return await feeLotsPromiseRef.current;
 
     feeLotsPromiseRef.current = (async () => {
       try {
-        const raffles = await fetchAllByFeeRecipientPaged(acct, { pageSize: 200, maxPages: 10 });
-        feeLotsCacheRef.current = { ts: Date.now(), account: acct, raffles };
+        const lotteries = await fetchAllByFeeRecipientPaged(acct, { pageSize: 200, maxPages: 10 });
+        feeLotsCacheRef.current = { ts: Date.now(), account: acct, lotteries };
         feeLotsBackoffMsRef.current = 0;
-        return raffles;
+        return lotteries;
       } catch (e) {
         if (isRateLimitError(e)) {
           const cur = feeLotsBackoffMsRef.current || 0;
           feeLotsBackoffMsRef.current = cur === 0 ? 15_000 : Math.min(cur * 2, 120_000);
         }
-        return cached?.account === acct ? cached.raffles : [];
+        return cached?.account === acct ? cached.lotteries : [];
       } finally {
         feeLotsPromiseRef.current = null;
       }

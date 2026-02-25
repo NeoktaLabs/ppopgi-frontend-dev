@@ -168,13 +168,13 @@ export default function App() {
 
         <LotteryDetailsModal
           open={!!selectedLotteryId}
-          raffleId={selectedLotteryId} // keep prop name if your modal still expects raffleId
+          lotteryId={selectedLotteryId} // keep prop name if your modal still expects lotteryId
           onClose={closeLottery}
           initialLottery={selectedFromStore as any}
         />
 
         {safetyId && safetyData && (
-          <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} raffle={safetyData as any} />
+          <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} lottery={safetyData as any} />
         )}
       </MainLayout>
     </>

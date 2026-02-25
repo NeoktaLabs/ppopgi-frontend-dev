@@ -28,7 +28,7 @@ type FinalizerInfo = {
 };
 
 type Props = {
-  raffle: LotteryListItem; // ✅ still named "raffle" for now, but type is LotteryListItem
+  lottery: LotteryListItem; 
   onOpen: (id: string) => void;
   onOpenSafety?: (id: string) => void;
   ribbon?: "gold" | "silver" | "bronze";
@@ -55,7 +55,7 @@ function fmtMinSec(sec: number): string {
 }
 
 export function LotteryCard({
-  raffle,
+  lottery,
   onOpen,
   onOpenSafety,
   ribbon,
@@ -64,21 +64,21 @@ export function LotteryCard({
   userEntry,
   finalizer,
 }: Props) {
-  const { ui, actions } = useLotteryCard(raffle, nowMs);
+  const { ui, actions } = useLotteryCard(lottery, nowMs);
 
-  const statusRaw = String((raffle as any).status || "");
+  const statusRaw = String((lottery as any).status || "");
   const isOpenStatus = statusRaw === "OPEN";
 
-  const maxTicketsN = Number((raffle as any).maxTickets ?? 0);
-  const soldN = Number((raffle as any).sold ?? 0);
+  const maxTicketsN = Number((lottery as any).maxTickets ?? 0);
+  const soldN = Number((lottery as any).sold ?? 0);
   const maxReached = maxTicketsN > 0 && soldN >= maxTicketsN;
 
-  const deadlineSec = Number((raffle as any).deadline ?? 0);
+  const deadlineSec = Number((lottery as any).deadline ?? 0);
   const deadlinePassed = deadlineSec > 0 && nowMs >= deadlineSec * 1000;
 
   const endConditionReached = isOpenStatus && (maxReached || deadlinePassed);
 
-  const minTicketsN = Number((raffle as any).minTickets ?? 0);
+  const minTicketsN = Number((lottery as any).minTickets ?? 0);
   const hasMin = (ui as any)?.hasMin ?? minTicketsN > 0;
   const minReached = (ui as any)?.minReached ?? (hasMin ? soldN >= Math.max(0, minTicketsN) : true);
 
@@ -124,22 +124,22 @@ export function LotteryCard({
   const cardClass = `rc-card ${ribbon || ""}`;
 
   // ✅ Prefer creator (new data), keep owner fallback only if you still have legacy rows somewhere.
-  const hostAddr = (raffle as any).creator || (raffle as any).owner;
+  const hostAddr = (lottery as any).creator || (lottery as any).owner;
 
   const winRateLabel = useMemo(() => {
-    const max = Number((raffle as any).maxTickets ?? 0);
-    const sold = Number((raffle as any).sold ?? 0);
+    const max = Number((lottery as any).maxTickets ?? 0);
+    const sold = Number((lottery as any).sold ?? 0);
     const denom = max > 0 ? max : sold + 1;
     if (!isFinite(denom) || denom <= 0) return "0%";
     return clampPct((1 / denom) * 100);
-  }, [raffle.maxTickets, raffle.sold]);
+  }, [lottery.maxTickets, lottery.sold]);
 
   const endInfoBlock = useMemo(() => {
     if (!endMode) return null;
     if (endMode === "CANCELING") {
       return (
         <div className="rc-end-note">
-          <div style={{ marginBottom: 6 }}>Canceling raffle</div>
+          <div style={{ marginBottom: 6 }}>Canceling lottery</div>
           <div className="rc-end-sub">
             Min tickets not reached.
             <br />
@@ -162,7 +162,7 @@ export function LotteryCard({
   }, [endMode, maxReached]);
 
   return (
-    <div className={cardClass} onClick={() => onOpen(raffle.id)} role="button" tabIndex={0}>
+    <div className={cardClass} onClick={() => onOpen(lottery.id)} role="button" tabIndex={0}>
       <div className="rc-notch left" />
       <div className="rc-notch right" />
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
@@ -178,7 +178,7 @@ export function LotteryCard({
             className="rc-shield-btn"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenSafety?.(raffle.id);
+              onOpenSafety?.(lottery.id);
             }}
             title="Verified Contract"
             disabled={!onOpenSafety}
@@ -221,8 +221,8 @@ export function LotteryCard({
         )}
       </div>
 
-      <div className="rc-title" title={raffle.name}>
-        {raffle.name}
+      <div className="rc-title" title={lottery.name}>
+        {lottery.name}
       </div>
 
       {/* --- PRIZE (Holographic) --- */}
@@ -311,7 +311,7 @@ export function LotteryCard({
               className="rc-quick-buy-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                onOpen(raffle.id);
+                onOpen(lottery.id);
               }}
             >
               ⚡ Buy Ticket
@@ -325,13 +325,13 @@ export function LotteryCard({
             <div className="rc-meta-left">{isLiveForCard ? `Ends: ${ui.timeLeft}` : displayStatus}</div>
             <div className="rc-meta-right">
               <a
-                href={`${EXPLORER_URL}${raffle.id}`}
+                href={`${EXPLORER_URL}${lottery.id}`}
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="rc-id-link"
               >
-                #{raffle.id.slice(2, 8).toUpperCase()}
+                #{lottery.id.slice(2, 8).toUpperCase()}
               </a>
             </div>
           </div>

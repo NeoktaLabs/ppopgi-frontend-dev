@@ -11,7 +11,7 @@ import "./CreateLotteryModal.css";
 type Props = {
   open: boolean;
   onClose: () => void;
-  onCreated?: (raffleAddress?: string) => void; // keep prop name to avoid touching callers
+  onCreated?: (lotteryAddress?: string) => void; // keep prop name to avoid touching callers
 };
 
 function toBigInt6(v: string): bigint {
@@ -198,8 +198,8 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
   const createDisabled = !canCreate;
 
   // Keep your router param as-is for now
-  const shareLink = createdAddr ? `${window.location.origin}/?raffle=${createdAddr}` : "";
-  const tweetText = `I just created a new raffle on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
+  const shareLink = createdAddr ? `${window.location.origin}/?lottery=${createdAddr}` : "";
+  const tweetText = `I just created a new lottery on Ppopgi! 🎟️\n\nPrize: ${form.winningPot} USDC\nCheck it out here:`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(shareLink)}`;
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(tweetText)}`;
 
@@ -246,7 +246,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
         <div className="crm-header">
           <div className="crm-header-text">
             <h3>{step === "success" ? "You're Live! 🎉" : "Creator Studio"}</h3>
-            <span>{step === "success" ? "Your raffle is now on the blockchain." : "Create your provably fair raffle."}</span>
+            <span>{step === "success" ? "Your lottery is now on the blockchain." : "Create your provably fair lottery."}</span>
           </div>
           <button className="crm-close-btn" onClick={handleFinalClose}>
             ✕
@@ -468,7 +468,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
               <div className="crm-preview-label">Live Preview</div>
               <div className="crm-levitate-wrapper">
                 {/* @ts-ignore */}
-                <LotteryCard raffle={previewLottery} onOpen={() => {}} />
+                <LotteryCard lottery={previewLottery} onOpen={() => {}} />
               </div>
               <div className="crm-preview-shadow" />
               <div className="crm-network-tip">Network: Etherlink Mainnet</div>
