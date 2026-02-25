@@ -141,6 +141,11 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
+// ✅ FIX: ParticipantUI shape varies by hook; derive a usable address safely.
+function participantAddr(p: any): string {
+  return String(p?.buyer || p?.user || p?.address || p?.account || "").toLowerCase();
+}
+
 export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }: Props) {
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
@@ -615,14 +620,17 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 ) : participants.length === 0 ? (
                   <div className="rdm-empty">No tickets sold.</div>
                 ) : (
-                  participants.map((p, i) => (
-                    <div key={i} className="rdm-holder-row">
-                      <ExplorerLink addr={p.buyer} />
-                      <b>
-                        {p.ticketsPurchased} ({p.percentage}%)
-                      </b>
-                    </div>
-                  ))
+                  participants.map((p, i) => {
+                    const addr = participantAddr(p);
+                    return (
+                      <div key={i} className="rdm-holder-row">
+                        <ExplorerLink addr={addr} />
+                        <b>
+                          {(p as any).ticketsPurchased} ({(p as any).percentage}%)
+                        </b>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
