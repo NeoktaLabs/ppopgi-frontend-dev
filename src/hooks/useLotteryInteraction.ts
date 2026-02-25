@@ -183,7 +183,10 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     else displayStatus = data.status.charAt(0) + data.status.slice(1).toLowerCase();
   }
 
-  const uiMinBuy = 1;
+  // ✅ Respect minPurchaseAmount (contract rule)
+  const minPurchaseN = Number((data as any)?.minPurchaseAmount || "1");
+  const uiMinBuy = Math.max(1, Number.isFinite(minPurchaseN) ? Math.floor(minPurchaseN) : 1);
+
   const uiMaxBuy = maxTicketsN > 0 ? Math.max(0, remainingTickets || 0) : 500;
 
   const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
@@ -197,7 +200,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     return getContract({
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
-      address: lotteryId,
+      address: lotteryId.toLowerCase(),
       abi: SingleWinnerLotteryABI,
     });
   }, [lotteryId]);
@@ -235,8 +238,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
   const hasEnoughAllowance = allowance !== null ? allowance >= totalCostU : false;
 
-  // Only enforce balance check if we actually loaded it.
-  const hasEnoughBalance = usdcBal !== null ? usdcBal >= totalCostU : true;
+  // ✅ Safer UX: unknown balance => not enough (prevents confusing reverts)
+  const hasEnoughBalance = usdcBal !== null ? usdcBal >= totalCostU : false;
 
   const allowInFlight = useRef(false);
   const lastAllowFetchAt = useRef(0);
@@ -277,10 +280,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
           params: [acct, spender],
         }).catch(() => 0n as any);
 
-        const shouldReadBalance =
-          reason === "manual" ||
-          reason === "preTx" ||
-          (allowance != null && allowance >= totalCostU && usdcBal == null);
+        // ✅ Always read balance at least once, and on preTx/manual
+        const shouldReadBalance = reason === "manual" || reason === "preTx" || usdcBal == null;
 
         const balanceP = shouldReadBalance
           ? readContract({
@@ -310,7 +311,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
         allowInFlight.current = false;
       }
     },
-    [isOpen, account?.address, usdcContract, lotteryId, paymentTokenAddr, allowance, usdcBal, totalCostU]
+    [isOpen, account?.address, usdcContract, lotteryId, paymentTokenAddr, usdcBal]
   );
 
   const approve = useCallback(async () => {
@@ -326,7 +327,6 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     try {
       await refreshAllowance("preTx");
 
-      // ✅ Use ABI method names
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "approve",
@@ -354,7 +354,16 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     try {
       await refreshAllowance("preTx");
 
-      // ✅ Use ABI method names (buyTickets is in SingleWinnerLottery ABI)
+      // ✅ Guard: don't send a tx we already know will revert
+      if (allowance === null || allowance < totalCostU) {
+        setBuyMsg("Please approve USDC first.");
+        return;
+      }
+      if (usdcBal === null || usdcBal < totalCostU) {
+        setBuyMsg("Not enough USDC.");
+        return;
+      }
+
       const tx = prepareContractCall({
         contract: lotteryContract,
         method: "buyTickets",
@@ -407,7 +416,9 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       void refreshAllowance("postTx");
       emitRevalidate(true);
     } catch (e: any) {
-      if (String(e).toLowerCase().includes("insufficient")) setBuyMsg("Not enough coins.");
+      const msg = String(e?.shortMessage || e?.message || e || "").toLowerCase();
+      if (msg.includes("insufficient")) setBuyMsg("Not enough USDC.");
+      else if (msg.includes("rejected") || msg.includes("user rejected")) setBuyMsg("You rejected the transaction.");
       else setBuyMsg("Purchase failed.");
     }
   }, [
@@ -428,6 +439,17 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     paymentTokenAddr,
   ]);
 
+  // ✅ avoid timer leak for copy message
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current != null) {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleShare = useCallback(async () => {
     if (!lotteryId) return;
 
@@ -439,20 +461,23 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     } catch {
       setCopyMsg("Could not copy.");
     }
-    setTimeout(() => setCopyMsg(null), 1500);
+
+    if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopyMsg(null), 1500);
   }, [lotteryId]);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    setTickets("1");
+    setTickets(String(uiMinBuy));
     setBuyMsg(null);
 
     setUsdcBal(null);
     setAllowance(null);
 
     void refreshAllowance("open");
-  }, [isOpen, lotteryId, account?.address, paymentTokenAddr, refreshAllowance]);
+    // include uiMinBuy so reopen resets correctly if minPurchaseAmount changes
+  }, [isOpen, uiMinBuy, lotteryId, account?.address, paymentTokenAddr, refreshAllowance]);
 
   return {
     state: {
