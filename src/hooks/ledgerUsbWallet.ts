@@ -1,3 +1,4 @@
+// src/hooks/ledgerUsbWallet.ts
 import { useCallback, useMemo, useRef, useState } from "react";
 import { EIP1193 } from "thirdweb/wallets";
 import type { ThirdwebClient } from "thirdweb";
@@ -101,7 +102,8 @@ async function openLedgerSession(): Promise<LedgerSession> {
 
   let transport: any = null;
 
-  // ✅ Silent reconnect after refresh if the user previously granted WebHID permission
+  // ✅ Best-effort silent reconnect after refresh if permission already granted
+  // NOTE: still not guaranteed; browser/device policies can block this.
   try {
     const hid: any = (navigator as any)?.hid;
     if (hid?.getDevices) {
@@ -112,7 +114,7 @@ async function openLedgerSession(): Promise<LedgerSession> {
     }
   } catch {}
 
-  // Fallback (will require a user gesture/prompt)
+  // Fallback (will require user gesture/prompt)
   if (!transport) {
     transport = await TransportWebHID.create();
   }
@@ -342,7 +344,10 @@ export function useLedgerUsbWallet() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ keep session alive within the same tab lifetime
+  /**
+   * ✅ Keep session for the current tab lifetime (best possible).
+   * NOTE: after a full refresh, this resets (expected). Silent HID reconnect above helps.
+   */
   const sessionRef = useRef<LedgerSession | null>((globalThis as any).__ppopgiLedgerSession ?? null);
   (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
@@ -356,8 +361,7 @@ export function useLedgerUsbWallet() {
         const rpcUrl = pickRpcUrl(opts.chain);
 
         const wallet = EIP1193.fromProvider({
-          // ✅ unique walletId so thirdweb can try to restore it
-          walletId: "ppopgi-ledger-usb",
+          // ✅ IMPORTANT: do NOT set a custom walletId (thirdweb types reject it)
           provider: async () => {
             return await createLedgerEip1193Provider({
               chainId: opts.chain.id,
@@ -369,6 +373,7 @@ export function useLedgerUsbWallet() {
 
         await wallet.connect({ client: opts.client, chain: opts.chain });
 
+        // keep ref cached for tab life
         (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
         return wallet;
