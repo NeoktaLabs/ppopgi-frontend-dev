@@ -15,10 +15,9 @@ import {
 import { useLotteryStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 
 // -------------------- Lottery dashboard ABI --------------------
-// Matches your SingleWinnerLottery ABI (no native claimables; unified claim()).
+// Matches your SingleWinnerLottery ABI (unified claim()).
 const LOTTERY_DASH_ABI = [
   { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [], outputs: [{ type: "uint256" }] },
-
   {
     type: "function",
     name: "claimableFunds",
@@ -32,20 +31,6 @@ const LOTTERY_DASH_ABI = [
     stateMutability: "view",
     inputs: [{ type: "address" }],
     outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "ticketPrice",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "status",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "uint8" }],
   },
 ] as const;
 
@@ -136,17 +121,16 @@ function scoreForClaimScan(r: LotteryListItem): number {
 }
 
 /**
- * Read claimableFunds + ticketsOwned + (ticketPrice if needed) with a short-lived cache.
+ * Read claimableFunds + ticketsOwned with a short-lived cache.
  * Never throws; failures become 0.
  */
 async function readDashboardValues(args: {
   lotteryId: string;
   account: string;
-  cache: Map<string, { ts: number; cf: string; owned: string; price: string }>;
+  cache: Map<string, { ts: number; cf: string; owned: string }>;
   ttlMs: number;
-  needPrice: boolean;
 }) {
-  const { lotteryId, account, cache, ttlMs, needPrice } = args;
+  const { lotteryId, account, cache, ttlMs } = args;
 
   const lid = normId(lotteryId);
   const acct = account.toLowerCase();
@@ -155,7 +139,7 @@ async function readDashboardValues(args: {
   const now = Date.now();
   const hit = cache.get(key);
   if (hit && now - hit.ts < ttlMs) {
-    return { cf: hit.cf, owned: hit.owned, price: hit.price };
+    return { cf: hit.cf, owned: hit.owned };
   }
 
   const contract = getContract({
@@ -167,7 +151,6 @@ async function readDashboardValues(args: {
 
   let cf = "0";
   let owned = "0";
-  let price = "0";
 
   try {
     cf = toBigInt(await readContract({ contract, method: "claimableFunds", params: [account] })).toString();
@@ -175,14 +158,9 @@ async function readDashboardValues(args: {
   try {
     owned = toBigInt(await readContract({ contract, method: "ticketsOwned", params: [account] })).toString();
   } catch {}
-  if (needPrice) {
-    try {
-      price = toBigInt(await readContract({ contract, method: "ticketPrice", params: [] })).toString();
-    } catch {}
-  }
 
-  cache.set(key, { ts: now, cf, owned, price });
-  return { cf, owned, price };
+  cache.set(key, { ts: now, cf, owned });
+  return { cf, owned };
 }
 
 /**
@@ -244,10 +222,13 @@ export function useDashboardController() {
   // fetched-by-id cache (fills missing store items)
   const byIdCacheRef = useRef<Map<string, { ts: number; item: LotteryListItem | null }>>(new Map());
 
-  // rpc cache
-  const rpcCacheRef = useRef<Map<string, { ts: number; cf: string; owned: string; price: string }>>(new Map());
+  // rpc cache (only cf + owned)
+  const rpcCacheRef = useRef<Map<string, { ts: number; cf: string; owned: string }>>(new Map());
   const lastBgRunRef = useRef(0);
   const rpcConcurrencyRef = useRef({ claimScan: 10, fillById: 8 });
+
+  // claim scan cursor (round-robin to avoid scanning hundreds every tick)
+  const claimScanCursorRef = useRef(0);
 
   // reset on wallet change
   useEffect(() => {
@@ -263,6 +244,7 @@ export function useDashboardController() {
     rpcCacheRef.current = new Map();
     lastBgRunRef.current = 0;
     rpcConcurrencyRef.current = { claimScan: 10, fillById: 8 };
+    claimScanCursorRef.current = 0;
 
     setHiddenClaimables({});
     setMsg(null);
@@ -417,7 +399,7 @@ export function useDashboardController() {
         const myAddr = account.toLowerCase();
 
         // --- Created from store (fast) ---
-        const myCreated = allLotteries.filter((r) => r.creator?.toLowerCase() === myAddr);
+        const myCreated = allLotteries.filter((r) => (r.creator || "").toLowerCase() === myAddr);
         setCreated(myCreated);
 
         // --- Joined from userLotteries ---
@@ -459,13 +441,13 @@ export function useDashboardController() {
         }
         if (runId !== runIdRef.current) return;
 
-        // --- On-chain enrichment + claimables scan candidates ---
+        // --- Candidates set (created + joined + feeRecipient) ---
         const candidatesMap = new Map<string, LotteryListItem>();
         for (const r of myCreated) candidatesMap.set(normId(r.id), { ...r, id: normId(r.id) });
         for (const r of joinedBase) candidatesMap.set(normId(r.id), { ...r, id: normId(r.id) });
         for (const r of myFeeLots) candidatesMap.set(normId(r.id), { ...r, id: normId(r.id) });
 
-        const candidates = Array.from(candidatesMap.values())
+        const candidatesAll = Array.from(candidatesMap.values())
           .sort((a, b) => {
             const sa = scoreForClaimScan(a);
             const sb = scoreForClaimScan(b);
@@ -483,23 +465,42 @@ export function useDashboardController() {
         const claimableOut: ClaimableItem[] = [];
         const joinedOut: JoinedLotteryItem[] = [];
 
-        // Build joined list with on-chain reads for those lotteries
-        await mapPool(joinedBase.slice(0, 200), 10, async (lot) => {
+        // Limits per run (prevents RPC spikes)
+        const MAX_JOINED_ONCHAIN = isBackground ? 80 : 200;
+        const MAX_CLAIM_SCAN = isBackground ? 60 : 180;
+
+        // Round-robin scan slice for claimables
+        const candLen = Math.max(1, candidatesAll.length);
+        const start = claimScanCursorRef.current % candLen;
+        const endExclusive = Math.min(start + MAX_CLAIM_SCAN, candidatesAll.length);
+
+        const scanSlice =
+          candidatesAll.length <= MAX_CLAIM_SCAN
+            ? candidatesAll
+            : [
+                ...candidatesAll.slice(start, endExclusive),
+                ...candidatesAll.slice(0, Math.max(0, MAX_CLAIM_SCAN - (endExclusive - start))),
+              ];
+
+        claimScanCursorRef.current = (start + MAX_CLAIM_SCAN) % candLen;
+
+        // Build joined list with minimal on-chain reads (cf + owned)
+        await mapPool(joinedBase.slice(0, MAX_JOINED_ONCHAIN), 10, async (lot) => {
           const id = normId(lot.id);
           const row = joinedRowById.get(id);
 
-          const needPrice = lot.status === "CANCELED";
           const v = await readDashboardValues({
             lotteryId: id,
             account,
             cache: rpcCache,
             ttlMs: 20_000,
-            needPrice,
           });
 
           const owned = BigInt(v.owned);
           const cf = BigInt(v.cf);
-          const price = BigInt(v.price || "0");
+
+          // refund uses subgraph ticketPrice (immutable)
+          const price = BigInt(String(lot.ticketPrice ?? "0") || "0");
           const refundNow = lot.status === "CANCELED" ? owned * price : 0n;
 
           joinedOut.push({
@@ -518,23 +519,23 @@ export function useDashboardController() {
         if (runId !== runIdRef.current) return;
         setJoined(joinedOut);
 
-        // Claimables scan (includes created + joined + feeRecipient)
-        await mapPool(candidates, Math.max(3, rpcConcurrencyRef.current.claimScan), async (lot) => {
+        // Claimables scan (cursor-limited per run)
+        await mapPool(scanSlice, Math.max(3, rpcConcurrencyRef.current.claimScan), async (lot) => {
           const id = normId(lot.id);
           const row = joinedRowById.get(id);
 
-          const needPrice = lot.status === "CANCELED";
           const v = await readDashboardValues({
             lotteryId: id,
             account,
             cache: rpcCache,
             ttlMs: 20_000,
-            needPrice,
           });
 
           const owned = BigInt(v.owned);
           const cf = BigInt(v.cf);
-          const price = BigInt(v.price || "0");
+
+          // refund uses subgraph ticketPrice (immutable)
+          const price = BigInt(String(lot.ticketPrice ?? "0") || "0");
           const refundNow = lot.status === "CANCELED" ? owned * price : 0n;
 
           const participatedEver = !!row && BigInt(row.ticketsPurchased ?? "0") > 0n;
@@ -696,7 +697,7 @@ export function useDashboardController() {
       clearRpcCacheFor(lid, account);
       emitRevalidate();
 
-      // hide item if nothing left now
+      // hide item if nothing left now (cheap: only cf + owned)
       let stillHasSomething = true;
       try {
         const v = await readDashboardValues({
@@ -704,7 +705,6 @@ export function useDashboardController() {
           account,
           cache: rpcCacheRef.current,
           ttlMs: 0,
-          needPrice: false,
         });
 
         const cf = BigInt(v.cf);
