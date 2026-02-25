@@ -1,6 +1,6 @@
 // src/hooks/useCreateLotteryForm.ts
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { parseUnits } from "ethers";
+import { MaxUint256, parseUnits } from "ethers";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
@@ -15,9 +15,33 @@ import DEPLOYER_ABI from "../config/abis/SingleWinnerDeployer.json";
 function sanitizeInt(raw: string) {
   return String(raw ?? "").replace(/[^\d]/g, "");
 }
+
 function toInt(raw: string, fallback = 0) {
   const n = Number(sanitizeInt(raw));
   return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+// ✅ allow decimal input for USDC fields (ticket price, winning pot)
+function sanitizeUsdcDecimal(raw: string) {
+  // allow digits + one dot; also accept commas from some keyboards
+  const s = String(raw ?? "").trim().replace(",", ".");
+  // keep only digits + dots
+  const cleaned = s.replace(/[^\d.]/g, "");
+  // collapse multiple dots into a single one
+  const parts = cleaned.split(".");
+  if (parts.length <= 1) return parts[0] || "0";
+  return `${parts[0] || "0"}.${parts.slice(1).join("")}`;
+}
+
+// ✅ safe parse to 6 decimals, returns 0n on bad input
+function parseUsdc(raw: string): bigint {
+  const s = sanitizeUsdcDecimal(raw);
+  if (!s || s === "." || s === "0." || s === ".0") return 0n;
+  try {
+    return parseUnits(s, 6);
+  } catch {
+    return 0n;
+  }
 }
 
 function isAbortError(err: unknown) {
@@ -181,7 +205,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.SingleWinnerDeployer,
-        abi: DEPLOYER_ABI as any, // ✅ full ABI (includes errors)
+        abi: DEPLOYER_ABI as any,
       }),
     []
   );
@@ -202,8 +226,9 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const unitSeconds = durationUnit === "minutes" ? 60 : durationUnit === "hours" ? 3600 : 86400;
   const durationSecondsN = toInt(durationValue, 0) * unitSeconds;
 
-  const ticketPriceU = useMemo(() => parseUnits(String(toInt(ticketPrice, 0)), 6), [ticketPrice]);
-  const winningPotU = useMemo(() => parseUnits(String(toInt(winningPot, 0)), 6), [winningPot]);
+  // ✅ FIX: allow decimals properly
+  const ticketPriceU = useMemo(() => parseUsdc(ticketPrice), [ticketPrice]);
+  const winningPotU = useMemo(() => parseUsdc(winningPot), [winningPot]);
 
   const minT = BigInt(Math.max(1, toInt(minTickets, 1)));
   const maxT = BigInt(Math.max(0, toInt(maxTickets, 0)));
@@ -242,11 +267,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       try {
         const [bal, a] = await Promise.all([
           readContract({ contract: usdcContract, method: "balanceOf", params: [me] }),
-          readContract({
-            contract: usdcContract,
-            method: "allowance",
-            params: [me, ADDRESSES.SingleWinnerDeployer],
-          }),
+          readContract({ contract: usdcContract, method: "allowance", params: [me, ADDRESSES.SingleWinnerDeployer] }),
         ]);
 
         if (reqId !== reqIdRef.current) return;
@@ -257,6 +278,10 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         lastSnapRef.current = { bal: balB, allowance: allowB, ts: Date.now() };
         setUsdcBal(balB);
         setAllowance(allowB);
+      } catch (e: any) {
+        if (reqId !== reqIdRef.current) return;
+        // keep previous values, but give a hint
+        setMsg((prev) => prev ?? "Could not refresh USDC balance/allowance. Try again.");
       } finally {
         if (reqId === reqIdRef.current) setAllowLoading(false);
       }
@@ -273,10 +298,11 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     try {
       setMsg("Confirm approval in wallet...");
 
+      // ✅ Better UX: approve max so user doesn’t need repeated approvals
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "approve",
-        params: [ADDRESSES.SingleWinnerDeployer, winningPotU],
+        params: [ADDRESSES.SingleWinnerDeployer, MaxUint256],
       });
 
       await sendAndConfirm(tx);
@@ -316,30 +342,12 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       const tx = prepareContractCall({
         contract: deployerContract,
         method: "createSingleWinnerLottery",
-        params: [
-          name.trim(),
-          ticketPriceU,
-          winningPotU,
-          minTicketsU64,
-          maxTicketsU64,
-          durationU64,
-          minPurchaseU32,
-        ],
-      });
-
-      console.log("CREATE tx prepared:", {
-        deployer: ADDRESSES.SingleWinnerDeployer,
-        name: name.trim(),
-        ticketPriceU: ticketPriceU.toString(),
-        winningPotU: winningPotU.toString(),
-        minTicketsU64: minTicketsU64.toString(),
-        maxTicketsU64: maxTicketsU64.toString(),
-        durationU64: durationU64.toString(),
-        minPurchaseU32: minPurchaseU32.toString(),
+        params: [name.trim(), ticketPriceU, winningPotU, minTicketsU64, maxTicketsU64, durationU64, minPurchaseU32],
       });
 
       const receipt = await sendAndConfirm(tx);
 
+      // ⚠️ fragile unless your event indexes the address as topic[1]
       let newAddr = "";
       const logs: any[] = (receipt as any)?.logs ?? [];
       for (const log of logs) {
@@ -395,8 +403,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     } catch (e: any) {
       if (isAbortError(e)) return;
       console.error("CREATE_FAILED full error:", e);
-      console.error("CREATE_FAILED message:", e?.message);
-      console.error("CREATE_FAILED cause:", e?.cause);
       setMsg(prettyCreateError(e));
     }
   };
