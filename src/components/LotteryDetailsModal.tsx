@@ -4,8 +4,8 @@ import { useActiveAccount } from "thirdweb/react";
 import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import { useLotteryParticipants } from "../hooks/useLotteryParticipants";
 
-// ✅ Updated type + fetch name (new “Lottery” model)
-import { fetchLotteryMetadata, type LotteryListItem } from "../indexer/subgraph";
+// ✅ FIX: your subgraph.ts doesn't export fetchLotteryMetadata
+import { fetchLotteryById, type LotteryListItem } from "../indexer/subgraph";
 
 import "./LotteryDetailsModal.css";
 
@@ -166,8 +166,8 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     let active = true;
 
     if (!(initialLottery as any)?.createdAtTimestamp) {
-      // ✅ NEW: fetchLotteryMetadata
-      fetchLotteryMetadata(lotteryId).then((data) => {
+      // ✅ FIX: fetchLotteryById
+      fetchLotteryById(lotteryId).then((data) => {
         if (active && data) setMetadata(data as any);
       });
     }
@@ -521,7 +521,10 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
               </div>
 
               <div className="rdm-spec-row">
-                <span>Sold / Max</span> <b>{soldNow} / {hasMax ? maxTicketsN : "∞"}</b>
+                <span>Sold / Max</span>{" "}
+                <b>
+                  {soldNow} / {hasMax ? maxTicketsN : "∞"}
+                </b>
               </div>
 
               <div className="rdm-spec-row">
@@ -531,7 +534,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
               {!minReached && minTicketsN > 0 && (
                 <div className="rdm-spec-row">
                   <span>Progress to Min</span>
-                  <b>{soldNow.toLocaleString("en-US")} / {minTicketsN.toLocaleString("en-US")}</b>
+                  <b>
+                    {soldNow.toLocaleString("en-US")} / {minTicketsN.toLocaleString("en-US")}
+                  </b>
                 </div>
               )}
             </div>
@@ -592,8 +597,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                         {step.tx && <TxLink hash={step.tx} />}
                         {step.winner && (
                           <div className="rdm-winner-hl">
-                            Winner:{" "}
-                            <ExplorerLink addr={step.winner} label={String(step.winner).slice(0, 6) + "..."} />
+                            Winner: <ExplorerLink addr={step.winner} label={String(step.winner).slice(0, 6) + "..."} />
                           </div>
                         )}
                       </div>
