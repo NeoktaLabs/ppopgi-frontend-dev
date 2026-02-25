@@ -15,55 +15,53 @@ import { FaqPage } from "./pages/FaqPage";
 
 // --- Components (Modals) ---
 import { SignInModal } from "./components/SignInModal";
-import { CreateRaffleModal } from "./components/CreateLotteryModal";
-import { RaffleDetailsModal } from "./components/LotteryDetailsModal";
+import { CreateLotteryModal } from "./components/CreateLotteryModal";
+import { LotteryDetailsModal } from "./components/LotteryDetailsModal";
 import { CashierModal } from "./components/CashierModal";
 import { SafetyProofModal } from "./components/SafetyProofModal";
 import { DisclaimerGate } from "./components/DisclaimerGate";
 
-// ✅ NEW: global sync refresher (mounted once)
+// ✅ global sync refresher
 import { GlobalDataRefresher } from "./components/GlobalDataRefresher";
 
-// --- Hooks ---
+// --- Hooks / State ---
 import { useSession } from "./state/useSession";
 import { useAppRouting } from "./hooks/useAppRouting";
-import { useRaffleDetails } from "./hooks/useLotteryDetails";
-
-// ✅ Shared store in App so the modal can use the same data as cards
-import { useRaffleStore } from "./hooks/useLotteryStore";
+import { useLotteryDetails } from "./hooks/useLotteryDetails";
+import { useLotteryStore } from "./hooks/useLotteryStore";
 
 type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 
 export default function App() {
-  // 1. Thirdweb Config
+  // 1) Thirdweb
   useAutoConnect({ client: thirdwebClient, chain: ETHERLINK_CHAIN, wallets: [createWallet("io.metamask")] });
 
-  // 2. Global State
+  // 2) Global session
   const activeAccount = useActiveAccount();
   const account = activeAccount?.address ?? null;
   const setSession = useSession((s) => s.set);
   const { disconnect } = useDisconnect();
   const activeWallet = useActiveWallet();
 
-  // 3. Routing & Navigation
+  // 3) Routing
   const [page, setPage] = useState<Page>("home");
-  const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting();
+  const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting(); // keep name for URL param compatibility
 
-  // ✅ Shared store subscription (gives us the same RaffleListItem as your cards)
-  const store = useRaffleStore("app-modal", 20_000);
+  // ✅ store (same items used by cards)
+  const store = useLotteryStore("app-modal", 20_000);
 
-  const selectedRaffleFromStore = useMemo(() => {
+  const selectedFromStore = useMemo(() => {
     const id = (selectedRaffleId || "").toLowerCase();
     if (!id) return null;
     return (store.items || []).find((r: any) => String(r.id || "").toLowerCase() === id) ?? null;
   }, [store.items, selectedRaffleId]);
 
-  // 4. Modal States
+  // 4) Modal states
   const [signInOpen, setSignInOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
 
-  // ✅ Global events (HomePage banner actions)
+  // 5) Global events (Home banner)
   useEffect(() => {
     const onOpenCashier = () => {
       if (account) setCashierOpen(true);
@@ -75,13 +73,12 @@ export default function App() {
       const next = ce?.detail?.page;
       if (!next) return;
 
-      // gate dashboard behind wallet (same rule you already enforce)
+      // gate dashboard behind wallet
       if (next === "dashboard" && !account) {
         setPage("home");
         setSignInOpen(true);
         return;
       }
-
       setPage(next);
     };
 
@@ -94,20 +91,9 @@ export default function App() {
     };
   }, [account]);
 
-  // GATE STATE
+  // 6) Disclaimer gate
   const [showGate, setShowGate] = useState(false);
 
-  // Safety Modal Logic
-  const [safetyId, setSafetyId] = useState<string | null>(null);
-
-  // 5. Global Clock (One tick for the whole app)
-  const [nowMs, setNowMs] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // CHECK DISCLAIMER STATUS ON LOAD
   useEffect(() => {
     const hasAccepted = localStorage.getItem("ppopgi_terms_accepted");
     if (!hasAccepted) setShowGate(true);
@@ -118,7 +104,14 @@ export default function App() {
     setShowGate(false);
   };
 
-  // Sync Session
+  // 7) Clock
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 8) Session sync
   useEffect(() => {
     setSession({ account, connector: account ? "thirdweb" : null });
     if (page === "dashboard" && !account) setPage("home");
@@ -129,17 +122,19 @@ export default function App() {
     if (activeWallet) disconnect(activeWallet);
   };
 
+  // Safety modal
+  const [safetyId, setSafetyId] = useState<string | null>(null);
+
   const handleOpenSafety = (id: string) => {
     closeRaffle();
     setSafetyId(id);
   };
 
-  // Data for Safety Modal
-  const { data: safetyData } = useRaffleDetails(safetyId, !!safetyId);
+  // ✅ Lottery details for safety modal
+  const { data: safetyData } = useLotteryDetails(safetyId, !!safetyId);
 
   return (
     <>
-      {/* ✅ single global sync point */}
       <GlobalDataRefresher intervalMs={5000} />
 
       <DisclaimerGate open={showGate} onAccept={handleAcceptGate} />
@@ -153,7 +148,6 @@ export default function App() {
         onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))}
         onSignOut={handleSignOut}
       >
-        {/* --- Page Routing --- */}
         {page === "home" && <HomePage nowMs={nowMs} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
 
         {page === "explore" && <ExplorePage onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
@@ -163,31 +157,24 @@ export default function App() {
         )}
 
         {page === "about" && <AboutPage />}
-
         {page === "faq" && <FaqPage />}
 
-        {/* --- Global Modals --- */}
+        {/* --- Modals --- */}
         <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
 
-        <CreateRaffleModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={() => {
-            /* Optional toast logic here */
-          }}
-        />
+        <CreateLotteryModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => {}} />
 
         <CashierModal open={cashierOpen} onClose={() => setCashierOpen(false)} />
 
-        <RaffleDetailsModal
+        <LotteryDetailsModal
           open={!!selectedRaffleId}
-          raffleId={selectedRaffleId}
+          raffleId={selectedRaffleId} // keep prop name if your modal still expects raffleId
           onClose={closeRaffle}
-          initialRaffle={selectedRaffleFromStore as any}
+          initialRaffle={selectedFromStore as any}
         />
 
         {safetyId && safetyData && (
-          <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} raffle={safetyData} />
+          <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} raffle={safetyData as any} />
         )}
       </MainLayout>
     </>
