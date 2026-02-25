@@ -30,8 +30,9 @@ const TxLink = ({ hash }: { hash?: string | null }) => {
 };
 
 const formatDate = (ts: any) => {
-  if (!ts || ts === "0") return "—";
-  return new Date(Number(ts) * 1000).toLocaleString("en-US", {
+  const n = Number(ts);
+  if (!ts || ts === "0" || !Number.isFinite(n) || n <= 0) return "—";
+  return new Date(n * 1000).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -40,47 +41,101 @@ const formatDate = (ts: any) => {
   });
 };
 
-type LotteryEventRow = {
-  type: string;
-  blockTimestamp: string;
-  txHash: string;
-  actor?: string | null;
-  target?: string | null;
-  uintValue?: string | null;
-  amount?: string | null;
-  amount2?: string | null;
-  text?: string | null;
-  requestId?: string | null;
-};
-
 function mustEnv(name: string): string {
   const v = (import.meta as any).env?.[name];
   if (!v) throw new Error(`MISSING_ENV_${name}`);
   return v;
 }
 
-// NOTE: Keeping the existing entity/event names in GraphQL.
-// If your subgraph renamed lotteryEvents -> lotteryEvents, update the query accordingly.
-async function fetchLotteryEvents(lotteryId: string): Promise<LotteryEventRow[]> {
+/**
+ * ✅ Indexer-based timeline (typed entities from your schema)
+ */
+type JourneyBundle = {
+  lottery: {
+    id: string;
+    createdAt?: string | null;
+    deployedAt?: string | null;
+    deployedTx?: string | null;
+    registeredAt?: string | null;
+    deadline?: string | null;
+    status?: any;
+    winner?: string | null;
+    drawingRequestedAt?: string | null;
+    entropyRequestId?: string | null;
+    canceledAt?: string | null;
+    cancelReason?: string | null;
+  } | null;
+
+  funding: { timestamp: string; txHash: string } | null;
+  finalized: { timestamp: string; txHash: string; requestId?: string | null } | null;
+  winnerPicked: { timestamp: string; txHash: string; winner?: string | null; winningTicketIndex?: string | null } | null;
+  canceled: { timestamp: string; txHash: string; reason?: string | null } | null;
+};
+
+async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | null> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
+
+  // NOTE: your schema uses `Lottery.id: ID!` (string), and event entities link via `lottery: Lottery!`
+  // So we should use $id: ID! and pass the lowercased address string.
   const query = `
-    query LotteryJourney($id: Bytes!, $first: Int!) {
-      lotteryEvents(
-        first: $first
-        orderBy: blockTimestamp
+    query LotteryJourney($id: ID!) {
+      lottery(id: $id) {
+        id
+        createdAt
+        deployedAt
+        deployedTx
+        registeredAt
+        deadline
+        status
+        winner
+        drawingRequestedAt
+        entropyRequestId
+        canceledAt
+        cancelReason
+      }
+
+      fundingConfirmedEvents(
+        first: 1
+        orderBy: timestamp
         orderDirection: asc
         where: { lottery: $id }
       ) {
-        type
-        blockTimestamp
+        timestamp
         txHash
-        actor
-        target
-        uintValue
-        amount
-        amount2
-        text
+      }
+
+      lotteryFinalizedEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
+        timestamp
+        txHash
         requestId
+      }
+
+      winnerPickedEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
+        timestamp
+        txHash
+        winner
+        winningTicketIndex
+      }
+
+      lotteryCanceledEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
+        timestamp
+        txHash
+        reason
       }
     }
   `;
@@ -89,14 +144,73 @@ async function fetchLotteryEvents(lotteryId: string): Promise<LotteryEventRow[]>
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query, variables: { id: lotteryId.toLowerCase(), first: 200 } }),
+      body: JSON.stringify({
+        query,
+        variables: { id: lotteryId.toLowerCase() },
+      }),
     });
 
-    const json = await res.json();
-    if (!res.ok || json?.errors?.length) return [];
-    return (json.data?.lotteryEvents ?? []) as LotteryEventRow[];
+    const json = await res.json().catch(() => null);
+    if (!res.ok || json?.errors?.length) return null;
+
+    const lot = json?.data?.lottery ?? null;
+
+    const funding0 = json?.data?.fundingConfirmedEvents?.[0] ?? null;
+    const fin0 = json?.data?.lotteryFinalizedEvents?.[0] ?? null;
+    const win0 = json?.data?.winnerPickedEvents?.[0] ?? null;
+    const canc0 = json?.data?.lotteryCanceledEvents?.[0] ?? null;
+
+    const bundle: JourneyBundle = {
+      lottery: lot
+        ? {
+            id: String(lot.id),
+            createdAt: lot.createdAt != null ? String(lot.createdAt) : null,
+            deployedAt: lot.deployedAt != null ? String(lot.deployedAt) : null,
+            deployedTx: lot.deployedTx != null ? String(lot.deployedTx).toLowerCase() : null,
+            registeredAt: lot.registeredAt != null ? String(lot.registeredAt) : null,
+            deadline: lot.deadline != null ? String(lot.deadline) : null,
+            status: lot.status,
+            winner: lot.winner != null ? String(lot.winner).toLowerCase() : null,
+            drawingRequestedAt: lot.drawingRequestedAt != null ? String(lot.drawingRequestedAt) : null,
+            entropyRequestId: lot.entropyRequestId != null ? String(lot.entropyRequestId) : null,
+            canceledAt: lot.canceledAt != null ? String(lot.canceledAt) : null,
+            cancelReason: lot.cancelReason != null ? String(lot.cancelReason) : null,
+          }
+        : null,
+
+      funding: funding0
+        ? { timestamp: String(funding0.timestamp ?? "0"), txHash: String(funding0.txHash ?? "").toLowerCase() }
+        : null,
+
+      finalized: fin0
+        ? {
+            timestamp: String(fin0.timestamp ?? "0"),
+            txHash: String(fin0.txHash ?? "").toLowerCase(),
+            requestId: fin0.requestId != null ? String(fin0.requestId) : null,
+          }
+        : null,
+
+      winnerPicked: win0
+        ? {
+            timestamp: String(win0.timestamp ?? "0"),
+            txHash: String(win0.txHash ?? "").toLowerCase(),
+            winner: win0.winner != null ? String(win0.winner).toLowerCase() : null,
+            winningTicketIndex: win0.winningTicketIndex != null ? String(win0.winningTicketIndex) : null,
+          }
+        : null,
+
+      canceled: canc0
+        ? {
+            timestamp: String(canc0.timestamp ?? "0"),
+            txHash: String(canc0.txHash ?? "").toLowerCase(),
+            reason: canc0.reason != null ? String(canc0.reason) : null,
+          }
+        : null,
+    };
+
+    return bundle;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -152,15 +266,15 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
 
-  // ✅ Updated type
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
 
-  const [events, setEvents] = useState<LotteryEventRow[] | null>(null);
+  // ✅ NEW: indexer-based journey bundle
+  const [journey, setJourney] = useState<JourneyBundle | null>(null);
 
   useEffect(() => {
     if (!lotteryId || !open) {
       setMetadata(null);
-      setEvents(null);
+      setJourney(null);
       setTab("receipt");
       return;
     }
@@ -171,15 +285,14 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     let active = true;
 
     if (!(initialLottery as any)?.createdAtTimestamp) {
-      // ✅ FIX: fetchLotteryById
       fetchLotteryById(lotteryId).then((data) => {
         if (active && data) setMetadata(data as any);
       });
     }
 
-    fetchLotteryEvents(lotteryId).then((rows) => {
+    fetchLotteryJourney(lotteryId).then((b) => {
       if (!active) return;
-      setEvents(rows);
+      setJourney(b);
     });
 
     return () => {
@@ -192,85 +305,105 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useLotteryParticipants(lotteryId, soldForPct);
 
+  /**
+   * ✅ Timeline now driven by subgraph:
+   * - Prefer Journey lottery fields + typed event timestamps/txHash.
+   * - Fall back to displayData fields if present.
+   */
   const timeline = useMemo(() => {
-    if (!displayData) return [];
+    if (!displayData && !journey?.lottery) return [];
+
+    const lot = journey?.lottery ?? null;
+
+    const createdAt =
+      lot?.createdAt ||
+      displayData?.createdAt ||
+      displayData?.createdAtTimestamp ||
+      displayData?.history?.createdAt ||
+      lot?.deployedAt ||
+      displayData?.deployedAt ||
+      null;
+
+    const deployedTx = lot?.deployedTx || displayData?.deployedTx || displayData?.creationTx || null;
+
+    const registeredAt =
+      lot?.registeredAt || displayData?.registeredAt || displayData?.history?.registeredAt || null;
+
+    const deadline = lot?.deadline || displayData?.deadline || null;
+
+    const statusRaw = displayData?.status ?? lot?.status ?? null;
+    const status = String(statusRaw ?? "").toUpperCase();
+
+    const funding = journey?.funding ?? null;
+    const finalized = journey?.finalized ?? null;
+    const winnerPicked = journey?.winnerPicked ?? null;
+    const canceled = journey?.canceled ?? null;
 
     const steps: any[] = [];
-    const findFirst = (t: string) => (events ?? []).find((e) => e.type === t) || null;
-
-    const deployed = findFirst("LOTTERY_DEPLOYED");
-    const registered = findFirst("LOTTERY_REGISTERED");
-    const funding = findFirst("FUNDING_CONFIRMED");
-    const finalized = findFirst("LOTTERY_FINALIZED");
-    const winner = findFirst("WINNER_PICKED");
-    const canceled = findFirst("LOTTERY_CANCELED");
 
     steps.push({
       label: "Initialized",
-      date: displayData.createdAtTimestamp || deployed?.blockTimestamp || null,
-      tx: displayData.creationTx || deployed?.txHash || null,
-      status: "done",
+      date: createdAt,
+      tx: deployedTx,
+      status: createdAt ? "done" : "active",
     });
 
-    if (registered) {
-      steps.push({ label: "Registered", date: registered.blockTimestamp, tx: registered.txHash, status: "done" });
-    } else if (displayData.registeredAt) {
-      steps.push({ label: "Registered", date: displayData.registeredAt, tx: null, status: "done" });
-    } else {
-      steps.push({ label: "Registered", date: null, tx: null, status: "future" });
-    }
+    steps.push({
+      label: "Registered",
+      date: registeredAt,
+      tx: null,
+      status: registeredAt ? "done" : "future",
+    });
 
-    const status = displayData.status;
-
+    // Ticket sales open = FundingConfirmedEvent OR if status already OPEN+
     if (funding) {
-      steps.push({ label: "Ticket Sales Open", date: funding.blockTimestamp, tx: funding.txHash, status: "done" });
+      steps.push({ label: "Ticket Sales Open", date: funding.timestamp, tx: funding.txHash, status: "done" });
     } else {
-      const s =
-        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
-          ? "active"
-          : "future";
+      const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
+    // Randomness requested = LotteryFinalizedEvent OR if status DRAWING+
     if (finalized) {
-      steps.push({ label: "Randomness Requested", date: finalized.blockTimestamp, tx: finalized.txHash, status: "done" });
+      steps.push({ label: "Randomness Requested", date: finalized.timestamp, tx: finalized.txHash, status: "done" });
     } else if (status === "DRAWING") {
       steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
     } else {
       steps.push({
         label: "Draw Deadline",
-        date: displayData.deadline || null,
+        date: deadline,
         tx: null,
         status: status === "OPEN" ? "active" : "future",
       });
     }
 
-    if (winner) {
+    // Winner / canceled / settlement
+    if (winnerPicked) {
       steps.push({
         label: "Winner Selected",
-        date: winner.blockTimestamp,
-        tx: winner.txHash,
+        date: winnerPicked.timestamp,
+        tx: winnerPicked.txHash,
         status: "done",
-        winner: displayData.winner || winner.actor || null,
+        winner: (winnerPicked.winner || displayData?.winner || lot?.winner || null),
       });
     } else if (canceled) {
-      steps.push({ label: "Canceled", date: canceled.blockTimestamp, tx: canceled.txHash, status: "done" });
+      steps.push({ label: "Canceled", date: canceled.timestamp, tx: canceled.txHash, status: "done" });
     } else if (status === "COMPLETED") {
       steps.push({
         label: "Winner Selected",
-        date: displayData.completedAt || null,
+        date: lot?.drawingRequestedAt || displayData?.completedAt || null,
         tx: null,
         status: "done",
-        winner: displayData.winner || null,
+        winner: (displayData?.winner || lot?.winner || null),
       });
     } else if (status === "CANCELED") {
-      steps.push({ label: "Canceled", date: displayData.canceledAt || null, tx: null, status: "done" });
+      steps.push({ label: "Canceled", date: lot?.canceledAt || displayData?.canceledAt || null, tx: null, status: "done" });
     } else {
       steps.push({ label: "Settlement", date: null, tx: null, status: "future" });
     }
 
     return steps;
-  }, [displayData, events]);
+  }, [displayData, journey]);
 
   const stats = useMemo(() => {
     if (!displayData) return null;
