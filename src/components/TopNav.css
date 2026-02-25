@@ -32,6 +32,9 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 
   overflow: hidden; /* makes it feel like one “unit” */
+
+  /* ✅ anchor for the mobile menu */
+  position: relative;
 }
 
 /* 2. NAV ROW (now just layout, no glass styling here) */
@@ -294,10 +297,8 @@
 .mobile-menu {
   position: absolute;
 
-  /* ✅ Now position relative to the whole shell height (nav + infra).
-     This value matches your previous behavior but is more stable now because
-     shell owns the infra spacing. */
-  top: 150px;
+  /* ✅ anchor to the bottom of the entire shell (nav + infra), no magic numbers */
+  top: calc(100% + 10px);
 
   left: 0;
   right: 0;
@@ -310,12 +311,7 @@
   z-index: 350;
 }
 
-@media (max-width: 700px) {
-  .mobile-menu {
-    top: 140px;
-  }
-}
-
+/* ✅ remove the old fixed offsets (150px/140px) */
 .mobile-menu.visible {
   opacity: 1;
   transform: translateY(0);
