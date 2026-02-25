@@ -240,7 +240,11 @@ export function useActivityStore() {
     start();
     const sub = () => force((x) => x + 1);
     subs.add(sub);
-    return () => subs.delete(sub);
+
+    // ✅ FIX: cleanup must return void (not boolean)
+    return () => {
+      subs.delete(sub);
+    };
   }, []);
 
   return useMemo(
