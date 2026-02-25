@@ -141,14 +141,14 @@ function MultiplierBadge({ count }: { count: number }) {
 }
 
 function LotteryCardPile({
-  raffle,
+  lottery,
   ticketCount,
   isWinner,
   onOpenLottery,
   onOpenSafety,
   nowMs,
 }: {
-  raffle: any;
+  lottery: any;
   ticketCount: number;
   isWinner: boolean;
   onOpenLottery: (id: string) => void;
@@ -161,12 +161,12 @@ function LotteryCardPile({
   const shadowCount = safeTickets > 1 ? Math.min(4, safeTickets - 1) : 0;
   const hasShadows = shadowCount > 0;
 
-  const raffleForCard = useMemo(() => {
-    const c = { ...(raffle ?? {}) };
+  const lotteryForCard = useMemo(() => {
+    const c = { ...(lottery ?? {}) };
     if ("userEntry" in c) delete (c as any).userEntry;
     if ("userTicketsOwned" in c) delete (c as any).userTicketsOwned;
     return c;
-  }, [raffle]);
+  }, [lottery]);
 
   const pileClass = `db-card-pile card-hover-trigger${isWinner ? " is-winner" : ""}${hasShadows ? "" : " no-shadows"}`;
 
@@ -183,7 +183,7 @@ function LotteryCardPile({
           <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard lottery={lotteryForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -192,7 +192,7 @@ function LotteryCardPile({
           <div className="db-card-shadow db-card-shadow-3" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard lottery={lotteryForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -201,7 +201,7 @@ function LotteryCardPile({
           <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard lottery={lotteryForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -210,7 +210,7 @@ function LotteryCardPile({
           <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard lottery={lotteryForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -218,7 +218,7 @@ function LotteryCardPile({
 
         <div className="db-card-front">
           <div className="db-card-front-card">
-            <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+            <LotteryCard lottery={lotteryForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
         </div>
       </div>
@@ -414,7 +414,6 @@ export function DashboardPage({ account: accountProp, onOpenLottery, onOpenSafet
           <div className="db-grid">
             {data.claimables.map((it: any) => {
               const r = it.lottery; // ✅ new shape
-              const acct = norm(account);
 
               const roles = it.roles ?? {};
               const hasRefund = safeBigInt(it.refundUsdc) > 0n;
@@ -463,7 +462,7 @@ export function DashboardPage({ account: accountProp, onOpenLottery, onOpenSafet
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
-                  <LotteryCard raffle={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
 
                   <div className="db-claim-cut-line" />
 
@@ -572,7 +571,7 @@ export function DashboardPage({ account: accountProp, onOpenLottery, onOpenSafet
               return (
                 <LotteryCardPile
                   key={r.id}
-                  raffle={r}
+                  lottery={r}
                   ticketCount={ticketCount}
                   isWinner={false}
                   onOpenLottery={onOpenLottery}
@@ -613,7 +612,7 @@ export function DashboardPage({ account: accountProp, onOpenLottery, onOpenSafet
               return (
                 <div key={r.id} className={`db-history-card-wrapper ${iLost ? "is-lost" : ""}`}>
                   <LotteryCardPile
-                    raffle={r}
+                    lottery={r}
                     ticketCount={ticketCount || 1}
                     isWinner={!!iWon}
                     onOpenLottery={onOpenLottery}
@@ -644,7 +643,7 @@ export function DashboardPage({ account: accountProp, onOpenLottery, onOpenSafet
             )}
 
             {(data.created ?? []).map((r: any) => (
-              <LotteryCard key={r.id} raffle={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+              <LotteryCard key={r.id} lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
             ))}
           </div>
         )}
