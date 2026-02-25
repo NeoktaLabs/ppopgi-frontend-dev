@@ -19,6 +19,7 @@ const isZeroAddr = (a: any) => String(a || "").toLowerCase() === ZERO;
 function short(a: string) {
   return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
 }
+
 function fmtUsdc(raw: string) {
   try {
     return formatUnits(BigInt(raw || "0"), 6);
@@ -26,9 +27,11 @@ function fmtUsdc(raw: string) {
     return "0";
   }
 }
+
 function clampInt(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.floor(n)));
 }
+
 function toInt(v: string, fb = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fb;
@@ -194,20 +197,19 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
   const ticketPriceU = BigInt((data as any)?.ticketPrice || "0");
   const totalCostU = BigInt(ticketCount) * ticketPriceU;
 
-  // ✅ Lottery contract uses your ABI file
+  // ✅ Lottery contract (cast ABI to any to satisfy thirdweb Abi typing)
   const lotteryContract = useMemo(() => {
     if (!lotteryId) return null;
     return getContract({
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: lotteryId.toLowerCase(),
-      abi: SingleWinnerLotteryABI,
+      abi: SingleWinnerLotteryABI as any,
     });
   }, [lotteryId]);
 
   /**
-   * ✅ IMPORTANT:
-   * Use the lottery's indexed usdcToken when available, otherwise fall back to global config.
+   * ✅ Use the lottery's indexed usdcToken when available, otherwise fall back to global config.
    */
   const paymentTokenAddr = useMemo(() => {
     const onchain = String((data as any)?.usdcToken || "").trim();
@@ -215,7 +217,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     return ADDRESSES.USDC;
   }, [data]);
 
-  // ✅ USDC contract uses your ABI file
+  // ✅ USDC contract (cast ABI to any to satisfy thirdweb Abi typing)
   const usdcContract = useMemo(() => {
     const addr = paymentTokenAddr;
     if (!addr || isZeroAddr(addr)) return null;
@@ -223,7 +225,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: addr,
-      abi: USDC_ABI,
+      abi: USDC_ABI as any,
     });
   }, [paymentTokenAddr]);
 
@@ -273,20 +275,19 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       setAllowLoading(true);
 
       try {
-        // ✅ Use ABI method names (no string signatures)
+        // ✅ Use function signatures to avoid thirdweb "never" inference issues
         const allowanceP = readContract({
-          contract: usdcContract,
-          method: "allowance",
+          contract: usdcContract as any,
+          method: "function allowance(address owner, address spender) view returns (uint256)",
           params: [acct, spender],
         }).catch(() => 0n as any);
 
-        // ✅ Always read balance at least once, and on preTx/manual
         const shouldReadBalance = reason === "manual" || reason === "preTx" || usdcBal == null;
 
         const balanceP = shouldReadBalance
           ? readContract({
-              contract: usdcContract,
-              method: "balanceOf",
+              contract: usdcContract as any,
+              method: "function balanceOf(address account) view returns (uint256)",
               params: [acct],
             }).catch(() => null as any)
           : Promise.resolve(null as any);
@@ -328,8 +329,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       await refreshAllowance("preTx");
 
       const tx = prepareContractCall({
-        contract: usdcContract,
-        method: "approve",
+        contract: usdcContract as any,
+        method: "function approve(address spender, uint256 amount) returns (bool)",
         params: [lotteryId, MaxUint256],
       });
 
@@ -365,8 +366,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       }
 
       const tx = prepareContractCall({
-        contract: lotteryContract,
-        method: "buyTickets",
+        contract: lotteryContract as any,
+        method: "function buyTickets(uint64 amount)",
         params: [BigInt(ticketCount)],
       });
 
