@@ -7,8 +7,7 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 
-// ✅ Use full ABIs so viem/thirdweb can decode custom errors (fixes 0x946d7b84 issue)
-import USDC_ABI from "../config/abis/USDC.json"; // or your ERC20 abi file name
+// ✅ IMPORTANT: use the FULL deployer ABI so custom errors can be decoded
 import DEPLOYER_ABI from "../config/abis/SingleWinnerDeployer.json";
 
 /* -------------------- utils -------------------- */
@@ -40,20 +39,50 @@ function pickErrMessage(e: any): string {
 }
 
 function prettyCreateError(e: any): string {
-  const msg = pickErrMessage(e).toLowerCase();
+  const raw = pickErrMessage(e);
+  const msg = raw.toLowerCase();
 
-  // common buckets
   if (msg.includes("insufficient funds")) return "Not enough XTZ for gas on Etherlink.";
   if (msg.includes("user rejected") || msg.includes("rejected")) return "You rejected the transaction in your wallet.";
   if (msg.includes("wrong network") || msg.includes("chain")) return "Wallet is on the wrong network. Switch to Etherlink.";
-  if (msg.includes("execution reverted") || msg.includes("revert")) return "Transaction would revert (contract rejected inputs).";
+  if (msg.includes("execution reverted") || msg.includes("revert")) return raw ? `Transaction reverted: ${raw}` : "Transaction reverted.";
   if (msg.includes("estimate gas") || msg.includes("gas")) return "Gas estimation failed (often due to a revert).";
-  if (msg.includes("invalid") && msg.includes("address")) return "Invalid contract/address configuration.";
   if (msg.includes("timeout")) return "Request timed out. Try again.";
 
-  const raw = pickErrMessage(e);
   return raw ? `Creation failed: ${raw}` : "Creation failed.";
 }
+
+/* -------------------- minimal ERC20 ABI -------------------- */
+
+const ERC20_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
 
 /* -------------------- app events -------------------- */
 
@@ -113,8 +142,7 @@ function topicToAddress(topic: string): string {
 /* -------------------- hook -------------------- */
 
 type AllowanceSnapshot = { bal: bigint; allowance: bigint; ts: number };
-
-const SNAPSHOT_TTL_MS = 12_000; // small TTL: prevents spam when typing or re-opening quickly
+const SNAPSHOT_TTL_MS = 12_000;
 
 // bounds
 const U64_MAX = (1n << 64n) - 1n;
@@ -144,7 +172,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [allowLoading, setAllowLoading] = useState(false);
 
-  // request guard + TTL snapshot
   const reqIdRef = useRef(0);
   const lastSnapRef = useRef<AllowanceSnapshot | null>(null);
 
@@ -154,7 +181,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.SingleWinnerDeployer,
-        abi: DEPLOYER_ABI as any,
+        abi: DEPLOYER_ABI as any, // ✅ full ABI (includes errors)
       }),
     []
   );
@@ -165,7 +192,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.USDC,
-        abi: USDC_ABI as any,
+        abi: ERC20_ABI,
       }),
     []
   );
@@ -175,7 +202,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const unitSeconds = durationUnit === "minutes" ? 60 : durationUnit === "hours" ? 3600 : 86400;
   const durationSecondsN = toInt(durationValue, 0) * unitSeconds;
 
-  // NOTE: you’re currently only allowing integer USDC amounts (sanitizeInt). That’s fine.
   const ticketPriceU = useMemo(() => parseUnits(String(toInt(ticketPrice, 0)), 6), [ticketPrice]);
   const winningPotU = useMemo(() => parseUnits(String(toInt(winningPot, 0)), 6), [winningPot]);
 
@@ -203,7 +229,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     async (opts: { force?: boolean } = {}) => {
       if (!isOpen || !me) return;
 
-      // TTL: avoid re-fetching if we just fetched
       const snap = lastSnapRef.current;
       if (!opts.force && snap && Date.now() - snap.ts < SNAPSHOT_TTL_MS) {
         setUsdcBal(snap.bal);
@@ -212,8 +237,8 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       }
 
       const reqId = ++reqIdRef.current;
-
       setAllowLoading(true);
+
       try {
         const [bal, a] = await Promise.all([
           readContract({ contract: usdcContract, method: "balanceOf", params: [me] }),
@@ -247,6 +272,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
     try {
       setMsg("Confirm approval in wallet...");
+
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "approve",
@@ -255,10 +281,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
       await sendAndConfirm(tx);
       setMsg("Approval successful!");
-
-      // force refresh to reflect new allowance immediately
       await refreshAllowance({ force: true });
-
       emitRevalidate(false);
     } catch (e: any) {
       if (isAbortError(e)) return;
@@ -273,7 +296,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     setMsg(null);
     if (!canSubmit) return;
 
-    // --- Cast + validate bounded ints (avoid encoding failures) ---
     const minTicketsU64 = minT;
     const maxTicketsU64 = maxT;
     const durationU64 = BigInt(Math.max(0, Math.floor(durationSecondsN)));
@@ -367,9 +389,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       });
 
       setMsg("🎉 Success!");
-
       await refreshAllowance({ force: true });
-
       emitRevalidate(true);
       onCreated?.(newAddr || undefined);
     } catch (e: any) {
