@@ -7,6 +7,10 @@ import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
 
+// ✅ Use full ABIs so viem/thirdweb can decode custom errors (fixes 0x946d7b84 issue)
+import USDC_ABI from "../config/abis/USDC.json"; // or your ERC20 abi file name
+import DEPLOYER_ABI from "../config/abis/SingleWinnerDeployer.json";
+
 /* -------------------- utils -------------------- */
 
 function sanitizeInt(raw: string) {
@@ -50,56 +54,6 @@ function prettyCreateError(e: any): string {
   const raw = pickErrMessage(e);
   return raw ? `Creation failed: ${raw}` : "Creation failed.";
 }
-
-/* -------------------- minimal ABIs -------------------- */
-
-const ERC20_ABI = [
-  {
-    type: "function",
-    name: "balanceOf",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "allowance",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "approve",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-] as const;
-
-const DEPLOYER_ABI = [
-  {
-    type: "function",
-    name: "createSingleWinnerLottery",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "name", type: "string" },
-      { name: "ticketPrice", type: "uint256" },
-      { name: "winningPot", type: "uint256" },
-      { name: "minTickets", type: "uint64" },
-      { name: "maxTickets", type: "uint64" },
-      { name: "durationSeconds", type: "uint64" },
-      { name: "minPurchaseAmount", type: "uint32" },
-    ],
-    outputs: [{ name: "lottery", type: "address" }],
-  },
-] as const;
 
 /* -------------------- app events -------------------- */
 
@@ -200,7 +154,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.SingleWinnerDeployer,
-        abi: DEPLOYER_ABI,
+        abi: DEPLOYER_ABI as any,
       }),
     []
   );
@@ -211,7 +165,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: ADDRESSES.USDC,
-        abi: ERC20_ABI,
+        abi: USDC_ABI as any,
       }),
     []
   );
@@ -351,7 +305,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         ],
       });
 
-      // Helpful debug (shows whether we even got to “send”)
       console.log("CREATE tx prepared:", {
         deployer: ADDRESSES.SingleWinnerDeployer,
         name: name.trim(),
@@ -415,7 +368,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
       setMsg("🎉 Success!");
 
-      // After create, balance may have changed; refresh once (forced)
       await refreshAllowance({ force: true });
 
       emitRevalidate(true);
@@ -431,7 +383,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
   /* ---------- lifecycle (NO POLLING) ---------- */
 
-  // 1) initial load when modal opens or account changes
   useEffect(() => {
     if (!isOpen) return;
     refreshAllowance({ force: true });
@@ -440,7 +391,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     };
   }, [isOpen, me, refreshAllowance]);
 
-  // 2) refresh when tab becomes visible again (prevents stale modal)
   useEffect(() => {
     if (!isOpen) return;
 
