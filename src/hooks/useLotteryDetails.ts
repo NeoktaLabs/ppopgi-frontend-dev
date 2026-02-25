@@ -23,8 +23,7 @@ function statusFromUint8(n: number): LotteryStatus {
   return "UNKNOWN";
 }
 
-// Your indexer/subgraph stores status as an int; some tooling might return a string.
-// Accept both.
+// subgraph may return int (0..4) or string labels depending on tooling
 function statusFromSubgraph(v: any): LotteryStatus {
   if (typeof v === "number") return statusFromUint8(v);
   const n = Number(v);
@@ -48,25 +47,21 @@ function normHex(v: unknown): string {
 type LotteryHistory = {
   status?: string | number | null;
 
-  // creation-ish
   createdAt?: string | null;
   deployedAt?: string | null;
   deployedTx?: string | null;
 
-  // drawing-ish
   drawingRequestedAt?: string | null;
   soldAtDrawing?: string | null;
   entropyRequestId?: string | null;
   selectedProvider?: string | null;
   winner?: string | null;
 
-  // cancel-ish
   canceledAt?: string | null;
   soldAtCancel?: string | null;
   cancelReason?: string | null;
   creatorPotRefunded?: boolean | null;
 
-  // registry-ish
   registryIndex?: string | null;
   registeredAt?: string | null;
 };
@@ -87,65 +82,35 @@ export type LotteryDetails = {
   maxTickets: string;
   deadline: string;
 
-  // best-effort legacy
+  // legacy field kept for UI compatibility (contract has no paused())
   paused: boolean;
 
   minPurchaseAmount: string;
 
-  // entropy/draw config
-  entropy: string;
-  entropyProvider: string;
+  // entropy/draw state
   entropyRequestId: string;
+  drawingRequestedAt: string;
   selectedProvider: string;
-  callbackGasLimit: string;
+  winner: string;
 
-  // token/creator config
+  // derived UX helpers from getSummary()
+  isFinalizable: boolean;
+  isHatchOpen: boolean;
+
+  // config (from subgraph; immutables on-chain but no need to hammer RPC)
   usdcToken: string;
   creator: string;
-
-  // fee config
   feeRecipient: string;
   protocolFeePercent: string;
+  entropy: string;
+  entropyProvider: string;
+  callbackGasLimit: string;
 
-  // outcome
-  winner: string;
+  // this is NOT a contract getter — we take it from WinnerPickedEvent in subgraph
   winningTicketIndex: string;
 
   history?: LotteryHistory;
 };
-
-async function readFirst(
-  contract: any,
-  label: string,
-  candidates: string[],
-  params: readonly unknown[] = []
-): Promise<any> {
-  let lastErr: any = null;
-  for (const method of candidates) {
-    try {
-      return await readContract({ contract, method, params });
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  // eslint-disable-next-line no-console
-  console.warn(`[useLotteryDetails] Failed to read ${label}. Tried:`, candidates, lastErr);
-  throw lastErr;
-}
-
-async function readFirstOr(
-  contract: any,
-  label: string,
-  candidates: string[],
-  fallback: any,
-  params: readonly unknown[] = []
-): Promise<any> {
-  try {
-    return await readFirst(contract, label, candidates, params);
-  } catch {
-    return fallback;
-  }
-}
 
 function mustEnv(name: string): string {
   const v = (import.meta as any).env?.[name];
@@ -167,17 +132,60 @@ async function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T
   }
 }
 
-async function fetchLotteryHistoryFromSubgraph(
-  id: string,
-  signal?: AbortSignal
-): Promise<LotteryHistory | null> {
+type SubgraphBundle = {
+  core: {
+    name: string | null;
+    creator: string | null;
+    usdcToken: string | null;
+
+    feeRecipient: string | null;
+    protocolFeePercent: string | null;
+
+    entropy: string | null;
+    entropyProvider: string | null;
+    callbackGasLimit: string | null;
+
+    ticketPrice: string | null;
+    winningPot: string | null;
+    minTickets: string | null;
+    maxTickets: string | null;
+    deadline: string | null;
+    ticketRevenue: string | null;
+
+    status: any;
+  } | null;
+
+  history: LotteryHistory | null;
+
+  latestWinnerPicked: { winningTicketIndex: string | null } | null;
+};
+
+async function fetchSubgraphBundle(id: string, signal?: AbortSignal): Promise<SubgraphBundle> {
   const lotteryId = id.toLowerCase();
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
   const query = `
-    query LotteryById($id: Bytes!) {
+    query LotteryDetailsBundle($id: Bytes!) {
       lottery(id: $id) {
+        id
+        name
         status
+
+        creator
+        usdcToken
+        feeRecipient
+        protocolFeePercent
+
+        entropy
+        entropyProvider
+        callbackGasLimit
+
+        ticketPrice
+        winningPot
+        minTickets
+        maxTickets
+        deadline
+        ticketRevenue
 
         createdAt
         deployedAt
@@ -197,6 +205,15 @@ async function fetchLotteryHistoryFromSubgraph(
         registryIndex
         registeredAt
       }
+
+      winnerPickedEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: desc
+        where: { lottery: $id }
+      ) {
+        winningTicketIndex
+      }
     }
   `;
 
@@ -208,46 +225,67 @@ async function fetchLotteryHistoryFromSubgraph(
   });
 
   if (!res.ok) throw new Error(`SUBGRAPH_HTTP_ERROR_${res.status}`);
-
   const json = await res.json().catch(() => null);
   if (json?.errors?.length) throw new Error("SUBGRAPH_GQL_ERROR");
 
-  const r = json?.data?.lottery;
-  if (!r) return null;
+  const lot = json?.data?.lottery ?? null;
+  const w = (json?.data?.winnerPickedEvents?.[0] ?? null) as { winningTicketIndex?: any } | null;
+
+  const history: LotteryHistory | null = lot
+    ? {
+        status: lot.status ?? null,
+
+        createdAt: lot.createdAt ?? null,
+        deployedAt: lot.deployedAt ?? null,
+        deployedTx: lot.deployedTx != null ? normHex(lot.deployedTx) : null,
+
+        drawingRequestedAt: lot.drawingRequestedAt ?? null,
+        soldAtDrawing: lot.soldAtDrawing ?? null,
+        entropyRequestId: lot.entropyRequestId ?? null,
+        selectedProvider: lot.selectedProvider != null ? normHex(lot.selectedProvider) : null,
+        winner: lot.winner != null ? normHex(lot.winner) : null,
+
+        canceledAt: lot.canceledAt ?? null,
+        soldAtCancel: lot.soldAtCancel ?? null,
+        cancelReason: lot.cancelReason ?? null,
+        creatorPotRefunded: typeof lot.creatorPotRefunded === "boolean" ? lot.creatorPotRefunded : null,
+
+        registryIndex: lot.registryIndex ?? null,
+        registeredAt: lot.registeredAt ?? null,
+      }
+    : null;
 
   return {
-    status: r.status ?? null,
+    core: lot
+      ? {
+          name: lot.name ?? null,
+          creator: lot.creator ?? null,
+          usdcToken: lot.usdcToken ?? null,
 
-    createdAt: r.createdAt ?? null,
-    deployedAt: r.deployedAt ?? null,
-    deployedTx: r.deployedTx != null ? normHex(r.deployedTx) : null,
+          feeRecipient: lot.feeRecipient ?? null,
+          protocolFeePercent: lot.protocolFeePercent ?? null,
 
-    drawingRequestedAt: r.drawingRequestedAt ?? null,
-    soldAtDrawing: r.soldAtDrawing ?? null,
-    entropyRequestId: r.entropyRequestId ?? null,
-    selectedProvider: r.selectedProvider != null ? normHex(r.selectedProvider) : null,
-    winner: r.winner != null ? normHex(r.winner) : null,
+          entropy: lot.entropy ?? null,
+          entropyProvider: lot.entropyProvider ?? null,
+          callbackGasLimit: lot.callbackGasLimit ?? null,
 
-    canceledAt: r.canceledAt ?? null,
-    soldAtCancel: r.soldAtCancel ?? null,
-    cancelReason: r.cancelReason ?? null,
-    creatorPotRefunded: typeof r.creatorPotRefunded === "boolean" ? r.creatorPotRefunded : null,
+          ticketPrice: lot.ticketPrice ?? null,
+          winningPot: lot.winningPot ?? null,
+          minTickets: lot.minTickets ?? null,
+          maxTickets: lot.maxTickets ?? null,
+          deadline: lot.deadline ?? null,
+          ticketRevenue: lot.ticketRevenue ?? null,
 
-    registryIndex: r.registryIndex ?? null,
-    registeredAt: r.registeredAt ?? null,
+          status: lot.status,
+        }
+      : null,
+
+    history,
+    latestWinnerPicked: w ? { winningTicketIndex: w.winningTicketIndex != null ? String(w.winningTicketIndex) : null } : null,
   };
 }
 
-/**
- * On-chain trust philosophy:
- * - Fetch "live" fields from RPC that can change quickly or matter for actions:
- *   status, sold, winner(+ticket index if completed)
- * - Everything else comes from subgraph history (fast + cached), and is displayed as such.
- *
- * This keeps RPC calls minimal and avoids hammering.
- */
-
-// Very small in-memory TTL cache to avoid refetch when user opens/closes the modal quickly
+// Very small in-memory TTL cache to avoid refetch when user opens/closes quickly
 type CacheEntry = { ts: number; data: LotteryDetails };
 const DETAILS_CACHE_TTL_MS = 7_500;
 const detailsCache = new Map<string, CacheEntry>();
@@ -292,7 +330,6 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
     }
 
     const runId = ++runIdRef.current;
-
     let alive = true;
     const ac = new AbortController();
 
@@ -300,179 +337,139 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
       setLoading(true);
       setNote(null);
 
-      // Always try to get subgraph "bulk" fields quickly, but never block RPC truth.
-      const historyPromise = withTimeout(
-        fetchLotteryHistoryFromSubgraph(normalizedAddress, ac.signal).catch(() => null),
-        2500,
-        null
-      );
+      // Start subgraph in parallel (fast, cached by your worker)
+      const subgraphP = withTimeout(fetchSubgraphBundle(cacheKey, ac.signal).catch(() => null), 2500, null);
 
       try {
-        // ----------------------------
-        // ✅ Minimal on-chain reads
-        // ----------------------------
-        // Do these in parallel (important).
-        const [statusU8, sold, winner] = await Promise.all([
-          readFirstOr(contract, "status", ["function status() view returns (uint8)"], 255),
-          readFirstOr(
+        /**
+         * ✅ BEST on-chain trust with MIN calls:
+         * 1 RPC: getSummary()
+         *
+         * getSummary returns:
+         * (_status,_name,_createdAt,_deadline,_ticketPrice,_winningPot,_ticketRevenue,_minTickets,_maxTickets,_minPurchaseAmount,_sold,_winner,_entropyRequestId,_drawingRequestedAt,_selectedProvider,_isFinalizable,_isHatchOpen)
+         */
+        const summary = await withTimeout(
+          readContract({
             contract,
-            "sold",
-            ["function getSold() view returns (uint256)", "function sold() view returns (uint256)"],
-            0n
-          ),
-          readFirstOr(contract, "winner", ["function winner() view returns (address)"], ZERO),
-        ]);
-
-        const onchainStatus = statusFromUint8(Number(statusU8));
-
-        const winningTicketIndex =
-          onchainStatus === "COMPLETED"
-            ? await readFirstOr(contract, "winningTicketIndex", ["function winningTicketIndex() view returns (uint256)"], 0n)
-            : 0n;
-
-        if (!alive || runId !== runIdRef.current) return;
-
-        // ----------------------------
-        // ✅ Subgraph bulk fields
-        // ----------------------------
-        const history = await historyPromise;
-
-        // Build display values primarily from subgraph if available.
-        // If subgraph is missing, we degrade gracefully to placeholders.
-        const name = history ? undefined : undefined; // we intentionally do NOT read name on-chain anymore
-        const subgraphStatus = history ? statusFromSubgraph(history.status) : "UNKNOWN";
-
-        const finalStatus: LotteryStatus =
-          subgraphStatus === "CANCELED" || subgraphStatus === "COMPLETED" || subgraphStatus === "DRAWING"
-            ? subgraphStatus
-            : onchainStatus;
-
-        // NOTE:
-        // All these "static-ish" fields are expected to be present in your Lottery entity.
-        // If history is null, we fill with safe placeholders and show a note.
-        const d: LotteryDetails = {
-          address: normalizedAddress,
-
-          // Name: prefer subgraph (it’s in Lottery entity); if history fetch didn’t include it, keep generic.
-          // If you want name always, add it to the history query (cheap) rather than RPC.
-          name: "Lottery",
-
-          status: finalStatus,
-
-          // On-chain truth:
-          sold: String(sold),
-
-          // From subgraph (if available). If missing, show 0 and warn.
-          ticketRevenue: history ? "0" : "0",
-
-          ticketPrice: history ? "0" : "0",
-          winningPot: history ? "0" : "0",
-
-          minTickets: history ? "0" : "0",
-          maxTickets: history ? "0" : "0",
-          deadline: history?.deployedAt ? String(history.deployedAt) : history?.registeredAt ? String(history.registeredAt) : "0",
-
-          // legacy best-effort (we no longer read it on-chain)
-          paused: false,
-
-          minPurchaseAmount: history ? "0" : "0",
-
-          entropy: history ? "0x" : ZERO,
-          entropyProvider: history ? "0x" : ZERO,
-          entropyRequestId: history?.entropyRequestId != null ? String(history.entropyRequestId) : "0",
-          selectedProvider: history?.selectedProvider != null ? String(history.selectedProvider) : ZERO,
-          callbackGasLimit: history ? "0" : "0",
-
-          usdcToken: history ? "0x" : ZERO,
-          creator: "0x",
-
-          feeRecipient: history ? "0x" : ZERO,
-          protocolFeePercent: history ? "0" : "0",
-
-          // On-chain truth:
-          winner: String(winner),
-          winningTicketIndex: String(winningTicketIndex),
-
-          history: history ?? undefined,
-        };
-
-        // If we got history, merge in the actual Lottery entity fields you already store
-        // (ticketPrice, winningPot, etc.) by fetching a richer object.
-        //
-        // Instead of expanding this hook with another query, the simplest move is:
-        // - keep history query light (as you have)
-        // - but ALSO query the Lottery core fields once from subgraph here
-        //   (still 1 request, far cheaper than 15+ RPC calls).
-        //
-        // We'll do that by reusing the same endpoint, but keeping it optional and fast.
-        // (If you prefer, I can switch it to import fetchLotteryById from indexer/subgraph.ts.)
-        const url = mustEnv("VITE_SUBGRAPH_URL");
-        const detailsQuery = `
-          query LotteryCore($id: Bytes!) {
-            lottery(id: $id) {
-              id
-              name
-              creator
-              usdcToken
-              feeRecipient
-              protocolFeePercent
-              entropy
-              entropyProvider
-              callbackGasLimit
-              minPurchaseAmount
-              ticketPrice
-              winningPot
-              minTickets
-              maxTickets
-              deadline
-              ticketRevenue
-              status
-            }
-          }
-        `;
-
-        const core = await withTimeout(
-          fetch(url, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ query: detailsQuery, variables: { id: cacheKey } }),
-            signal: ac.signal,
-          })
-            .then((r) => (r.ok ? r.json() : null))
-            .then((j) => (j?.data?.lottery ? j.data.lottery : null))
-            .catch(() => null),
-          2500,
+            method:
+              "function getSummary() view returns (uint8,string,uint64,uint64,uint256,uint256,uint256,uint64,uint64,uint32,uint256,address,uint64,uint64,address,bool,bool)",
+            params: [],
+          }).catch(() => null),
+          4000,
           null
         );
 
+        // Parse summary defensively
+        const s = Array.isArray(summary) ? summary : null;
+
+        const onchainStatus = s ? statusFromUint8(Number(s[0])) : "UNKNOWN";
+        const onchainName = s ? String(s[1] ?? "Lottery") : "Lottery";
+        const onchainDeadline = s ? String(s[3] ?? "0") : "0";
+        const onchainTicketPrice = s ? String(s[4] ?? "0") : "0";
+        const onchainWinningPot = s ? String(s[5] ?? "0") : "0";
+        const onchainTicketRevenue = s ? String(s[6] ?? "0") : "0";
+        const onchainMinTickets = s ? String(s[7] ?? "0") : "0";
+        const onchainMaxTickets = s ? String(s[8] ?? "0") : "0";
+        const onchainMinPurchaseAmount = s ? String(s[9] ?? "0") : "0";
+        const onchainSold = s ? String(s[10] ?? "0") : "0";
+        const onchainWinner = s ? normHex(s[11] ?? ZERO) : ZERO;
+        const onchainEntropyRequestId = s ? String(s[12] ?? "0") : "0";
+        const onchainDrawingRequestedAt = s ? String(s[13] ?? "0") : "0";
+        const onchainSelectedProvider = s ? normHex(s[14] ?? ZERO) : ZERO;
+        const onchainIsFinalizable = s ? Boolean(s[15]) : false;
+        const onchainIsHatchOpen = s ? Boolean(s[16]) : false;
+
         if (!alive || runId !== runIdRef.current) return;
 
-        if (core) {
+        // Build initial view using on-chain summary (truth) + placeholders for config
+        const base: LotteryDetails = {
+          address: normalizedAddress,
+
+          name: onchainName,
+          status: onchainStatus,
+
+          sold: onchainSold,
+          ticketRevenue: onchainTicketRevenue,
+
+          ticketPrice: onchainTicketPrice,
+          winningPot: onchainWinningPot,
+
+          minTickets: onchainMinTickets,
+          maxTickets: onchainMaxTickets,
+          deadline: onchainDeadline,
+
+          paused: false, // contract has no paused()
+
+          minPurchaseAmount: onchainMinPurchaseAmount,
+
+          entropyRequestId: onchainEntropyRequestId,
+          drawingRequestedAt: onchainDrawingRequestedAt,
+          selectedProvider: onchainSelectedProvider,
+          winner: onchainWinner,
+
+          isFinalizable: onchainIsFinalizable,
+          isHatchOpen: onchainIsHatchOpen,
+
+          // config comes from subgraph (immutables on-chain, but not worth extra RPC here)
+          usdcToken: ZERO,
+          creator: ZERO,
+          feeRecipient: ZERO,
+          protocolFeePercent: "0",
+          entropy: ZERO,
+          entropyProvider: ZERO,
+          callbackGasLimit: "0",
+
+          // NOT a contract getter; take from subgraph event
+          winningTicketIndex: "0",
+
+          history: undefined,
+        };
+
+        // Set immediately so UI is responsive even if subgraph lags
+        setData(base);
+
+        // Merge subgraph if/when available
+        const bundle = await subgraphP;
+        if (!alive || runId !== runIdRef.current) return;
+
+        if (bundle?.core) {
+          const subStatus = statusFromSubgraph(bundle.core.status);
+          const finalStatus: LotteryStatus =
+            subStatus === "CANCELED" || subStatus === "COMPLETED" || subStatus === "DRAWING"
+              ? subStatus
+              : onchainStatus;
+
           const merged: LotteryDetails = {
-            ...d,
-            name: String(core.name ?? d.name),
-            creator: String(core.creator ?? d.creator),
-            usdcToken: String(core.usdcToken ?? d.usdcToken),
-            feeRecipient: String(core.feeRecipient ?? d.feeRecipient),
-            protocolFeePercent: String(core.protocolFeePercent ?? d.protocolFeePercent),
+            ...base,
 
-            entropy: String(core.entropy ?? d.entropy),
-            entropyProvider: String(core.entropyProvider ?? d.entropyProvider),
-            callbackGasLimit: String(core.callbackGasLimit ?? d.callbackGasLimit),
-            minPurchaseAmount: String(core.minPurchaseAmount ?? d.minPurchaseAmount),
+            // Prefer subgraph name if present (but keep on-chain if not)
+            name: bundle.core.name ? String(bundle.core.name) : base.name,
 
-            ticketPrice: String(core.ticketPrice ?? d.ticketPrice),
-            winningPot: String(core.winningPot ?? d.winningPot),
-            minTickets: String(core.minTickets ?? d.minTickets),
-            maxTickets: String(core.maxTickets ?? d.maxTickets),
-            deadline: String(core.deadline ?? d.deadline),
-            ticketRevenue: String(core.ticketRevenue ?? d.ticketRevenue),
+            // Prefer subgraph config (immutables)
+            creator: bundle.core.creator ? normHex(bundle.core.creator) : base.creator,
+            usdcToken: bundle.core.usdcToken ? normHex(bundle.core.usdcToken) : base.usdcToken,
+            feeRecipient: bundle.core.feeRecipient ? normHex(bundle.core.feeRecipient) : base.feeRecipient,
+            protocolFeePercent: bundle.core.protocolFeePercent != null ? String(bundle.core.protocolFeePercent) : base.protocolFeePercent,
+            entropy: bundle.core.entropy ? normHex(bundle.core.entropy) : base.entropy,
+            entropyProvider: bundle.core.entropyProvider ? normHex(bundle.core.entropyProvider) : base.entropyProvider,
+            callbackGasLimit: bundle.core.callbackGasLimit != null ? String(bundle.core.callbackGasLimit) : base.callbackGasLimit,
 
-            // keep on-chain overrides for fields we trust from RPC:
+            // Prefer subgraph for these if you want “what the indexer thinks”, but keep on-chain truth for actions:
+            // - keep sold/winner/status from chain
+            ticketPrice: bundle.core.ticketPrice != null ? String(bundle.core.ticketPrice) : base.ticketPrice,
+            winningPot: bundle.core.winningPot != null ? String(bundle.core.winningPot) : base.winningPot,
+            minTickets: bundle.core.minTickets != null ? String(bundle.core.minTickets) : base.minTickets,
+            maxTickets: bundle.core.maxTickets != null ? String(bundle.core.maxTickets) : base.maxTickets,
+            deadline: bundle.core.deadline != null ? String(bundle.core.deadline) : base.deadline,
+            ticketRevenue: bundle.core.ticketRevenue != null ? String(bundle.core.ticketRevenue) : base.ticketRevenue,
+
+            // Final status: allow subgraph to “win” only for terminal/drawing states
             status: finalStatus,
-            sold: String(sold),
-            winner: String(winner),
-            winningTicketIndex: String(winningTicketIndex),
+
+            // event-derived
+            winningTicketIndex: bundle.latestWinnerPicked?.winningTicketIndex ?? base.winningTicketIndex,
+
+            history: bundle.history ?? undefined,
           };
 
           setData(merged);
@@ -481,10 +478,9 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
           return;
         }
 
-        // If subgraph core not available, show the minimal on-chain view and warn.
-        setData(d);
-        detailsCache.set(cacheKey, { ts: Date.now(), data: d });
-        setNote("Showing minimal on-chain data. Indexer details are still syncing or unavailable.");
+        // If subgraph unavailable, keep the on-chain view but warn
+        detailsCache.set(cacheKey, { ts: Date.now(), data: base });
+        setNote("Showing on-chain summary only. Indexer details are still syncing or unavailable.");
       } catch {
         if (!alive || runId !== runIdRef.current) return;
         setData(null);
