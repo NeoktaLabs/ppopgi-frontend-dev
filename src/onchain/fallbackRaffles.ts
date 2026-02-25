@@ -3,7 +3,7 @@ import { Contract, JsonRpcProvider, ZeroAddress } from "ethers";
 import { ADDRESSES } from "../config/contracts";
 import LotteryRegistryAbi from "../config/abis/LotteryRegistry.json";
 import LotterySingleWinnerAbi from "../config/abis/LotterySingleWinnerV2.json";
-import type { RaffleListItem, RaffleStatus } from "../indexer/subgraph";
+import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
 function mustEnv(name: string): string {
   const v = (import.meta as any).env?.[name];
@@ -11,7 +11,7 @@ function mustEnv(name: string): string {
   return v;
 }
 
-function statusFromUint8(x: number): RaffleStatus {
+function statusFromUint8(x: number): LotteryStatus {
   if (x === 0) return "FUNDING_PENDING";
   if (x === 1) return "OPEN";
   if (x === 2) return "DRAWING";
@@ -30,7 +30,7 @@ async function safeCall<T>(p: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleListItem[]> {
+export async function fetchLotteriesOnChainFallback(limit = 120): Promise<LotteryListItem[]> {
   const rpcUrl = mustEnv("VITE_ETHERLINK_RPC_URL");
 
   const rpc = new JsonRpcProvider(rpcUrl);
@@ -40,8 +40,8 @@ export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleLi
     reg.getAllLotteriesCount(),
     rpc.getBlockNumber(),
   ]);
-  const count = Number(countBn);
 
+  const count = Number(countBn);
   const pageSize = 25;
   const maxToLoad = Math.min(limit, count);
 
@@ -51,7 +51,7 @@ export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleLi
 
   for (let i = start; i < count; i += pageSize) {
     const page = await reg.getAllLotteries(i, Math.min(pageSize, count - i));
-    for (const a of page as string[]) addrs.push(a);
+    for (const a of page as string[]) addrs.push(String(a));
   }
 
   // show newest first
@@ -60,12 +60,11 @@ export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleLi
   const nowSec = String(Math.floor(Date.now() / 1000));
   const nowBlock = String(latestBlock);
 
-  const out: RaffleListItem[] = [];
+  const out: LotteryListItem[] = [];
 
   for (const addr of addrs) {
-    const raffle = new Contract(addr, LotterySingleWinnerAbi, rpc);
+    const lottery = new Contract(addr, LotterySingleWinnerAbi, rpc);
 
-    // Best-effort reads (fallbacks are safe)
     const [
       name,
       statusU8,
@@ -80,16 +79,18 @@ export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleLi
       deployer,
       creator,
 
-      usdc,
+      // token / entropy fields (best effort)
+      usdcToken,
       entropy,
       entropyProvider,
       callbackGasLimit,
       minPurchaseAmount,
 
+      // accounting / state
       ticketRevenue,
       paused,
 
-      // optional lifecycle fields (may exist, but we won't rely)
+      // optional lifecycle fields (may or may not exist on ABI)
       winner,
       selectedProvider,
       finalizedAt,
@@ -100,87 +101,93 @@ export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleLi
       finalizeRequestId,
       winningTicketIndex,
     ] = await Promise.all([
-      safeCall(raffle.name(), ""),
-      safeCall(raffle.status(), 0),
-      safeCall(raffle.winningPot(), 0n as any),
-      safeCall(raffle.ticketPrice(), 0n as any),
-      safeCall(raffle.deadline(), 0n as any),
-      safeCall(raffle.getSold(), 0n as any),
+      safeCall(lottery.name(), ""),
+      safeCall(lottery.status(), 0),
 
-      safeCall(raffle.minTickets(), 0n as any),
-      safeCall(raffle.maxTickets(), 0n as any),
+      safeCall(lottery.winningPot(), 0n as any),
+      safeCall(lottery.ticketPrice(), 0n as any),
+      safeCall(lottery.deadline(), 0n as any),
+      safeCall(lottery.getSold?.(), 0n as any),
 
-      safeCall(raffle.protocolFeePercent(), 0n as any),
-      safeCall(raffle.feeRecipient(), ZeroAddress),
-      safeCall(raffle.deployer(), ZeroAddress),
-      safeCall(raffle.creator(), ZeroAddress),
+      safeCall(lottery.minTickets?.(), 0n as any),
+      safeCall(lottery.maxTickets?.(), 0n as any),
 
-      safeCall(raffle.usdcToken?.(), ZeroAddress),
-      safeCall(raffle.entropy?.(), ZeroAddress),
-      safeCall(raffle.entropyProvider?.(), ZeroAddress),
-      safeCall(raffle.callbackGasLimit?.(), 0),
-      safeCall(raffle.minPurchaseAmount?.(), 0),
+      safeCall(lottery.protocolFeePercent?.(), 0n as any),
+      safeCall(lottery.feeRecipient?.(), ZeroAddress),
+      safeCall(lottery.deployer?.(), ZeroAddress),
+      safeCall(lottery.creator?.(), ZeroAddress),
 
-      safeCall(raffle.ticketRevenue?.(), 0n as any),
-      safeCall(raffle.paused?.(), false),
+      // ✅ NEW: prefer usdcToken() (your new schema uses usdcToken)
+      safeCall(lottery.usdcToken?.(), ADDRESSES.USDC),
 
-      safeCall(raffle.winner?.(), null),
-      safeCall(raffle.entropyRequestId?.(), null),
-      safeCall(raffle.selectedProvider?.(), null),
-      safeCall(raffle.finalizedAt?.(), null),
-      safeCall(raffle.completedAt?.(), null),
-      safeCall(raffle.canceledAt?.(), null),
-      safeCall(raffle.canceledReason?.(), null),
-      safeCall(raffle.soldAtCancel?.(), null),
-      safeCall(raffle.finalizeRequestId?.(), null),
-      safeCall(raffle.winningTicketIndex?.(), null),
+      safeCall(lottery.entropy?.(), ZeroAddress),
+      safeCall(lottery.entropyProvider?.(), ZeroAddress),
+      safeCall(lottery.callbackGasLimit?.(), 0),
+      safeCall(lottery.minPurchaseAmount?.(), 0),
+
+      safeCall(lottery.ticketRevenue?.(), 0n as any),
+      safeCall(lottery.paused?.(), false),
+
+      safeCall(lottery.winner?.(), null),
+      safeCall(lottery.selectedProvider?.(), null),
+      safeCall(lottery.finalizedAt?.(), null),
+      safeCall(lottery.completedAt?.(), null),
+      safeCall(lottery.canceledAt?.(), null),
+      safeCall(lottery.canceledReason?.(), null),
+      safeCall(lottery.soldAtCancel?.(), null),
+      safeCall(lottery.finalizeRequestId?.(), null),
+      safeCall(lottery.winningTicketIndex?.(), null),
     ]);
 
+    // createdAt() is not guaranteed — keep it best-effort
+    const createdAtTimestamp = String(await safeCall(lottery.createdAt?.(), 0));
+
+    // ✅ Map to your NEW list item shape (and keep extra fields as optional)
     out.push({
-      id: addr,
-      name: String(name || ""), // if empty, your UI can label it "Unnamed"
+      id: addr.toLowerCase(),
+      name: String(name || ""),
+
       status: statusFromUint8(Number(statusU8)),
 
-      // canonical discovery (unknown in fallback)
-      deployer: String(deployer),
+      // “registry discovery” fields are unknown on fallback
+      deployer: String(deployer || ZeroAddress).toLowerCase(),
       registry: null,
-      typeId: null,
+      typeId: "1",
       registryIndex: null,
       isRegistered: false,
       registeredAt: null,
 
-      // creation metadata (best-effort)
-      creator: String(creator),
+      creator: String(creator || ZeroAddress).toLowerCase(),
       createdAtBlock: "0",
-      createdAtTimestamp: String(await safeCall(raffle.createdAt?.(), 0)),
+      createdAtTimestamp,
       creationTx: ZERO_TX,
 
-      // config / contracts
-      usdc: String(usdc),
-      entropy: String(entropy),
-      entropyProvider: String(entropyProvider),
-      feeRecipient: String(feeRecipient),
-      protocolFeePercent: protocolFeePercent.toString(),
-      callbackGasLimit: String(callbackGasLimit),
-      minPurchaseAmount: String(minPurchaseAmount),
+      // ✅ NEW FIELD NAME
+      usdcToken: String(usdcToken || ADDRESSES.USDC).toLowerCase(),
 
-      // economics
-      winningPot: winningPot.toString(),
-      ticketPrice: ticketPrice.toString(),
-      deadline: deadline.toString(),
-      minTickets: minTickets.toString(),
-      maxTickets: maxTickets.toString(),
+      entropy: String(entropy || ZeroAddress).toLowerCase(),
+      entropyProvider: String(entropyProvider || ZeroAddress).toLowerCase(),
 
-      // lifecycle / state
-      sold: sold.toString(),
-      ticketRevenue: ticketRevenue.toString(),
+      feeRecipient: String(feeRecipient || ZeroAddress).toLowerCase(),
+      protocolFeePercent: protocolFeePercent?.toString?.() ?? "0",
+      callbackGasLimit: String(callbackGasLimit ?? 0),
+      minPurchaseAmount: String(minPurchaseAmount ?? 0),
+
+      winningPot: winningPot?.toString?.() ?? "0",
+      ticketPrice: ticketPrice?.toString?.() ?? "0",
+      deadline: deadline?.toString?.() ?? "0",
+      minTickets: minTickets?.toString?.() ?? "0",
+      maxTickets: maxTickets?.toString?.() ?? "0",
+
+      sold: sold?.toString?.() ?? "0",
+      ticketRevenue: ticketRevenue?.toString?.() ?? "0",
       paused: Boolean(paused),
 
       finalizeRequestId: finalizeRequestId ? String(finalizeRequestId) : null,
       finalizedAt: finalizedAt ? String(finalizedAt) : null,
       selectedProvider: selectedProvider ? String(selectedProvider) : null,
 
-      winner: winner ? String(winner) : null,
+      winner: winner ? String(winner).toLowerCase() : null,
       winningTicketIndex: winningTicketIndex ? String(winningTicketIndex) : null,
       completedAt: completedAt ? String(completedAt) : null,
 
@@ -188,10 +195,9 @@ export async function fetchRafflesOnChainFallback(limit = 120): Promise<RaffleLi
       canceledAt: canceledAt ? String(canceledAt) : null,
       soldAtCancel: soldAtCancel ? String(soldAtCancel) : null,
 
-      // indexing metadata (synthetic)
       lastUpdatedBlock: nowBlock,
       lastUpdatedTimestamp: nowSec,
-    });
+    } as LotteryListItem);
   }
 
   return out;
