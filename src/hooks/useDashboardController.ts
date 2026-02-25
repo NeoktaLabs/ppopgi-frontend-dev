@@ -10,7 +10,6 @@ import {
   fetchLotteriesByFeeRecipient,
   type LotteryListItem,
   type UserLotteryItem,
-  type LotteryStatus,
 } from "../indexer/subgraph";
 import { useLotteryStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 
@@ -595,7 +594,17 @@ export function useDashboardController() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [account, allLotteries, store.items, created.length, joined.length, claimables.length, txPending, getUserLotteries, getFeeRecipientLotteries]
+    [
+      account,
+      allLotteries,
+      store.items,
+      created.length,
+      joined.length,
+      claimables.length,
+      txPending,
+      getUserLotteries,
+      getFeeRecipientLotteries,
+    ]
   );
 
   useEffect(() => {
