@@ -67,7 +67,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
             </div>
 
             <div className="sp-data-box">
-              <div className="sp-lbl">Raffle address</div>
+              <div className="sp-lbl">Lottery address</div>
               <ExplorerLink addr={raffle.address} label={short(raffle.address)} />
             </div>
 
@@ -93,7 +93,7 @@ export function SafetyProofModal({ open, onClose, raffle }: Props) {
               <div className="sp-step">
                 <div className="sp-step-num">1</div>
                 <div>
-                  <div className="sp-step-title">Raffle requests randomness</div>
+                  <div className="sp-step-title">Lottery requests randomness</div>
                   <div className="sp-step-text">
                     Once ticket sales end, the raffle smart contract sends a randomness request to the entropy network.
                   </div>

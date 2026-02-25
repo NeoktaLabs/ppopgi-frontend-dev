@@ -1,7 +1,7 @@
 // src/components/LotteryCard.tsx
 import React, { useMemo } from "react";
 import type { LotteryListItem } from "../indexer/subgraph"; // ✅ updated type
-import { useRaffleCard } from "../hooks/useLotteryCard";
+import { useLotteryCard } from "../hooks/useLotteryCard";
 import "./LotteryCard.css";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
@@ -54,7 +54,7 @@ function fmtMinSec(sec: number): string {
   return `${m}m ${r}s`;
 }
 
-export function RaffleCard({
+export function LotteryCard({
   raffle,
   onOpen,
   onOpenSafety,
@@ -64,7 +64,7 @@ export function RaffleCard({
   userEntry,
   finalizer,
 }: Props) {
-  const { ui, actions } = useRaffleCard(raffle, nowMs);
+  const { ui, actions } = useLotteryCard(raffle, nowMs);
 
   const statusRaw = String((raffle as any).status || "");
   const isOpenStatus = statusRaw === "OPEN";

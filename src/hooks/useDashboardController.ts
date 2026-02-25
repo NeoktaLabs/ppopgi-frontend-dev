@@ -12,7 +12,7 @@ import {
   type UserLotteryItem,
   type LotteryStatus,
 } from "../indexer/subgraph";
-import { useRaffleStore, refresh as refreshLotteryStore } from "./useLotteryStore";
+import { useLotteryStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 
 // -------------------- Lottery dashboard ABI --------------------
 // Matches your SingleWinnerLottery ABI (no native claimables; unified claim()).
@@ -217,7 +217,7 @@ export function useDashboardController() {
   const { mutateAsync: sendAndConfirm } = useSendAndConfirmTransaction();
 
   // NOTE: keeping your existing store hook name; it should now be backed by LotteryListItem.
-  const store = useRaffleStore("dashboard", 15_000);
+  const store = useLotteryStore("dashboard", 15_000);
   const allLotteries = useMemo(() => (store.items ?? []) as LotteryListItem[], [store.items]);
 
   const [created, setCreated] = useState<LotteryListItem[]>([]);

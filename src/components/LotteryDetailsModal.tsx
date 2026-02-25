@@ -1,13 +1,13 @@
 // src/components/LotteryDetailsModal.tsx
 import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { useRaffleInteraction } from "../hooks/useRaffleInteraction";
-import { useRaffleParticipants } from "../hooks/useRaffleParticipants";
+import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
+import { useLotteryParticipants } from "../hooks/useLotteryParticipants";
 
 // ✅ Updated type + fetch name (new “Lottery” model)
 import { fetchLotteryMetadata, type LotteryListItem } from "../indexer/subgraph";
 
-import "./RaffleDetailsModal.css";
+import "./LotteryDetailsModal.css";
 
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
   if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{label || "—"}</span>;
@@ -40,7 +40,7 @@ const formatDate = (ts: any) => {
   });
 };
 
-type RaffleEventRow = {
+type LotteryEventRow = {
   type: string;
   blockTimestamp: string;
   txHash: string;
@@ -61,10 +61,10 @@ function mustEnv(name: string): string {
 
 // NOTE: Keeping the existing entity/event names in GraphQL.
 // If your subgraph renamed raffleEvents -> lotteryEvents, update the query accordingly.
-async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
+async function fetchLotteryEvents(raffleId: string): Promise<LotteryEventRow[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
   const query = `
-    query RaffleJourney($id: Bytes!, $first: Int!) {
+    query LotteryJourney($id: Bytes!, $first: Int!) {
       raffleEvents(
         first: $first
         orderBy: blockTimestamp
@@ -94,7 +94,7 @@ async function fetchRaffleEvents(raffleId: string): Promise<RaffleEventRow[]> {
 
     const json = await res.json();
     if (!res.ok || json?.errors?.length) return [];
-    return (json.data?.raffleEvents ?? []) as RaffleEventRow[];
+    return (json.data?.raffleEvents ?? []) as LotteryEventRow[];
   } catch {
     return [];
   }
@@ -109,7 +109,7 @@ type Props = {
   onClose: () => void;
 
   // ✅ Updated type
-  initialRaffle?: LotteryListItem | null;
+  initialLottery?: LotteryListItem | null;
 };
 
 function clampPct(p: number) {
@@ -141,8 +141,8 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
-export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: Props) {
-  const { state, math, flags, actions } = useRaffleInteraction(raffleId, open);
+export function LotteryDetailsModal({ open, raffleId, onClose, initialLottery }: Props) {
+  const { state, math, flags, actions } = useLotteryInteraction(raffleId, open);
   const account = useActiveAccount();
 
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
@@ -150,7 +150,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
   // ✅ Updated type
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
 
-  const [events, setEvents] = useState<RaffleEventRow[] | null>(null);
+  const [events, setEvents] = useState<LotteryEventRow[] | null>(null);
 
   useEffect(() => {
     if (!raffleId || !open) {
@@ -161,18 +161,18 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     }
 
     // Keep this optimization if your list item includes it; otherwise it’s harmless.
-    if ((initialRaffle as any)?.createdAtTimestamp) setMetadata(initialRaffle as any);
+    if ((initialLottery as any)?.createdAtTimestamp) setMetadata(initialLottery as any);
 
     let active = true;
 
-    if (!(initialRaffle as any)?.createdAtTimestamp) {
+    if (!(initialLottery as any)?.createdAtTimestamp) {
       // ✅ NEW: fetchLotteryMetadata
       fetchLotteryMetadata(raffleId).then((data) => {
         if (active && data) setMetadata(data as any);
       });
     }
 
-    fetchRaffleEvents(raffleId).then((rows) => {
+    fetchLotteryEvents(raffleId).then((rows) => {
       if (!active) return;
       setEvents(rows);
     });
@@ -180,12 +180,12 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
     return () => {
       active = false;
     };
-  }, [raffleId, open, initialRaffle]);
+  }, [raffleId, open, initialLottery]);
 
-  const displayData = (state.data || initialRaffle || metadata) as any;
+  const displayData = (state.data || initialLottery || metadata) as any;
 
   const soldForPct = Number(displayData?.sold || 0);
-  const { participants, isLoading: loadingPart } = useRaffleParticipants(raffleId, soldForPct);
+  const { participants, isLoading: loadingPart } = useLotteryParticipants(raffleId, soldForPct);
 
   const timeline = useMemo(() => {
     if (!displayData) return [];
@@ -435,7 +435,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           <div className="rdm-buy-section">
             {!flags.raffleIsOpen ? (
               <div className="rdm-closed-msg">
-                {state.displayStatus === "Finalizing" ? "Raffle is finalizing..." : "Raffle Closed"}
+                {state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}
               </div>
             ) : isCreator ? (
               <div className="rdm-buy-disabled">Creator cannot participate.</div>
@@ -508,7 +508,7 @@ export function RaffleDetailsModal({ open, raffleId, onClose, initialRaffle }: P
           </div>
 
           <div className="rdm-dist-section">
-            <div className="rdm-dist-header">Raffle Specs</div>
+            <div className="rdm-dist-header">Lottery Specs</div>
             <div className="rdm-dist-note">{expectedOutcome}</div>
 
             <div className="rdm-specs-grid">

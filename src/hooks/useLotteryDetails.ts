@@ -238,7 +238,7 @@ async function fetchLotteryHistoryFromSubgraph(
   };
 }
 
-export function useRaffleDetails(lotteryAddress: string | null, open: boolean) {
+export function useLotteryDetails(lotteryAddress: string | null, open: boolean) {
   const [data, setData] = useState<LotteryDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState<string | null>(null);

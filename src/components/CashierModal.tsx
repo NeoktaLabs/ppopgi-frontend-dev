@@ -102,7 +102,7 @@ export function CashierModal({ open, onClose }: Props) {
                   <div className="cm-asset-amount">{display.usdc}</div>
                   <div className="cm-asset-name">USDC</div>
                 </div>
-                <div className="cm-asset-tag">Raffle Funds</div>
+                <div className="cm-asset-tag">Lottery Funds</div>
               </div>
 
               <div className="cm-asset-card secondary">

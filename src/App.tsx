@@ -45,16 +45,16 @@ export default function App() {
 
   // 3) Routing
   const [page, setPage] = useState<Page>("home");
-  const { selectedRaffleId, openRaffle, closeRaffle } = useAppRouting(); // keep name for URL param compatibility
+  const { selectedLotteryId, openLottery, closeLottery } = useAppRouting(); // keep name for URL param compatibility
 
   // ✅ store (same items used by cards)
   const store = useLotteryStore("app-modal", 20_000);
 
   const selectedFromStore = useMemo(() => {
-    const id = (selectedRaffleId || "").toLowerCase();
+    const id = (selectedLotteryId || "").toLowerCase();
     if (!id) return null;
     return (store.items || []).find((r: any) => String(r.id || "").toLowerCase() === id) ?? null;
-  }, [store.items, selectedRaffleId]);
+  }, [store.items, selectedLotteryId]);
 
   // 4) Modal states
   const [signInOpen, setSignInOpen] = useState(false);
@@ -126,7 +126,7 @@ export default function App() {
   const [safetyId, setSafetyId] = useState<string | null>(null);
 
   const handleOpenSafety = (id: string) => {
-    closeRaffle();
+    closeLottery();
     setSafetyId(id);
   };
 
@@ -148,12 +148,12 @@ export default function App() {
         onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))}
         onSignOut={handleSignOut}
       >
-        {page === "home" && <HomePage nowMs={nowMs} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
+        {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
-        {page === "explore" && <ExplorePage onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />}
+        {page === "explore" && <ExplorePage onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
         {page === "dashboard" && (
-          <DashboardPage account={account} onOpenRaffle={openRaffle} onOpenSafety={handleOpenSafety} />
+          <DashboardPage account={account} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />
         )}
 
         {page === "about" && <AboutPage />}
@@ -167,10 +167,10 @@ export default function App() {
         <CashierModal open={cashierOpen} onClose={() => setCashierOpen(false)} />
 
         <LotteryDetailsModal
-          open={!!selectedRaffleId}
-          raffleId={selectedRaffleId} // keep prop name if your modal still expects raffleId
-          onClose={closeRaffle}
-          initialRaffle={selectedFromStore as any}
+          open={!!selectedLotteryId}
+          raffleId={selectedLotteryId} // keep prop name if your modal still expects raffleId
+          onClose={closeLottery}
+          initialLottery={selectedFromStore as any}
         />
 
         {safetyId && safetyData && (

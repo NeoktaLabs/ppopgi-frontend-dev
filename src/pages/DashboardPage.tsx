@@ -1,8 +1,8 @@
 // src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { formatUnits } from "ethers";
-import { RaffleCard } from "../components/LotteryCard";
-import { RaffleCardSkeleton } from "../components/LotteryCardSkeleton";
+import { LotteryCard } from "../components/LotteryCard";
+import { LotteryCardSkeleton } from "../components/LotteryCardSkeleton";
 import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 
@@ -18,7 +18,7 @@ const fmt = (v: string, dec = 18) => {
 
 type Props = {
   account: string | null;
-  onOpenRaffle: (id: string) => void; // can rename later to onOpenLottery
+  onOpenLottery: (id: string) => void; // can rename later to onOpenLottery
   onOpenSafety: (id: string) => void;
   onBrowse?: () => void;
 };
@@ -140,18 +140,18 @@ function MultiplierBadge({ count }: { count: number }) {
   );
 }
 
-function RaffleCardPile({
+function LotteryCardPile({
   raffle,
   ticketCount,
   isWinner,
-  onOpenRaffle,
+  onOpenLottery,
   onOpenSafety,
   nowMs,
 }: {
   raffle: any;
   ticketCount: number;
   isWinner: boolean;
-  onOpenRaffle: (id: string) => void;
+  onOpenLottery: (id: string) => void;
   onOpenSafety: (id: string) => void;
   nowMs: number;
 }) {
@@ -183,7 +183,7 @@ function RaffleCardPile({
           <div className="db-card-shadow db-card-shadow-4" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -192,7 +192,7 @@ function RaffleCardPile({
           <div className="db-card-shadow db-card-shadow-3" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -201,7 +201,7 @@ function RaffleCardPile({
           <div className="db-card-shadow db-card-shadow-2" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -210,7 +210,7 @@ function RaffleCardPile({
           <div className="db-card-shadow db-card-shadow-1" aria-hidden="true">
             <div className="db-card-shadow-inner">
               <div className="db-card-shadow-card">
-                <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+                <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
               </div>
             </div>
           </div>
@@ -218,7 +218,7 @@ function RaffleCardPile({
 
         <div className="db-card-front">
           <div className="db-card-front-card">
-            <RaffleCard raffle={raffleForCard} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} />
+            <LotteryCard raffle={raffleForCard} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} />
           </div>
         </div>
       </div>
@@ -226,7 +226,7 @@ function RaffleCardPile({
   );
 }
 
-export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety, onBrowse }: Props) {
+export function DashboardPage({ account: accountProp, onOpenLottery, onOpenSafety, onBrowse }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Dashboard";
   }, []);
@@ -300,7 +300,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
     return active;
   }, [data.created]);
 
-  const ongoingRaffles = useMemo(() => {
+  const ongoingLotteries = useMemo(() => {
     const byId = new Map<string, any>();
     for (const r of activeJoined) byId.set(String(r.id), r);
     for (const r of activeCreated) {
@@ -319,15 +319,15 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
   }, [data.msg]);
 
   const hasClaims = (data.claimables?.length ?? 0) > 0;
-  const showColdSkeletons = data.isColdLoading && ongoingRaffles.length === 0;
+  const showColdSkeletons = data.isColdLoading && ongoingLotteries.length === 0;
 
   const [purchasedByLottery, setPurchasedByLottery] = useState<Map<string, number>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
 
   const relevantLotteryIdsForPurchased = useMemo(() => {
-    const ids = [...ongoingRaffles.map((r: any) => String(r.id)), ...pastJoined.map((r: any) => String(r.id))];
+    const ids = [...ongoingLotteries.map((r: any) => String(r.id)), ...pastJoined.map((r: any) => String(r.id))];
     return Array.from(new Set(ids.map((x) => normId(x))));
-  }, [ongoingRaffles, pastJoined]);
+  }, [ongoingLotteries, pastJoined]);
 
   const loadPurchased = useCallback(async () => {
     if (!account) {
@@ -375,7 +375,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
         <div className="db-hero-stats">
           <div className="db-stat">
-            <div className="db-stat-num">{ongoingRaffles.length}</div>
+            <div className="db-stat-num">{ongoingLotteries.length}</div>
             <div className="db-stat-lbl">Live</div>
           </div>
           <div className="db-stat">
@@ -463,7 +463,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className="db-claim-wrapper">
-                  <RaffleCard raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+                  <LotteryCard raffle={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
 
                   <div className="db-claim-cut-line" />
 
@@ -519,7 +519,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
       {/* ---------------- My Lotteries ---------------- */}
       <div className="db-section-header">
-        <div className="db-section-title">My Raffles</div>
+        <div className="db-section-title">My Lotteries</div>
         <div className="db-section-line" />
       </div>
 
@@ -528,7 +528,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <button className={`db-tab ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")}>
             <span className="db-tab-live">
               <span className="db-live-dot" aria-hidden="true" />
-              Live <span className="db-tab-count">({ongoingRaffles.length})</span>
+              Live <span className="db-tab-count">({ongoingLotteries.length})</span>
             </span>
           </button>
 
@@ -547,35 +547,35 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
           <div className="db-grid">
             {showColdSkeletons && (
               <>
-                <RaffleCardSkeleton />
-                <RaffleCardSkeleton />
+                <LotteryCardSkeleton />
+                <LotteryCardSkeleton />
               </>
             )}
 
-            {!data.isColdLoading && ongoingRaffles.length === 0 && (
+            {!data.isColdLoading && ongoingLotteries.length === 0 && (
               <div className="db-empty">
                 <div className="db-empty-icon">🎟️</div>
                 <div>You have no on-going raffles.</div>
                 {onBrowse && (
                   <button className="db-btn-browse" onClick={onBrowse}>
-                    Browse Raffles
+                    Browse Lotteries
                   </button>
                 )}
               </div>
             )}
 
-            {ongoingRaffles.map((r: any) => {
+            {ongoingLotteries.map((r: any) => {
               const ownedNow = Number(r.userEntry?.count ?? 0);
               const purchasedEver = getPurchasedEver(r.id);
               const ticketCount = ownedNow > 0 ? ownedNow : purchasedEver;
 
               return (
-                <RaffleCardPile
+                <LotteryCardPile
                   key={r.id}
                   raffle={r}
                   ticketCount={ticketCount}
                   isWinner={false}
-                  onOpenRaffle={onOpenRaffle}
+                  onOpenLottery={onOpenLottery}
                   onOpenSafety={onOpenSafety}
                   nowMs={nowS * 1000}
                 />
@@ -612,11 +612,11 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
 
               return (
                 <div key={r.id} className={`db-history-card-wrapper ${iLost ? "is-lost" : ""}`}>
-                  <RaffleCardPile
+                  <LotteryCardPile
                     raffle={r}
                     ticketCount={ticketCount || 1}
                     isWinner={!!iWon}
-                    onOpenRaffle={onOpenRaffle}
+                    onOpenLottery={onOpenLottery}
                     onOpenSafety={onOpenSafety}
                     nowMs={nowS * 1000}
                   />
@@ -644,7 +644,7 @@ export function DashboardPage({ account: accountProp, onOpenRaffle, onOpenSafety
             )}
 
             {(data.created ?? []).map((r: any) => (
-              <RaffleCard key={r.id} raffle={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
+              <LotteryCard key={r.id} raffle={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowS * 1000} />
             ))}
           </div>
         )}

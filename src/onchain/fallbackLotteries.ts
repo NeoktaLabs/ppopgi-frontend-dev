@@ -1,8 +1,8 @@
-// src/onchain/fallbackRaffles.ts
+// src/onchain/fallbackLotteries.ts
 import { Contract, JsonRpcProvider, ZeroAddress } from "ethers";
 import { ADDRESSES } from "../config/contracts";
 import LotteryRegistryAbi from "../config/abis/LotteryRegistry.json";
-import LotterySingleWinnerAbi from "../config/abis/LotterySingleWinnerV2.json";
+import SingleWinnerLotteryAbi from "../config/abis/SingleWinnerLottery.json";
 import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
 function mustEnv(name: string): string {
@@ -63,7 +63,7 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
   const out: LotteryListItem[] = [];
 
   for (const addr of addrs) {
-    const lottery = new Contract(addr, LotterySingleWinnerAbi, rpc);
+    const lottery = new Contract(addr, SingleWinnerLotteryAbi, rpc);
 
     const [
       name,

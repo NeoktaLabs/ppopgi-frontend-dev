@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LotteryListItem } from "../indexer/subgraph";
 import { fetchLotteriesOnChainFallback } from "../onchain/fallbackLotteries";
 
-import { useRaffleStore, refresh as refreshLotteryStore } from "./useLotteryStore";
+import { useLotteryStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 import { useRevalidate } from "./useRevalidateTick";
 
 type Mode = "indexer" | "live";
@@ -42,9 +42,9 @@ function shouldFallback(note: string | null) {
   );
 }
 
-export function useHomeRaffles() {
+export function useHomeLotteries() {
   // ✅ Shared store snapshot (indexer)
-  const store = useRaffleStore("home", 20_000);
+  const store = useLotteryStore("home", 20_000);
 
   // ✅ Revalidate tick (event-based refresh)
   const rvTick = useRevalidate();

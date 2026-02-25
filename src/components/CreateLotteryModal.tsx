@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { useActiveAccount } from "thirdweb/react";
 import { ADDRESSES } from "../config/contracts";
-import { RaffleCard } from "./LotteryCard";
+import { LotteryCard } from "./LotteryCard";
 import { useCreateLotteryForm } from "../hooks/useCreateLotteryForm";
 import { useConfetti } from "../hooks/useConfetti";
 import "./CreateLotteryModal.css";
@@ -55,7 +55,7 @@ function secondsToBestUnitValue(seconds: number, unit: DurUnit): { value: number
   return { value: v, unit };
 }
 
-export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
+export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
   const { fireConfetti } = useConfetti();
   const account = useActiveAccount();
   const isConnected = !!account?.address;
@@ -211,11 +211,11 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
     } catch {}
   };
 
-  // ✅ preview object must match what RaffleCard expects (LotteryListItem-ish)
-  const previewRaffle = useMemo(
+  // ✅ preview object must match what LotteryCard expects (LotteryListItem-ish)
+  const previewLottery = useMemo(
     () => ({
       id: "0xpreview",
-      name: form.name || "Your Raffle Name",
+      name: form.name || "Your Lottery Name",
       status: "OPEN",
       winningPot: String(derived.winningPotU),
       ticketPrice: String(derived.ticketPriceU),
@@ -257,7 +257,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
         {step === "success" ? (
           <div className="crm-success-view">
             <div className="crm-success-icon">✓</div>
-            <div className="crm-success-title">Raffle Created!</div>
+            <div className="crm-success-title">Lottery Created!</div>
             <div className="crm-success-sub">
               Your contract is live. Share the link below to start selling tickets.
               <br />
@@ -309,7 +309,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
               </div>
 
               <div className="crm-input-group">
-                <label>Raffle Name</label>
+                <label>Lottery Name</label>
                 <input
                   className={fieldClass(invalidName)}
                   value={form.name}
@@ -468,7 +468,7 @@ export function CreateRaffleModal({ open, onClose, onCreated }: Props) {
               <div className="crm-preview-label">Live Preview</div>
               <div className="crm-levitate-wrapper">
                 {/* @ts-ignore */}
-                <RaffleCard raffle={previewRaffle} onOpen={() => {}} />
+                <LotteryCard raffle={previewLottery} onOpen={() => {}} />
               </div>
               <div className="crm-preview-shadow" />
               <div className="crm-network-tip">Network: Etherlink Mainnet</div>

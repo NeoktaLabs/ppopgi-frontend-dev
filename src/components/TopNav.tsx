@@ -269,7 +269,7 @@ export const TopNav = memo(function TopNav({
           {account && <button onClick={() => handleNav(onOpenDashboard, "dashboard")}>👤 Dashboard</button>}
 
           <button className="highlight" onClick={() => handleNav(onOpenCreate)}>
-            ✨ Create Raffle
+            ✨ Create Lottery
           </button>
 
           <div className="mobile-divider" />

@@ -3,7 +3,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
-import { useRaffleStore, refresh as refreshRaffleStore } from "./useLotteryStore";
+import { useLotteryStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 
@@ -21,7 +21,7 @@ export function useExploreController() {
   const me = activeAccount?.address ? norm(activeAccount.address) : null;
 
   // ✅ Shared store subscription (single global poller)
-  const store = useRaffleStore("explore", 20_000);
+  const store = useLotteryStore("explore", 20_000);
   const items: LotteryListItem[] | null = useMemo(() => store.items ?? null, [store.items]);
   const isLoading = !!store.isLoading;
   const note = store.note ?? null;
@@ -89,7 +89,7 @@ export function useExploreController() {
 
   const refresh = useCallback(() => {
     // ✅ force the store to refetch (store dedupes across the whole app)
-    void refreshRaffleStore(false, true);
+    void refreshLotteryStore(false, true);
   }, []);
 
   return {

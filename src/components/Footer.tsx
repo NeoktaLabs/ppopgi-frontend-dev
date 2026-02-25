@@ -45,7 +45,7 @@ export function Footer({ onNavigate }: Props) {
             <span className="footer-logo-text">Ppopgi</span>
           </div>
 
-          <div className="footer-desc">Fair, verifiable, on-chain raffles.</div>
+          <div className="footer-desc">Fair, verifiable, on-chain lotteries.</div>
 
           <div className="footer-built">Built with love on Etherlink 💚</div>
 

@@ -26,20 +26,16 @@ function timeAgoFrom(nowSec: number, ts: string) {
 
 // Support both new + legacy item shapes
 function getLotteryId(item: any): string {
-  return String(item?.lotteryId || item?.raffleId || "");
+  return String(item?.lotteryId || "");
 }
 function getLotteryName(item: any): string {
-  return String(item?.lotteryName || item?.raffleName || "—");
+  return String(item?.lotteryName || "—");
 }
 
 function buildDetailHref(lotteryId: string) {
-  // ✅ Works with both router conventions:
-  // - new: ?lottery=
-  // - legacy: ?raffle=
   const u = new URL("/", window.location.origin);
   if (lotteryId) {
     u.searchParams.set("lottery", lotteryId);
-    u.searchParams.set("raffle", lotteryId);
   }
   return u.toString();
 }

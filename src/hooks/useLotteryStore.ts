@@ -372,7 +372,7 @@ async function doFetch(isBackground: boolean) {
         if (!isBackground) setState({ isLoading: false });
         applyBackoff(err);
         // eslint-disable-next-line no-console
-        console.warn("[useRaffleStore] fetch failed", err);
+        console.warn("[useLotteryStore] fetch failed", err);
       }
     } finally {
       inFlight = null;
@@ -455,7 +455,7 @@ function requestRevalidate(force = false) {
   void refresh(true, true);
 }
 
-export function startRaffleStore(consumerKey: string, pollMs: number) {
+export function startLotteryStore(consumerKey: string, pollMs: number) {
   subscribers += 1;
   requestedPolls.set(consumerKey, pollMs);
 
@@ -482,7 +482,7 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
     window.addEventListener("ppopgi:revalidate", onReval as any);
     window.addEventListener("ppopgi:optimistic", onOpt as any);
 
-    (startRaffleStore as any)._cleanup = () => {
+    (startLotteryStore as any)._cleanup = () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("ppopgi:revalidate", onReval as any);
@@ -511,18 +511,18 @@ export function startRaffleStore(consumerKey: string, pollMs: number) {
       inFlight = null;
       pendingRefreshAfterFlight = false;
       clearRevalidateDebounce();
-      (startRaffleStore as any)._cleanup?.();
+      (startLotteryStore as any)._cleanup?.();
     } else {
       scheduleNext();
     }
   };
 }
 
-export function useRaffleStore(consumerKey: string, pollMs: number) {
+export function useLotteryStore(consumerKey: string, pollMs: number) {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
-    const stop = startRaffleStore(consumerKey, pollMs);
+    const stop = startLotteryStore(consumerKey, pollMs);
     return () => stop();
   }, [consumerKey, pollMs]);
 

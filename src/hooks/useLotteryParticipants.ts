@@ -40,7 +40,7 @@ function isHidden() {
  * Participants = userLotteries(where: { lottery: <id> }, orderBy: ticketsPurchased desc)
  * This is your "holders" list.
  */
-export function useRaffleParticipants(lotteryId: string | null, totalSold: number) {
+export function useLotteryParticipants(lotteryId: string | null, totalSold: number) {
   const [raw, setRaw] = useState<UserLotteryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 

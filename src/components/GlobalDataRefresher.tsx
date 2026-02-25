@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { refresh as refreshRaffleStore } from "../hooks/useLotteryStore";
+import { refresh as refreshLotteryStore } from "../hooks/useLotteryStore";
 import { refresh as refreshActivityStore } from "../hooks/useActivityStore";
 
 function isVisible() {
@@ -12,7 +12,7 @@ function isVisible() {
 
 export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number }) {
   const runningRef = useRef(false);
-  const lastRaffleRefreshAtRef = useRef(0);
+  const lastLotteryRefreshAtRef = useRef(0);
 
   const tick = async (background = false) => {
     if (runningRef.current) return;
@@ -24,9 +24,9 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
       const now = Date.now();
       const RAFFLE_REFRESH_MIN_GAP_MS = 20_000;
 
-      const shouldRefreshRaffles = !background || now - lastRaffleRefreshAtRef.current >= RAFFLE_REFRESH_MIN_GAP_MS;
+      const shouldRefreshLotteries = !background || now - lastLotteryRefreshAtRef.current >= RAFFLE_REFRESH_MIN_GAP_MS;
 
-      if (shouldRefreshRaffles) lastRaffleRefreshAtRef.current = now;
+      if (shouldRefreshLotteries) lastLotteryRefreshAtRef.current = now;
 
       // ✅ Run in parallel; don't let Activity block everything else.
       const tasks: Promise<any>[] = [];
@@ -34,9 +34,9 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
       // Activity: light + frequent
       tasks.push(refreshActivityStore(true, true));
 
-      // Raffles: heavier + throttled
-      if (shouldRefreshRaffles) {
-        tasks.push(refreshRaffleStore(true, true));
+      // Lotteries: heavier + throttled
+      if (shouldRefreshLotteries) {
+        tasks.push(refreshLotteryStore(true, true));
       }
 
       // Never throw from refresher (stores already handle their own errors/backoff)

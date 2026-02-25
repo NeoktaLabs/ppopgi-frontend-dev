@@ -6,7 +6,7 @@ import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { useRaffleDetails } from "./useLotteryDetails";
+import { useLotteryDetails } from "./useLotteryDetails";
 import { useConfetti } from "./useConfetti";
 import { ADDRESSES } from "../config/contracts";
 
@@ -61,9 +61,9 @@ function emitActivity(detail: ActivityDetail) {
   } catch {}
 }
 
-export function useRaffleInteraction(lotteryId: string | null, isOpen: boolean) {
-  // NOTE: this hook still consumes useRaffleDetails; rename later if you like
-  const { data, loading, note } = useRaffleDetails(lotteryId, isOpen);
+export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean) {
+  // NOTE: this hook still consumes useLotteryDetails; rename later if you like
+  const { data, loading, note } = useLotteryDetails(lotteryId, isOpen);
 
   const account = useActiveAccount();
   const me = account?.address ?? null;

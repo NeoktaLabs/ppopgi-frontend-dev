@@ -60,7 +60,7 @@ function normalizeMaxTickets(maxTickets: any) {
   return n > 0 ? n : 0;
 }
 
-export function useRaffleCard(lottery: LotteryListItem, nowMs: number) {
+export function useLotteryCard(lottery: LotteryListItem, nowMs: number) {
   // ✅ Revalidate tick: forces a rerender on relevant events.
   // This helps in cases where upstream data might be updated in-place.
   const rvTick = useRevalidate();

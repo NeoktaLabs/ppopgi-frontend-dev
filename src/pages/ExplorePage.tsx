@@ -1,16 +1,16 @@
 // src/pages/ExplorePage.tsx
 import { useEffect } from "react";
-import { RaffleCard } from "../components/LotteryCard";
+import { LotteryCard } from "../components/LotteryCard";
 import { LotteryCardSkeleton } from "../components/LotteryCardSkeleton";
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 
 type Props = {
-  onOpenRaffle: (id: string) => void; // can rename later to onOpenLottery
+  onOpenLottery: (id: string) => void; // can rename later to onOpenLottery
   onOpenSafety: (id: string) => void;
 };
 
-export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
+export function ExplorePage({ onOpenLottery, onOpenSafety }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Explore";
   }, []);
@@ -125,7 +125,7 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
           <>
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="xp-card-shell" style={{ animationDelay: `${i * 0.05}s` }}>
-                <RaffleCardSkeleton />
+                <LotteryCardSkeleton />
               </div>
             ))}
           </>
@@ -134,7 +134,7 @@ export function ExplorePage({ onOpenRaffle, onOpenSafety }: Props) {
         {/* Real Cards */}
         {state.list.map((r, i) => (
           <div key={r.id} className="xp-card-shell" style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}>
-            <RaffleCard lottery={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} />
+            <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
           </div>
         ))}
 

@@ -1,16 +1,16 @@
 // src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { formatUnits } from "ethers";
-import { useHomeRaffles } from "../hooks/useHomeLotteries"; // (you can rename later)
+import { useHomeLotteries } from "../hooks/useHomeLotteries"; // (you can rename later)
 import { useInfraStatus } from "../hooks/useInfraStatus";
-import { RaffleCard } from "../components/LotteryCard";
-import { RaffleCardSkeleton } from "../components/LotteryCardSkeleton";
+import { LotteryCard } from "../components/LotteryCard";
+import { LotteryCardSkeleton } from "../components/LotteryCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard";
 import "./HomePage.css";
 
 type Props = {
   nowMs: number;
-  onOpenRaffle: (id: string) => void; // you can rename later to onOpenLottery
+  onOpenLottery: (id: string) => void; // you can rename later to onOpenLottery
   onOpenSafety: (id: string) => void;
 };
 
@@ -119,13 +119,13 @@ function BannerSlider() {
   );
 }
 
-export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
+export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
 
   const infra = useInfraStatus();
-  const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading, refetch } = useHomeRaffles();
+  const { bigPrizes, endingSoon, recentlyFinalized, stats, isLoading, refetch } = useHomeLotteries();
 
   const finalizerForCards = useMemo(
     () => ({
@@ -242,13 +242,13 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             {isLoading && (
               <>
                 <div className="pp-silver-wrapper">
-                  <RaffleCardSkeleton />
+                  <LotteryCardSkeleton />
                 </div>
                 <div className="pp-gold-wrapper">
-                  <RaffleCardSkeleton />
+                  <LotteryCardSkeleton />
                 </div>
                 <div className="pp-bronze-wrapper">
-                  <RaffleCardSkeleton />
+                  <LotteryCardSkeleton />
                 </div>
               </>
             )}
@@ -256,9 +256,9 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             {!isLoading && podium.silver && (
               <div className="pp-silver-wrapper">
                 <div className="pp-rank-badge silver">2</div>
-                <RaffleCard
+                <LotteryCard
                   lottery={podium.silver}
-                  onOpen={onOpenRaffle}
+                  onOpen={onOpenLottery}
                   onOpenSafety={onOpenSafety}
                   ribbon="silver"
                   nowMs={nowMs}
@@ -269,9 +269,9 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             {!isLoading && podium.gold && (
               <div className="pp-gold-wrapper">
                 <div className="pp-rank-badge gold">1</div>
-                <RaffleCard
+                <LotteryCard
                   lottery={podium.gold}
-                  onOpen={onOpenRaffle}
+                  onOpen={onOpenLottery}
                   onOpenSafety={onOpenSafety}
                   ribbon="gold"
                   nowMs={nowMs}
@@ -282,9 +282,9 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
             {!isLoading && podium.bronze && (
               <div className="pp-bronze-wrapper">
                 <div className="pp-rank-badge bronze">3</div>
-                <RaffleCard
+                <LotteryCard
                   lottery={podium.bronze}
-                  onOpen={onOpenRaffle}
+                  onOpen={onOpenLottery}
                   onOpenSafety={onOpenSafety}
                   ribbon="bronze"
                   nowMs={nowMs}
@@ -324,14 +324,14 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               {isLoading &&
                 Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="hp-strip-item">
-                    <RaffleCardSkeleton />
+                    <LotteryCardSkeleton />
                   </div>
                 ))}
 
               {!isLoading &&
                 endingSoonSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
-                    <RaffleCard lottery={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                    <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
                   </div>
                 ))}
 
@@ -368,14 +368,14 @@ export function HomePage({ nowMs, onOpenRaffle, onOpenSafety }: Props) {
               {isLoading &&
                 Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="hp-strip-item">
-                    <RaffleCardSkeleton />
+                    <LotteryCardSkeleton />
                   </div>
                 ))}
 
               {!isLoading &&
                 recentlySettledSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
-                    <RaffleCard lottery={r} onOpen={onOpenRaffle} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                    <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
                   </div>
                 ))}
 

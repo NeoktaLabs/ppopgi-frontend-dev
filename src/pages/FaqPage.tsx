@@ -42,7 +42,7 @@ flowchart TD
 
   A[Creator Launches]:::brand
   B[Prize Pot Funded]:::brand
-  C[Raffle OPEN]:::brand
+  C[Lottery OPEN]:::brand
 
   D{Max Tickets?}:::decision
   E{Deadline?}:::decision
@@ -55,7 +55,7 @@ flowchart TD
   I[Pyth Entropy<br/>Verifiable Randomness]:::tech
 
   J[Winner Selected]:::success
-  G[Raffle Canceled]:::fail
+  G[Lottery Canceled]:::fail
 
   K[Winner Claims Prize]:::success
   L[Creator Claims Revenue]:::success
@@ -116,7 +116,7 @@ flowchart TD
   App[Ppopgi Frontend<br/>(React)]:::brand
 
   RPC[RPC / Etherlink Node]:::tech
-  Chain[Etherlink (EVM)<br/>Raffle Contracts]:::brand
+  Chain[Etherlink (EVM)<br/>Lottery Contracts]:::brand
 
   Entropy[Pyth Entropy<br/>Verifiable Randomness]:::tech
   Bot[Finalizer Bot<br/>permissionless caller]:::tech
@@ -526,7 +526,7 @@ export function FaqPage() {
       </div>
 
       {/* Mermaid Lifecycle */}
-      <SectionTitle>How a Raffle Works</SectionTitle>
+      <SectionTitle>How a Lottery Works</SectionTitle>
       <div className="faq-mermaid">
         <div className="faq-diagram-title">System State Flow</div>
         <MermaidDiagram code={RAFFLE_FLOW} id="ppopgi-raffle-lifecycle" />
