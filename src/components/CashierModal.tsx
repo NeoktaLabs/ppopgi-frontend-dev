@@ -21,8 +21,8 @@ export function CashierModal({ open, onClose }: Props) {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<Tab>("buy_usdc");
 
-  // ✅ Single source of truth (src/config/contracts.ts)
-  const USDC_ADDRESS = useMemo(() => ADDRESSES.USDC.toLowerCase(), []);
+  // ✅ Keep as Address (do NOT .toLowerCase(); it turns it into plain string)
+  const USDC_ADDRESS = useMemo(() => ADDRESSES.USDC, []);
 
   const handleCopy = useCallback(() => {
     const addr = state.me;
