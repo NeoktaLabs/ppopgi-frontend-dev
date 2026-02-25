@@ -1,7 +1,7 @@
 // src/hooks/useLotteryInteraction.ts
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { formatUnits } from "ethers";
+import { formatUnits, MaxUint256 } from "ethers";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
@@ -33,11 +33,7 @@ function toInt(v: string, fb = 0) {
 
 function safeTxHash(receipt: any): string {
   return String(
-    receipt?.transactionHash ||
-      receipt?.hash ||
-      receipt?.receipt?.transactionHash ||
-      receipt?.receipt?.hash ||
-      ""
+    receipt?.transactionHash || receipt?.hash || receipt?.receipt?.transactionHash || receipt?.receipt?.hash || ""
   ).toLowerCase();
 }
 
@@ -61,8 +57,20 @@ function emitActivity(detail: ActivityDetail) {
   } catch {}
 }
 
+/**
+ * Very small in-memory cache for allowance/balance reads.
+ * Goal: avoid re-reading when modal reopens quickly or state re-renders.
+ */
+type AllowBalEntry = { ts: number; allowance?: bigint; bal?: bigint };
+const ALLOW_BAL_TTL_MS = 20_000;
+const allowBalCache = new Map<string, AllowBalEntry>();
+
+function cacheKey(acct: string, token: string, spender: string) {
+  return `${acct.toLowerCase()}:${token.toLowerCase()}:${spender.toLowerCase()}`;
+}
+
 export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean) {
-  // NOTE: this hook still consumes useLotteryDetails; rename later if you like
+  // NOTE: this hook still consumes useLotteryDetails
   const { data, loading, note } = useLotteryDetails(lotteryId, isOpen);
 
   const account = useActiveAccount();
@@ -74,9 +82,12 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
   const [nowMs, setNowMs] = useState(Date.now());
   const [tickets, setTickets] = useState("1");
   const [buyMsg, setBuyMsg] = useState<string | null>(null);
+
+  // We keep these for UI display, but we fetch as little as possible.
   const [usdcBal, setUsdcBal] = useState<bigint | null>(null);
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [allowLoading, setAllowLoading] = useState(false);
+
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
   // ✅ revalidate ping (Home/Explore/ActivityBoard/etc)
@@ -103,13 +114,11 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
   }, []);
 
   // ✅ optimistic store patch (instant list bump)
-  // IMPORTANT: updated store expects { lotteryId } (not raffleId)
   const emitOptimisticBuy = useCallback(
     (deltaSold: number, patchId?: string) => {
       try {
         if (typeof window === "undefined" || !lotteryId) return;
 
-        // Optional: store supports deltaRevenue (lets ticketRevenue bump instantly too)
         const deltaRevenue = (() => {
           try {
             const price = BigInt((data as any)?.ticketPrice || "0");
@@ -210,19 +219,44 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     (maxTicketsN === 0 || (remainingTickets ?? 0) > 0);
 
   const hasEnoughAllowance = allowance !== null ? allowance >= totalCostU : false;
+
+  // To reduce RPC calls, we treat balance as "unknown" unless fetched.
+  // Only enforce balance check if we actually loaded it.
   const hasEnoughBalance = usdcBal !== null ? usdcBal >= totalCostU : true;
 
   const allowInFlight = useRef(false);
   const lastAllowFetchAt = useRef(0);
 
+  /**
+   * Minimal read strategy:
+   * - Always read allowance on open/manual/postTx (cached + throttled).
+   * - Read balance ONLY when:
+   *   (a) user explicitly triggers "manual" refresh, or
+   *   (b) allowance is sufficient but balance is unknown, OR
+   *   (c) we're about to send buy/approve and want a best-effort check.
+   */
   const refreshAllowance = useCallback(
-    async (reason: "open" | "postTx" | "manual" = "manual") => {
+    async (reason: "open" | "postTx" | "manual" | "preTx" = "manual") => {
       if (!isOpen) return;
       if (!account?.address || !usdcContract || !lotteryId) return;
+
+      const acct = account.address;
+      const token = paymentTokenAddr;
+      const spender = lotteryId;
+      const key = cacheKey(acct, token, spender);
 
       const now = Date.now();
       const minGap = reason === "postTx" ? 0 : 2500;
       if (now - lastAllowFetchAt.current < minGap) return;
+
+      // Cache hit?
+      const hit = allowBalCache.get(key);
+      if (hit && now - hit.ts < ALLOW_BAL_TTL_MS) {
+        if (typeof hit.allowance === "bigint") setAllowance(hit.allowance);
+        if (typeof hit.bal === "bigint") setUsdcBal(hit.bal);
+        // On open, don't force a network call if cache is fresh
+        if (reason === "open") return;
+      }
 
       if (allowInFlight.current) return;
       allowInFlight.current = true;
@@ -231,30 +265,49 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       setAllowLoading(true);
 
       try {
-        const [bal, a] = await Promise.all([
-          readContract({
-            contract: usdcContract,
-            method: "function balanceOf(address) view returns (uint256)",
-            params: [account.address],
-          }),
-          readContract({
-            contract: usdcContract,
-            method: "function allowance(address,address) view returns (uint256)",
-            params: [account.address, lotteryId],
-          }),
-        ]);
+        // 1) allowance is always useful
+        const allowanceP = readContract({
+          contract: usdcContract,
+          method: "function allowance(address,address) view returns (uint256)",
+          params: [acct, spender],
+        }).catch(() => 0n as any);
 
-        setUsdcBal(BigInt(bal as any));
-        setAllowance(BigInt(a as any));
+        // 2) balance only sometimes
+        const shouldReadBalance =
+          reason === "manual" ||
+          reason === "preTx" ||
+          (allowance != null && allowance >= totalCostU && usdcBal == null);
+
+        const balanceP = shouldReadBalance
+          ? readContract({
+              contract: usdcContract,
+              method: "function balanceOf(address) view returns (uint256)",
+              params: [acct],
+            }).catch(() => null as any)
+          : Promise.resolve(null as any);
+
+        const [a, bal] = await Promise.all([allowanceP, balanceP]);
+
+        const aBi = BigInt((a as any) ?? 0n);
+        setAllowance(aBi);
+
+        let balBi: bigint | undefined = undefined;
+        if (bal != null) {
+          balBi = BigInt((bal as any) ?? 0n);
+          setUsdcBal(balBi);
+        }
+
+        allowBalCache.set(key, { ts: Date.now(), allowance: aBi, bal: balBi ?? hit?.bal });
       } catch {
-        setUsdcBal(null);
-        setAllowance(null);
+        // keep previous state if any; just mark unknown
+        setAllowance((prev) => prev ?? null);
+        setUsdcBal((prev) => prev ?? null);
       } finally {
         setAllowLoading(false);
         allowInFlight.current = false;
       }
     },
-    [isOpen, account?.address, usdcContract, lotteryId]
+    [isOpen, account?.address, usdcContract, lotteryId, paymentTokenAddr, allowance, usdcBal, totalCostU]
   );
 
   const approve = useCallback(async () => {
@@ -268,27 +321,40 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     }
 
     try {
+      // Best-effort refresh right before tx, but still cached/throttled.
+      await refreshAllowance("preTx");
+
+      // ✅ Approve MaxUint256 to avoid repeated approvals (fewer future RPC calls + better UX)
       const tx = prepareContractCall({
         contract: usdcContract,
         method: "function approve(address,uint256) returns (bool)",
-        params: [lotteryId, totalCostU],
+        params: [lotteryId, MaxUint256],
       });
+
       await sendAndConfirm(tx);
 
       setBuyMsg("✅ Wallet prepared.");
-      refreshAllowance("postTx");
+
+      // Optimistically set allowance high (avoid immediate refetch spam)
+      setAllowance(MaxUint256);
+
+      // Refresh once post-tx to sync UI (still cheap, cached)
+      void refreshAllowance("postTx");
 
       emitRevalidate(false);
     } catch {
       setBuyMsg("Prepare wallet failed.");
     }
-  }, [account?.address, usdcContract, lotteryId, totalCostU, sendAndConfirm, refreshAllowance, emitRevalidate]);
+  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance, emitRevalidate]);
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
     if (!account?.address || !lotteryContract || !lotteryId) return;
 
     try {
+      // Best-effort pre-tx refresh (cached) so buttons reflect reality without polling.
+      await refreshAllowance("preTx");
+
       const tx = prepareContractCall({
         contract: lotteryContract,
         method: "function buyTickets(uint256)",
@@ -318,7 +384,30 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
       fireConfetti();
       setBuyMsg("🎉 Tickets purchased!");
-      refreshAllowance("postTx");
+
+      // Optimistic local + cache update (avoid immediate extra reads)
+      try {
+        const acct = account.address;
+        const token = paymentTokenAddr;
+        const spender = lotteryId;
+        const key = cacheKey(acct, token, spender);
+        const hit = allowBalCache.get(key);
+
+        const newAllowance = allowance != null ? (allowance > totalCostU ? allowance - totalCostU : 0n) : undefined;
+        const newBal = usdcBal != null ? (usdcBal > totalCostU ? usdcBal - totalCostU : 0n) : undefined;
+
+        if (typeof newAllowance === "bigint") setAllowance(newAllowance);
+        if (typeof newBal === "bigint") setUsdcBal(newBal);
+
+        allowBalCache.set(key, {
+          ts: Date.now(),
+          allowance: typeof newAllowance === "bigint" ? newAllowance : hit?.allowance,
+          bal: typeof newBal === "bigint" ? newBal : hit?.bal,
+        });
+      } catch {}
+
+      // One post-tx refresh (cached/throttled)
+      void refreshAllowance("postTx");
 
       emitRevalidate(true);
     } catch (e: any) {
@@ -328,15 +417,19 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
   }, [
     account?.address,
     lotteryContract,
+    lotteryId,
     ticketCount,
     sendAndConfirm,
     fireConfetti,
     refreshAllowance,
     emitRevalidate,
     emitOptimisticBuy,
-    lotteryId,
     data,
     me,
+    allowance,
+    usdcBal,
+    totalCostU,
+    paymentTokenAddr,
   ]);
 
   const handleShare = useCallback(async () => {
@@ -364,7 +457,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     setUsdcBal(null);
     setAllowance(null);
 
-    refreshAllowance("open");
+    // Use cached/throttled read
+    void refreshAllowance("open");
   }, [isOpen, lotteryId, account?.address, paymentTokenAddr, refreshAllowance]);
 
   return {
