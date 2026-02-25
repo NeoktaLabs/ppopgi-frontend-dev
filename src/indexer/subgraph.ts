@@ -234,7 +234,7 @@ function normalizeLottery(r: any): LotteryListItem {
     id: normHex(r.id) as string,
 
     typeId: String(r.typeId ?? "0"),
-    creator: normHex(r.creator) as string,
+    creator: (normHex(r.creator) as string) || "0x",
     registeredAt: String(r.registeredAt ?? "0"),
     registryIndex: r.registryIndex != null ? String(r.registryIndex) : null,
 
@@ -290,7 +290,7 @@ function normalizeUserLottery(p: any): UserLotteryItem {
     fundsClaimedAmount: String(p.fundsClaimedAmount ?? "0"),
 
     updatedAt: String(p.updatedAt ?? "0"),
-    updatedTx: normHex(p.updatedTx) as string,
+    updatedTx: (normHex(p.updatedTx) as string) || "0x",
   };
 }
 
@@ -333,6 +333,14 @@ export async function fetchLotteryById(id: string, opts: FetchOpts = {}): Promis
   type Resp = { lottery: any | null };
   const data = await gqlFetch<Resp>(url, query, { id: id.toLowerCase() }, opts);
   return data.lottery ? normalizeLottery(data.lottery) : null;
+}
+
+/**
+ * ✅ Compatibility export for UI components expecting "metadata".
+ * This is just a thin alias for fetchLotteryById.
+ */
+export async function fetchLotteryMetadata(id: string, opts: FetchOpts = {}) {
+  return await fetchLotteryById(id, opts);
 }
 
 export async function fetchLotteriesByCreator(
@@ -511,7 +519,7 @@ export async function fetchGlobalActivity(
         txHash
       }
 
-      // Preferred creation source (if you emit these)
+      # Preferred creation source (if you emit these)
       createsDeployer: deployerEvents(
         first: $first
         orderBy: timestamp
@@ -526,7 +534,7 @@ export async function fetchGlobalActivity(
         txHash
       }
 
-      // Fallback creation source
+      # Fallback creation source
       createsRegistry: registryEvents(
         first: $first
         orderBy: timestamp
@@ -555,20 +563,20 @@ export async function fetchGlobalActivity(
     type: "BUY" as const,
     lotteryId: normHex(e.lottery?.id) as string,
     lotteryName: String(e.lottery?.name ?? "Unknown Lottery"),
-    subject: normHex(e.buyer) as string,
+    subject: (normHex(e.buyer) as string) || "",
     value: String(e.count ?? "0"),
     timestamp: String(e.timestamp ?? "0"),
-    txHash: normHex(e.txHash) as string,
+    txHash: (normHex(e.txHash) as string) || "",
   }));
 
   const wins = (data.wins ?? []).map((e) => ({
     type: "WIN" as const,
     lotteryId: normHex(e.lottery?.id) as string,
     lotteryName: String(e.lottery?.name ?? "Unknown Lottery"),
-    subject: normHex(e.winner) as string,
+    subject: (normHex(e.winner) as string) || "",
     value: String(e.lottery?.winningPot ?? "0"),
     timestamp: String(e.timestamp ?? "0"),
-    txHash: normHex(e.txHash) as string,
+    txHash: (normHex(e.txHash) as string) || "",
   }));
 
   const cancels = (data.cancels ?? []).map((e) => ({
@@ -578,27 +586,27 @@ export async function fetchGlobalActivity(
     subject: normHex(e.lottery?.creator) ?? "",
     value: "0",
     timestamp: String(e.timestamp ?? "0"),
-    txHash: normHex(e.txHash) as string,
+    txHash: (normHex(e.txHash) as string) || "",
   }));
 
   const createsDeployer = (data.createsDeployer ?? []).map((e) => ({
     type: "CREATE" as const,
     lotteryId: normHex(e.lottery) as string,
     lotteryName: String(e.name ?? "New Lottery"),
-    subject: normHex(e.creator) as string,
+    subject: (normHex(e.creator) as string) || "",
     value: String(e.winningPot ?? "0"),
     timestamp: String(e.timestamp ?? "0"),
-    txHash: normHex(e.txHash) as string,
+    txHash: (normHex(e.txHash) as string) || "",
   }));
 
   const createsRegistry = (data.createsRegistry ?? []).map((e) => ({
     type: "CREATE" as const,
     lotteryId: normHex(e.lottery) as string,
     lotteryName: "New Lottery",
-    subject: normHex(e.creator) as string,
+    subject: (normHex(e.creator) as string) || "",
     value: "0",
     timestamp: String(e.timestamp ?? "0"),
-    txHash: normHex(e.txHash) as string,
+    txHash: (normHex(e.txHash) as string) || "",
   }));
 
   // Prefer deployer creates when available (dedup by txHash if both show up)
