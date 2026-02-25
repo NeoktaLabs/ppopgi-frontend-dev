@@ -14,7 +14,7 @@ import {
 import { useLotteryStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 
 // ✅ Use full ABI from your folder (better decoding, no drift)
-import { SingleWinnerLottery } from "../config/abis/index";
+import { SingleWinnerLotteryABI } from "../config/abis/index";
 
 type JoinedLotteryItem = LotteryListItem & {
   // From subgraph UserLotteryItem (historical)
@@ -128,7 +128,7 @@ async function readDashboardValues(args: {
     client: thirdwebClient,
     chain: ETHERLINK_CHAIN,
     address: lid,
-    abi: SingleWinnerLottery as any,
+    abi: SingleWinnerLotteryABI as any,
   });
 
   let cf = "0";
@@ -648,7 +648,7 @@ export function useDashboardController() {
         client: thirdwebClient,
         chain: ETHERLINK_CHAIN,
         address: lid,
-        abi: SingleWinnerLottery as any,
+        abi: SingleWinnerLotteryABI as any,
       });
 
       await sendAndConfirm(

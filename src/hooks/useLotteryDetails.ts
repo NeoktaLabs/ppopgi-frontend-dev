@@ -5,7 +5,7 @@ import { getContract, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { getAddress } from "ethers";
-import { SingleWinnerLottery } from "../config/abis";
+import { SingleWinnerLotteryABI } from "../config/abis";
 
 export type LotteryStatus =
   | "FUNDING_PENDING"
@@ -316,7 +316,7 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: normalizedAddress,
-      abi: SingleWinnerLottery as any,
+      abi: SingleWinnerLotteryABI as any,
     });
   }, [normalizedAddress]);
 
