@@ -104,8 +104,6 @@ function emitRevalidate(withDelayedPing = true) {
   } catch {}
 }
 
-/* ✅ optimistic store event */
-
 function emitOptimistic(detail: any) {
   try {
     if (typeof window === "undefined") return;
@@ -125,6 +123,10 @@ function topicToAddress(topic: string): string {
 }
 
 /* -------------------- hook -------------------- */
+
+type AllowanceSnapshot = { bal: bigint; allowance: bigint; ts: number };
+
+const SNAPSHOT_TTL_MS = 12_000; // small TTL: prevents spam when typing or re-opening quickly
 
 export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string) => void) {
   const account = useActiveAccount();
@@ -150,7 +152,9 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [allowLoading, setAllowLoading] = useState(false);
 
+  // request guard + TTL snapshot
   const reqIdRef = useRef(0);
+  const lastSnapRef = useRef<AllowanceSnapshot | null>(null);
 
   const deployerContract = useMemo(
     () =>
@@ -200,31 +204,47 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     hasEnoughAllowance &&
     hasEnoughBalance;
 
-  /* ---------- actions ---------- */
+  /* ---------- allowance/balance refresh ---------- */
 
-  const refreshAllowance = useCallback(async () => {
-    if (!isOpen || !me) return;
-    const reqId = ++reqIdRef.current;
+  const refreshAllowance = useCallback(
+    async (opts: { force?: boolean } = {}) => {
+      if (!isOpen || !me) return;
 
-    setAllowLoading(true);
-    try {
-      const [bal, a] = await Promise.all([
-        readContract({ contract: usdcContract, method: "balanceOf", params: [me] }),
-        readContract({
-          contract: usdcContract,
-          method: "allowance",
-          params: [me, ADDRESSES.SingleWinnerDeployer],
-        }),
-      ]);
+      // TTL: avoid re-fetching if we just fetched
+      const snap = lastSnapRef.current;
+      if (!opts.force && snap && Date.now() - snap.ts < SNAPSHOT_TTL_MS) {
+        setUsdcBal(snap.bal);
+        setAllowance(snap.allowance);
+        return;
+      }
 
-      if (reqId !== reqIdRef.current) return;
+      const reqId = ++reqIdRef.current;
 
-      setUsdcBal(BigInt(bal ?? 0n));
-      setAllowance(BigInt(a ?? 0n));
-    } finally {
-      if (reqId === reqIdRef.current) setAllowLoading(false);
-    }
-  }, [isOpen, me, usdcContract]);
+      setAllowLoading(true);
+      try {
+        const [bal, a] = await Promise.all([
+          readContract({ contract: usdcContract, method: "balanceOf", params: [me] }),
+          readContract({
+            contract: usdcContract,
+            method: "allowance",
+            params: [me, ADDRESSES.SingleWinnerDeployer],
+          }),
+        ]);
+
+        if (reqId !== reqIdRef.current) return;
+
+        const balB = BigInt(bal ?? 0n);
+        const allowB = BigInt(a ?? 0n);
+
+        lastSnapRef.current = { bal: balB, allowance: allowB, ts: Date.now() };
+        setUsdcBal(balB);
+        setAllowance(allowB);
+      } finally {
+        if (reqId === reqIdRef.current) setAllowLoading(false);
+      }
+    },
+    [isOpen, me, usdcContract]
+  );
 
   /* ---------- approve ---------- */
 
@@ -242,7 +262,9 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
       await sendAndConfirm(tx);
       setMsg("Approval successful!");
-      await refreshAllowance();
+
+      // force refresh to reflect new allowance immediately
+      await refreshAllowance({ force: true });
 
       emitRevalidate(false);
     } catch {
@@ -291,7 +313,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       const nowSec = Math.floor(Date.now() / 1000);
       const txHash = String((receipt as any)?.transactionHash ?? `create:${nowSec}:${me}`);
 
-      /* ✅ optimistic list insert */
       emitOptimistic({
         kind: "CREATE",
         patchId: txHash,
@@ -313,7 +334,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         },
       });
 
-      /* ✅ activity board instant UX */
       emitActivity({
         type: "CREATE",
         lotteryId: (newAddr || "0x").toLowerCase(),
@@ -326,7 +346,9 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       });
 
       setMsg("🎉 Success!");
-      await refreshAllowance();
+
+      // After create, balance may have changed; refresh once (forced)
+      await refreshAllowance({ force: true });
 
       emitRevalidate(true);
       onCreated?.(newAddr || undefined);
@@ -335,18 +357,27 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     }
   };
 
-  /* ---------- lifecycle ---------- */
+  /* ---------- lifecycle (NO POLLING) ---------- */
 
+  // 1) initial load when modal opens or account changes
+  useEffect(() => {
+    if (!isOpen) return;
+    refreshAllowance({ force: true });
+    return () => {
+      reqIdRef.current++;
+    };
+  }, [isOpen, me, refreshAllowance]);
+
+  // 2) refresh when tab becomes visible again (prevents stale modal)
   useEffect(() => {
     if (!isOpen) return;
 
-    refreshAllowance();
-    const t = window.setInterval(refreshAllowance, 15000);
-
-    return () => {
-      window.clearInterval(t);
-      reqIdRef.current++;
+    const onVis = () => {
+      if (document.visibilityState === "visible") refreshAllowance({ force: false });
     };
+
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [isOpen, refreshAllowance]);
 
   return {
