@@ -1,4 +1,4 @@
-// src/components/RaffleDetailsModal.tsx
+// src/components/LotteryDetailsModal.tsx
 import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useRaffleInteraction } from "../hooks/useRaffleInteraction";

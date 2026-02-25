@@ -1,5 +1,4 @@
-// src/hooks/useRaffleParticipants.ts
-// (You can rename later to useLotteryParticipants.ts if you want.)
+// src/hooks/useLotteryParticipants.ts
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchUserLotteriesByLottery, type UserLotteryItem } from "../indexer/subgraph";

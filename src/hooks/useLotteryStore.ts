@@ -1,5 +1,4 @@
-// src/hooks/useRaffleStore.ts
-// (You can rename later to useLotteryStore.ts if you want.)
+// src/hooks/useLotteryStore.ts
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { fetchLotteriesFromSubgraph, type LotteryListItem, type LotteryStatus } from "../indexer/subgraph";

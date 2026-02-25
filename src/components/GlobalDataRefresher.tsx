@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { refresh as refreshRaffleStore } from "../hooks/useRaffleStore";
+import { refresh as refreshRaffleStore } from "../hooks/useLotteryStore";
 import { refresh as refreshActivityStore } from "../hooks/useActivityStore";
 
 function isVisible() {

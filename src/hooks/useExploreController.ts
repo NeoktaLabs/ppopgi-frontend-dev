@@ -3,7 +3,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
-import { useRaffleStore, refresh as refreshRaffleStore } from "./useRaffleStore";
+import { useRaffleStore, refresh as refreshRaffleStore } from "./useLotteryStore";
 
 export type SortMode = "endingSoon" | "bigPrize" | "newest";
 

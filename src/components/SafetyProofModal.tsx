@@ -1,5 +1,5 @@
 // src/components/SafetyProofModal.tsx
-import type { LotteryDetails } from "../hooks/useRaffleDetails"; // ✅ updated type name
+import type { LotteryDetails } from "../hooks/useLotteryDetails"; // ✅ updated type name
 import { useSafetyBreakdown } from "../hooks/useSafetyBreakdown";
 import "./SafetyProofModal.css";
 

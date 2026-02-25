@@ -1,7 +1,7 @@
 // src/hooks/useSafetyBreakdown.ts
 import { useMemo } from "react";
 import { formatUnits } from "ethers";
-import type { LotteryDetails } from "./useRaffleDetails"; // ✅ updated type name
+import type { LotteryDetails } from "./useLotteryDetails"; // ✅ updated type name
 
 // --- Helpers ---
 const safeBigInt = (x: any) => {

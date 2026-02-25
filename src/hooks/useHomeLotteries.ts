@@ -1,11 +1,11 @@
-// src/hooks/useHomeRaffles.ts
-// (You can rename later to useHomeLotteries.ts if you want.)
+// src/hooks/useHomeLotteries.ts
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LotteryListItem } from "../indexer/subgraph";
 import { fetchLotteriesOnChainFallback } from "../onchain/fallbackLotteries";
 
-import { useRaffleStore, refresh as refreshLotteryStore } from "./useRaffleStore";
-import { useRevalidate } from "../hooks/useRevalidateTick";
+import { useRaffleStore, refresh as refreshLotteryStore } from "./useLotteryStore";
+import { useRevalidate } from "./useRevalidateTick";
 
 type Mode = "indexer" | "live";
 

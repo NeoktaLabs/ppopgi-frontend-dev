@@ -12,7 +12,7 @@ import {
   type UserLotteryItem,
   type LotteryStatus,
 } from "../indexer/subgraph";
-import { useRaffleStore, refresh as refreshLotteryStore } from "./useRaffleStore";
+import { useRaffleStore, refresh as refreshLotteryStore } from "./useLotteryStore";
 
 // -------------------- Lottery dashboard ABI --------------------
 // Matches your SingleWinnerLottery ABI (no native claimables; unified claim()).

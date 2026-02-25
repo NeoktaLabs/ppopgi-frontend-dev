@@ -1,12 +1,12 @@
-// src/components/CreateRaffleModal.tsx
+// src/components/CreateLotteryModal.tsx
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { formatUnits } from "ethers";
 import { useActiveAccount } from "thirdweb/react";
 import { ADDRESSES } from "../config/contracts";
-import { RaffleCard } from "./RaffleCard";
+import { RaffleCard } from "./LotteryCard";
 import { useCreateLotteryForm } from "../hooks/useCreateLotteryForm";
 import { useConfetti } from "../hooks/useConfetti";
-import "./CreateRaffleModal.css";
+import "./CreateLotteryModal.css";
 
 type Props = {
   open: boolean;

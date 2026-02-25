@@ -1,5 +1,4 @@
-// src/hooks/useRaffleInteraction.ts
-// (If you’re migrating naming, feel free to rename this file to useLotteryInteraction.ts later.)
+// src/hooks/useLotteryInteraction.ts
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { formatUnits } from "ethers";
@@ -7,7 +6,7 @@ import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
-import { useRaffleDetails } from "./useRaffleDetails";
+import { useRaffleDetails } from "./useLotteryDetails";
 import { useConfetti } from "./useConfetti";
 import { ADDRESSES } from "../config/contracts";
 

@@ -1,7 +1,7 @@
 // src/pages/ExplorePage.tsx
 import { useEffect } from "react";
-import { RaffleCard } from "../components/RaffleCard";
-import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
+import { RaffleCard } from "../components/LotteryCard";
+import { RaffleCardSkeleton } from "../components/LotteryCardSkeleton";
 import { useExploreController, type SortMode } from "../hooks/useExploreController";
 import "./ExplorePage.css";
 

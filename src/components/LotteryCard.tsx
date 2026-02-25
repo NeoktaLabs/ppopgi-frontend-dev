@@ -1,8 +1,8 @@
-// src/components/RaffleCard.tsx
+// src/components/LotteryCard.tsx
 import React, { useMemo } from "react";
 import type { LotteryListItem } from "../indexer/subgraph"; // ✅ updated type
-import { useRaffleCard } from "../hooks/useRaffleCard";
-import "./RaffleCard.css";
+import { useRaffleCard } from "../hooks/useLotteryCard";
+import "./LotteryCard.css";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
 

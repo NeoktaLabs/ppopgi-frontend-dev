@@ -1,5 +1,5 @@
-// src/hooks/useRaffleDetails.ts
-// (You can rename later to useLotteryDetails.ts if you want.)
+// src/hooks/useLotteryDetails.ts
+
 import { useEffect, useMemo, useState } from "react";
 import { getContract, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";

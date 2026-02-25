@@ -1,8 +1,8 @@
 // src/pages/DashboardPage.tsx
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { formatUnits } from "ethers";
-import { RaffleCard } from "../components/RaffleCard";
-import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
+import { RaffleCard } from "../components/LotteryCard";
+import { RaffleCardSkeleton } from "../components/LotteryCardSkeleton";
 import { useDashboardController } from "../hooks/useDashboardController";
 import "./DashboardPage.css";
 

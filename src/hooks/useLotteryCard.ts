@@ -1,10 +1,9 @@
-// src/hooks/useRaffleCard.ts
-// (You can rename later to useLotteryCard.ts if you want.)
+// src/hooks/useLotteryCard.ts
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { formatUnits } from "ethers";
 import type { LotteryListItem } from "../indexer/subgraph";
-import { useRevalidate } from "../hooks/useRevalidateTick";
+import { useRevalidate } from "./useRevalidateTick";
 
 // --- Helpers ---
 const toNum = (v: any) => {

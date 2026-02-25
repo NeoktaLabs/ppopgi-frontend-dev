@@ -15,8 +15,8 @@ import { FaqPage } from "./pages/FaqPage";
 
 // --- Components (Modals) ---
 import { SignInModal } from "./components/SignInModal";
-import { CreateRaffleModal } from "./components/CreateRaffleModal";
-import { RaffleDetailsModal } from "./components/RaffleDetailsModal";
+import { CreateRaffleModal } from "./components/CreateLotteryModal";
+import { RaffleDetailsModal } from "./components/LotteryDetailsModal";
 import { CashierModal } from "./components/CashierModal";
 import { SafetyProofModal } from "./components/SafetyProofModal";
 import { DisclaimerGate } from "./components/DisclaimerGate";
@@ -27,10 +27,10 @@ import { GlobalDataRefresher } from "./components/GlobalDataRefresher";
 // --- Hooks ---
 import { useSession } from "./state/useSession";
 import { useAppRouting } from "./hooks/useAppRouting";
-import { useRaffleDetails } from "./hooks/useRaffleDetails";
+import { useRaffleDetails } from "./hooks/useLotteryDetails";
 
 // ✅ Shared store in App so the modal can use the same data as cards
-import { useRaffleStore } from "./hooks/useRaffleStore";
+import { useRaffleStore } from "./hooks/useLotteryStore";
 
 type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 

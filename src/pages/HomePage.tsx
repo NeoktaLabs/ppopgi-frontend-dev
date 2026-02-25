@@ -1,10 +1,10 @@
 // src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { formatUnits } from "ethers";
-import { useHomeRaffles } from "../hooks/useHomeRaffles"; // (you can rename later)
+import { useHomeRaffles } from "../hooks/useHomeLotteries"; // (you can rename later)
 import { useInfraStatus } from "../hooks/useInfraStatus";
-import { RaffleCard } from "../components/RaffleCard";
-import { RaffleCardSkeleton } from "../components/RaffleCardSkeleton";
+import { RaffleCard } from "../components/LotteryCard";
+import { RaffleCardSkeleton } from "../components/LotteryCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard";
 import "./HomePage.css";
 
