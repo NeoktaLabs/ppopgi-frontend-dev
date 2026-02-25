@@ -22,6 +22,17 @@ function statusFromUint8(x: number): LotteryStatus {
 const ZERO_TX =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 
+/**
+ * ✅ RPC-minimal fallback
+ *
+ * This file should be used only when the subgraph/indexer is unavailable.
+ * So we keep calls to the absolute minimum:
+ * - Registry: getAllLotteriesCount + paged getAllLotteries
+ * - Per-lottery: status() + getSold() (or sold())
+ *
+ * Everything else is returned as safe placeholders so the UI can still render a list.
+ */
+
 async function safeCall<T>(p: Promise<T>, fallback: T): Promise<T> {
   try {
     return await p;
@@ -60,144 +71,99 @@ export async function fetchLotteriesOnChainFallback(limit = 120): Promise<Lotter
   const nowSec = String(Math.floor(Date.now() / 1000));
   const nowBlock = String(latestBlock);
 
+  // -----------------------------
+  // ✅ Minimal per-lottery reads
+  // -----------------------------
+  // Do them in parallel to reduce wall-clock time.
+  const lotteries = addrs.map((addr) => new Contract(addr, SingleWinnerLotteryAbi, rpc));
+
+  // status() for all
+  const statuses = await Promise.all(
+    lotteries.map((c) => safeCall<unknown>(c.status?.(), 0))
+  );
+
+  // sold() for all (prefer getSold() if present)
+  const solds = await Promise.all(
+    lotteries.map((c) =>
+      safeCall<unknown>(
+        // Some ABIs have getSold(), some have sold()
+        (c.getSold ? c.getSold() : c.sold?.()) as Promise<unknown>,
+        0n
+      )
+    )
+  );
+
   const out: LotteryListItem[] = [];
 
-  for (const addr of addrs) {
-    const lottery = new Contract(addr, SingleWinnerLotteryAbi, rpc);
+  for (let i = 0; i < addrs.length; i++) {
+    const addr = addrs[i];
 
-    const [
-      name,
-      statusU8,
-      winningPot,
-      ticketPrice,
-      deadline,
-      sold,
-      minTickets,
-      maxTickets,
-      protocolFeePercent,
-      feeRecipient,
-      deployer,
-      creator,
+    const statusU8 = Number(statuses[i] as any);
+    const sold = solds[i] as any;
 
-      // token / entropy fields (best effort)
-      usdcToken,
-      entropy,
-      entropyProvider,
-      callbackGasLimit,
-      minPurchaseAmount,
-
-      // accounting / state
-      ticketRevenue,
-      paused,
-
-      // optional lifecycle fields (may or may not exist on ABI)
-      winner,
-      selectedProvider,
-      finalizedAt,
-      completedAt,
-      canceledAt,
-      canceledReason,
-      soldAtCancel,
-      finalizeRequestId,
-      winningTicketIndex,
-    ] = await Promise.all([
-      safeCall(lottery.name(), ""),
-      safeCall(lottery.status(), 0),
-
-      safeCall(lottery.winningPot(), 0n as any),
-      safeCall(lottery.ticketPrice(), 0n as any),
-      safeCall(lottery.deadline(), 0n as any),
-      safeCall(lottery.getSold?.(), 0n as any),
-
-      safeCall(lottery.minTickets?.(), 0n as any),
-      safeCall(lottery.maxTickets?.(), 0n as any),
-
-      safeCall(lottery.protocolFeePercent?.(), 0n as any),
-      safeCall(lottery.feeRecipient?.(), ZeroAddress),
-      safeCall(lottery.deployer?.(), ZeroAddress),
-      safeCall(lottery.creator?.(), ZeroAddress),
-
-      // ✅ NEW: prefer usdcToken() (your new schema uses usdcToken)
-      safeCall(lottery.usdcToken?.(), ADDRESSES.USDC),
-
-      safeCall(lottery.entropy?.(), ZeroAddress),
-      safeCall(lottery.entropyProvider?.(), ZeroAddress),
-      safeCall(lottery.callbackGasLimit?.(), 0),
-      safeCall(lottery.minPurchaseAmount?.(), 0),
-
-      safeCall(lottery.ticketRevenue?.(), 0n as any),
-      safeCall(lottery.paused?.(), false),
-
-      safeCall(lottery.winner?.(), null),
-      safeCall(lottery.selectedProvider?.(), null),
-      safeCall(lottery.finalizedAt?.(), null),
-      safeCall(lottery.completedAt?.(), null),
-      safeCall(lottery.canceledAt?.(), null),
-      safeCall(lottery.canceledReason?.(), null),
-      safeCall(lottery.soldAtCancel?.(), null),
-      safeCall(lottery.finalizeRequestId?.(), null),
-      safeCall(lottery.winningTicketIndex?.(), null),
-    ]);
-
-    // createdAt() is not guaranteed — keep it best-effort
-    const createdAtTimestamp = String(await safeCall(lottery.createdAt?.(), 0));
-
-    // ✅ Map to your NEW list item shape (and keep extra fields as optional)
+    // ✅ Map to your NEW list item shape with placeholders for non-trusted fields
     out.push({
       id: addr.toLowerCase(),
-      name: String(name || ""),
 
-      status: statusFromUint8(Number(statusU8)),
+      // Fallback mode: we don't spend RPC on name/config. UI can show "Lottery" + address.
+      name: null,
 
-      // “registry discovery” fields are unknown on fallback
-      deployer: String(deployer || ZeroAddress).toLowerCase(),
-      registry: null,
+      status: statusFromUint8(Number.isFinite(statusU8) ? statusU8 : 0),
+
+      // Registry discovery fields unknown in fallback list mode
       typeId: "1",
+      creator: ZeroAddress.toLowerCase(),
+      registeredAt: "0",
       registryIndex: null,
-      isRegistered: false,
-      registeredAt: null,
 
-      creator: String(creator || ZeroAddress).toLowerCase(),
-      createdAtBlock: "0",
-      createdAtTimestamp,
-      creationTx: ZERO_TX,
+      deployedBy: null,
+      deployedAt: null,
+      deployedTx: null,
 
-      // ✅ NEW FIELD NAME
-      usdcToken: String(usdcToken || ADDRESSES.USDC).toLowerCase(),
+      usdcToken: ADDRESSES.USDC.toLowerCase(),
+      feeRecipient: ZeroAddress.toLowerCase(),
+      entropy: ZeroAddress.toLowerCase(),
+      entropyProvider: ZeroAddress.toLowerCase(),
+      callbackGasLimit: null,
+      protocolFeePercent: null,
 
-      entropy: String(entropy || ZeroAddress).toLowerCase(),
-      entropyProvider: String(entropyProvider || ZeroAddress).toLowerCase(),
+      createdAt: null,
+      deadline: null,
+      ticketPrice: null,
+      winningPot: null,
+      minTickets: null,
+      maxTickets: null,
+      minPurchaseAmount: null,
 
-      feeRecipient: String(feeRecipient || ZeroAddress).toLowerCase(),
-      protocolFeePercent: protocolFeePercent?.toString?.() ?? "0",
-      callbackGasLimit: String(callbackGasLimit ?? 0),
-      minPurchaseAmount: String(minPurchaseAmount ?? 0),
-
-      winningPot: winningPot?.toString?.() ?? "0",
-      ticketPrice: ticketPrice?.toString?.() ?? "0",
-      deadline: deadline?.toString?.() ?? "0",
-      minTickets: minTickets?.toString?.() ?? "0",
-      maxTickets: maxTickets?.toString?.() ?? "0",
-
+      // On-chain truth (minimal)
       sold: sold?.toString?.() ?? "0",
-      ticketRevenue: ticketRevenue?.toString?.() ?? "0",
-      paused: Boolean(paused),
 
-      finalizeRequestId: finalizeRequestId ? String(finalizeRequestId) : null,
-      finalizedAt: finalizedAt ? String(finalizedAt) : null,
-      selectedProvider: selectedProvider ? String(selectedProvider) : null,
+      // Unknown without extra reads; keep 0 so UI doesn't break.
+      ticketRevenue: "0",
 
-      winner: winner ? String(winner).toLowerCase() : null,
-      winningTicketIndex: winningTicketIndex ? String(winningTicketIndex) : null,
-      completedAt: completedAt ? String(completedAt) : null,
+      winner: null,
+      selectedProvider: null,
+      entropyRequestId: null,
+      drawingRequestedAt: null,
+      soldAtDrawing: null,
 
-      canceledReason: canceledReason ? String(canceledReason) : null,
-      canceledAt: canceledAt ? String(canceledAt) : null,
-      soldAtCancel: soldAtCancel ? String(soldAtCancel) : null,
+      canceledAt: null,
+      soldAtCancel: null,
+      cancelReason: null,
+      creatorPotRefunded: null,
 
-      lastUpdatedBlock: nowBlock,
-      lastUpdatedTimestamp: nowSec,
+      totalReservedUSDC: null,
+
+      // NOTE: these fields aren't in your LotteryListItem type anymore,
+      // so we do NOT include: paused/finalizedAt/creationTx/lastUpdatedBlock...
+      // If your UI relies on them, prefer to derive them in UI from nowSec/nowBlock instead.
     } as LotteryListItem);
+
+    // If you still want to show "updated at" somewhere in UI, do it outside the type:
+    // - nowBlock / nowSec already computed above.
+    void nowBlock;
+    void nowSec;
+    void ZERO_TX;
   }
 
   return out;
