@@ -5,6 +5,7 @@ import { getContract, readContract } from "thirdweb";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { getAddress } from "ethers";
+import { SingleWinnerLotteryABI } from "../config/abis";
 
 export type LotteryStatus =
   | "FUNDING_PENDING"
@@ -281,7 +282,9 @@ async function fetchSubgraphBundle(id: string, signal?: AbortSignal): Promise<Su
       : null,
 
     history,
-    latestWinnerPicked: w ? { winningTicketIndex: w.winningTicketIndex != null ? String(w.winningTicketIndex) : null } : null,
+    latestWinnerPicked: w
+      ? { winningTicketIndex: w.winningTicketIndex != null ? String(w.winningTicketIndex) : null }
+      : null,
   };
 }
 
@@ -313,6 +316,7 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
       client: thirdwebClient,
       chain: ETHERLINK_CHAIN,
       address: normalizedAddress,
+      abi: SingleWinnerLotteryABI as any,
     });
   }, [normalizedAddress]);
 
@@ -351,8 +355,7 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
         const summary = await withTimeout(
           readContract({
             contract,
-            method:
-              "function getSummary() view returns (uint8,string,uint64,uint64,uint256,uint256,uint256,uint64,uint64,uint32,uint256,address,uint64,uint64,address,bool,bool)",
+            method: "getSummary",
             params: [],
           }).catch(() => null),
           4000,
@@ -449,10 +452,12 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
             creator: bundle.core.creator ? normHex(bundle.core.creator) : base.creator,
             usdcToken: bundle.core.usdcToken ? normHex(bundle.core.usdcToken) : base.usdcToken,
             feeRecipient: bundle.core.feeRecipient ? normHex(bundle.core.feeRecipient) : base.feeRecipient,
-            protocolFeePercent: bundle.core.protocolFeePercent != null ? String(bundle.core.protocolFeePercent) : base.protocolFeePercent,
+            protocolFeePercent:
+              bundle.core.protocolFeePercent != null ? String(bundle.core.protocolFeePercent) : base.protocolFeePercent,
             entropy: bundle.core.entropy ? normHex(bundle.core.entropy) : base.entropy,
             entropyProvider: bundle.core.entropyProvider ? normHex(bundle.core.entropyProvider) : base.entropyProvider,
-            callbackGasLimit: bundle.core.callbackGasLimit != null ? String(bundle.core.callbackGasLimit) : base.callbackGasLimit,
+            callbackGasLimit:
+              bundle.core.callbackGasLimit != null ? String(bundle.core.callbackGasLimit) : base.callbackGasLimit,
 
             // Prefer subgraph for these if you want “what the indexer thinks”, but keep on-chain truth for actions:
             // - keep sold/winner/status from chain
