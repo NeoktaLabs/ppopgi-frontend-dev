@@ -36,10 +36,13 @@ let backoffStep = 0;
 // Each consumer requests a poll interval; we use the minimum
 const requestedPolls = new Map<string, number>();
 
-// Revalidate burst control
+// Revalidate burst control / throttling
 let lastFetchStartedMs = 0;
 let pendingRefreshAfterFlight = false;
 let revalidateDebounceTimer: number | null = null;
+
+// Global throttle to avoid “poll + focus + revalidate” piling up
+let nextAllowedFetchMs = 0;
 
 // Optimistic patch dedupe (don’t apply same patch twice)
 const appliedPatchIds = new Set<string>();
@@ -53,11 +56,12 @@ const HARD_REVALIDATE_MIN_GAP_MS = 2_500; // allow quick refresh after user acti
 let lastItemsSig = "";
 function signature(items: LotteryListItem[] | null) {
   if (!items || items.length === 0) return "";
-  // List query sorts by registeredAt desc; most live-changing fields are status/sold/ticketRevenue.
   return items
     .map(
       (r) =>
-        `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.ticketRevenue)}:${String(r.registeredAt)}`
+        `${String(r.id)}:${String(r.status)}:${String(r.sold)}:${String(r.ticketRevenue)}:${String(
+          r.registeredAt
+        )}`
     )
     .join("|");
 }
@@ -101,11 +105,11 @@ function clearTimer() {
 function computePollMs() {
   const minRequested = requestedPolls.size > 0 ? Math.min(...requestedPolls.values()) : 20_000;
 
-  // Foreground minimum is 10s (protect indexer)
-  const fg = Math.max(10_000, minRequested);
+  // Foreground minimum is 12s (protect indexer)
+  const fg = Math.max(12_000, minRequested);
 
-  // Background minimum is 60s
-  const bg = Math.max(60_000, fg);
+  // Background minimum is 90s (protect indexer even more)
+  const bg = Math.max(90_000, fg);
 
   return isHidden() ? bg : fg;
 }
@@ -114,12 +118,19 @@ function scheduleNext() {
   clearTimer();
   if (subscribers <= 0) return;
 
+  // If hidden, don’t keep polling aggressively. We'll refresh on visibility/focus.
+  const pollMs = computePollMs();
   const now = Date.now();
   const waitForBackoff = Math.max(0, backoffUntilMs - now);
-  const delay = waitForBackoff > 0 ? waitForBackoff : computePollMs();
+
+  // Also respect global throttle (nextAllowedFetchMs).
+  const waitForThrottle = Math.max(0, nextAllowedFetchMs - now);
+
+  const delay = Math.max(waitForBackoff, waitForThrottle, pollMs);
 
   timer = window.setTimeout(() => {
-    void refresh(true);
+    // background poll
+    void refresh(true, false);
   }, delay);
 }
 
@@ -154,6 +165,9 @@ function applyBackoff(err: any) {
 
   const delay = Math.min(max, base * Math.pow(2, backoffStep));
   backoffUntilMs = Date.now() + delay;
+
+  // also throttle general fetch start
+  nextAllowedFetchMs = Math.max(nextAllowedFetchMs, backoffUntilMs);
 
   setState({
     note: rateLimited ? "Indexer rate-limited. Retrying shortly…" : "Indexer temporarily unavailable.",
@@ -229,9 +243,7 @@ function applyOptimisticBuy(e: OptimisticEvent & { kind: "BUY" }) {
     if (deltaRev > 0n) {
       try {
         nextRev = (BigInt(r.ticketRevenue || "0") + deltaRev).toString();
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     return { ...r, sold: nextSold, ticketRevenue: nextRev };
@@ -254,18 +266,15 @@ function applyOptimisticCreate(e: OptimisticEvent & { kind: "CREATE" }) {
   const newItem: LotteryListItem = {
     id,
 
-    // Canonical registry metadata
     typeId: String(r.typeId ?? "1"),
     creator,
     registeredAt: String(r.registeredAt ?? nowSec),
     registryIndex: r.registryIndex != null ? String(r.registryIndex) : null,
 
-    // Deployer snapshot (best-effort)
     deployedBy: r.deployedBy != null ? String(r.deployedBy).toLowerCase() : null,
     deployedAt: r.deployedAt != null ? String(r.deployedAt) : nowSec,
     deployedTx: r.deployedTx != null ? String(r.deployedTx).toLowerCase() : null,
 
-    // Config / constants
     name: String(r.name ?? "New Lottery"),
     usdcToken: r.usdcToken != null ? String(r.usdcToken).toLowerCase() : null,
     feeRecipient: r.feeRecipient != null ? String(r.feeRecipient).toLowerCase() : null,
@@ -282,34 +291,28 @@ function applyOptimisticCreate(e: OptimisticEvent & { kind: "CREATE" }) {
     maxTickets: r.maxTickets != null ? String(r.maxTickets) : null,
     minPurchaseAmount: r.minPurchaseAmount != null ? String(r.minPurchaseAmount) : null,
 
-    // Live state
     status: (r.status as LotteryStatus) ?? "FUNDING_PENDING",
     sold: String(r.sold ?? "0"),
     ticketRevenue: String(r.ticketRevenue ?? "0"),
 
-    // Drawing state
     winner: r.winner != null ? String(r.winner).toLowerCase() : null,
     selectedProvider: r.selectedProvider != null ? String(r.selectedProvider).toLowerCase() : null,
     entropyRequestId: r.entropyRequestId != null ? String(r.entropyRequestId) : null,
     drawingRequestedAt: r.drawingRequestedAt != null ? String(r.drawingRequestedAt) : null,
     soldAtDrawing: r.soldAtDrawing != null ? String(r.soldAtDrawing) : null,
 
-    // Cancel state
     canceledAt: r.canceledAt != null ? String(r.canceledAt) : null,
     soldAtCancel: r.soldAtCancel != null ? String(r.soldAtCancel) : null,
     cancelReason: r.cancelReason != null ? String(r.cancelReason) : null,
     creatorPotRefunded: typeof r.creatorPotRefunded === "boolean" ? r.creatorPotRefunded : null,
 
-    // Accounting snapshots
     totalReservedUSDC: r.totalReservedUSDC != null ? String(r.totalReservedUSDC) : null,
   };
 
   const items = state.items ?? [];
   if (items.some((x) => normHex(x.id) === id)) return;
 
-  const next = [newItem, ...items].sort(
-    (a, b) => Number(b.registeredAt || "0") - Number(a.registeredAt || "0")
-  );
+  const next = [newItem, ...items].sort((a, b) => Number(b.registeredAt || "0") - Number(a.registeredAt || "0"));
 
   lastItemsSig = signature(next);
   setState({ items: next });
@@ -331,6 +334,28 @@ function handleOptimisticEvent(ev: OptimisticEvent) {
 // -----------------------------
 // Fetching
 // -----------------------------
+function clampFirstForContext() {
+  // 200 is fine on modern indexers, but if hidden we can fetch less.
+  return isHidden() ? 120 : 200;
+}
+
+/**
+ * Centralized “should we start a fetch now?”
+ * Applies: backoff + global throttle + inFlight queueing.
+ */
+function canStartFetch(force: boolean) {
+  if (subscribers <= 0) return { ok: false, reason: "no-subs" as const };
+
+  const now = Date.now();
+
+  if (!force && now < backoffUntilMs) return { ok: false, reason: "backoff" as const };
+  if (!force && now < nextAllowedFetchMs) return { ok: false, reason: "throttle" as const };
+
+  if (inFlight) return { ok: false, reason: "inflight" as const };
+
+  return { ok: true, reason: "ok" as const };
+}
+
 async function doFetch(isBackground: boolean) {
   if (inFlight) return inFlight;
 
@@ -343,9 +368,8 @@ async function doFetch(isBackground: boolean) {
     lastFetchStartedMs = Date.now();
 
     try {
-      // fetchLotteriesFromSubgraph clamps "first" internally; keep it reasonable here
       const data = await fetchLotteriesFromSubgraph({
-        first: 200,
+        first: clampFirstForContext(),
         signal: aborter.signal,
       } as any);
 
@@ -365,6 +389,10 @@ async function doFetch(isBackground: boolean) {
       }
 
       resetBackoff();
+
+      // After a successful fetch, set a soft throttle so multiple triggers
+      // within a short window don’t re-fetch.
+      nextAllowedFetchMs = Date.now() + 1_500;
     } catch (err) {
       if (isAbortError(err)) {
         if (!isBackground) setState({ isLoading: false });
@@ -379,7 +407,8 @@ async function doFetch(isBackground: boolean) {
 
       if (pendingRefreshAfterFlight) {
         pendingRefreshAfterFlight = false;
-        void refresh(true, true);
+        // do not bypass throttles; requestRevalidate will handle timing
+        requestRevalidate(true);
       } else {
         scheduleNext();
       }
@@ -392,12 +421,23 @@ async function doFetch(isBackground: boolean) {
 export async function refresh(isBackground = false, force = false) {
   if (subscribers <= 0) return;
 
-  if (!force && Date.now() < backoffUntilMs) {
+  // If hidden and background, don’t aggressively fetch; let focus/visible do it.
+  if (isBackground && isHidden() && !force) {
     scheduleNext();
     return;
   }
 
-  if (force) backoffUntilMs = 0;
+  if (force) {
+    backoffUntilMs = 0;
+    nextAllowedFetchMs = 0;
+  }
+
+  const gate = canStartFetch(force);
+  if (!gate.ok) {
+    if (gate.reason === "inflight") pendingRefreshAfterFlight = true;
+    scheduleNext();
+    return;
+  }
 
   await doFetch(isBackground);
 }
@@ -429,6 +469,7 @@ function clearRevalidateDebounce() {
  * When UI emits "ppopgi:revalidate", we:
  * - don’t spam (min gap)
  * - don’t overlap (if inFlight => queue one refresh)
+ * - respect backoff + global throttle
  */
 function requestRevalidate(force = false) {
   if (subscribers <= 0) return;
@@ -442,13 +483,16 @@ function requestRevalidate(force = false) {
     return;
   }
 
-  const since = now - lastFetchStartedMs;
-  if (since >= 0 && since < minGap) {
+  // also consider global throttle (e.g. multiple events)
+  const earliest = Math.max(lastFetchStartedMs + minGap, nextAllowedFetchMs);
+  const wait = Math.max(0, earliest - now);
+
+  if (wait > 0) {
     clearRevalidateDebounce();
     revalidateDebounceTimer = window.setTimeout(() => {
       revalidateDebounceTimer = null;
       void refresh(true, true);
-    }, minGap - since);
+    }, wait);
     return;
   }
 
@@ -475,6 +519,8 @@ export function startLotteryStore(consumerKey: string, pollMs: number) {
       const detail = ce?.detail;
       if (!detail || typeof detail !== "object") return;
       handleOptimisticEvent(detail as any);
+      // IMPORTANT: do NOT immediately force a fetch here.
+      // Optimistic patches update UI; real fetch comes via throttled revalidate/poll.
     };
 
     window.addEventListener("focus", onFocus);
