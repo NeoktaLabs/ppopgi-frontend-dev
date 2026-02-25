@@ -28,7 +28,7 @@ type FinalizerInfo = {
 };
 
 type Props = {
-  lottery: LotteryListItem; 
+  lottery: LotteryListItem;
   onOpen: (id: string) => void;
   onOpenSafety?: (id: string) => void;
   ribbon?: "gold" | "silver" | "bronze";
@@ -95,20 +95,22 @@ export function LotteryCard({
   const endChipNode = useMemo(() => {
     if (!endMode) return null;
     const title = endMode === "CANCELING" ? "Canceling" : "Drawing winner";
-    if (finalizer?.running) return (
-      <>
-        {title}
-        <br />
-        ~ now
-      </>
-    );
-    if (endCountdownSec === null) return (
-      <>
-        {title}
-        <br />
-        ~ soon
-      </>
-    );
+    if (finalizer?.running)
+      return (
+        <>
+          {title}
+          <br />
+          ~ now
+        </>
+      );
+    if (endCountdownSec === null)
+      return (
+        <>
+          {title}
+          <br />
+          ~ soon
+        </>
+      );
     return (
       <>
         {title}
@@ -160,6 +162,10 @@ export function LotteryCard({
       </div>
     );
   }, [endMode, maxReached]);
+
+  // ✅ Fix TS: title prop cannot be null
+  const titleText = lottery.name ?? undefined;
+  const displayName = lottery.name ?? "Lottery";
 
   return (
     <div className={cardClass} onClick={() => onOpen(lottery.id)} role="button" tabIndex={0}>
@@ -221,8 +227,8 @@ export function LotteryCard({
         )}
       </div>
 
-      <div className="rc-title" title={lottery.name}>
-        {lottery.name}
+      <div className="rc-title" title={titleText}>
+        {displayName}
       </div>
 
       {/* --- PRIZE (Holographic) --- */}
