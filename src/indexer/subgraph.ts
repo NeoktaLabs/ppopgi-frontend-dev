@@ -224,6 +224,12 @@ const LOTTERY_CARD_FIELDS = `
   sold
   ticketRevenue
   registeredAt
+
+  # ✅ needed for Dashboard "Winner" vs "Better luck next time"
+  winner
+
+  # ✅ optional but useful for badges/UX
+  canceledAt
 `;
 
 // -------------------- Normalizers --------------------
