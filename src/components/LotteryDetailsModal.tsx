@@ -75,8 +75,6 @@ type JourneyBundle = {
 async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | null> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
-  // NOTE: your schema uses `Lottery.id: ID!` (string), and event entities link via `lottery: Lottery!`
-  // So we should use $id: ID! and pass the lowercased address string.
   const query = `
     query LotteryJourney($id: ID!) {
       lottery(id: $id) {
@@ -216,13 +214,8 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
 
 type Props = {
   open: boolean;
-
-  // ✅ Keep prop name so existing router/query (?lottery=) keeps working
   lotteryId: string | null;
-
   onClose: () => void;
-
-  // ✅ Updated type
   initialLottery?: LotteryListItem | null;
 };
 
@@ -265,10 +258,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const account = useActiveAccount();
 
   const [tab, setTab] = useState<"receipt" | "holders">("receipt");
-
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
-
-  // ✅ NEW: indexer-based journey bundle
   const [journey, setJourney] = useState<JourneyBundle | null>(null);
 
   useEffect(() => {
@@ -279,7 +269,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       return;
     }
 
-    // Keep this optimization if your list item includes it; otherwise it’s harmless.
     if ((initialLottery as any)?.createdAtTimestamp) setMetadata(initialLottery as any);
 
     let active = true;
@@ -305,11 +294,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useLotteryParticipants(lotteryId, soldForPct);
 
-  /**
-   * ✅ Timeline now driven by subgraph:
-   * - Prefer Journey lottery fields + typed event timestamps/txHash.
-   * - Fall back to displayData fields if present.
-   */
   const timeline = useMemo(() => {
     if (!displayData && !journey?.lottery) return [];
 
@@ -326,8 +310,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
     const deployedTx = lot?.deployedTx || displayData?.deployedTx || displayData?.creationTx || null;
 
-    const registeredAt =
-      lot?.registeredAt || displayData?.registeredAt || displayData?.history?.registeredAt || null;
+    const registeredAt = lot?.registeredAt || displayData?.registeredAt || displayData?.history?.registeredAt || null;
 
     const deadline = lot?.deadline || displayData?.deadline || null;
 
@@ -355,15 +338,16 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       status: registeredAt ? "done" : "future",
     });
 
-    // Ticket sales open = FundingConfirmedEvent OR if status already OPEN+
     if (funding) {
       steps.push({ label: "Ticket Sales Open", date: funding.timestamp, tx: funding.txHash, status: "done" });
     } else {
-      const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
+      const s =
+        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
+          ? "active"
+          : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
-    // Randomness requested = LotteryFinalizedEvent OR if status DRAWING+
     if (finalized) {
       steps.push({ label: "Randomness Requested", date: finalized.timestamp, tx: finalized.txHash, status: "done" });
     } else if (status === "DRAWING") {
@@ -377,14 +361,13 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       });
     }
 
-    // Winner / canceled / settlement
     if (winnerPicked) {
       steps.push({
         label: "Winner Selected",
         date: winnerPicked.timestamp,
         tx: winnerPicked.txHash,
         status: "done",
-        winner: (winnerPicked.winner || displayData?.winner || lot?.winner || null),
+        winner: winnerPicked.winner || displayData?.winner || lot?.winner || null,
       });
     } else if (canceled) {
       steps.push({ label: "Canceled", date: canceled.timestamp, tx: canceled.txHash, status: "done" });
@@ -394,7 +377,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         date: lot?.drawingRequestedAt || displayData?.completedAt || null,
         tx: null,
         status: "done",
-        winner: (displayData?.winner || lot?.winner || null),
+        winner: displayData?.winner || lot?.winner || null,
       });
     } else if (status === "CANCELED") {
       steps.push({ label: "Canceled", date: lot?.canceledAt || displayData?.canceledAt || null, tx: null, status: "done" });
@@ -424,7 +407,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     if (!displayData) return null;
 
     const status = String(displayData.status || "");
-    const isSettled = status === "COMPLETED";
     const isCanceled = status === "CANCELED";
 
     const pot = parseFloat(math.fmtUsdc(displayData.winningPot || "0"));
@@ -434,13 +416,11 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
     const winnerNet = pot * 0.9;
     const platformPrizeFee = pot * 0.1;
-    const prizeTotal = winnerNet + platformPrizeFee;
 
     const creatorNet = grossSales * 0.9;
     const platformSalesFee = grossSales * 0.1;
-    const salesTotal = creatorNet + platformSalesFee;
 
-    return { isSettled, isCanceled, winnerNet, platformPrizeFee, prizeTotal, creatorNet, platformSalesFee, salesTotal };
+    return { isCanceled, winnerNet, platformPrizeFee, creatorNet, platformSalesFee };
   }, [displayData, math]);
 
   const creatorAddr = String(displayData?.creator || "").toLowerCase();
@@ -463,9 +443,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   }, [state.usdcBal, ticketPriceU]);
 
   const remainingCap = Math.max(0, Number(math.maxBuy || 0));
-  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy)
-    ? Math.max(0, Math.min(remainingCap, affordableMaxBuy))
-    : remainingCap;
+  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy) ? Math.max(0, Math.min(remainingCap, affordableMaxBuy)) : remainingCap;
 
   const uiMaxForStepper = Math.max(1, effectiveMaxBuy);
   const uiTicket = clampTicketsUi(state.tickets);
@@ -535,10 +513,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
             <div className="rdm-hero-meta">
               <div className="rdm-host">
                 <span>Created by</span>
-                <ExplorerLink
-                  addr={String(displayData?.creator || "")}
-                  label={math.short(String(displayData?.creator || ""))}
-                />
+                <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
               </div>
               <div className="rdm-createdon">
                 <span>on</span>
@@ -572,9 +547,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         <div className="rdm-ticket-stub">
           <div className="rdm-buy-section">
             {!flags.lotteryIsOpen ? (
-              <div className="rdm-closed-msg">
-                {state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}
-              </div>
+              <div className="rdm-closed-msg">{state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}</div>
             ) : isCreator ? (
               <div className="rdm-buy-disabled">Creator cannot participate.</div>
             ) : (
@@ -748,7 +721,8 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
             {tab === "holders" && (
               <div className="rdm-holders">
-                {loadingPart ? (
+                {/* ✅ FIX: only show Loading if we have nothing to show yet */}
+                {loadingPart && participants.length === 0 ? (
                   <div className="rdm-empty">Loading...</div>
                 ) : participants.length === 0 ? (
                   <div className="rdm-empty">No tickets sold.</div>
