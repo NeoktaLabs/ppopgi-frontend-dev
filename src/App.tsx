@@ -143,6 +143,23 @@ export default function App() {
   // ✅ Lottery details for safety modal
   const { data: safetyData } = useLotteryDetails(safetyId, !!safetyId);
 
+  // ✅ NEW: single flag to hide layout chrome when any modal/gate is open
+  const anyModalOpen =
+    showGate ||
+    signInOpen ||
+    createOpen ||
+    cashierOpen ||
+    !!selectedLotteryId ||
+    !!safetyId;
+
+  // ✅ OPTIONAL: prevent background scroll while a modal is open
+  useEffect(() => {
+    document.body.style.overflow = anyModalOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [anyModalOpen]);
+
   return (
     <>
       <GlobalDataRefresher intervalMs={5000} />
@@ -157,6 +174,7 @@ export default function App() {
         onOpenCreate={() => (account ? setCreateOpen(true) : setSignInOpen(true))}
         onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))}
         onSignOut={handleSignOut}
+        hideChrome={anyModalOpen} // ✅ NEW
       >
         {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
