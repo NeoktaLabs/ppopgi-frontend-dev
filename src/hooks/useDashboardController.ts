@@ -376,8 +376,21 @@ export function useDashboardController() {
         const userLots = await getUserLotteries();
         if (runId !== runIdRef.current) return;
 
-        const joinedRows = (userLots ?? []).filter((x) => (x.user || "").toLowerCase() === myAddr);
-        const joinedIds = joinedRows.map((x) => normId(x.lottery));
+        // ✅ All rows for this user (keep for claim history & roles)
+        const joinedRowsAll = (userLots ?? []).filter((x) => (x.user || "").toLowerCase() === myAddr);
+
+        // ✅ Joined tab should mean "actually bought tickets"
+        //    Prevents creator/feeRecipient rows that exist for accounting but have 0 tickets.
+        const joinedRowsPurchased = joinedRowsAll.filter((x) => {
+          try {
+            return BigInt(x.ticketsPurchased ?? "0") > 0n;
+          } catch {
+            return false;
+          }
+        });
+
+        // ✅ Joined IDs only from purchased rows
+        const joinedIds = joinedRowsPurchased.map((x) => normId(x.lottery));
 
         const storeById = new Map<string, LotteryListItem>();
         for (const r of allLotteries) storeById.set(normId(r.id), { ...r, id: normId(r.id) });
@@ -422,8 +435,9 @@ export function useDashboardController() {
           })
           .slice(0, 600);
 
+        // ✅ IMPORTANT: keep lookup map from ALL rows (claim history / participatedEver)
         const joinedRowById = new Map<string, UserLotteryItem>();
-        for (const row of joinedRows) joinedRowById.set(normId(row.lottery), row);
+        for (const row of joinedRowsAll) joinedRowById.set(normId(row.lottery), row);
 
         const rpcCache = rpcCacheRef.current;
 
