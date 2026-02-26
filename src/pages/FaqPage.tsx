@@ -110,7 +110,7 @@ flowchart TD
   classDef decision fill:#ffffff,stroke:#9d174d,stroke-width:2px,color:#4A0F2B,rx:6,ry:6,stroke-dasharray: 5 5;
   classDef success fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d,rx:12,ry:12;
   classDef fail fill:#fff1f2,stroke:#e11d48,stroke-width:2px,color:#9f1239,rx:12,ry:12;
-  classDef tech fill:#fff,stroke:#4A0F2B,stroke-width:2px,color:#4A0F2B,rx:4,ry:4,stroke-dasharray: 2 2;
+  classDef tech fill:#fff,stroke:#4A0F2B,stroke:#4A0F2B,color:#4A0F2B,rx:4,ry:4,stroke-dasharray: 2 2;
 
   User[User Wallet<br/>(MetaMask etc.)]:::tech
   App[Ppopgi Frontend<br/>(React)]:::brand
@@ -168,7 +168,7 @@ const FAQ_ITEMS: FaqItem[] = [
         A typical raffle works like this:
         <ul className="faq-ul">
           <li>
-            A <b>creator deposits a prize pot</b> (USDC) into the raffle contract.
+            A <b>creator deposits a prize pot</b> (USDC) into a new raffle contract.
           </li>
           <li>
             Players <b>buy tickets</b> (USDC) while the raffle is open.
@@ -177,12 +177,64 @@ const FAQ_ITEMS: FaqItem[] = [
             When the raffle ends (sold out or deadline), a <b>winner is selected on-chain</b> using verifiable randomness.
           </li>
           <li>
-            After the draw, funds are handled as <b>claims</b>: the winner claims the prize (minus prize fee) and the creator claims
-            ticket revenue (minus ticket fee).
+            After the draw, funds are handled as <b>claims</b>: the winner claims the prize (minus protocol fees) and the creator
+            claims ticket revenue (minus protocol fees).
           </li>
         </ul>
         <div className="faq-callout">
-          Core idea: no hidden server logic deciding outcomes — the important rules are enforced by the raffle contract.
+          Core idea: no hidden server logic deciding outcomes — the important rules are enforced by the raffle smart contract.
+        </div>
+      </>
+    ),
+  },
+
+  // ✅ NEW: Tech stack/components (requested)
+  {
+    id: "tech-stack",
+    q: "What is the Ppopgi tech stack / components?",
+    a: (
+      <>
+        Ppopgi is made of a few components. Some are <b>on-chain</b> (custody + rules), and others are <b>off-chain</b> (speed + UX).
+        <br />
+        <br />
+
+        <b>🧱 On-chain</b>
+        <ul className="faq-ul">
+          <li>
+            <b>Lottery contracts (Etherlink / EVM):</b> hold USDC, enforce rules, request randomness, compute winner, and allocate
+            claimable balances.
+          </li>
+          <li>
+            <b>LotteryRegistry:</b> a registry of deployed lotteries (used for discovery and indexing).
+          </li>
+          <li>
+            <b>SingleWinnerDeployer:</b> deploys a new lottery contract per raffle and registers it in the registry.
+          </li>
+          <li>
+            <b>Pyth Entropy:</b> provides on-chain verifiable randomness for winner selection.
+          </li>
+        </ul>
+
+        <b>🌐 Off-chain (operated by Ppopgi for a smooth UX)</b>
+        <ul className="faq-ul">
+          <li>
+            <b>Frontend (React):</b> the user interface that reads public chain data and sends transactions from your wallet.
+          </li>
+          <li>
+            <b>Indexer (The Graph subgraph):</b> indexes contract events for fast lists, participants, and history views.
+          </li>
+          <li>
+            <b>Edge cache worker:</b> caches GraphQL reads to reduce latency and load.
+          </li>
+          <li>
+            <b>Finalizer bot:</b> periodically calls <code>finalize()</code> when raffles are eligible (permissionless action).
+          </li>
+        </ul>
+
+        <div className="faq-callout">
+          Important: Ppopgi provides the indexer, cache worker, and finalizer bot to make the experience as smooth as possible — but
+          these services do <b>not</b> control funds and do <b>not</b> decide winners. They either read public data or call public
+          functions that anyone can call.
         </div>
       </>
     ),
@@ -211,11 +263,11 @@ const FAQ_ITEMS: FaqItem[] = [
           <li>Holds USDC (prize pot + ticket revenue) inside the raffle contract.</li>
           <li>Enforces the raffle state machine (FundingPending → Open → Drawing → Completed / Canceled).</li>
           <li>Requests randomness from Pyth Entropy and accepts callbacks only from the Entropy contract.</li>
-          <li>Computes winner deterministically (<code>random % totalSold</code>) using ticket ownership ranges.</li>
+          <li>Computes the winner deterministically (<code>random % totalSold</code>) using ticket ownership ranges.</li>
           <li>Uses pull-based claims (winner/creator/feeRecipient claim their own funds).</li>
         </ul>
 
-        <b>🌐 Off-chain (UX + performance)</b>
+        <b>🌐 Off-chain (operated by Ppopgi for UX + performance)</b>
         <ul className="faq-ul">
           <li>
             <b>Subgraph (The Graph)</b> indexes events for fast lists/participants/history.
@@ -236,7 +288,6 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
-  // ✅ NEW: contract addresses
   {
     id: "contracts-addresses",
     q: "What are the on-chain contract addresses?",
@@ -304,6 +355,21 @@ const FAQ_ITEMS: FaqItem[] = [
               <span>0x… (add your address)</span>
             )}
           </li>
+          <li>
+            <b>Entropy provider:</b>{" "}
+            {CONTRACTS.entropyProvider !== "0x…" ? (
+              <a
+                className="rdm-info-link"
+                target="_blank"
+                rel="noreferrer"
+                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.entropyProvider).toLowerCase()}`}
+              >
+                {CONTRACTS.entropyProvider}
+              </a>
+            ) : (
+              <span>0x… (add your address)</span>
+            )}
+          </li>
         </ul>
 
         <div className="faq-callout">
@@ -313,16 +379,19 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
-  // ✅ NEW: per-lottery contracts + security model
   {
     id: "each-lottery-contract",
     q: "Is each lottery a new contract? How are lotteries secured?",
     a: (
       <>
-        <b>Yes.</b> Each raffle is deployed as a <b>new smart contract instance</b>. This has two big benefits:
+        <b>Yes.</b> Each raffle is deployed as a <b>new smart contract instance</b> using the deployer.
+        <br />
+        <br />
+        This has two big benefits:
         <ul className="faq-ul">
           <li>
-            A raffle’s parameters (ticket price, deadline, max tickets, fee recipient, etc.) are fixed inside that contract.
+            A raffle’s parameters (ticket price, deadline, max tickets, fee recipient, fee percent, etc.) are fixed inside that
+            contract.
           </li>
           <li>
             Funds for that raffle are isolated in that contract. A bug or issue in one raffle should not automatically affect others.
@@ -331,23 +400,21 @@ const FAQ_ITEMS: FaqItem[] = [
 
         <b>How funds are protected (in practice):</b>
         <ul className="faq-ul">
+          <li>USDC is held by the raffle contract itself (not in a website wallet).</li>
           <li>
-            USDC is held by the raffle contract itself (not in a website wallet).
+            There is no function in the raffle contract intended to “withdraw everything to an arbitrary address”.
           </li>
           <li>
             Winner selection is enforced by contract logic and uses <b>Pyth Entropy</b> randomness.
           </li>
           <li>
-            Payouts use <b>pull-based claims</b>: the contract records what you’re owed, and <i>only your address</i> can claim it.
-          </li>
-          <li>
-            There is no “admin withdraw everything” function in the raffle contract.
+            Payouts use <b>pull-based claims</b>: the contract records what you’re owed, and only your address can claim it.
           </li>
         </ul>
 
         <div className="faq-callout">
-          Like any smart contract system, the remaining risk is “code risk” (unexpected bugs). The goal is to keep contracts simple,
-          transparent, and verifiable on-chain.
+          Like any smart contract system, the remaining risk is “code risk” (unexpected bugs). The best reassurance is transparency:
+          verified addresses, public source code, and on-chain behavior you can verify yourself.
         </div>
       </>
     ),
@@ -364,24 +431,23 @@ const FAQ_ITEMS: FaqItem[] = [
         Ppopgi uses <b>Pyth Entropy</b> as the randomness source. In plain terms:
         <ol className="faq-ol">
           <li>
-            When a raffle is ready to settle (deadline reached or sold out), the raffle asks Pyth Entropy for a{" "}
-            <b>random value tied to that exact raffle draw</b>.
+            When a raffle is ready to settle (deadline reached or sold out), the raffle calls <code>finalize()</code> and requests a
+            random value from Pyth Entropy (paying the Entropy fee).
           </li>
           <li>
-            That randomness is returned <b>on-chain</b> and delivered back to the raffle contract.
+            Entropy returns the random value <b>on-chain</b> via a callback.
           </li>
           <li>
-            The raffle uses it to pick a winner deterministically by mapping the random number into the range of sold tickets
-            (conceptually: <code>random % totalSold</code>).
+            The raffle contract only accepts callbacks from the <b>Entropy contract address</b> and rejects invalid callbacks.
           </li>
           <li>
-            The winning ticket index is then matched to the owner using the on-chain ticket ownership history (ranges), and the result
-            is written on-chain.
+            The raffle selects a winner deterministically using <code>winningIndex = random % totalSold</code> and maps that index to a
+            buyer using on-chain ticket ranges.
           </li>
         </ol>
         <div className="faq-callout">
-          There is no private server picking the winner. Even the protocol deployer cannot override the result — the contract only
-          accepts randomness from the Pyth Entropy contract.
+          There is no private server picking the winner. The randomness is delivered on-chain, and the winner is computed by the
+          contract.
         </div>
       </>
     ),
@@ -409,7 +475,7 @@ const FAQ_ITEMS: FaqItem[] = [
           <li>or an automated helper (the <b>finalizer bot</b>).</li>
         </ul>
         <div className="faq-callout">
-          This cost is separate from Ppopgi fees: it’s the on-chain randomness request cost paid by whoever finalizes.
+          This cost is separate from Ppopgi protocol fees: it’s the on-chain randomness request cost paid by whoever finalizes.
         </div>
       </>
     ),
@@ -428,14 +494,13 @@ const FAQ_ITEMS: FaqItem[] = [
         <br />
         <br />
         <div className="faq-callout">
-          Important: the bot does not decide winners and cannot change outcomes — it only triggers the same public “settle” action that
-          any user can call.
+          Important: the bot does not decide winners and cannot change outcomes — it only triggers the same public <code>finalize()</code>{" "}
+          action that any user can call.
         </div>
       </>
     ),
   },
 
-  // ✅ FIXED: matches your contract (forceCancelStuck is permissionless after hatch delay)
   {
     id: "stuck-drawing",
     q: "What if a raffle gets stuck while settling?",
@@ -460,19 +525,33 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
+  // ✅ FIXED: fees text now matches protocolFeePercent in your contracts (0..20)
   {
     id: "fees",
-    q: "What are the fees? (Prize vs ticket sales)",
+    q: "What are the fees?",
     a: (
       <>
         Fees are transparent and enforced by the raffle contract when the raffle completes.
         <br />
         <br />
-        In each raffle contract, the fee percentage is stored on-chain and used at settlement time.
-        <div className="faq-callout" style={{ marginTop: 10 }}>
-          You can verify the fee percent for any raffle directly on-chain (it’s part of the raffle’s immutable config).
+        Each raffle stores these values on-chain:
+        <ul className="faq-ul">
+          <li>
+            <b>protocolFeePercent</b> (0–20%)
+          </li>
+          <li>
+            <b>feeRecipient</b> (the address that can claim protocol fees)
+          </li>
+        </ul>
+        At settlement time, the contract applies <b>protocolFeePercent</b> to:
+        <ul className="faq-ul">
+          <li>the prize pot (winner payout)</li>
+          <li>the ticket revenue (creator payout)</li>
+        </ul>
+        <div className="faq-callout">
+          You can verify the fee percent and fee recipient for any raffle directly on-chain (it’s part of that raffle’s immutable
+          config).
         </div>
-        Fees are <b>not discretionary</b> once the raffle is live — they’re computed by the contract at settlement.
       </>
     ),
   },
@@ -503,12 +582,11 @@ const FAQ_ITEMS: FaqItem[] = [
         Yes — once a raffle is created, its fee settings are <b>fixed for that raffle</b>.
         <br />
         <br />
-        The protocol may update defaults for <b>future</b> raffles, but existing raffles remain unchanged.
+        The deployer may update defaults for <b>future</b> raffles, but existing raffles remain unchanged.
       </>
     ),
   },
 
-  // ✅ FIXED: removed "pause" claim (not present in the contracts you shared)
   {
     id: "permissions",
     q: "Who can do what? (Creator vs players vs protocol roles)",
@@ -544,7 +622,7 @@ const FAQ_ITEMS: FaqItem[] = [
         The winner selection is enforced by the raffle contract and uses verifiable randomness from Pyth Entropy.
         <br />
         <br />
-        Also, payouts are designed as <b>pull payments</b>:
+        Payouts are pull-based:
         <ul className="faq-ul">
           <li>The contract records what each address is owed.</li>
           <li>Only that address can claim its own funds.</li>
@@ -554,7 +632,7 @@ const FAQ_ITEMS: FaqItem[] = [
         address.
         <div className="faq-callout">
           Important nuance: smart contracts reduce trust in people, but they don’t eliminate “code risk”. The best reassurance is
-          transparency: verified contracts, public source code, and reproducible behavior on-chain.
+          transparency: verified contracts, public source code, and behavior you can verify on-chain.
         </div>
       </>
     ),
@@ -633,8 +711,8 @@ const FAQ_ITEMS: FaqItem[] = [
         <br />
         <ul className="faq-ul">
           <li>🎟 Players can reclaim a <b>full refund</b> for their tickets.</li>
-          <li>👤 The creator can reclaim their <b>original prize pot</b>.</li>
-          <li>💸 <b>No fees</b> are taken on canceled raffles.</li>
+          <li>👤 The creator can reclaim their <b>original prize pot</b> (as a claim).</li>
+          <li>💸 <b>No protocol fees</b> are allocated on canceled raffles.</li>
         </ul>
         Refunds are done through the <b>Dashboard</b> (claim portal).
       </>
