@@ -15,13 +15,42 @@ function isFresh(ts: string, seconds = NEW_WINDOW_SEC) {
   return now - t <= seconds;
 }
 
+// ✅ Updated: seconds / minutes / hours / days / months / years
 function timeAgoFrom(nowSec: number, ts: string) {
-  const diff = nowSec - Number(ts);
+  const t = Number(ts);
+  if (!Number.isFinite(t) || t <= 0) return "—";
+
+  const diff = nowSec - t;
   if (!Number.isFinite(diff)) return "—";
-  if (diff < 0) return "0s";
-  if (diff < 60) return `${diff}s`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  return `${Math.floor(diff / 3600)}h`;
+  if (diff < 0) return "0 sec ago";
+
+  if (diff < 60) {
+    const s = Math.floor(diff);
+    return `${s} sec ago`;
+  }
+
+  if (diff < 3600) {
+    const m = Math.floor(diff / 60);
+    return `${m} min ago`;
+  }
+
+  if (diff < 86400) {
+    const h = Math.floor(diff / 3600);
+    return `${h}h ago`;
+  }
+
+  if (diff < 30 * 86400) {
+    const d = Math.floor(diff / 86400);
+    return `${d} day${d === 1 ? "" : "s"} ago`;
+  }
+
+  if (diff < 365 * 86400) {
+    const mo = Math.floor(diff / (30 * 86400));
+    return `${mo} month${mo === 1 ? "" : "s"} ago`;
+  }
+
+  const y = Math.floor(diff / (365 * 86400));
+  return `${y} year${y === 1 ? "" : "s"} ago`;
 }
 
 // Support both new + legacy item shapes
