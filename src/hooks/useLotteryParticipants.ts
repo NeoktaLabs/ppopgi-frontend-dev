@@ -11,7 +11,7 @@ export type ParticipantUI = UserLotteryItem & {
 type CacheEntry = {
   at: number;
   data: UserLotteryItem[];
-  soldAtFetch: number;
+  soldAtFetch: number; // helps decide if cache is too stale
 };
 
 const CACHE = new Map<string, CacheEntry>();
@@ -42,6 +42,8 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
   const abortRef = useRef<AbortController | null>(null);
   const reqIdRef = useRef(0);
+  const rawRef = useRef<UserLotteryItem[]>([]);
+  rawRef.current = raw;
 
   const load = useCallback(
     async (opts?: { force?: boolean; reason?: "id_change" | "revalidate" | "manual" }) => {
@@ -57,19 +59,19 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
       const cached = CACHE.get(key);
       const cacheFresh = !!cached && now - cached.at < CACHE_TTL_MS;
-
       const soldMovedALot =
         !!cached &&
         Number.isFinite(cached.soldAtFetch) &&
         Math.abs(soldNow - cached.soldAtFetch) >= SOLD_DELTA_FORCE_REFRESH;
 
+      // Cache hit (unless force)
       if (!opts?.force && cached && cacheFresh && !soldMovedALot) {
         setRaw(cached.data);
         setIsLoading(false);
         return;
       }
 
-      // Abort previous request
+      // Abort any in-flight request
       try {
         abortRef.current?.abort();
       } catch {}
@@ -79,31 +81,35 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
       const myReqId = ++reqIdRef.current;
 
-      // Spinner only if we truly have nothing to show
-      const hasSomething = (cached?.data?.length ?? raw.length) > 0;
+      // Only show spinner if we truly have nothing to show
+      const hasSomething = (cached?.data?.length ?? rawRef.current.length) > 0;
       if (!hasSomething) setIsLoading(true);
 
       try {
         const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
 
-        // Only the latest request is allowed to update state
-        if (ac.signal.aborted || myReqId !== reqIdRef.current) return;
+        // Only the latest request may update state
+        if (myReqId !== reqIdRef.current) return;
 
-        CACHE.set(key, { at: now, data: data ?? [], soldAtFetch: soldNow });
+        CACHE.set(key, { at: Date.now(), data: data ?? [], soldAtFetch: soldNow });
         setRaw(data ?? []);
       } catch (err: any) {
-        if (isAbortError(err)) return;
+        if (myReqId !== reqIdRef.current) return;
+        if (isAbortError(err)) {
+          // Keep whatever we already have; don't treat as "still loading"
+          return;
+        }
 
         console.error("Failed to load participants", err);
-
-        // Keep cached/previous data on error
         if (cached?.data?.length) setRaw(cached.data);
+        // else keep current raw (don’t blank)
       } finally {
-        // Only the latest request should control loading state
-        if (myReqId === reqIdRef.current) setIsLoading(false);
+        if (myReqId === reqIdRef.current) {
+          setIsLoading(false);
+        }
       }
     },
-    [lotteryId, totalSold, raw.length]
+    [lotteryId, totalSold]
   );
 
   // Fetch when lotteryId changes
@@ -123,11 +129,12 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
     };
   }, [lotteryId, load]);
 
-  // Refresh holders after buy/create
+  // Refresh holders after buy/create (ppopgi:revalidate)
   useEffect(() => {
     const onRevalidate = () => {
       if (!lotteryId) return;
       if (isHidden()) return;
+
       void load({ force: false, reason: "revalidate" });
     };
 
@@ -138,14 +145,11 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
   const participants: ParticipantUI[] = useMemo(() => {
     const sold = Number.isFinite(totalSold) ? totalSold : 0;
 
-    return (raw ?? [])
-      // optional safety: ignore zero-ticket rows
-      .filter((p) => Number(p.ticketsPurchased || "0") > 0)
-      .map((p) => {
-        const count = Number(p.ticketsPurchased || "0");
-        const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
-        return { ...p, percentage: pct };
-      });
+    return (raw ?? []).map((p) => {
+      const count = Number(p.ticketsPurchased || "0");
+      const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
+      return { ...p, percentage: pct };
+    });
   }, [raw, totalSold]);
 
   return {
