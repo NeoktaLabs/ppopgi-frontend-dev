@@ -41,60 +41,71 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
   const soldRef = useRef(0);
   soldRef.current = Number.isFinite(totalSold) ? totalSold : 0;
 
-  const load = useCallback(async (opts?: { force?: boolean; reason?: "id_change" | "revalidate" | "manual" }) => {
-    if (!lotteryId) {
-      setRaw([]);
-      setIsLoading(false);
-      return;
-    }
+  // ✅ debounce revalidate spam (if any)
+  const lastRevalRef = useRef(0);
 
-    const key = lotteryId.toLowerCase();
-    const now = Date.now();
-    const soldNow = soldRef.current;
+  const load = useCallback(
+    async (opts?: { force?: boolean; reason?: "id_change" | "revalidate" | "manual" }) => {
+      if (!lotteryId) {
+        setRaw([]);
+        setIsLoading(false);
+        return;
+      }
 
-    const cached = CACHE.get(key);
-    const cacheFresh = !!cached && now - cached.at < CACHE_TTL_MS;
-    const soldMovedALot =
-      !!cached &&
-      Number.isFinite(cached.soldAtFetch) &&
-      Math.abs(soldNow - cached.soldAtFetch) >= SOLD_DELTA_FORCE_REFRESH;
+      const key = lotteryId.toLowerCase();
+      const now = Date.now();
+      const soldNow = soldRef.current;
 
-    if (!opts?.force && cached && cacheFresh && !soldMovedALot) {
-      setRaw(cached.data);
-      setIsLoading(false);
-      return;
-    }
+      const cached = CACHE.get(key);
+      const cacheFresh = !!cached && now - cached.at < CACHE_TTL_MS;
+      const soldMovedALot =
+        !!cached &&
+        Number.isFinite(cached.soldAtFetch) &&
+        Math.abs(soldNow - cached.soldAtFetch) >= SOLD_DELTA_FORCE_REFRESH;
 
-    try {
-      abortRef.current?.abort();
-    } catch {}
+      // Cache hit (unless force)
+      if (!opts?.force && cached && cacheFresh && !soldMovedALot) {
+        setRaw(cached.data);
+        setIsLoading(false);
+        return;
+      }
 
-    const ac = new AbortController();
-    abortRef.current = ac;
+      // ✅ IMPORTANT: do NOT abort previous requests here.
+      // Frequent calls + aborting leads to "canceled" loops and stuck Loading.
+      const myReqId = ++reqIdRef.current;
 
-    const myReqId = ++reqIdRef.current;
+      const ac = new AbortController();
+      abortRef.current = ac;
 
-    const hasSomething = (cached?.data?.length ?? rawRef.current.length) > 0;
-    if (!hasSomething) setIsLoading(true);
+      // Only show spinner if we truly have nothing to show
+      const hasSomething = (cached?.data?.length ?? rawRef.current.length) > 0;
+      if (!hasSomething) setIsLoading(true);
 
-    try {
-      const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
-      if (myReqId !== reqIdRef.current) return;
+      try {
+        const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
 
-      CACHE.set(key, { at: Date.now(), data: data ?? [], soldAtFetch: soldNow });
-      setRaw(data ?? []);
-    } catch (err: any) {
-      if (myReqId !== reqIdRef.current) return;
-      if (isAbortError(err)) return;
+        // Only the latest request may update state
+        if (myReqId !== reqIdRef.current) return;
 
-      console.error("Failed to load participants", err);
-      if (cached?.data?.length) setRaw(cached.data);
-    } finally {
-      if (myReqId === reqIdRef.current) setIsLoading(false);
-    }
-  }, [lotteryId]); // ✅ totalSold removed
+        CACHE.set(key, { at: Date.now(), data: data ?? [], soldAtFetch: soldNow });
+        setRaw(data ?? []);
+      } catch (err: any) {
+        if (myReqId !== reqIdRef.current) return;
+        if (isAbortError(err)) return;
 
-  // ✅ now this only runs when lotteryId changes (not on every sold update)
+        console.error("Failed to load participants", err);
+        if (cached?.data?.length) setRaw(cached.data);
+        // else keep current raw (don’t blank)
+      } finally {
+        if (myReqId === reqIdRef.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [lotteryId]
+  ); // ✅ totalSold removed
+
+  // ✅ fetch when lotteryId changes
   useEffect(() => {
     if (!lotteryId) {
       setRaw([]);
@@ -106,15 +117,21 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
     return () => {
       try {
-        abortRef.current?.abort();
+        abortRef.current?.abort(); // ok to abort on unmount
       } catch {}
     };
   }, [lotteryId, load]);
 
+  // ✅ refresh holders after buy/create (ppopgi:revalidate) with debounce
   useEffect(() => {
     const onRevalidate = () => {
       if (!lotteryId) return;
       if (isHidden()) return;
+
+      const now = Date.now();
+      if (now - lastRevalRef.current < 750) return; // debounce
+      lastRevalRef.current = now;
+
       void load({ force: false, reason: "revalidate" });
     };
 
@@ -131,5 +148,9 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
     });
   }, [raw]);
 
-  return { participants, isLoading, refresh: () => load({ force: true, reason: "manual" }) };
+  return {
+    participants,
+    isLoading,
+    refresh: () => load({ force: true, reason: "manual" }),
+  };
 }
