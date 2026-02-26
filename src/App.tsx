@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useAutoConnect, useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react";
 import { createWallet } from "thirdweb/wallets";
 import { thirdwebClient } from "./thirdweb/client";
@@ -32,14 +32,32 @@ import { useLotteryStore } from "./hooks/useLotteryStore";
 
 type Page = "home" | "explore" | "dashboard" | "about" | "faq";
 
+function isValidPage(p: any): p is Page {
+  return p === "home" || p === "explore" || p === "dashboard" || p === "about" || p === "faq";
+}
+
+function getPageFromUrl(): Page {
+  try {
+    const u = new URL(window.location.href);
+    const p = (u.searchParams.get("page") || "").toLowerCase();
+    return isValidPage(p) ? p : "home";
+  } catch {
+    return "home";
+  }
+}
+
+function setPageInUrl(next: Page) {
+  const u = new URL(window.location.href);
+
+  if (!next || next === "home") u.searchParams.delete("page");
+  else u.searchParams.set("page", next);
+
+  // ✅ preserve everything else (including ?lottery=...)
+  window.history.pushState({}, "", u.toString());
+}
+
 export default function App() {
   // 1) Thirdweb
-  /**
-   * ✅ IMPORTANT:
-   * Do NOT add the Ledger USB "walletId" here.
-   * - createWallet(...) only accepts thirdweb-known WalletId values
-   * - WebHID Ledger cannot be auto-restored on refresh anyway (requires user gesture)
-   */
   useAutoConnect({
     client: thirdwebClient,
     chain: ETHERLINK_CHAIN,
@@ -53,8 +71,8 @@ export default function App() {
   const { disconnect } = useDisconnect();
   const activeWallet = useActiveWallet();
 
-  // 3) Routing
-  const [page, setPage] = useState<Page>("home");
+  // 3) Routing (page + lottery deep-link)
+  const [page, setPage] = useState<Page>(() => (typeof window !== "undefined" ? getPageFromUrl() : "home"));
   const { selectedLotteryId, openLottery, closeLottery } = useAppRouting(); // keep name for URL param compatibility
 
   // ✅ store (same items used by cards)
@@ -71,39 +89,8 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
 
-  // 5) Global events (Home banner)
-  useEffect(() => {
-    const onOpenCashier = () => {
-      if (account) setCashierOpen(true);
-      else setSignInOpen(true);
-    };
-
-    const onNavigate = (e: Event) => {
-      const ce = e as CustomEvent<{ page?: Page }>;
-      const next = ce?.detail?.page;
-      if (!next) return;
-
-      // gate dashboard behind wallet
-      if (next === "dashboard" && !account) {
-        setPage("home");
-        setSignInOpen(true);
-        return;
-      }
-      setPage(next);
-    };
-
-    window.addEventListener("ppopgi:open-cashier", onOpenCashier);
-    window.addEventListener("ppopgi:navigate", onNavigate as EventListener);
-
-    return () => {
-      window.removeEventListener("ppopgi:open-cashier", onOpenCashier);
-      window.removeEventListener("ppopgi:navigate", onNavigate as EventListener);
-    };
-  }, [account]);
-
-  // 6) Disclaimer gate
+  // 5) Disclaimer gate
   const [showGate, setShowGate] = useState(false);
-
   useEffect(() => {
     const hasAccepted = localStorage.getItem("ppopgi_terms_accepted");
     if (!hasAccepted) setShowGate(true);
@@ -114,18 +101,12 @@ export default function App() {
     setShowGate(false);
   };
 
-  // 7) Clock
+  // 6) Clock
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-
-  // 8) Session sync
-  useEffect(() => {
-    setSession({ account, connector: account ? "thirdweb" : null });
-    if (page === "dashboard" && !account) setPage("home");
-  }, [account, page, setSession]);
 
   // Actions
   const handleSignOut = () => {
@@ -144,13 +125,7 @@ export default function App() {
   const { data: safetyData } = useLotteryDetails(safetyId, !!safetyId);
 
   // ✅ NEW: single flag to hide layout chrome when any modal/gate is open
-  const anyModalOpen =
-    showGate ||
-    signInOpen ||
-    createOpen ||
-    cashierOpen ||
-    !!selectedLotteryId ||
-    !!safetyId;
+  const anyModalOpen = showGate || signInOpen || createOpen || cashierOpen || !!selectedLotteryId || !!safetyId;
 
   // ✅ OPTIONAL: prevent background scroll while a modal is open
   useEffect(() => {
@@ -160,6 +135,95 @@ export default function App() {
     };
   }, [anyModalOpen]);
 
+  /**
+   * ✅ Navigate helper:
+   * - updates React state
+   * - updates URL (?page=...)
+   * - gates dashboard behind wallet
+   */
+  const navigateTo = useCallback(
+    (next: Page) => {
+      // gate dashboard behind wallet
+      if (next === "dashboard" && !account) {
+        setPage("home");
+        setPageInUrl("home");
+        setSignInOpen(true);
+        return;
+      }
+
+      setPage(next);
+      setPageInUrl(next);
+    },
+    [account]
+  );
+
+  /**
+   * ✅ Sync page from URL on:
+   * - first load
+   * - browser back/forward
+   */
+  const didInitRef = useRef(false);
+  useEffect(() => {
+    const applyFromUrl = () => {
+      const next = getPageFromUrl();
+
+      // gate dashboard behind wallet if needed
+      if (next === "dashboard" && !account) {
+        setPage("home");
+        // keep URL consistent too
+        setPageInUrl("home");
+        setSignInOpen(true);
+        return;
+      }
+
+      setPage(next);
+    };
+
+    // initial sync
+    if (!didInitRef.current) {
+      didInitRef.current = true;
+      applyFromUrl();
+    }
+
+    // popstate (back/forward)
+    window.addEventListener("popstate", applyFromUrl);
+    return () => window.removeEventListener("popstate", applyFromUrl);
+  }, [account]);
+
+  // 8) Session sync
+  useEffect(() => {
+    setSession({ account, connector: account ? "thirdweb" : null });
+
+    // if user disconnects while on dashboard, bounce home + keep URL correct
+    if (page === "dashboard" && !account) {
+      setPage("home");
+      setPageInUrl("home");
+    }
+  }, [account, page, setSession]);
+
+  // 9) Global events (Home banner + external navigation)
+  useEffect(() => {
+    const onOpenCashier = () => {
+      if (account) setCashierOpen(true);
+      else setSignInOpen(true);
+    };
+
+    const onNavigate = (e: Event) => {
+      const ce = e as CustomEvent<{ page?: Page }>;
+      const next = ce?.detail?.page;
+      if (!next || !isValidPage(next)) return;
+      navigateTo(next);
+    };
+
+    window.addEventListener("ppopgi:open-cashier", onOpenCashier);
+    window.addEventListener("ppopgi:navigate", onNavigate as EventListener);
+
+    return () => {
+      window.removeEventListener("ppopgi:open-cashier", onOpenCashier);
+      window.removeEventListener("ppopgi:navigate", onNavigate as EventListener);
+    };
+  }, [account, navigateTo]);
+
   return (
     <>
       <GlobalDataRefresher intervalMs={5000} />
@@ -168,13 +232,13 @@ export default function App() {
 
       <MainLayout
         page={page}
-        onNavigate={setPage}
+        onNavigate={navigateTo} // ✅ IMPORTANT: use navigateTo so URL updates
         account={account}
         onOpenSignIn={() => setSignInOpen(true)}
         onOpenCreate={() => (account ? setCreateOpen(true) : setSignInOpen(true))}
         onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))}
         onSignOut={handleSignOut}
-        hideChrome={anyModalOpen} // ✅ NEW
+        hideChrome={anyModalOpen}
       >
         {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
@@ -196,7 +260,7 @@ export default function App() {
 
         <LotteryDetailsModal
           open={!!selectedLotteryId}
-          lotteryId={selectedLotteryId} // keep prop name if your modal still expects lotteryId
+          lotteryId={selectedLotteryId}
           onClose={closeLottery}
           initialLottery={selectedFromStore as any}
         />
