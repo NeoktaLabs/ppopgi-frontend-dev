@@ -124,9 +124,21 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  // ✅ NEW: range-policy UX (prevents BatchTooCheap silent reverts for first-time buyers)
+  // ✅ range-policy UX (prevents BatchTooCheap silent reverts for first-time buyers)
   const [wouldCreateRange, setWouldCreateRange] = useState<boolean | null>(null);
   const [minTicketsForNewRange, setMinTicketsForNewRange] = useState<number>(1);
+
+  // ✅ NEW: range-tier/capacity transparency (live, on-chain)
+  const [rangeCount, setRangeCount] = useState<number | null>(null);
+  const [rangeTier, setRangeTier] = useState<number | null>(null);
+  const [nextTierAtRangeCount, setNextTierAtRangeCount] = useState<number | null>(null);
+  const [rangesUntilNextTier, setRangesUntilNextTier] = useState<number | null>(null);
+  const [minCostToCreateNewRange, setMinCostToCreateNewRange] = useState<bigint | null>(null);
+
+  const [maxRanges, setMaxRanges] = useState<number | null>(null);
+  const [rangeStep, setRangeStep] = useState<number | null>(null);
+  const [baseCost, setBaseCost] = useState<bigint | null>(null);
+  const [costStep, setCostStep] = useState<bigint | null>(null);
 
   // ✅ revalidate ping (Home/Explore/ActivityBoard/etc)
   const delayedRevalRef = useRef<number | null>(null);
@@ -309,6 +321,99 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       alive = false;
     };
   }, [isOpen, lotteryContract, me]);
+
+  // ✅ NEW: Range capacity + tier info (for transparency)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (!lotteryContract) {
+      setRangeCount(null);
+      setRangeTier(null);
+      setNextTierAtRangeCount(null);
+      setRangesUntilNextTier(null);
+      setMinCostToCreateNewRange(null);
+      setMaxRanges(null);
+      setRangeStep(null);
+      setBaseCost(null);
+      setCostStep(null);
+      return;
+    }
+
+    let alive = true;
+
+    (async () => {
+      try {
+        const [tierInfo, policy] = await Promise.all([
+          readContract({
+            contract: lotteryContract as any,
+            method:
+              "function getRangeTierInfo() view returns (uint256 rangeCount,uint256 tier,uint256 minCostToCreateNewRange,uint256 nextTierAtRangeCount,uint256 rangesUntilNextTier)",
+            params: [],
+          }).catch(() => null as any),
+
+          readContract({
+            contract: lotteryContract as any,
+            method: "function getRangePolicy() pure returns (uint256 maxRanges,uint256 rangeStep,uint256 baseCost,uint256 costStep)",
+            params: [],
+          }).catch(() => null as any),
+        ]);
+
+        if (!alive) return;
+
+        const rc = Number(tierInfo?.[0] ?? 0);
+        const t = Number(tierInfo?.[1] ?? 0);
+        const minCost = BigInt(tierInfo?.[2] ?? 0n);
+        const nextAt = Number(tierInfo?.[3] ?? 0);
+        const until = Number(tierInfo?.[4] ?? 0);
+
+        setRangeCount(Number.isFinite(rc) ? Math.floor(rc) : 0);
+        setRangeTier(Number.isFinite(t) ? Math.floor(t) : 0);
+        setMinCostToCreateNewRange(minCost);
+        setNextTierAtRangeCount(Number.isFinite(nextAt) ? Math.floor(nextAt) : 0);
+        setRangesUntilNextTier(Number.isFinite(until) ? Math.floor(until) : 0);
+
+        const mr = Number(policy?.[0] ?? 0);
+        const step = Number(policy?.[1] ?? 0);
+        const bc = BigInt(policy?.[2] ?? 0n);
+        const cs = BigInt(policy?.[3] ?? 0n);
+
+        setMaxRanges(Number.isFinite(mr) ? Math.floor(mr) : 0);
+        setRangeStep(Number.isFinite(step) ? Math.floor(step) : 0);
+        setBaseCost(bc);
+        setCostStep(cs);
+      } catch {
+        // keep previous values if a call fails
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [isOpen, lotteryContract]);
+
+  const rangeTierProgressPct = useMemo(() => {
+    if (rangeCount == null || rangeTier == null || rangeStep == null || rangeStep <= 0) return null;
+
+    const start = rangeTier * rangeStep;
+    const end = start + rangeStep;
+    const denom = Math.max(1, end - start);
+    const p = ((rangeCount - start) / denom) * 100;
+
+    if (!Number.isFinite(p)) return null;
+    return Math.max(0, Math.min(100, p));
+  }, [rangeCount, rangeTier, rangeStep]);
+
+  const rangeCapacityPct = useMemo(() => {
+    if (rangeCount == null || maxRanges == null || maxRanges <= 0) return null;
+    const p = (rangeCount / maxRanges) * 100;
+    if (!Number.isFinite(p)) return null;
+    return Math.max(0, Math.min(100, p));
+  }, [rangeCount, maxRanges]);
+
+  const isNearTierUp = useMemo(() => {
+    if (rangesUntilNextTier == null) return false;
+    return rangesUntilNextTier <= 50;
+  }, [rangesUntilNextTier]);
 
   // ✅ Respect minPurchaseAmount (contract rule) + range min (BatchTooCheap guard)
   const minPurchaseN = Number((data as any)?.minPurchaseAmount || "1");
@@ -522,8 +627,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
         const key = cacheKey(acct, token, spender);
         const hit = allowBalCache.get(key);
 
-        const newAllowance =
-          allowance != null ? (allowance > totalCostU ? allowance - totalCostU : 0n) : undefined;
+        const newAllowance = allowance != null ? (allowance > totalCostU ? allowance - totalCostU : 0n) : undefined;
         const newBal = usdcBal != null ? (usdcBal > totalCostU ? usdcBal - totalCostU : 0n) : undefined;
 
         if (typeof newAllowance === "bigint") setAllowance(newAllowance);
@@ -618,9 +722,23 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       allowance,
       paymentTokenAddr,
 
-      // NEW (optional UI usage)
+      // range-policy UX
       wouldCreateRange,
       minTicketsForNewRange,
+
+      // ✅ NEW: range-tier/capacity transparency
+      rangeCount,
+      rangeTier,
+      nextTierAtRangeCount,
+      rangesUntilNextTier,
+      minCostToCreateNewRange,
+      maxRanges,
+      rangeStep,
+      baseCost,
+      costStep,
+      rangeTierProgressPct,
+      rangeCapacityPct,
+      isNearTierUp,
     },
     math: {
       minBuy: uiMinBuy,
