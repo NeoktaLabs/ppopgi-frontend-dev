@@ -350,9 +350,10 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       const minGap = reason === "postTx" ? 0 : 2500;
       if (now - lastAllowFetchAt.current < minGap) return;
 
-      // Cache hit?
+      // ✅ Cache hit? (use cache only for "open"/"manual" to avoid stale overwrite after tx)
       const hit = allowBalCache.get(key);
-      if (hit && now - hit.ts < ALLOW_BAL_TTL_MS) {
+      const canUseCache = reason === "open" || reason === "manual";
+      if (canUseCache && hit && now - hit.ts < ALLOW_BAL_TTL_MS) {
         if (typeof hit.allowance === "bigint") setAllowance(hit.allowance);
         if (typeof hit.bal === "bigint") setUsdcBal(hit.bal);
         if (reason === "open") return;
@@ -392,7 +393,9 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
           setUsdcBal(balBi);
         }
 
-        allowBalCache.set(key, { ts: Date.now(), allowance: aBi, bal: balBi ?? hit?.bal });
+        // Keep previous cached bal if we didn't read it this time
+        const prev = allowBalCache.get(key);
+        allowBalCache.set(key, { ts: Date.now(), allowance: aBi, bal: balBi ?? prev?.bal });
       } catch {
         setAllowance((prev) => prev ?? null);
         setUsdcBal((prev) => prev ?? null);
@@ -427,8 +430,23 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
       setBuyMsg("✅ Wallet prepared.");
 
-      // Optimistic set
+      // ✅ Optimistic set
       setAllowance(MaxUint256 as any);
+
+      // ✅ Also patch cache so UI won't regress to stale allowance while postTx read is pending
+      try {
+        const acct = account.address;
+        const token = paymentTokenAddr;
+        const spender = lotteryId;
+        const key = cacheKey(acct, token, spender);
+        const hit = allowBalCache.get(key);
+
+        allowBalCache.set(key, {
+          ts: Date.now(),
+          allowance: MaxUint256 as any,
+          bal: hit?.bal, // preserve last known balance
+        });
+      } catch {}
 
       void refreshAllowance("postTx");
       // also update other pages, but no delayed ping needed here
@@ -440,7 +458,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       const { label } = parseTxError(e);
       setBuyMsg(label === "Purchase failed." ? "Prepare wallet failed." : label);
     }
-  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance]);
+  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance, paymentTokenAddr]);
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
