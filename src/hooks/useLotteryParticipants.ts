@@ -136,11 +136,15 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
   const participants: ParticipantUI[] = useMemo(() => {
     const sold = soldRef.current;
-    return (raw ?? []).map((p) => {
-      const count = Number(p.ticketsPurchased || "0");
-      const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
-      return { ...p, percentage: pct };
-    });
+
+    // ✅ FIX: hide "0 tickets" rows (e.g. creator placeholder entries)
+    return (raw ?? [])
+      .filter((p) => Number(p.ticketsPurchased || "0") > 0)
+      .map((p) => {
+        const count = Number(p.ticketsPurchased || "0");
+        const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
+        return { ...p, percentage: pct };
+      });
   }, [raw]);
 
   return { participants, isLoading, refresh: () => load({ force: true, reason: "manual" }) };
