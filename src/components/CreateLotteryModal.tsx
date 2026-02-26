@@ -262,7 +262,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
               Your contract is live. Share the link below to start selling tickets.
               <br />
               <span style={{ display: "inline-block", marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
-                Redirecting to home in ~10s…
+                Redirecting to home in ~3s…
               </span>
             </div>
 
