@@ -257,7 +257,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
-  const [tab, setTab] = useState<"receipt" | "holders">("receipt");
+  // ✅ NEW: third tab for range policy transparency
+  const [tab, setTab] = useState<"receipt" | "holders" | "ranges">("receipt");
+
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
   const [journey, setJourney] = useState<JourneyBundle | null>(null);
 
@@ -443,7 +445,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   }, [state.usdcBal, ticketPriceU]);
 
   const remainingCap = Math.max(0, Number(math.maxBuy || 0));
-  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy) ? Math.max(0, Math.min(remainingCap, affordableMaxBuy)) : remainingCap;
+  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy)
+    ? Math.max(0, Math.min(remainingCap, affordableMaxBuy))
+    : remainingCap;
 
   const uiMaxForStepper = Math.max(1, effectiveMaxBuy);
   const uiTicket = clampTicketsUi(state.tickets);
@@ -485,6 +489,36 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       return `Winner selected at deadline — or if the remaining ${remaining ?? 0} tickets sell out.`;
     }
     return "A winner will be selected at the deadline.";
+  })();
+
+  // ✅ derived helpers for range UI (purely presentational)
+  const showRangePanel =
+    state.rangeCount != null ||
+    state.maxRanges != null ||
+    state.rangeTier != null ||
+    state.minCostToCreateNewRange != null ||
+    state.wouldCreateRange != null;
+
+  const tierLabel =
+    state.rangeTier != null && state.rangeTier >= 0 ? `Tier ${state.rangeTier + 1}` : "Tier —";
+
+  const fmtCostTickets = (raw?: bigint | null) => {
+    if (raw == null) return "—";
+    if (ticketPriceU <= 0n) return "—";
+    const tix = raw / ticketPriceU;
+    return `${tix.toString()} ticket${tix === 1n ? "" : "s"}`;
+  };
+
+  const nextTierText = (() => {
+    if (state.rangesUntilNextTier == null) return null;
+    if (state.rangesUntilNextTier <= 0) return "Next tier is active now.";
+    return `${state.rangesUntilNextTier} range${state.rangesUntilNextTier === 1 ? "" : "s"} until next tier`;
+  })();
+
+  const minBuyHint = (() => {
+    if (!state.wouldCreateRange) return null;
+    const n = Number(state.minTicketsForNewRange || 1);
+    return `Your next buy will open a new range. Minimum is ${n} ticket${n === 1 ? "" : "s"}.`;
   })();
 
   return (
@@ -547,7 +581,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         <div className="rdm-ticket-stub">
           <div className="rdm-buy-section">
             {!flags.lotteryIsOpen ? (
-              <div className="rdm-closed-msg">{state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}</div>
+              <div className="rdm-closed-msg">
+                {state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}
+              </div>
             ) : isCreator ? (
               <div className="rdm-buy-disabled">Creator cannot participate.</div>
             ) : (
@@ -562,6 +598,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                     Only {(math as any).remainingTickets} ticket{(math as any).remainingTickets === 1 ? "" : "s"} remaining
                   </div>
                 )}
+
+                {/* ✅ NEW: range min hint (only when relevant) */}
+                {minBuyHint && <div className="rdm-warn-text">{minBuyHint}</div>}
 
                 {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
 
@@ -693,6 +732,11 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
             <button className={`rdm-tab ${tab === "holders" ? "active" : ""}`} onClick={() => setTab("holders")}>
               Holders
             </button>
+
+            {/* ✅ NEW */}
+            <button className={`rdm-tab ${tab === "ranges" ? "active" : ""}`} onClick={() => setTab("ranges")}>
+              Ranges
+            </button>
           </div>
 
           <div className="rdm-tab-content">
@@ -738,6 +782,89 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                       </div>
                     );
                   })
+                )}
+              </div>
+            )}
+
+            {/* ✅ NEW: range policy transparency */}
+            {tab === "ranges" && (
+              <div className="rdm-receipt">
+                <div className="rdm-receipt-line start">--- RANGE POLICY ---</div>
+
+                {!showRangePanel ? (
+                  <div className="rdm-empty">Range information unavailable.</div>
+                ) : (
+                  <>
+                    <div className="rdm-slip-row">
+                      <span>Current tier</span>
+                      <span>
+                        <b>{tierLabel}</b>
+                        {state.isNearTierUp ? <span style={{ marginLeft: 8 }}>⚠️</span> : null}
+                      </span>
+                    </div>
+
+                    <div className="rdm-slip-row">
+                      <span>Ranges used</span>
+                      <span>
+                        <b>
+                          {state.rangeCount ?? "—"} / {state.maxRanges ?? "—"}
+                        </b>
+                        {state.rangeCapacityPct != null ? (
+                          <span style={{ marginLeft: 8, opacity: 0.75 }}>({state.rangeCapacityPct.toFixed(0)}%)</span>
+                        ) : null}
+                      </span>
+                    </div>
+
+                    <div className="rdm-slip-row">
+                      <span>Tier progress</span>
+                      <span>
+                        {state.rangesUntilNextTier != null ? (
+                          <b>{nextTierText}</b>
+                        ) : (
+                          <b>—</b>
+                        )}
+                        {state.rangeTierProgressPct != null ? (
+                          <span style={{ marginLeft: 8, opacity: 0.75 }}>
+                            ({state.rangeTierProgressPct.toFixed(0)}%)
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+
+                    <div className="rdm-slip-divider" />
+
+                    <div className="rdm-slip-row head">
+                      <span>Buying rules</span>
+                    </div>
+
+                    <div className="rdm-slip-row">
+                      <span>Your next buy opens new range?</span>
+                      <span>
+                        <b>
+                          {state.wouldCreateRange == null ? "—" : state.wouldCreateRange ? "Yes" : "No"}
+                        </b>
+                      </span>
+                    </div>
+
+                    <div className="rdm-slip-row">
+                      <span>Min tickets (if opening range)</span>
+                      <span>
+                        <b>{state.wouldCreateRange ? state.minTicketsForNewRange : "—"}</b>
+                      </span>
+                    </div>
+
+                    <div className="rdm-slip-row">
+                      <span>Min cost to open new range</span>
+                      <span>
+                        <b>{math.fmtUsdc(state.minCostToCreateNewRange?.toString() || "0")} USDC</b>
+                        <span style={{ marginLeft: 8, opacity: 0.75 }}>
+                          (~{fmtCostTickets(state.minCostToCreateNewRange)})
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="rdm-receipt-line end">--- END ---</div>
+                  </>
                 )}
               </div>
             )}
