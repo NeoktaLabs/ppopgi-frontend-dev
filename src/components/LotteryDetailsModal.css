@@ -6,7 +6,7 @@
   z-index: 9000;
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(6px);
-  padding-top: 60px;
+  padding-top: 100px;
   padding-bottom: 40px;
   display: flex;
   justify-content: center;
