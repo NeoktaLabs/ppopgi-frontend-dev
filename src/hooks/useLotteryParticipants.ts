@@ -37,12 +37,13 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
   const rawRef = useRef<UserLotteryItem[]>([]);
   rawRef.current = raw;
 
-  // ✅ keep latest sold in a ref so load() doesn't change identity
   const soldRef = useRef(0);
   soldRef.current = Number.isFinite(totalSold) ? totalSold : 0;
 
-  // ✅ debounce revalidate spam (if any)
   const lastRevalRef = useRef(0);
+
+  // ✅ prevent overlapping loads
+  const inFlightRef = useRef(false);
 
   const load = useCallback(
     async (opts?: { force?: boolean; reason?: "id_change" | "revalidate" | "manual" }) => {
@@ -63,28 +64,26 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
         Number.isFinite(cached.soldAtFetch) &&
         Math.abs(soldNow - cached.soldAtFetch) >= SOLD_DELTA_FORCE_REFRESH;
 
-      // Cache hit (unless force)
       if (!opts?.force && cached && cacheFresh && !soldMovedALot) {
         setRaw(cached.data);
         setIsLoading(false);
         return;
       }
 
-      // ✅ IMPORTANT: do NOT abort previous requests here.
-      // Frequent calls + aborting leads to "canceled" loops and stuck Loading.
+      // ✅ do not start a new request if one is already running
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+
       const myReqId = ++reqIdRef.current;
 
       const ac = new AbortController();
       abortRef.current = ac;
 
-      // Only show spinner if we truly have nothing to show
       const hasSomething = (cached?.data?.length ?? rawRef.current.length) > 0;
       if (!hasSomething) setIsLoading(true);
 
       try {
         const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
-
-        // Only the latest request may update state
         if (myReqId !== reqIdRef.current) return;
 
         CACHE.set(key, { at: Date.now(), data: data ?? [], soldAtFetch: soldNow });
@@ -95,17 +94,14 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
         console.error("Failed to load participants", err);
         if (cached?.data?.length) setRaw(cached.data);
-        // else keep current raw (don’t blank)
       } finally {
-        if (myReqId === reqIdRef.current) {
-          setIsLoading(false);
-        }
+        if (myReqId === reqIdRef.current) setIsLoading(false);
+        inFlightRef.current = false;
       }
     },
     [lotteryId]
-  ); // ✅ totalSold removed
+  );
 
-  // ✅ fetch when lotteryId changes
   useEffect(() => {
     if (!lotteryId) {
       setRaw([]);
@@ -117,19 +113,18 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
     return () => {
       try {
-        abortRef.current?.abort(); // ok to abort on unmount
+        abortRef.current?.abort();
       } catch {}
     };
   }, [lotteryId, load]);
 
-  // ✅ refresh holders after buy/create (ppopgi:revalidate) with debounce
   useEffect(() => {
     const onRevalidate = () => {
       if (!lotteryId) return;
       if (isHidden()) return;
 
       const now = Date.now();
-      if (now - lastRevalRef.current < 750) return; // debounce
+      if (now - lastRevalRef.current < 750) return;
       lastRevalRef.current = now;
 
       void load({ force: false, reason: "revalidate" });
@@ -148,9 +143,5 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
     });
   }, [raw]);
 
-  return {
-    participants,
-    isLoading,
-    refresh: () => load({ force: true, reason: "manual" }),
-  };
+  return { participants, isLoading, refresh: () => load({ force: true, reason: "manual" }) };
 }
