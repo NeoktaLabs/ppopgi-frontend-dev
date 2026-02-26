@@ -512,7 +512,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
             <div className="rdm-hero-meta">
               <div className="rdm-host">
-                <span>Created by</span>
+                <span>Created by </span>
                 <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
               </div>
               <div className="rdm-createdon">
