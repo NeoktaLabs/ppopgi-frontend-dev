@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import "./FaqPage.css";
 
 import { MermaidDiagram } from "../components/MermaidDiagram";
+import { CONTRACTS, LINKS, explorerAddressUrl } from "../config/transparency";
 
 type FaqItem = {
   id: string;
@@ -83,6 +84,14 @@ flowchart TD
   linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
 `;
 
+function LinkOut({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a className="rdm-info-link" target="_blank" rel="noreferrer" href={href}>
+      {children} ↗
+    </a>
+  );
+}
+
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "what-is",
@@ -115,7 +124,6 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
-  // ✅ NEW: Tech stack/components (requested)
   {
     id: "tech-stack",
     q: "What is the Ppopgi tech stack / components?",
@@ -132,20 +140,20 @@ const FAQ_ITEMS: FaqItem[] = [
             claimable balances.
           </li>
           <li>
-            <b>LotteryRegistry:</b> a registry of deployed lotteries (used for discovery and indexing).
+            <b>LotteryRegistry:</b> registry of deployed lotteries (discovery + indexing).
           </li>
           <li>
             <b>SingleWinnerDeployer:</b> deploys a new lottery contract per lottery and registers it in the registry.
           </li>
           <li>
-            <b>Pyth Entropy:</b> provides on-chain verifiable randomness for winner selection.
+            <b>Pyth Entropy:</b> on-chain verifiable randomness used for winner selection.
           </li>
         </ul>
 
         <b>🌐 Off-chain (operated by Ppopgi for a smooth UX)</b>
         <ul className="faq-ul">
           <li>
-            <b>Frontend (React):</b> the user interface that reads public chain data and sends transactions from your wallet.
+            <b>Frontend (React):</b> the UI that reads public chain data and sends transactions from your wallet.
           </li>
           <li>
             <b>Indexer (The Graph subgraph):</b> indexes contract events for fast lists, participants, and history views.
@@ -159,9 +167,8 @@ const FAQ_ITEMS: FaqItem[] = [
         </ul>
 
         <div className="faq-callout">
-          Important: Ppopgi provides the indexer, cache worker, and finalizer bot to make the experience as smooth as possible — but
-          these services do <b>not</b> control funds and do <b>not</b> decide winners. They either read public data or call public
-          functions that anyone can call.
+          Ppopgi provides the indexer, cache worker, and finalizer bot to make the experience smooth — but these services do <b>not</b>{" "}
+          control funds and do <b>not</b> decide winners. They either read public data or call public functions that anyone can call.
         </div>
       </>
     ),
@@ -175,34 +182,20 @@ const FAQ_ITEMS: FaqItem[] = [
         You can verify the core contracts on Etherlink Explorer:
         <ul className="faq-ul">
           <li>
-            <b>Lottery Registry:</b>{" "}
-            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0xa916e20AbF4d57bCb98f7A845eb74f2EB4Dcbed2">
-            0xa916e20AbF4d57bCb98f7A845eb74f2EB4Dcbed2 ↗
-          </a>
+            <b>Lottery Registry:</b> <LinkOut href={explorerAddressUrl(CONTRACTS.registry)}>{CONTRACTS.registry}</LinkOut>
           </li>
           <li>
-            <b>SingleWinner Deployer:</b>{" "}
-            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0xAd0c8Ba0E4e519B4EA97cE945A20E2716dDbDf7D">
-            0xAd0c8Ba0E4e519B4EA97cE945A20E2716dDbDf7D ↗
-          </a>
+            <b>SingleWinner Deployer:</b> <LinkOut href={explorerAddressUrl(CONTRACTS.deployer)}>{CONTRACTS.deployer}</LinkOut>
           </li>
           <li>
-            <b>USDC token:</b>{" "}
-            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9">
-            0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9 ↗
-          </a>
+            <b>USDC token:</b> <LinkOut href={explorerAddressUrl(CONTRACTS.usdc)}>{CONTRACTS.usdc}</LinkOut>
           </li>
           <li>
-            <b>Pyth Entropy contract:</b>{" "}
-            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0x23f0e8faee7bbb405e7a7c3d60138fcfd43d7509">
-            0x23f0e8faee7bbb405e7a7c3d60138fcfd43d7509 ↗
-          </a>
+            <b>Pyth Entropy contract:</b> <LinkOut href={explorerAddressUrl(CONTRACTS.pythEntropy)}>{CONTRACTS.pythEntropy}</LinkOut>
           </li>
           <li>
             <b>Entropy provider:</b>{" "}
-            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0x52DeaA1c84233F7bb8C8A45baeDE41091c616506">
-            0x52DeaA1c84233F7bb8C8A45baeDE41091c616506 ↗
-          </a>
+            <LinkOut href={explorerAddressUrl(CONTRACTS.entropyProvider)}>{CONTRACTS.entropyProvider}</LinkOut>
           </li>
         </ul>
 
@@ -235,9 +228,7 @@ const FAQ_ITEMS: FaqItem[] = [
         <b>How funds are protected (in practice):</b>
         <ul className="faq-ul">
           <li>USDC is held by the lottery contract itself (not in a website wallet).</li>
-          <li>
-            There is no function in the lottery contract intended to “withdraw everything to an arbitrary address”.
-          </li>
+          <li>There is no function in the lottery contract intended to “withdraw everything to an arbitrary address”.</li>
           <li>
             Winner selection is enforced by contract logic and uses <b>Pyth Entropy</b> randomness.
           </li>
@@ -262,15 +253,13 @@ const FAQ_ITEMS: FaqItem[] = [
         Yes — the draw is verifiable and not “hidden” behind off-chain logic.
         <br />
         <br />
-        Ppopgi uses <b>Pyth Entropy</b> as the randomness source. In plain terms:
+        Ppopgi uses <b>Pyth Entropy</b> as the randomness source:
         <ol className="faq-ol">
           <li>
             When a lottery is ready to settle (deadline reached or sold out), the lottery calls <code>finalize()</code> and requests a
             random value from Pyth Entropy (paying the Entropy fee).
           </li>
-          <li>
-            Entropy returns the random value <b>on-chain</b> via a callback.
-          </li>
+          <li>Entropy returns the random value <b>on-chain</b> via a callback.</li>
           <li>
             The lottery contract only accepts callbacks from the <b>Entropy contract address</b> and rejects invalid callbacks.
           </li>
@@ -324,14 +313,11 @@ const FAQ_ITEMS: FaqItem[] = [
           </li>
           <li>This cancels the lottery and routes funds into the normal refund/claim flow.</li>
         </ul>
-        <div className="faq-callout">
-          Goal: a lottery should never remain stuck forever — there is always a public path to recover and refund.
-        </div>
+        <div className="faq-callout">Goal: a lottery should never remain stuck forever — there is always a public path to recover.</div>
       </>
     ),
   },
 
-  // ✅ FIXED: fees text now matches protocolFeePercent in your contracts (0..20)
   {
     id: "fees",
     q: "What are the fees?",
@@ -452,12 +438,9 @@ const FAQ_ITEMS: FaqItem[] = [
         You can review automated scan reports (static analysis) here:
         <br />
         <br />
-          <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://solidityscan.com/quickscan/0xa916e20AbF4d57bCb98f7A845eb74f2EB4Dcbed2/blockscout/etherlink-mainnet">
-            View LotteryRegistry SolidityScan report ↗
-          </a><br />
-          <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://solidityscan.com/quickscan/0xAd0c8Ba0E4e519B4EA97cE945A20E2716dDbDf7D/blockscout/etherlink-mainnet">
-            View LotteryDeployer SolidityScan report ↗
-          </a>
+        <LinkOut href={LINKS.solidityScanRegistry}>View LotteryRegistry SolidityScan report</LinkOut>
+        <br />
+        <LinkOut href={LINKS.solidityScanDeployer}>View LotteryDeployer SolidityScan report</LinkOut>
         <br />
         <br />
         <div className="faq-callout">
@@ -553,6 +536,29 @@ const FAQ_ITEMS: FaqItem[] = [
       <>
         Yes. Links to the Frontend, Smart Contracts, and Finalizer Bot are available in the <b>Transparency</b> section of the site
         footer.
+        {LINKS.repoFrontend || LINKS.repoContracts || LINKS.repoFinalizerBot ? (
+          <>
+            <br />
+            <br />
+            <ul className="faq-ul">
+              {LINKS.repoFrontend ? (
+                <li>
+                  <LinkOut href={LINKS.repoFrontend}>Frontend repository</LinkOut>
+                </li>
+              ) : null}
+              {LINKS.repoContracts ? (
+                <li>
+                  <LinkOut href={LINKS.repoContracts}>Smart contracts repository</LinkOut>
+                </li>
+              ) : null}
+              {LINKS.repoFinalizerBot ? (
+                <li>
+                  <LinkOut href={LINKS.repoFinalizerBot}>Finalizer bot repository</LinkOut>
+                </li>
+              ) : null}
+            </ul>
+          </>
+        ) : null}
       </>
     ),
   },
