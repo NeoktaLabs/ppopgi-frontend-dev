@@ -138,6 +138,24 @@ flowchart TD
   linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
 `;
 
+/**
+ * ✅ OPTIONAL: Put your real addresses here (or import from config)
+ * Keeping it local makes the FAQ very easy to update.
+ */
+const CONTRACTS = {
+  registry: "0x…",
+  deployer: "0x…",
+  usdc: "0x…",
+  pythEntropy: "0x…",
+  entropyProvider: "0x…",
+};
+
+const LINKS = {
+  explorerBase: "https://explorer.etherlink.com",
+  solidityScanProject: "", // e.g. "https://solidityscan.com/..."
+  repoContracts: "", // e.g. "https://github.com/<you>/<repo>"
+};
+
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "what-is",
@@ -170,7 +188,6 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
-  // ✅ NEW: Added right after "what-is"
   {
     id: "architecture-tech",
     q: "What is Ppopgi’s system architecture? (Technical overview)",
@@ -219,6 +236,123 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
+  // ✅ NEW: contract addresses
+  {
+    id: "contracts-addresses",
+    q: "What are the on-chain contract addresses?",
+    a: (
+      <>
+        You can verify the core contracts on Etherlink Explorer:
+        <ul className="faq-ul">
+          <li>
+            <b>Lottery Registry:</b>{" "}
+            {CONTRACTS.registry !== "0x…" ? (
+              <a
+                className="rdm-info-link"
+                target="_blank"
+                rel="noreferrer"
+                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.registry).toLowerCase()}`}
+              >
+                {CONTRACTS.registry}
+              </a>
+            ) : (
+              <span>0x… (add your address)</span>
+            )}
+          </li>
+          <li>
+            <b>SingleWinner Deployer:</b>{" "}
+            {CONTRACTS.deployer !== "0x…" ? (
+              <a
+                className="rdm-info-link"
+                target="_blank"
+                rel="noreferrer"
+                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.deployer).toLowerCase()}`}
+              >
+                {CONTRACTS.deployer}
+              </a>
+            ) : (
+              <span>0x… (add your address)</span>
+            )}
+          </li>
+          <li>
+            <b>USDC token:</b>{" "}
+            {CONTRACTS.usdc !== "0x…" ? (
+              <a
+                className="rdm-info-link"
+                target="_blank"
+                rel="noreferrer"
+                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.usdc).toLowerCase()}`}
+              >
+                {CONTRACTS.usdc}
+              </a>
+            ) : (
+              <span>0x… (add your address)</span>
+            )}
+          </li>
+          <li>
+            <b>Pyth Entropy contract:</b>{" "}
+            {CONTRACTS.pythEntropy !== "0x…" ? (
+              <a
+                className="rdm-info-link"
+                target="_blank"
+                rel="noreferrer"
+                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.pythEntropy).toLowerCase()}`}
+              >
+                {CONTRACTS.pythEntropy}
+              </a>
+            ) : (
+              <span>0x… (add your address)</span>
+            )}
+          </li>
+        </ul>
+
+        <div className="faq-callout">
+          Each lottery also has its <b>own contract address</b>. You can find it on the lottery card and on the Explorer.
+        </div>
+      </>
+    ),
+  },
+
+  // ✅ NEW: per-lottery contracts + security model
+  {
+    id: "each-lottery-contract",
+    q: "Is each lottery a new contract? How are lotteries secured?",
+    a: (
+      <>
+        <b>Yes.</b> Each raffle is deployed as a <b>new smart contract instance</b>. This has two big benefits:
+        <ul className="faq-ul">
+          <li>
+            A raffle’s parameters (ticket price, deadline, max tickets, fee recipient, etc.) are fixed inside that contract.
+          </li>
+          <li>
+            Funds for that raffle are isolated in that contract. A bug or issue in one raffle should not automatically affect others.
+          </li>
+        </ul>
+
+        <b>How funds are protected (in practice):</b>
+        <ul className="faq-ul">
+          <li>
+            USDC is held by the raffle contract itself (not in a website wallet).
+          </li>
+          <li>
+            Winner selection is enforced by contract logic and uses <b>Pyth Entropy</b> randomness.
+          </li>
+          <li>
+            Payouts use <b>pull-based claims</b>: the contract records what you’re owed, and <i>only your address</i> can claim it.
+          </li>
+          <li>
+            There is no “admin withdraw everything” function in the raffle contract.
+          </li>
+        </ul>
+
+        <div className="faq-callout">
+          Like any smart contract system, the remaining risk is “code risk” (unexpected bugs). The goal is to keep contracts simple,
+          transparent, and verifiable on-chain.
+        </div>
+      </>
+    ),
+  },
+
   {
     id: "randomness",
     q: "How does randomness work? Is it verifiable?",
@@ -246,7 +380,7 @@ const FAQ_ITEMS: FaqItem[] = [
           </li>
         </ol>
         <div className="faq-callout">
-          There is no private server picking the winner. Even the protocol owner cannot override the result — the contract only
+          There is no private server picking the winner. Even the protocol deployer cannot override the result — the contract only
           accepts randomness from the Pyth Entropy contract.
         </div>
       </>
@@ -270,12 +404,12 @@ const FAQ_ITEMS: FaqItem[] = [
         <br />
         In practice this is usually:
         <ul className="faq-ul">
-          <li>the creator,</li>
           <li>a player,</li>
+          <li>the creator,</li>
           <li>or an automated helper (the <b>finalizer bot</b>).</li>
         </ul>
         <div className="faq-callout">
-          This cost is separate from Ppopgi fees: it’s the network/randomness request cost paid upfront by whoever finalizes.
+          This cost is separate from Ppopgi fees: it’s the on-chain randomness request cost paid by whoever finalizes.
         </div>
       </>
     ),
@@ -301,27 +435,26 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
+  // ✅ FIXED: matches your contract (forceCancelStuck is permissionless after hatch delay)
   {
     id: "stuck-drawing",
     q: "What if a raffle gets stuck while settling?",
     a: (
       <>
-        Rarely, a raffle could get stuck during settlement (for example: a delayed randomness callback, temporary provider issues, or
+        Rarely, a raffle could get stuck during settlement (for example: delayed randomness callback, temporary provider issues, or
         unusual network conditions).
         <br />
         <br />
         To protect users, the contracts include an <b>emergency recovery</b> path:
         <ul className="faq-ul">
           <li>
-            After a <b>short delay</b>, the <b>creator</b> or the <b>protocol owner</b> can recover the raffle.
+            If a raffle stays in <b>Drawing</b> for too long, <b>anyone</b> can call an emergency function after a safety delay (the
+            “hatch” period).
           </li>
-          <li>
-            After a <b>longer delay</b>, <b>anyone</b> can recover it (so it can’t remain stuck forever).
-          </li>
+          <li>This cancels the raffle and routes funds into the normal refund/claim flow.</li>
         </ul>
-        Recovery cancels the raffle and moves funds into the normal refund/claim flow.
         <div className="faq-callout">
-          Goal: users should always have a path to get their funds back, even in edge cases.
+          Goal: a raffle should never remain stuck forever — there is always a public path to recover and refund.
         </div>
       </>
     ),
@@ -332,18 +465,12 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "What are the fees? (Prize vs ticket sales)",
     a: (
       <>
-        Fees are transparent and enforced by the raffle contract when the raffle completes:
-        <ul className="faq-ul">
-          <li>
-            <b>10% on ticket sales</b> (taken from ticket revenue)
-          </li>
-          <li>
-            <b>10% on the prize pot</b> (taken from the prize pot)
-          </li>
-        </ul>
-        <div className="faq-callout">
-          Example: Prize pot = 100 USDC → winner can claim 90 USDC. Ticket sales = 200 USDC → creator can claim 180 USDC.
-          The remaining 10 + 20 USDC is allocated as protocol fees.
+        Fees are transparent and enforced by the raffle contract when the raffle completes.
+        <br />
+        <br />
+        In each raffle contract, the fee percentage is stored on-chain and used at settlement time.
+        <div className="faq-callout" style={{ marginTop: 10 }}>
+          You can verify the fee percent for any raffle directly on-chain (it’s part of the raffle’s immutable config).
         </div>
         Fees are <b>not discretionary</b> once the raffle is live — they’re computed by the contract at settlement.
       </>
@@ -381,9 +508,10 @@ const FAQ_ITEMS: FaqItem[] = [
     ),
   },
 
+  // ✅ FIXED: removed "pause" claim (not present in the contracts you shared)
   {
     id: "permissions",
-    q: "Who can do what? (Owner vs creator vs players)",
+    q: "Who can do what? (Creator vs players vs protocol roles)",
     a: (
       <>
         Here’s the simple breakdown:
@@ -396,13 +524,13 @@ const FAQ_ITEMS: FaqItem[] = [
             <b>cannot</b> buy tickets in their own raffle.
           </li>
           <li>
-            <b>The protocol owner</b> (a Safe multisig) has limited admin powers like pausing in emergencies and updating allowed
-            configuration for future raffles — but <b>cannot</b> change winners or rewrite outcomes once a raffle exists.
+            <b>Registry/Deployer admins</b> can manage configuration for <b>future</b> raffles (ex: set registrar, update deployer
+            config). This does <b>not</b> let them rewrite outcomes of an already deployed raffle.
           </li>
         </ul>
         <div className="faq-callout">
-          The protocol owner is a multisig. Today it contains 1 signer (me), with the goal to add additional parties as the project
-          grows.
+          Best practice: treat smart contracts as the source of truth. You can verify a raffle’s rules (fee recipient, ticket price,
+          deadline, etc.) on-chain for that raffle address.
         </div>
       </>
     ),
@@ -410,10 +538,10 @@ const FAQ_ITEMS: FaqItem[] = [
 
   {
     id: "owner-rug",
-    q: "Can the owner steal funds or change the winner?",
+    q: "Can anyone steal funds or change the winner?",
     a: (
       <>
-        <b>No</b>. Winner selection is enforced by the raffle contract and uses verifiable randomness from Pyth Entropy.
+        The winner selection is enforced by the raffle contract and uses verifiable randomness from Pyth Entropy.
         <br />
         <br />
         Also, payouts are designed as <b>pull payments</b>:
@@ -421,10 +549,59 @@ const FAQ_ITEMS: FaqItem[] = [
           <li>The contract records what each address is owed.</li>
           <li>Only that address can claim its own funds.</li>
         </ul>
-        This is safer than “push payments” because it avoids sending funds automatically during a complex settlement step.
+        <br />
+        This design helps protect users from “admin drains” because there is no function intended to move all funds to an arbitrary
+        address.
+        <div className="faq-callout">
+          Important nuance: smart contracts reduce trust in people, but they don’t eliminate “code risk”. The best reassurance is
+          transparency: verified contracts, public source code, and reproducible behavior on-chain.
+        </div>
+      </>
+    ),
+  },
+
+  {
+    id: "solidityscan",
+    q: "Where can I find the contracts security score (SolidityScan)?",
+    a: (
+      <>
+        You can review automated scan reports (static analysis) here:
         <br />
         <br />
-        The owner can pause in emergencies, but <b>cannot</b> arbitrarily redirect prize funds to themselves.
+        {LINKS.solidityScanProject ? (
+          <a className="rdm-info-link" target="_blank" rel="noreferrer" href={LINKS.solidityScanProject}>
+            View SolidityScan report ↗
+          </a>
+        ) : (
+          <div className="faq-callout">
+            Add your SolidityScan link in <code>LINKS.solidityScanProject</code> (or point to it from your Transparency footer).
+          </div>
+        )}
+        <br />
+        <br />
+        <div className="faq-callout">
+          Automated scanners are helpful, but they are not a substitute for a full audit. Always combine scans + manual review.
+        </div>
+      </>
+    ),
+  },
+
+  {
+    id: "audit",
+    q: "Why haven’t the contracts been audited externally?",
+    a: (
+      <>
+        External audits are valuable — they also cost real time and money. Ppopgi started as a lean project and prioritizes:
+        <ul className="faq-ul">
+          <li>simple contracts with fewer moving parts,</li>
+          <li>public source code and on-chain verification,</li>
+          <li>automated scanning + ongoing fixes,</li>
+          <li>transparent communication about changes.</li>
+        </ul>
+        <div className="faq-callout">
+          If usage grows, an external audit is a natural next step. Until then, the best defense is transparency: verify addresses,
+          review code, and follow on-chain behavior.
+        </div>
       </>
     ),
   },
@@ -495,6 +672,13 @@ const FAQ_ITEMS: FaqItem[] = [
       <>
         Yes. Links to the Frontend, Smart Contracts, and Finalizer Bot are available in the <b>Transparency</b> section of the site
         footer.
+        <br />
+        <br />
+        {LINKS.repoContracts ? (
+          <a className="rdm-info-link" target="_blank" rel="noreferrer" href={LINKS.repoContracts}>
+            View smart contracts repo ↗
+          </a>
+        ) : null}
       </>
     ),
   },
