@@ -119,7 +119,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
 
     successTimerRef.current = window.setTimeout(() => {
       handleFinalClose();
-    }, 10_000);
+    }, 3_000);
 
     return () => {
       clearSuccessTimer();
