@@ -165,8 +165,13 @@ async function fetchSubgraphBundle(id: string, signal?: AbortSignal): Promise<Su
   const lotteryId = id.toLowerCase();
   const url = mustEnv("VITE_SUBGRAPH_URL");
 
+  /**
+   * ✅ IMPORTANT:
+   * Your schema has `Lottery.id: ID!` (string), NOT Bytes.
+   * So the query variable must be `$id: ID!` and you pass the lowercased address string.
+   */
   const query = `
-    query LotteryDetailsBundle($id: Bytes!) {
+    query LotteryDetailsBundle($id: ID!) {
       lottery(id: $id) {
         id
         name
@@ -460,7 +465,6 @@ export function useLotteryDetails(lotteryAddress: string | null, open: boolean) 
               bundle.core.callbackGasLimit != null ? String(bundle.core.callbackGasLimit) : base.callbackGasLimit,
 
             // Prefer subgraph for these if you want “what the indexer thinks”, but keep on-chain truth for actions:
-            // - keep sold/winner/status from chain
             ticketPrice: bundle.core.ticketPrice != null ? String(bundle.core.ticketPrice) : base.ticketPrice,
             winningPot: bundle.core.winningPot != null ? String(bundle.core.winningPot) : base.winningPot,
             minTickets: bundle.core.minTickets != null ? String(bundle.core.minTickets) : base.minTickets,
