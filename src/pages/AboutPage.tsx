@@ -14,14 +14,14 @@ export function AboutPage() {
 
         <div className="about-content">
           <p>
-            <strong>Hi — I’m Julien. I’m an IT engineer and a lifelong technology enthusiast.</strong>
+            <strong>Hi — I’m Julien. I’m an IT Infrastructure Engineer and a lifelong technology enthusiast.</strong>
           </p>
 
           <p>
-            I’ve spent most of my career around systems, networks, security, and designing solutions that need to be reliable and
-            understandable. I’ve always enjoyed figuring out how things work, how they fail, and how to make them simpler and safer.
-            I’m also the kind of person who doesn’t mind starting from scratch again if it means learning something new — even if I
-            look a bit clueless at first.
+            I’m naturally curious and detail-oriented — I love learning how systems work, where they break, and how to make them
+            simpler, safer, and more reliable. Most of my career has been around infrastructure, networks, security, and designing
+            solutions that need to be understandable and resilient. I’m also the kind of person who doesn’t mind starting from scratch
+            if it means learning a new technology properly — even if I look a bit clueless at first.
           </p>
 
           <h3>The Journey</h3>
@@ -61,9 +61,9 @@ export function AboutPage() {
 
           <h3>Transparency by Design</h3>
           <p>
-            Ppopgi is built so the most important parts are verifiable on-chain: <strong>the lottery rules, funds custody, and winner
-            selection</strong>. The UI, indexing, and automation are there to make things fast and easy — but they don’t decide who
-            wins.
+            Ppopgi is built so the most important parts are verifiable on-chain:{" "}
+            <strong>the lottery rules, funds custody, and winner selection</strong>. The UI, indexing, and automation are there to make
+            things fast and easy — but they don’t decide who wins.
           </p>
 
           <p>
@@ -87,7 +87,8 @@ export function AboutPage() {
           <h3>A Note on Safety & Risk</h3>
           <p>
             I take safety seriously, but I also want to be straightforward: smart contracts can have bugs, integrations can fail, and
-            blockchains have their own risks. <strong>Please interact thoughtfully and only with amounts you’re comfortable with.</strong>
+            blockchains have their own risks.{" "}
+            <strong>Please interact thoughtfully and only with amounts you’re comfortable with.</strong>
           </p>
           <p>
             Every part of this project — smart contracts, frontend, automation, tests — was built with the help of AI. I acted as the
@@ -105,6 +106,15 @@ export function AboutPage() {
           <p>
             If you find bugs, weird behavior, or have ideas — feedback is always welcome. This project grows through curiosity, not
             perfection.
+          </p>
+
+          <p>
+            If you’d like to learn more about how Ppopgi works, its security model, and the underlying architecture, feel free to
+            explore the{" "}
+            <a href="?page=faq" className="rdm-info-link">
+              FAQ
+            </a>
+            .
           </p>
 
           <div className="about-signoff">— Julien</div>
