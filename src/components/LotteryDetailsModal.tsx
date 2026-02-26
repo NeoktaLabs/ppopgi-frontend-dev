@@ -3,7 +3,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import { useLotteryParticipants } from "../hooks/useLotteryParticipants";
+
+// ✅ FIX: your subgraph.ts doesn't export fetchLotteryMetadata
 import { fetchLotteryById, type LotteryListItem } from "../indexer/subgraph";
+
 import "./LotteryDetailsModal.css";
 
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
@@ -44,6 +47,9 @@ function mustEnv(name: string): string {
   return v;
 }
 
+/**
+ * ✅ Indexer-based timeline (typed entities from your schema)
+ */
 type JourneyBundle = {
   lottery: {
     id: string;
@@ -152,7 +158,7 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
     const win0 = json?.data?.winnerPickedEvents?.[0] ?? null;
     const canc0 = json?.data?.lotteryCanceledEvents?.[0] ?? null;
 
-    return {
+    const bundle: JourneyBundle = {
       lottery: lot
         ? {
             id: String(lot.id),
@@ -199,6 +205,8 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
           }
         : null,
     };
+
+    return bundle;
   } catch {
     return null;
   }
@@ -240,6 +248,7 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
+// ✅ FIX: ParticipantUI shape varies by hook; derive a usable address safely.
 function participantAddr(p: any): string {
   return String(p?.buyer || p?.user || p?.address || p?.account || "").toLowerCase();
 }
@@ -283,22 +292,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const displayData = (state.data || initialLottery || metadata) as any;
 
   const soldForPct = Number(displayData?.sold || 0);
-
-  // ✅ Only fetch participants when modal is open AND holders tab is active
-  const effectiveLotteryId = open && tab === "holders" ? lotteryId : null;
-  const { participants, isLoading: loadingPart, refresh: refreshParticipants } = useLotteryParticipants(
-    effectiveLotteryId,
-    soldForPct
-  );
-
-  // ✅ Optional: when switching to Holders, force a refresh once
-  useEffect(() => {
-    if (!open) return;
-    if (tab !== "holders") return;
-    if (!lotteryId) return;
-    refreshParticipants();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, tab, lotteryId]);
+  const { participants, isLoading: loadingPart } = useLotteryParticipants(lotteryId, soldForPct);
 
   const timeline = useMemo(() => {
     if (!displayData && !journey?.lottery) return [];
@@ -315,7 +309,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       null;
 
     const deployedTx = lot?.deployedTx || displayData?.deployedTx || displayData?.creationTx || null;
+
     const registeredAt = lot?.registeredAt || displayData?.registeredAt || displayData?.history?.registeredAt || null;
+
     const deadline = lot?.deadline || displayData?.deadline || null;
 
     const statusRaw = displayData?.status ?? lot?.status ?? null;
@@ -328,8 +324,19 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
     const steps: any[] = [];
 
-    steps.push({ label: "Initialized", date: createdAt, tx: deployedTx, status: createdAt ? "done" : "active" });
-    steps.push({ label: "Registered", date: registeredAt, tx: null, status: registeredAt ? "done" : "future" });
+    steps.push({
+      label: "Initialized",
+      date: createdAt,
+      tx: deployedTx,
+      status: createdAt ? "done" : "active",
+    });
+
+    steps.push({
+      label: "Registered",
+      date: registeredAt,
+      tx: null,
+      status: registeredAt ? "done" : "future",
+    });
 
     if (funding) {
       steps.push({ label: "Ticket Sales Open", date: funding.timestamp, tx: funding.txHash, status: "done" });
@@ -346,7 +353,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     } else if (status === "DRAWING") {
       steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
     } else {
-      steps.push({ label: "Draw Deadline", date: deadline, tx: null, status: status === "OPEN" ? "active" : "future" });
+      steps.push({
+        label: "Draw Deadline",
+        date: deadline,
+        tx: null,
+        status: status === "OPEN" ? "active" : "future",
+      });
     }
 
     if (winnerPicked) {
@@ -368,12 +380,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         winner: displayData?.winner || lot?.winner || null,
       });
     } else if (status === "CANCELED") {
-      steps.push({
-        label: "Canceled",
-        date: lot?.canceledAt || displayData?.canceledAt || null,
-        tx: null,
-        status: "done",
-      });
+      steps.push({ label: "Canceled", date: lot?.canceledAt || displayData?.canceledAt || null, tx: null, status: "done" });
     } else {
       steps.push({ label: "Settlement", date: null, tx: null, status: "future" });
     }
@@ -436,9 +443,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   }, [state.usdcBal, ticketPriceU]);
 
   const remainingCap = Math.max(0, Number(math.maxBuy || 0));
-  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy)
-    ? Math.max(0, Math.min(remainingCap, affordableMaxBuy))
-    : remainingCap;
+  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy) ? Math.max(0, Math.min(remainingCap, affordableMaxBuy)) : remainingCap;
 
   const uiMaxForStepper = Math.max(1, effectiveMaxBuy);
   const uiTicket = clampTicketsUi(state.tickets);
@@ -540,7 +545,146 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         <div className="rdm-perforation-line" />
 
         <div className="rdm-ticket-stub">
-          {/* ... unchanged UI above ... */}
+          <div className="rdm-buy-section">
+            {!flags.lotteryIsOpen ? (
+              <div className="rdm-closed-msg">{state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}</div>
+            ) : isCreator ? (
+              <div className="rdm-buy-disabled">Creator cannot participate.</div>
+            ) : (
+              <div className={`rdm-buy-inner ${blurBuy ? "blurred" : ""}`}>
+                <div className="rdm-balance-row">
+                  <span>Bal: {math.fmtUsdc(state.usdcBal?.toString() || "0")} USDC</span>
+                  <span>Cap: {uiMaxForStepper}</span>
+                </div>
+
+                {showRemainingNote && (
+                  <div className="rdm-warn-text">
+                    Only {(math as any).remainingTickets} ticket{(math as any).remainingTickets === 1 ? "" : "s"} remaining
+                  </div>
+                )}
+
+                {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
+
+                <div className="rdm-stepper">
+                  <button
+                    className="rdm-step-btn"
+                    onClick={() => actions.setTickets(String(Math.max(1, clampedUiTicket - 1)))}
+                    disabled={clampedUiTicket <= 1}
+                  >
+                    −
+                  </button>
+
+                  <div className="rdm-input-wrapper">
+                    <input
+                      className="rdm-amount"
+                      inputMode="numeric"
+                      value={String(clampedUiTicket)}
+                      onChange={(e) => {
+                        const v = clampTicketsUi(e.target.value);
+                        actions.setTickets(String(Math.min(v, uiMaxForStepper)));
+                      }}
+                      placeholder="1"
+                    />
+                    <div className="rdm-cost-preview">Total: {math.fmtUsdc(math.totalCostU.toString())} USDC</div>
+                  </div>
+
+                  <button
+                    className="rdm-step-btn"
+                    onClick={() => actions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)))}
+                    disabled={clampedUiTicket >= uiMaxForStepper}
+                  >
+                    +
+                  </button>
+                </div>
+
+                {!flags.hasEnoughAllowance ? (
+                  <button className="rdm-cta primary" onClick={actions.approve} disabled={state.isPending}>
+                    {state.isPending ? "Preparing..." : "1. Prepare Wallet"}
+                  </button>
+                ) : (
+                  <button className="rdm-cta primary" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
+                    {state.isPending ? "Processing..." : `Buy ${clampedUiTicket} Ticket${clampedUiTicket !== 1 ? "s" : ""}`}
+                  </button>
+                )}
+
+                {state.buyMsg && <div className="rdm-error-msg">{state.buyMsg}</div>}
+
+                {blurBuy && (
+                  <div className="rdm-overlay-msg">
+                    <span>Connect Wallet to Buy</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rdm-dist-section">
+            <div className="rdm-dist-header">Lottery Specs</div>
+            <div className="rdm-dist-note">{expectedOutcome}</div>
+
+            <div className="rdm-specs-grid">
+              <div className="rdm-spec-row">
+                <span>Status</span> <b>{prettyStatus(displayData?.status)}</b>
+              </div>
+
+              <div className="rdm-spec-row">
+                <span>Min Required</span> <b>{minTicketsN > 0 ? minTicketsN.toLocaleString("en-US") : "None"}</b>
+              </div>
+
+              <div className="rdm-spec-row">
+                <span>Sold / Max</span>{" "}
+                <b>
+                  {soldNow} / {hasMax ? maxTicketsN : "∞"}
+                </b>
+              </div>
+
+              <div className="rdm-spec-row">
+                <span>Deadline</span> <b>{formatDate(displayData?.deadline || "0")}</b>
+              </div>
+
+              {!minReached && minTicketsN > 0 && (
+                <div className="rdm-spec-row">
+                  <span>Progress to Min</span>
+                  <b>
+                    {soldNow.toLocaleString("en-US")} / {minTicketsN.toLocaleString("en-US")}
+                  </b>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {distribution && (
+            <div className="rdm-dist-section">
+              <div className="rdm-dist-header">Payout Distribution</div>
+              {distribution.isCanceled ? (
+                <div className="rdm-dist-note warn">Canceled. Reclaim available on dashboard.</div>
+              ) : (
+                <div className="rdm-payout-slip">
+                  <div className="rdm-slip-row head">
+                    <span>Prize Breakdown</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Winner (Net)</span> <span>{fmtNum(distribution.winnerNet)} USDC</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Fee</span> <span>{fmtNum(distribution.platformPrizeFee)} USDC</span>
+                  </div>
+
+                  <div className="rdm-slip-divider" />
+
+                  <div className="rdm-slip-row head" style={{ marginTop: 8 }}>
+                    <span>Sales Breakdown</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Creator (Net)</span> <span>{fmtNum(distribution.creatorNet)} USDC</span>
+                  </div>
+                  <div className="rdm-slip-row">
+                    <span>Fee</span> <span>{fmtNum(distribution.platformSalesFee)} USDC</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="rdm-tabs">
             <button className={`rdm-tab ${tab === "receipt" ? "active" : ""}`} onClick={() => setTab("receipt")}>
@@ -577,6 +721,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
             {tab === "holders" && (
               <div className="rdm-holders">
+                {/* ✅ FIX: only show Loading if we have nothing to show yet */}
                 {loadingPart && participants.length === 0 ? (
                   <div className="rdm-empty">Loading...</div>
                 ) : participants.length === 0 ? (
