@@ -36,9 +36,27 @@ function isHidden() {
   }
 }
 
+function normId(v: string) {
+  const s = String(v || "").toLowerCase();
+  if (!s) return s;
+  return s.startsWith("0x") ? s : `0x${s}`;
+}
+
+function gt0(v: any): boolean {
+  try {
+    return BigInt(v ?? "0") > 0n;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Participants = userLotteries(where: { lottery: <id> }, orderBy: ticketsPurchased desc)
  * This is your "holders" list.
+ *
+ * ✅ Fix: exclude "zero-ticket" rows (e.g. creator/feeRecipient rollup rows that exist
+ * in your subgraph but don't represent ticket holders). This prevents showing the creator
+ * address with 0 tickets in the Holders tab.
  */
 export function useLotteryParticipants(lotteryId: string | null, totalSold: number) {
   const [raw, setRaw] = useState<UserLotteryItem[]>([]);
@@ -53,7 +71,7 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
         return;
       }
 
-      const key = lotteryId.toLowerCase();
+      const key = normId(lotteryId);
       const now = Date.now();
       const soldNow = Number.isFinite(totalSold) ? totalSold : 0;
 
@@ -86,11 +104,13 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
 
       try {
         const data = await fetchUserLotteriesByLottery(key, { first: 1000, signal: ac.signal });
-
         if (ac.signal.aborted) return;
 
-        CACHE.set(key, { at: now, data: data ?? [], soldAtFetch: soldNow });
-        setRaw(data ?? []);
+        // ✅ Filter out non-holders (0 ticketsPurchased)
+        const cleaned = (data ?? []).filter((p) => gt0((p as any)?.ticketsPurchased));
+
+        CACHE.set(key, { at: now, data: cleaned, soldAtFetch: soldNow });
+        setRaw(cleaned);
       } catch (err: any) {
         if (isAbortError(err)) return;
 
@@ -138,9 +158,12 @@ export function useLotteryParticipants(lotteryId: string | null, totalSold: numb
   const participants: ParticipantUI[] = useMemo(() => {
     const sold = Number.isFinite(totalSold) ? totalSold : 0;
 
+    // If indexer lags and sold is 0, avoid weird %.
+    const denom = sold > 0 ? sold : 0;
+
     return (raw ?? []).map((p) => {
-      const count = Number(p.ticketsPurchased || "0");
-      const pct = sold > 0 ? ((count / sold) * 100).toFixed(1) : "0.0";
+      const count = Number((p as any)?.ticketsPurchased || "0");
+      const pct = denom > 0 ? ((count / denom) * 100).toFixed(1) : "0.0";
       return { ...p, percentage: pct };
     });
   }, [raw, totalSold]);
