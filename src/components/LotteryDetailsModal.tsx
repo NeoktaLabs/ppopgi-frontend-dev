@@ -248,6 +248,7 @@ function participantAddr(p: any): string {
 }
 
 export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }: Props) {
+  // ✅ IMPORTANT: hooks must always run (avoid React #310)
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
@@ -285,11 +286,11 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
   const displayData = (state.data || initialLottery || metadata) as any;
 
-  // ✅ Auto switch to success screen after buy
+  // ✅ Auto switch to success screen after buy (only if hook provides it)
   useEffect(() => {
     if (!open) return;
-    if (state.lastBuy) setTab("success");
-  }, [open, state.lastBuy]);
+    if ((state as any).lastBuy) setTab("success");
+  }, [open, (state as any).lastBuy]);
 
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useLotteryParticipants(lotteryId, soldForPct);
@@ -309,9 +310,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       null;
 
     const deployedTx = lot?.deployedTx || displayData?.deployedTx || displayData?.creationTx || null;
-
     const registeredAt = lot?.registeredAt || displayData?.registeredAt || displayData?.history?.registeredAt || null;
-
     const deadline = lot?.deadline || displayData?.deadline || null;
 
     const statusRaw = displayData?.status ?? lot?.status ?? null;
@@ -324,27 +323,14 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
     const steps: any[] = [];
 
-    steps.push({
-      label: "Initialized",
-      date: createdAt,
-      tx: deployedTx,
-      status: createdAt ? "done" : "active",
-    });
-
-    steps.push({
-      label: "Registered",
-      date: registeredAt,
-      tx: null,
-      status: registeredAt ? "done" : "future",
-    });
+    steps.push({ label: "Initialized", date: createdAt, tx: deployedTx, status: createdAt ? "done" : "active" });
+    steps.push({ label: "Registered", date: registeredAt, tx: null, status: registeredAt ? "done" : "future" });
 
     if (funding) {
       steps.push({ label: "Ticket Sales Open", date: funding.timestamp, tx: funding.txHash, status: "done" });
     } else {
       const s =
-        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED"
-          ? "active"
-          : "future";
+        status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
@@ -353,12 +339,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     } else if (status === "DRAWING") {
       steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
     } else {
-      steps.push({
-        label: "Draw Deadline",
-        date: deadline,
-        tx: null,
-        status: status === "OPEN" ? "active" : "future",
-      });
+      steps.push({ label: "Draw Deadline", date: deadline, tx: null, status: status === "OPEN" ? "active" : "future" });
     }
 
     if (winnerPicked) {
@@ -451,12 +432,34 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
   useEffect(() => {
     if (!open || !lotteryId) return;
-    if (String(clampedUiTicket) !== String(state.tickets)) {
-      actions.setTickets(String(clampedUiTicket));
-    }
+    if (String(clampedUiTicket) !== String(state.tickets)) actions.setTickets(String(clampedUiTicket));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lotteryId, uiMaxForStepper]);
 
+  // ✅ Success-screen math (guarded: hook might not provide lastBuy yet)
+  const lastBuy = (state as any).lastBuy as
+    | { count: number; totalCostU: bigint; txHash?: string | null; atMs?: number }
+    | null
+    | undefined;
+
+  const soldNow = Number(displayData?.sold || 0);
+  const maxTicketsN = Math.max(0, Number(displayData?.maxTickets || 0));
+  const hasMax = maxTicketsN > 0;
+
+  const soldEffective = useMemo(() => {
+    const base = Number(displayData?.sold || 0);
+    const add = lastBuy?.count || 0;
+    // show optimistic sold (base + add), but never below base
+    return Math.max(base, base + add);
+  }, [displayData?.sold, lastBuy?.count]);
+
+  const successOdds = useMemo(() => {
+    // approximate: 1 / soldEffective
+    if (soldEffective <= 1) return "100%";
+    return clampPct(100 / soldEffective);
+  }, [soldEffective]);
+
+  // ✅ AFTER all hooks: safe early return (prevents React #310)
   if (!open) return null;
 
   const createdOnTs = timeline?.[0]?.date ?? null;
@@ -465,10 +468,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const blurBuy = !state.isConnected;
   const showBalanceWarn = state.isConnected && flags.hasEnoughAllowance && !flags.hasEnoughBalance;
 
-  const soldNow = Number(displayData?.sold || 0);
   const minTicketsN = Math.max(0, Number(displayData?.minTickets || 0));
-  const maxTicketsN = Math.max(0, Number(displayData?.maxTickets || 0));
-  const hasMax = maxTicketsN > 0;
   const remaining = hasMax ? Math.max(0, maxTicketsN - soldNow) : null;
   const minReached = minTicketsN > 0 ? soldNow >= minTicketsN : true;
 
@@ -481,23 +481,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       if (minTicketsN <= 0) return "A winner will be selected at the deadline.";
       return `Not enough tickets yet. If the minimum (${minTicketsN}) isn’t reached before the deadline, it will likely be canceled.`;
     }
-    if (hasMax) {
-      return `Winner selected at deadline — or if the remaining ${remaining ?? 0} tickets sell out.`;
-    }
+    if (hasMax) return `Winner selected at deadline — or if the remaining ${remaining ?? 0} tickets sell out.`;
     return "A winner will be selected at the deadline.";
   })();
 
-  // ✅ Success-screen math (use optimistic sold to avoid “laggy odds”)
-  const soldEffective = useMemo(() => {
-    const base = Number(displayData?.sold || 0);
-    const add = state.lastBuy?.count || 0;
-    return Math.max(base, base + add);
-  }, [displayData?.sold, state.lastBuy?.count]);
-
-  const successOdds = useMemo(() => {
-    if (soldEffective <= 0) return "100%";
-    return clampPct(100 / soldEffective);
-  }, [soldEffective]);
+  const onClearLastBuy =
+    typeof (actions as any).clearLastBuy === "function" ? ((actions as any).clearLastBuy as () => void) : null;
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -705,7 +694,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
             <button className={`rdm-tab ${tab === "holders" ? "active" : ""}`} onClick={() => setTab("holders")}>
               Holders
             </button>
-            {state.lastBuy && (
+            {lastBuy && (
               <button className={`rdm-tab ${tab === "success" ? "active" : ""}`} onClick={() => setTab("success")}>
                 Success
               </button>
@@ -713,18 +702,18 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
           </div>
 
           <div className="rdm-tab-content">
-            {tab === "success" && state.lastBuy && (
+            {tab === "success" && lastBuy && (
               <div className="rdm-success">
                 <div className="rdm-success-badge">✓ Confirmed</div>
                 <div className="rdm-success-title">🎉 Tickets Purchased!</div>
                 <div className="rdm-success-sub">
-                  You bought <b>{state.lastBuy.count}</b> ticket{state.lastBuy.count === 1 ? "" : "s"}.
+                  You bought <b>{lastBuy.count}</b> ticket{lastBuy.count === 1 ? "" : "s"}.
                 </div>
 
                 <div className="rdm-success-grid">
                   <div className="rdm-success-box">
                     <div className="rdm-success-lbl">You spent</div>
-                    <div className="rdm-success-val">{math.fmtUsdc(state.lastBuy.totalCostU.toString())} USDC</div>
+                    <div className="rdm-success-val">{math.fmtUsdc(lastBuy.totalCostU.toString())} USDC</div>
                   </div>
 
                   <div className="rdm-success-box">
@@ -749,24 +738,31 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 </div>
 
                 <div className="rdm-success-actions">
-                  {state.lastBuy.txHash && (
-                    <a className="rdm-cta" href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`} target="_blank" rel="noreferrer">
+                  {lastBuy.txHash && (
+                    <a
+                      className="rdm-cta"
+                      href={`https://explorer.etherlink.com/tx/${String(lastBuy.txHash).toLowerCase()}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       View Tx ↗
                     </a>
                   )}
+
                   <button
                     className="rdm-cta"
                     onClick={() => {
-                      actions.clearLastBuy();
+                      if (onClearLastBuy) onClearLastBuy();
                       setTab("receipt");
                     }}
                   >
                     Back to details
                   </button>
+
                   <button
                     className="rdm-cta primary"
                     onClick={() => {
-                      actions.clearLastBuy();
+                      if (onClearLastBuy) onClearLastBuy();
                       setTab("receipt");
                     }}
                   >
