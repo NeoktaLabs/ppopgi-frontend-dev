@@ -324,3 +324,82 @@
   background: linear-gradient(90deg, transparent, rgba(190, 24, 93, 0.25), transparent);
   margin: 10px 0 12px;
 }
+
+/* ✅ Success view (like CreateLotteryModal) */
+.rdm-success {
+  padding: 26px 18px;
+  text-align: center;
+  border-radius: 16px;
+  background: radial-gradient(circle at top, #fffbeb 0%, #ffffff 60%);
+  border: 1px solid #f1f5f9;
+}
+
+.rdm-success-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px auto;
+  border-radius: 999px;
+  background: #22c55e;
+  color: white;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 28px;
+  box-shadow: 0 10px 20px rgba(34, 197, 94, 0.25);
+}
+
+.rdm-success-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.rdm-success-sub {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.rdm-success-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rdm-success-box {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 10px;
+  text-align: left;
+}
+
+.rdm-success-lbl {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.rdm-success-val {
+  font-size: 13px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.rdm-success-note {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.rdm-success-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
