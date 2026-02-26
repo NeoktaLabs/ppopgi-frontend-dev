@@ -13,7 +13,7 @@ type FaqItem = {
 };
 
 // ✅ UPDATED: Mermaid Theme matches Brand (Pink/Crimson)
-const RAFFLE_FLOW = `
+const LOTTERY_FLOW = `
 %%{
   init: {
     'theme': 'base',
@@ -90,19 +90,19 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "What is Ppopgi?",
     a: (
       <>
-        Ppopgi is a friendly, on-chain raffle app on <b>Etherlink (Tezos L2, EVM)</b>.
+        Ppopgi is a friendly, on-chain lottery app on <b>Etherlink (Tezos L2, EVM)</b>.
         <br />
         <br />
-        A typical raffle works like this:
+        A typical lottery works like this:
         <ul className="faq-ul">
           <li>
-            A <b>creator deposits a prize pot</b> (USDC) into a new raffle contract.
+            A <b>creator deposits a prize pot</b> (USDC) into a new lottery contract.
           </li>
           <li>
-            Players <b>buy tickets</b> (USDC) while the raffle is open.
+            Players <b>buy tickets</b> (USDC) while the lottery is open.
           </li>
           <li>
-            When the raffle ends (sold out or deadline), a <b>winner is selected on-chain</b> using verifiable randomness.
+            When the lottery ends (sold out or deadline), a <b>winner is selected on-chain</b> using verifiable randomness.
           </li>
           <li>
             After the draw, funds are handled as <b>claims</b>: the winner claims the prize (minus protocol fees) and the creator
@@ -110,7 +110,7 @@ const FAQ_ITEMS: FaqItem[] = [
           </li>
         </ul>
         <div className="faq-callout">
-          Core idea: no hidden server logic deciding outcomes — the important rules are enforced by the raffle smart contract.
+          Core idea: no hidden server logic deciding outcomes — the important rules are enforced by the lottery smart contract.
         </div>
       </>
     ),
@@ -136,7 +136,7 @@ const FAQ_ITEMS: FaqItem[] = [
             <b>LotteryRegistry:</b> a registry of deployed lotteries (used for discovery and indexing).
           </li>
           <li>
-            <b>SingleWinnerDeployer:</b> deploys a new lottery contract per raffle and registers it in the registry.
+            <b>SingleWinnerDeployer:</b> deploys a new lottery contract per lottery and registers it in the registry.
           </li>
           <li>
             <b>Pyth Entropy:</b> provides on-chain verifiable randomness for winner selection.
@@ -155,7 +155,7 @@ const FAQ_ITEMS: FaqItem[] = [
             <b>Edge cache worker:</b> caches GraphQL reads to reduce latency and load.
           </li>
           <li>
-            <b>Finalizer bot:</b> periodically calls <code>finalize()</code> when raffles are eligible (permissionless action).
+            <b>Finalizer bot:</b> periodically calls <code>finalize()</code> when lotteries are eligible (permissionless action).
           </li>
         </ul>
 
@@ -219,25 +219,25 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "Is each lottery a new contract? How are lotteries secured?",
     a: (
       <>
-        <b>Yes.</b> Each raffle is deployed as a <b>new smart contract instance</b> using the deployer.
+        <b>Yes.</b> Each lottery is deployed as a <b>new smart contract instance</b> using the deployer.
         <br />
         <br />
         This has two big benefits:
         <ul className="faq-ul">
           <li>
-            A raffle’s parameters (ticket price, deadline, max tickets, fee recipient, fee percent, etc.) are fixed inside that
+            A lottery’s parameters (ticket price, deadline, max tickets, fee recipient, fee percent, etc.) are fixed inside that
             contract.
           </li>
           <li>
-            Funds for that raffle are isolated in that contract. A bug or issue in one raffle should not automatically affect others.
+            Funds for that lottery are isolated in that contract. A bug or issue in one lottery should not automatically affect others.
           </li>
         </ul>
 
         <b>How funds are protected (in practice):</b>
         <ul className="faq-ul">
-          <li>USDC is held by the raffle contract itself (not in a website wallet).</li>
+          <li>USDC is held by the lottery contract itself (not in a website wallet).</li>
           <li>
-            There is no function in the raffle contract intended to “withdraw everything to an arbitrary address”.
+            There is no function in the lottery contract intended to “withdraw everything to an arbitrary address”.
           </li>
           <li>
             Winner selection is enforced by contract logic and uses <b>Pyth Entropy</b> randomness.
@@ -266,17 +266,17 @@ const FAQ_ITEMS: FaqItem[] = [
         Ppopgi uses <b>Pyth Entropy</b> as the randomness source. In plain terms:
         <ol className="faq-ol">
           <li>
-            When a raffle is ready to settle (deadline reached or sold out), the raffle calls <code>finalize()</code> and requests a
+            When a lottery is ready to settle (deadline reached or sold out), the lottery calls <code>finalize()</code> and requests a
             random value from Pyth Entropy (paying the Entropy fee).
           </li>
           <li>
             Entropy returns the random value <b>on-chain</b> via a callback.
           </li>
           <li>
-            The raffle contract only accepts callbacks from the <b>Entropy contract address</b> and rejects invalid callbacks.
+            The lottery contract only accepts callbacks from the <b>Entropy contract address</b> and rejects invalid callbacks.
           </li>
           <li>
-            The raffle selects a winner deterministically using <code>winningIndex = random % totalSold</code> and maps that index to a
+            The lottery selects a winner deterministically using <code>winningIndex = random % totalSold</code> and maps that index to a
             buyer using on-chain ticket ranges.
           </li>
         </ol>
@@ -296,8 +296,8 @@ const FAQ_ITEMS: FaqItem[] = [
         The finalizer bot is a simple automated helper that improves UX.
         <br />
         <br />
-        It runs on a schedule (about <b>every ~3 minutes</b>) and checks for raffles that are ready to settle (deadline reached or
-        sold out). If it finds one, it can trigger settlement so raffles don’t stay “waiting” forever.
+        It runs on a schedule (about <b>every ~3 minutes</b>) and checks for lotteries that are ready to settle (deadline reached or
+        sold out). If it finds one, it can trigger settlement so lotteries don’t stay “waiting” forever.
         <br />
         <br />
         <div className="faq-callout">
@@ -310,23 +310,23 @@ const FAQ_ITEMS: FaqItem[] = [
 
   {
     id: "stuck-drawing",
-    q: "What if a raffle gets stuck while settling?",
+    q: "What if a lottery gets stuck while settling?",
     a: (
       <>
-        Rarely, a raffle could get stuck during settlement (for example: delayed randomness callback, temporary provider issues, or
+        Rarely, a lottery could get stuck during settlement (for example: delayed randomness callback, temporary provider issues, or
         unusual network conditions).
         <br />
         <br />
         To protect users, the contracts include an <b>emergency recovery</b> path:
         <ul className="faq-ul">
           <li>
-            If a raffle stays in <b>Drawing</b> for too long, <b>anyone</b> can call an emergency function after a safety delay (the
+            If a lottery stays in <b>Drawing</b> for too long, <b>anyone</b> can call an emergency function after a safety delay (the
             “hatch” period).
           </li>
-          <li>This cancels the raffle and routes funds into the normal refund/claim flow.</li>
+          <li>This cancels the lottery and routes funds into the normal refund/claim flow.</li>
         </ul>
         <div className="faq-callout">
-          Goal: a raffle should never remain stuck forever — there is always a public path to recover and refund.
+          Goal: a lottery should never remain stuck forever — there is always a public path to recover and refund.
         </div>
       </>
     ),
@@ -338,10 +338,10 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "What are the fees?",
     a: (
       <>
-        Fees are transparent and enforced by the raffle contract when the raffle completes.
+        Fees are transparent and enforced by the lottery contract when the lottery completes.
         <br />
         <br />
-        Each raffle stores these values on-chain:
+        Each lottery stores these values on-chain:
         <ul className="faq-ul">
           <li>
             <b>protocolFeePercent</b> (0–20%)
@@ -356,7 +356,7 @@ const FAQ_ITEMS: FaqItem[] = [
           <li>the ticket revenue (creator payout)</li>
         </ul>
         <div className="faq-callout">
-          You can verify the fee percent and fee recipient for any raffle directly on-chain (it’s part of that raffle’s immutable
+          You can verify the fee percent and fee recipient for any lottery directly on-chain (it’s part of that lottery’s immutable
           config).
         </div>
       </>
@@ -376,20 +376,20 @@ const FAQ_ITEMS: FaqItem[] = [
           <li>indexing / data services,</li>
           <li>maintenance and improvements over time.</li>
         </ul>
-        If the project grows, fees may also help fund <b>special community events</b> and themed raffles throughout the year.
+        If the project grows, fees may also help fund <b>special community events</b> and themed lotteries throughout the year.
       </>
     ),
   },
 
   {
     id: "fees-fixed",
-    q: "Are fees fixed once a raffle is created?",
+    q: "Are fees fixed once a lottery is created?",
     a: (
       <>
-        Yes — once a raffle is created, its fee settings are <b>fixed for that raffle</b>.
+        Yes — once a lottery is created, its fee settings are <b>fixed for that lottery</b>.
         <br />
         <br />
-        The deployer may update defaults for <b>future</b> raffles, but existing raffles remain unchanged.
+        The deployer may update defaults for <b>future</b> lotteries, but existing lotteries remain unchanged.
       </>
     ),
   },
@@ -405,17 +405,17 @@ const FAQ_ITEMS: FaqItem[] = [
             <b>Players</b> can buy tickets and claim refunds/payouts when available.
           </li>
           <li>
-            <b>Creators</b> choose raffle parameters, fund the prize pot, and can claim ticket revenue after settlement. Creators{" "}
-            <b>cannot</b> buy tickets in their own raffle.
+            <b>Creators</b> choose lottery parameters, fund the prize pot, and can claim ticket revenue after settlement. Creators{" "}
+            <b>cannot</b> buy tickets in their own lottery.
           </li>
           <li>
-            <b>Registry/Deployer admins</b> can manage configuration for <b>future</b> raffles (ex: set registrar, update deployer
-            config). This does <b>not</b> let them rewrite outcomes of an already deployed raffle.
+            <b>Registry/Deployer admins</b> can manage configuration for <b>future</b> lotteries (ex: set registrar, update deployer
+            config). This does <b>not</b> let them rewrite outcomes of an already deployed lottery.
           </li>
         </ul>
         <div className="faq-callout">
-          Best practice: treat smart contracts as the source of truth. You can verify a raffle’s rules (fee recipient, ticket price,
-          deadline, etc.) on-chain for that raffle address.
+          Best practice: treat smart contracts as the source of truth. You can verify a lottery’s rules (fee recipient, ticket price,
+          deadline, etc.) on-chain for that lottery address.
         </div>
       </>
     ),
@@ -426,7 +426,7 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "Can anyone steal funds or change the winner?",
     a: (
       <>
-        The winner selection is enforced by the raffle contract and uses verifiable randomness from Pyth Entropy.
+        The winner selection is enforced by the lottery contract and uses verifiable randomness from Pyth Entropy.
         <br />
         <br />
         Payouts are pull-based:
@@ -507,16 +507,16 @@ const FAQ_ITEMS: FaqItem[] = [
 
   {
     id: "canceled",
-    q: "What happens if a raffle is canceled?",
+    q: "What happens if a lottery is canceled?",
     a: (
       <>
-        If a raffle is canceled, <b>no one loses funds</b>.
+        If a lottery is canceled, <b>no one loses funds</b>.
         <br />
         <br />
         <ul className="faq-ul">
           <li>🎟 Players can reclaim a <b>full refund</b> for their tickets.</li>
           <li>👤 The creator can reclaim their <b>original prize pot</b> (as a claim).</li>
-          <li>💸 <b>No protocol fees</b> are allocated on canceled raffles.</li>
+          <li>💸 <b>No protocol fees</b> are allocated on canceled lotteries.</li>
         </ul>
         Refunds are done through the <b>Dashboard</b> (claim portal).
       </>
@@ -540,7 +540,7 @@ const FAQ_ITEMS: FaqItem[] = [
             <b>EVM compatibility:</b> works with common wallets like MetaMask.
           </li>
           <li>
-            <b>Good UX:</b> quick confirmations make raffles feel responsive.
+            <b>Good UX:</b> quick confirmations make lotteries feel responsive.
           </li>
         </ul>
       </>
@@ -588,7 +588,7 @@ export function FaqPage() {
       <SectionTitle>How a Lottery Works</SectionTitle>
       <div className="faq-mermaid">
         <div className="faq-diagram-title">System State Flow</div>
-        <MermaidDiagram code={RAFFLE_FLOW} id="ppopgi-raffle-lifecycle" />
+        <MermaidDiagram code={LOTTERY_FLOW} id="ppopgi-lottery-lifecycle" />
         <div className="faq-diagram-note">Scroll to view the full lifecycle</div>
       </div>
 
@@ -613,7 +613,7 @@ export function FaqPage() {
       </div>
 
       {/* Footer Note */}
-      <div className="faq-footer-card">Still curious? Check the "Blockchain Journey" on any raffle card.</div>
+      <div className="faq-footer-card">Still curious? Check the "Blockchain Journey" on any lottery card.</div>
     </div>
   );
 }
