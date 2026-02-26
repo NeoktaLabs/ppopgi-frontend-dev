@@ -61,14 +61,14 @@ export function AboutPage() {
 
           <h3>Transparency by Design</h3>
           <p>
-            Ppopgi is built so the most important parts are verifiable on-chain: <strong>the raffle rules, funds custody, and winner
+            Ppopgi is built so the most important parts are verifiable on-chain: <strong>the lottery rules, funds custody, and winner
             selection</strong>. The UI, indexing, and automation are there to make things fast and easy — but they don’t decide who
             wins.
           </p>
 
           <p>
-            Each raffle is its own smart contract. That means raffle settings are fixed inside that contract, and funds are isolated
-            per raffle. Payouts are handled through a “claim” flow (pull-based), so users claim what they’re owed directly from their
+            Each lottery is its own smart contract. That means lottery settings are fixed inside that contract, and funds are isolated
+            per lottery. Payouts are handled through a “claim” flow (pull-based), so users claim what they’re owed directly from their
             wallet.
           </p>
 
@@ -79,7 +79,7 @@ export function AboutPage() {
           </p>
 
           <p>
-            Because the project is self-funded, there are protocol fees. They’re defined on-chain and fixed per raffle once it’s
+            Because the project is self-funded, there are protocol fees. They’re defined on-chain and fixed per lottery once it’s
             created. They’re clearly displayed in the app and verifiable on-chain. The goal is simply to cover infrastructure,
             maintenance, and keep the project independent.
           </p>
