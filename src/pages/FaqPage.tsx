@@ -241,54 +241,6 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 
   {
-    id: "architecture-tech",
-    q: "What is Ppopgi’s system architecture? (Technical overview)",
-    a: (
-      <>
-        Ppopgi is a hybrid on-chain / off-chain system where <b>funds custody and winner logic live entirely on-chain</b>, while
-        off-chain components improve performance and UX.
-        <br />
-        <br />
-
-        <div className="faq-mermaid" style={{ marginTop: 12 }}>
-          <div className="faq-diagram-title">System Architecture</div>
-          <MermaidDiagram code={SYSTEM_ARCH} id="ppopgi-system-architecture" />
-          <div className="faq-diagram-note">On-chain components enforce rules; off-chain components speed up reads and automation.</div>
-        </div>
-
-        <br />
-
-        <b>🧱 On-chain (Etherlink smart contracts)</b>
-        <ul className="faq-ul">
-          <li>Holds USDC (prize pot + ticket revenue) inside the raffle contract.</li>
-          <li>Enforces the raffle state machine (FundingPending → Open → Drawing → Completed / Canceled).</li>
-          <li>Requests randomness from Pyth Entropy and accepts callbacks only from the Entropy contract.</li>
-          <li>Computes the winner deterministically (<code>random % totalSold</code>) using ticket ownership ranges.</li>
-          <li>Uses pull-based claims (winner/creator/feeRecipient claim their own funds).</li>
-        </ul>
-
-        <b>🌐 Off-chain (operated by Ppopgi for UX + performance)</b>
-        <ul className="faq-ul">
-          <li>
-            <b>Subgraph (The Graph)</b> indexes events for fast lists/participants/history.
-          </li>
-          <li>
-            <b>Edge cache worker</b> caches GraphQL queries to reduce load and speed up responses.
-          </li>
-          <li>
-            <b>Finalizer bot</b> periodically calls <code>finalize()</code> when raffles are eligible (permissionless).
-          </li>
-        </ul>
-
-        <div className="faq-callout">
-          Important: Off-chain services don’t control outcomes and can’t steal funds — they just make the app faster and help trigger
-          public actions.
-        </div>
-      </>
-    ),
-  },
-
-  {
     id: "contracts-addresses",
     q: "What are the on-chain contract addresses?",
     a: (
@@ -297,78 +249,33 @@ const FAQ_ITEMS: FaqItem[] = [
         <ul className="faq-ul">
           <li>
             <b>Lottery Registry:</b>{" "}
-            {CONTRACTS.registry !== "0x…" ? (
-              <a
-                className="rdm-info-link"
-                target="_blank"
-                rel="noreferrer"
-                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.registry).toLowerCase()}`}
-              >
-                {CONTRACTS.registry}
-              </a>
-            ) : (
-              <span>0x… (add your address)</span>
-            )}
+            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0xa916e20AbF4d57bCb98f7A845eb74f2EB4Dcbed2">
+            0xa916e20AbF4d57bCb98f7A845eb74f2EB4Dcbed2 ↗
+          </a>
           </li>
           <li>
             <b>SingleWinner Deployer:</b>{" "}
-            {CONTRACTS.deployer !== "0x…" ? (
-              <a
-                className="rdm-info-link"
-                target="_blank"
-                rel="noreferrer"
-                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.deployer).toLowerCase()}`}
-              >
-                {CONTRACTS.deployer}
-              </a>
-            ) : (
-              <span>0x… (add your address)</span>
-            )}
+            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0xAd0c8Ba0E4e519B4EA97cE945A20E2716dDbDf7D">
+            0xAd0c8Ba0E4e519B4EA97cE945A20E2716dDbDf7D ↗
+          </a>
           </li>
           <li>
             <b>USDC token:</b>{" "}
-            {CONTRACTS.usdc !== "0x…" ? (
-              <a
-                className="rdm-info-link"
-                target="_blank"
-                rel="noreferrer"
-                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.usdc).toLowerCase()}`}
-              >
-                {CONTRACTS.usdc}
-              </a>
-            ) : (
-              <span>0x… (add your address)</span>
-            )}
+            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9">
+            0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9 ↗
+          </a>
           </li>
           <li>
             <b>Pyth Entropy contract:</b>{" "}
-            {CONTRACTS.pythEntropy !== "0x…" ? (
-              <a
-                className="rdm-info-link"
-                target="_blank"
-                rel="noreferrer"
-                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.pythEntropy).toLowerCase()}`}
-              >
-                {CONTRACTS.pythEntropy}
-              </a>
-            ) : (
-              <span>0x… (add your address)</span>
-            )}
+            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0x23f0e8faee7bbb405e7a7c3d60138fcfd43d7509">
+            0x23f0e8faee7bbb405e7a7c3d60138fcfd43d7509 ↗
+          </a>
           </li>
           <li>
             <b>Entropy provider:</b>{" "}
-            {CONTRACTS.entropyProvider !== "0x…" ? (
-              <a
-                className="rdm-info-link"
-                target="_blank"
-                rel="noreferrer"
-                href={`${LINKS.explorerBase}/address/${String(CONTRACTS.entropyProvider).toLowerCase()}`}
-              >
-                {CONTRACTS.entropyProvider}
-              </a>
-            ) : (
-              <span>0x… (add your address)</span>
-            )}
+            <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://explorer.etherlink.com/address/0x52DeaA1c84233F7bb8C8A45baeDE41091c616506">
+            0x52DeaA1c84233F7bb8C8A45baeDE41091c616506 ↗
+          </a>
           </li>
         </ul>
 
@@ -454,34 +361,6 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 
   {
-    id: "finalize-fee",
-    q: "Who settles a raffle, and who pays for randomness?",
-    a: (
-      <>
-        Settling (finalizing) a raffle is <b>permissionless</b> — anyone can do it once the raffle is ready:
-        <ul className="faq-ul">
-          <li>either the raffle is <b>sold out</b> (max tickets reached),</li>
-          <li>or the <b>deadline has passed</b>.</li>
-        </ul>
-        <br />
-        Randomness has a small network cost because it uses an on-chain randomness provider. The person who triggers settlement pays
-        that cost <b>at the moment the randomness request is made</b>.
-        <br />
-        <br />
-        In practice this is usually:
-        <ul className="faq-ul">
-          <li>a player,</li>
-          <li>the creator,</li>
-          <li>or an automated helper (the <b>finalizer bot</b>).</li>
-        </ul>
-        <div className="faq-callout">
-          This cost is separate from Ppopgi protocol fees: it’s the on-chain randomness request cost paid by whoever finalizes.
-        </div>
-      </>
-    ),
-  },
-
-  {
     id: "finalizer-bot",
     q: "What is the finalizer bot?",
     a: (
@@ -489,7 +368,7 @@ const FAQ_ITEMS: FaqItem[] = [
         The finalizer bot is a simple automated helper that improves UX.
         <br />
         <br />
-        It runs on a schedule (about <b>every ~5 minutes</b>) and checks for raffles that are ready to settle (deadline reached or
+        It runs on a schedule (about <b>every ~3 minutes</b>) and checks for raffles that are ready to settle (deadline reached or
         sold out). If it finds one, it can trigger settlement so raffles don’t stay “waiting” forever.
         <br />
         <br />
@@ -646,15 +525,12 @@ const FAQ_ITEMS: FaqItem[] = [
         You can review automated scan reports (static analysis) here:
         <br />
         <br />
-        {LINKS.solidityScanProject ? (
-          <a className="rdm-info-link" target="_blank" rel="noreferrer" href={LINKS.solidityScanProject}>
-            View SolidityScan report ↗
+          <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://solidityscan.com/quickscan/0xa916e20AbF4d57bCb98f7A845eb74f2EB4Dcbed2/blockscout/etherlink-mainnet">
+            View LotteryRegistry SolidityScan report ↗
+          </a><br />
+          <a className="rdm-info-link" target="_blank" rel="noreferrer" href="https://solidityscan.com/quickscan/0xAd0c8Ba0E4e519B4EA97cE945A20E2716dDbDf7D/blockscout/etherlink-mainnet">
+            View LotteryDeployer SolidityScan report ↗
           </a>
-        ) : (
-          <div className="faq-callout">
-            Add your SolidityScan link in <code>LINKS.solidityScanProject</code> (or point to it from your Transparency footer).
-          </div>
-        )}
         <br />
         <br />
         <div className="faq-callout">
