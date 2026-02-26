@@ -152,7 +152,11 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
         : null,
 
       finalized: fin0
-        ? { timestamp: String(fin0.timestamp ?? "0"), txHash: String(fin0.txHash ?? "").toLowerCase(), requestId: fin0.requestId != null ? String(fin0.requestId) : null }
+        ? {
+            timestamp: String(fin0.timestamp ?? "0"),
+            txHash: String(fin0.txHash ?? "").toLowerCase(),
+            requestId: fin0.requestId != null ? String(fin0.requestId) : null,
+          }
         : null,
 
       winnerPicked: win0
@@ -165,7 +169,11 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
         : null,
 
       canceled: canc0
-        ? { timestamp: String(canc0.timestamp ?? "0"), txHash: String(canc0.txHash ?? "").toLowerCase(), reason: canc0.reason != null ? String(canc0.reason) : null }
+        ? {
+            timestamp: String(canc0.timestamp ?? "0"),
+            txHash: String(canc0.txHash ?? "").toLowerCase(),
+            reason: canc0.reason != null ? String(canc0.reason) : null,
+          }
         : null,
     } as JourneyBundle;
   } catch {
@@ -277,9 +285,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
       null;
 
     const deployedTx = lot?.deployedTx || displayData?.deployedTx || displayData?.creationTx || null;
-
     const registeredAt = lot?.registeredAt || displayData?.registeredAt || displayData?.history?.registeredAt || null;
-
     const deadline = lot?.deadline || displayData?.deadline || null;
 
     const statusRaw = displayData?.status ?? lot?.status ?? null;
@@ -316,7 +322,13 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     } else if (canceled) {
       steps.push({ label: "Canceled", date: canceled.timestamp, tx: canceled.txHash, status: "done" });
     } else if (status === "COMPLETED") {
-      steps.push({ label: "Winner Selected", date: lot?.drawingRequestedAt || displayData?.completedAt || null, tx: null, status: "done", winner: displayData?.winner || lot?.winner || null });
+      steps.push({
+        label: "Winner Selected",
+        date: lot?.drawingRequestedAt || displayData?.completedAt || null,
+        tx: null,
+        status: "done",
+        winner: displayData?.winner || lot?.winner || null,
+      });
     } else if (status === "CANCELED") {
       steps.push({ label: "Canceled", date: lot?.canceledAt || displayData?.canceledAt || null, tx: null, status: "done" });
     } else {
@@ -393,8 +405,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lotteryId, uiMaxForStepper]);
 
-  if (!open) return null;
-
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
@@ -435,7 +445,8 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
   const showSuccess = !!state.lastBuy;
 
-  return (
+  // ✅ IMPORTANT: no early return before hooks. Conditional return happens here.
+  return !open ? null : (
     <div className="rdm-overlay" onMouseDown={handleClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="rdm-notch left" />
@@ -531,12 +542,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
               <div className="rdm-success-actions">
                 {state.lastBuy.txHash && (
-                  <a
-                    className="rdm-cta"
-                    href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a className="rdm-cta" href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`} target="_blank" rel="noreferrer">
                     View Tx ↗
                   </a>
                 )}
@@ -549,7 +555,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                   className="rdm-cta primary"
                   onClick={() => {
                     actions.clearLastBuy();
-                    // go straight back to buying experience
                     setTab("receipt");
                   }}
                 >
@@ -708,7 +713,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 <button className={`rdm-tab ${tab === "holders" ? "active" : ""}`} onClick={() => setTab("holders")}>
                   Holders
                 </button>
-                {/* (keep your Range tab here if you already have it in your working version) */}
+                {/* keep your Range tab here if you already have it */}
               </div>
 
               <div className="rdm-tab-content">
