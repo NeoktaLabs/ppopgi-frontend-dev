@@ -512,13 +512,38 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     [isOpen, account?.address, usdcContract, lotteryId, paymentTokenAddr, usdcBal]
   );
 
+  // ✅ timer (avoid message sticking forever)
+  const buyMsgTimerRef = useRef<number | null>(null);
+  const setBuyMsgWithTtl = useCallback((msg: string | null, ttlMs = 2500) => {
+    if (buyMsgTimerRef.current != null) window.clearTimeout(buyMsgTimerRef.current);
+    buyMsgTimerRef.current = null;
+
+    setBuyMsg(msg);
+
+    if (msg && ttlMs > 0) {
+      buyMsgTimerRef.current = window.setTimeout(() => {
+        setBuyMsg((prev) => (prev === msg ? null : prev));
+      }, ttlMs);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (buyMsgTimerRef.current != null) {
+        window.clearTimeout(buyMsgTimerRef.current);
+        buyMsgTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const approve = useCallback(async () => {
+    // don’t clear success messages instantly on range recalcs
     setBuyMsg(null);
 
     if (!account?.address || !lotteryId) return;
 
     if (!usdcContract) {
-      setBuyMsg("Payment token unavailable. Please retry.");
+      setBuyMsgWithTtl("Payment token unavailable. Please retry.", 3000);
       return;
     }
 
@@ -533,12 +558,11 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
       await sendAndConfirm(tx);
 
-      setBuyMsg("✅ Wallet prepared.");
+      // ✅ IMPORTANT:
+      // ethers v6 MaxUint256 is a bigint. Keep allowance as bigint to make UI flip instantly.
+      setAllowance(MaxUint256);
 
-      // ✅ Optimistic set
-      setAllowance(MaxUint256 as any);
-
-      // ✅ Also patch cache so UI won't regress to stale allowance while postTx read is pending
+      // ✅ Patch cache too (as bigint)
       try {
         const acct = account.address;
         const token = paymentTokenAddr;
@@ -548,24 +572,35 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
         allowBalCache.set(key, {
           ts: Date.now(),
-          allowance: MaxUint256 as any,
+          allowance: MaxUint256,
           bal: hit?.bal, // preserve last known balance
         });
       } catch {}
 
-      void refreshAllowance("postTx");
-      // also update other pages, but no delayed ping needed here
-      // (buy will do delayed ping)
-      try {
-        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-      } catch {}
+      // ✅ Force an immediate post-tx refresh (no "void") so UI reliably flips after returning from wallet
+      await refreshAllowance("postTx");
+
+      // ✅ Small app refresh (no delayed ping needed)
+      emitRevalidate(false);
+
+      setBuyMsgWithTtl("✅ Wallet prepared. You can buy tickets now!", 2500);
     } catch (e: any) {
       const { label } = parseTxError(e);
-      setBuyMsg(label === "Purchase failed." ? "Prepare wallet failed." : label);
+      setBuyMsgWithTtl(label === "Purchase failed." ? "Prepare wallet failed." : label, 3500);
     }
-  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance, paymentTokenAddr]);
+  }, [
+    account?.address,
+    usdcContract,
+    lotteryId,
+    sendAndConfirm,
+    refreshAllowance,
+    paymentTokenAddr,
+    emitRevalidate,
+    setBuyMsgWithTtl,
+  ]);
 
   const buy = useCallback(async () => {
+    // don’t clear success messages instantly on range recalcs
     setBuyMsg(null);
     if (!account?.address || !lotteryContract || !lotteryId) return;
 
@@ -574,19 +609,19 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
       // ✅ Guard: don't send a tx we already know will revert
       if (!lotteryIsOpen) {
-        setBuyMsg("Lottery is not open.");
+        setBuyMsgWithTtl("Lottery is not open.", 3000);
         return;
       }
       if (ticketCount < uiMinBuy) {
-        setBuyMsg(`Minimum purchase is ${uiMinBuy} ticket${uiMinBuy === 1 ? "" : "s"}.`);
+        setBuyMsgWithTtl(`Minimum purchase is ${uiMinBuy} ticket${uiMinBuy === 1 ? "" : "s"}.`, 3500);
         return;
       }
       if (allowance === null || allowance < totalCostU) {
-        setBuyMsg("Please approve USDC first.");
+        setBuyMsgWithTtl("Please approve USDC first.", 3000);
         return;
       }
       if (usdcBal === null || usdcBal < totalCostU) {
-        setBuyMsg("Not enough USDC.");
+        setBuyMsgWithTtl("Not enough USDC.", 3000);
         return;
       }
 
@@ -617,7 +652,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       });
 
       fireConfetti();
-      setBuyMsg("🎉 Tickets purchased!");
+      // ✅ Keep message visible even if range/min changes after buy
+      setBuyMsgWithTtl("🎉 Tickets purchased!", 3000);
 
       // Optimistic local + cache update
       try {
@@ -644,7 +680,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       emitRevalidate(true);
     } catch (e: any) {
       const { label } = parseTxError(e);
-      setBuyMsg(label);
+      setBuyMsgWithTtl(label, 3500);
     }
   }, [
     account?.address,
@@ -664,6 +700,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     totalCostU,
     paymentTokenAddr,
     lotteryIsOpen,
+    setBuyMsgWithTtl,
   ]);
 
   // ✅ avoid timer leak for copy message
@@ -693,17 +730,31 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     copyTimerRef.current = window.setTimeout(() => setCopyMsg(null), 1500);
   }, [lotteryId]);
 
+  // ✅ Only “reset” when modal opens (not when uiMinBuy changes later)
+  const prevOpenRef = useRef(false);
   useEffect(() => {
+    const justOpened = isOpen && !prevOpenRef.current;
+    prevOpenRef.current = isOpen;
+
     if (!isOpen) return;
 
-    setTickets(String(uiMinBuy));
-    setBuyMsg(null);
+    if (justOpened) {
+      setTickets(String(uiMinBuy));
+      setBuyMsg(null);
 
-    setUsdcBal(null);
-    setAllowance(null);
+      setUsdcBal(null);
+      setAllowance(null);
 
-    void refreshAllowance("open");
-    // include uiMinBuy so reopen resets correctly if minPurchaseAmount / range min changes
+      void refreshAllowance("open");
+      return;
+    }
+
+    // If min increases while open, bump tickets up — but DO NOT clear buyMsg.
+    setTickets((prev) => {
+      const n = toInt(prev, uiMinBuy);
+      if (n < uiMinBuy) return String(uiMinBuy);
+      return prev;
+    });
   }, [isOpen, uiMinBuy, lotteryId, account?.address, paymentTokenAddr, refreshAllowance]);
 
   return {
