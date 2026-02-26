@@ -84,76 +84,8 @@ flowchart TD
   linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
 `;
 
-// ✅ NEW: Architecture diagram (same theme + style)
-const SYSTEM_ARCH = `
-%%{
-  init: {
-    'theme': 'base',
-    'themeVariables': {
-      'primaryColor': '#ffffff',
-      'primaryTextColor': '#4A0F2B',
-      'primaryBorderColor': '#fce7f3',
-      'lineColor': '#be185d',
-      'fontFamily': 'ui-sans-serif, system-ui, -apple-system, sans-serif',
-      'fontSize': '14px'
-    },
-    'flowchart': {
-      'curve': 'basis',
-      'nodeSpacing': 40,
-      'rankSpacing': 60
-    }
-  }
-}%%
-
-flowchart TD
-  classDef brand fill:#fdf2f8,stroke:#db2777,stroke-width:2px,color:#be185d,rx:12,ry:12;
-  classDef decision fill:#ffffff,stroke:#9d174d,stroke-width:2px,color:#4A0F2B,rx:6,ry:6,stroke-dasharray: 5 5;
-  classDef success fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d,rx:12,ry:12;
-  classDef fail fill:#fff1f2,stroke:#e11d48,stroke-width:2px,color:#9f1239,rx:12,ry:12;
-  classDef tech fill:#fff,stroke:#4A0F2B,stroke:#4A0F2B,color:#4A0F2B,rx:4,ry:4,stroke-dasharray: 2 2;
-
-  User[User Wallet<br/>(MetaMask etc.)]:::tech
-  App[Ppopgi Frontend<br/>(React)]:::brand
-
-  RPC[RPC / Etherlink Node]:::tech
-  Chain[Etherlink (EVM)<br/>Lottery Contracts]:::brand
-
-  Entropy[Pyth Entropy<br/>Verifiable Randomness]:::tech
-  Bot[Finalizer Bot<br/>permissionless caller]:::tech
-
-  Subgraph[The Graph Subgraph<br/>(indexed events)]:::tech
-  Worker[Edge Cache Worker<br/>(GraphQL cache)]:::tech
-
-  User --> App
-  App --> RPC
-  RPC --> Chain
-
-  Bot -.-> Chain
-  Chain --> Entropy
-  Entropy --> Chain
-
-  Chain --> Subgraph
-  App --> Worker --> Subgraph
-
-  linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
-`;
-
-/**
- * ✅ OPTIONAL: Put your real addresses here (or import from config)
- * Keeping it local makes the FAQ very easy to update.
- */
-const CONTRACTS = {
-  registry: "0x…",
-  deployer: "0x…",
-  usdc: "0x…",
-  pythEntropy: "0x…",
-  entropyProvider: "0x…",
-};
-
 const LINKS = {
   explorerBase: "https://explorer.etherlink.com",
-  solidityScanProject: "", // e.g. "https://solidityscan.com/..."
-  repoContracts: "", // e.g. "https://github.com/<you>/<repo>"
 };
 
 const FAQ_ITEMS: FaqItem[] = [
