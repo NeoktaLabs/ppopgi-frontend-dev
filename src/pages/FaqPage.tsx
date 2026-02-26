@@ -84,10 +84,6 @@ flowchart TD
   linkStyle default stroke:#db2777,stroke-width:2px,fill:none;
 `;
 
-const LINKS = {
-  explorerBase: "https://explorer.etherlink.com",
-};
-
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "what-is",
@@ -558,13 +554,6 @@ const FAQ_ITEMS: FaqItem[] = [
       <>
         Yes. Links to the Frontend, Smart Contracts, and Finalizer Bot are available in the <b>Transparency</b> section of the site
         footer.
-        <br />
-        <br />
-        {LINKS.repoContracts ? (
-          <a className="rdm-info-link" target="_blank" rel="noreferrer" href={LINKS.repoContracts}>
-            View smart contracts repo ↗
-          </a>
-        ) : null}
       </>
     ),
   },
