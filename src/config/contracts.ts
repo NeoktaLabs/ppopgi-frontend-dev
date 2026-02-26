@@ -1,3 +1,5 @@
+// src/config/contracts.ts
+
 import LotteryRegistryAbi from "./abis/LotteryRegistry.json";
 import SingleWinnerDeployerAbi from "./abis/SingleWinnerDeployer.json";
 import SingleWinnerLotteryAbi from "./abis/SingleWinnerLottery.json";
