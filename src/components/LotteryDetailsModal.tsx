@@ -45,6 +45,9 @@ function mustEnv(name: string): string {
   return v;
 }
 
+/**
+ * ✅ Indexer-based timeline (typed entities from your schema)
+ */
 type JourneyBundle = {
   lottery: {
     id: string;
@@ -87,25 +90,45 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
         cancelReason
       }
 
-      fundingConfirmedEvents(first: 1, orderBy: timestamp, orderDirection: asc, where: { lottery: $id }) {
+      fundingConfirmedEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
         timestamp
         txHash
       }
 
-      lotteryFinalizedEvents(first: 1, orderBy: timestamp, orderDirection: asc, where: { lottery: $id }) {
+      lotteryFinalizedEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
         timestamp
         txHash
         requestId
       }
 
-      winnerPickedEvents(first: 1, orderBy: timestamp, orderDirection: asc, where: { lottery: $id }) {
+      winnerPickedEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
         timestamp
         txHash
         winner
         winningTicketIndex
       }
 
-      lotteryCanceledEvents(first: 1, orderBy: timestamp, orderDirection: asc, where: { lottery: $id }) {
+      lotteryCanceledEvents(
+        first: 1
+        orderBy: timestamp
+        orderDirection: asc
+        where: { lottery: $id }
+      ) {
         timestamp
         txHash
         reason
@@ -117,19 +140,23 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query, variables: { id: lotteryId.toLowerCase() } }),
+      body: JSON.stringify({
+        query,
+        variables: { id: lotteryId.toLowerCase() },
+      }),
     });
 
     const json = await res.json().catch(() => null);
     if (!res.ok || json?.errors?.length) return null;
 
     const lot = json?.data?.lottery ?? null;
+
     const funding0 = json?.data?.fundingConfirmedEvents?.[0] ?? null;
     const fin0 = json?.data?.lotteryFinalizedEvents?.[0] ?? null;
     const win0 = json?.data?.winnerPickedEvents?.[0] ?? null;
     const canc0 = json?.data?.lotteryCanceledEvents?.[0] ?? null;
 
-    return {
+    const bundle: JourneyBundle = {
       lottery: lot
         ? {
             id: String(lot.id),
@@ -175,7 +202,9 @@ async function fetchLotteryJourney(lotteryId: string): Promise<JourneyBundle | n
             reason: canc0.reason != null ? String(canc0.reason) : null,
           }
         : null,
-    } as JourneyBundle;
+    };
+
+    return bundle;
   } catch {
     return null;
   }
@@ -217,6 +246,7 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
+// ✅ FIX: ParticipantUI shape varies by hook; derive a usable address safely.
 function participantAddr(p: any): string {
   return String(p?.buyer || p?.user || p?.address || p?.account || "").toLowerCase();
 }
@@ -225,12 +255,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
-  const [tab, setTab] = useState<"receipt" | "holders">("receipt");
+  // ✅ third tab for range policy transparency
+  const [tab, setTab] = useState<"receipt" | "holders" | "ranges">("receipt");
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
   const [journey, setJourney] = useState<JourneyBundle | null>(null);
 
   const handleClose = useCallback(() => {
-    // so it doesn't "stick" on next open
     try {
       actions.clearLastBuy?.();
     } catch {}
@@ -301,15 +331,20 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     steps.push({ label: "Initialized", date: createdAt, tx: deployedTx, status: createdAt ? "done" : "active" });
     steps.push({ label: "Registered", date: registeredAt, tx: null, status: registeredAt ? "done" : "future" });
 
-    if (funding) steps.push({ label: "Ticket Sales Open", date: funding.timestamp, tx: funding.txHash, status: "done" });
-    else {
+    if (funding) {
+      steps.push({ label: "Ticket Sales Open", date: funding.timestamp, tx: funding.txHash, status: "done" });
+    } else {
       const s = status === "OPEN" || status === "DRAWING" || status === "COMPLETED" || status === "CANCELED" ? "active" : "future";
       steps.push({ label: "Ticket Sales Open", date: null, tx: null, status: s });
     }
 
-    if (finalized) steps.push({ label: "Randomness Requested", date: finalized.timestamp, tx: finalized.txHash, status: "done" });
-    else if (status === "DRAWING") steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
-    else steps.push({ label: "Draw Deadline", date: deadline, tx: null, status: status === "OPEN" ? "active" : "future" });
+    if (finalized) {
+      steps.push({ label: "Randomness Requested", date: finalized.timestamp, tx: finalized.txHash, status: "done" });
+    } else if (status === "DRAWING") {
+      steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
+    } else {
+      steps.push({ label: "Draw Deadline", date: deadline, tx: null, status: status === "OPEN" ? "active" : "future" });
+    }
 
     if (winnerPicked) {
       steps.push({
@@ -431,7 +466,36 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     return "A winner will be selected at the deadline.";
   })();
 
-  // success math (optimistic)
+  // ✅ derived helpers for range UI (purely presentational) — copied from your file
+  const showRangePanel =
+    state.rangeCount != null ||
+    state.maxRanges != null ||
+    state.rangeTier != null ||
+    state.minCostToCreateNewRange != null ||
+    state.wouldCreateRange != null;
+
+  const tierLabel = state.rangeTier != null && state.rangeTier >= 0 ? `Tier ${state.rangeTier + 1}` : "Tier —";
+
+  const fmtCostTickets = (raw?: bigint | null) => {
+    if (raw == null) return "—";
+    if (ticketPriceU <= 0n) return "—";
+    const tix = raw / ticketPriceU;
+    return `${tix.toString()} ticket${tix === 1n ? "" : "s"}`;
+  };
+
+  const nextTierText = (() => {
+    if (state.rangesUntilNextTier == null) return null;
+    if (state.rangesUntilNextTier <= 0) return "Next tier is active now.";
+    return `${state.rangesUntilNextTier} range${state.rangesUntilNextTier === 1 ? "" : "s"} until next tier`;
+  })();
+
+  const minBuyHint = (() => {
+    if (!state.wouldCreateRange) return null;
+    const n = Number(state.minTicketsForNewRange || 1);
+    return `Your next buy will open a new range. Minimum is ${n} ticket${n === 1 ? "" : "s"}.`;
+  })();
+
+  // ✅ Success math (always computed; no hook-order issues)
   const soldEffective = useMemo(() => {
     const base = Number(displayData?.sold || 0);
     const add = state.lastBuy?.count || 0;
@@ -445,7 +509,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
   const showSuccess = !!state.lastBuy;
 
-  // ✅ IMPORTANT: no early return before hooks. Conditional return happens here.
+  // ✅ IMPORTANT: keep hooks stable by returning conditionally ONLY here
   return !open ? null : (
     <div className="rdm-overlay" onMouseDown={handleClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
@@ -564,10 +628,11 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
             </div>
           ) : (
             <>
-              {/* NORMAL DETAILS VIEW */}
               <div className="rdm-buy-section">
                 {!flags.lotteryIsOpen ? (
-                  <div className="rdm-closed-msg">{state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}</div>
+                  <div className="rdm-closed-msg">
+                    {state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}
+                  </div>
                 ) : isCreator ? (
                   <div className="rdm-buy-disabled">Creator cannot participate.</div>
                 ) : (
@@ -582,6 +647,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                         Only {(math as any).remainingTickets} ticket{(math as any).remainingTickets === 1 ? "" : "s"} remaining
                       </div>
                     )}
+
+                    {/* ✅ range min hint (only when relevant) */}
+                    {minBuyHint && <div className="rdm-warn-text">{minBuyHint}</div>}
 
                     {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
 
@@ -706,6 +774,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 </div>
               )}
 
+              {/* ✅ Tabs (WITH RANGES TAB restored exactly like your file) */}
               <div className="rdm-tabs">
                 <button className={`rdm-tab ${tab === "receipt" ? "active" : ""}`} onClick={() => setTab("receipt")}>
                   Receipt Log
@@ -713,7 +782,9 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 <button className={`rdm-tab ${tab === "holders" ? "active" : ""}`} onClick={() => setTab("holders")}>
                   Holders
                 </button>
-                {/* keep your Range tab here if you already have it */}
+                <button className={`rdm-tab ${tab === "ranges" ? "active" : ""}`} onClick={() => setTab("ranges")}>
+                  Ranges
+                </button>
               </div>
 
               <div className="rdm-tab-content">
@@ -758,6 +829,79 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                           </div>
                         );
                       })
+                    )}
+                  </div>
+                )}
+
+                {/* ✅ Ranges panel restored exactly like your file */}
+                {tab === "ranges" && (
+                  <div className="rdm-receipt">
+                    <div className="rdm-receipt-line start">--- RANGE POLICY ---</div>
+
+                    {!showRangePanel ? (
+                      <div className="rdm-empty">Range information unavailable.</div>
+                    ) : (
+                      <>
+                        <div className="rdm-slip-row">
+                          <span>Current tier</span>
+                          <span>
+                            <b>{tierLabel}</b>
+                            {state.isNearTierUp ? <span style={{ marginLeft: 8 }}>⚠️</span> : null}
+                          </span>
+                        </div>
+
+                        <div className="rdm-slip-row">
+                          <span>Ranges used</span>
+                          <span>
+                            <b>
+                              {state.rangeCount ?? "—"} / {state.maxRanges ?? "—"}
+                            </b>
+                            {state.rangeCapacityPct != null ? (
+                              <span style={{ marginLeft: 8, opacity: 0.75 }}>({state.rangeCapacityPct.toFixed(0)}%)</span>
+                            ) : null}
+                          </span>
+                        </div>
+
+                        <div className="rdm-slip-row">
+                          <span>Tier progress</span>
+                          <span>
+                            {state.rangesUntilNextTier != null ? <b>{nextTierText}</b> : <b>—</b>}
+                            {state.rangeTierProgressPct != null ? (
+                              <span style={{ marginLeft: 8, opacity: 0.75 }}>({state.rangeTierProgressPct.toFixed(0)}%)</span>
+                            ) : null}
+                          </span>
+                        </div>
+
+                        <div className="rdm-slip-divider" />
+
+                        <div className="rdm-slip-row head">
+                          <span>Buying rules</span>
+                        </div>
+
+                        <div className="rdm-slip-row">
+                          <span>Your next buy opens new range?</span>
+                          <span>
+                            <b>{state.wouldCreateRange == null ? "—" : state.wouldCreateRange ? "Yes" : "No"}</b>
+                          </span>
+                        </div>
+
+                        <div className="rdm-slip-row">
+                          <span>Min tickets (if opening range)</span>
+                          <span>
+                            <b>{state.wouldCreateRange ? state.minTicketsForNewRange : "—"}</b>
+                          </span>
+                        </div>
+
+                        <div className="rdm-slip-row">
+                          <span>Min cost to open new range</span>
+                          <span>
+                            <b>{math.fmtUsdc(state.minCostToCreateNewRange?.toString() || "0")} USDC</b>
+                            <span style={{ marginLeft: 8, opacity: 0.75 }}> (~{fmtCostTickets(state.minCostToCreateNewRange)})</span>
+                          </span>
+                        </div>
+
+                        <div className="rdm-receipt-line end">--- END ---</div>
+                      </>
                     )}
                   </div>
                 )}
