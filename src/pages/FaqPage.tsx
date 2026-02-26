@@ -12,7 +12,6 @@ type FaqItem = {
   tags?: string[];
 };
 
-// ✅ UPDATED: Mermaid Theme matches Brand (Pink/Crimson)
 const LOTTERY_FLOW = `
 %%{
   init: {
