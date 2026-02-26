@@ -75,6 +75,34 @@ function cacheKey(acct: string, token: string, spender: string) {
   return `${acct.toLowerCase()}:${token.toLowerCase()}:${spender.toLowerCase()}`;
 }
 
+function parseTxError(e: any): { label: string; raw: string } {
+  const raw =
+    String(
+      e?.shortMessage ||
+        e?.message ||
+        e?.cause?.shortMessage ||
+        e?.cause?.message ||
+        e?.data?.message ||
+        e?.reason ||
+        ""
+    ) || "unknown error";
+
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("user rejected") || lower.includes("rejected")) return { label: "You rejected the transaction.", raw };
+  if (lower.includes("insufficient")) return { label: "Not enough USDC.", raw };
+  if (lower.includes("batchtoocheap") || lower.includes("too cheap"))
+    return { label: "Amount too small for this lottery. Increase ticket count.", raw };
+  if (lower.includes("lotterynotopen") || lower.includes("not open")) return { label: "Lottery is not open.", raw };
+  if (lower.includes("lotteryexpired") || lower.includes("expired")) return { label: "Lottery is expired.", raw };
+  if (lower.includes("ticketlimitreached") || lower.includes("limit")) return { label: "Ticket limit reached.", raw };
+
+  // common RPC umbrella code (e.g. -32000)
+  if (lower.includes("-32000") || lower.includes("internal error")) return { label: "RPC error. Please retry.", raw };
+
+  return { label: "Purchase failed.", raw };
+}
+
 export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean) {
   // NOTE: this hook still consumes useLotteryDetails
   const { data, loading, note } = useLotteryDetails(lotteryId, isOpen);
@@ -95,6 +123,10 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
   const [allowLoading, setAllowLoading] = useState(false);
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
+
+  // ✅ NEW: range-policy UX (prevents BatchTooCheap silent reverts for first-time buyers)
+  const [wouldCreateRange, setWouldCreateRange] = useState<boolean | null>(null);
+  const [minTicketsForNewRange, setMinTicketsForNewRange] = useState<number>(1);
 
   // ✅ revalidate ping (Home/Explore/ActivityBoard/etc)
   const delayedRevalRef = useRef<number | null>(null);
@@ -186,17 +218,6 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     else displayStatus = data.status.charAt(0) + data.status.slice(1).toLowerCase();
   }
 
-  // ✅ Respect minPurchaseAmount (contract rule)
-  const minPurchaseN = Number((data as any)?.minPurchaseAmount || "1");
-  const uiMinBuy = Math.max(1, Number.isFinite(minPurchaseN) ? Math.floor(minPurchaseN) : 1);
-
-  const uiMaxBuy = maxTicketsN > 0 ? Math.max(0, remainingTickets || 0) : 500;
-
-  const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
-
-  const ticketPriceU = BigInt((data as any)?.ticketPrice || "0");
-  const totalCostU = BigInt(ticketCount) * ticketPriceU;
-
   // ✅ Lottery contract (cast ABI to any to satisfy thirdweb Abi typing)
   const lotteryContract = useMemo(() => {
     if (!lotteryId) return null;
@@ -238,6 +259,75 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     !maxReached &&
     (maxTicketsN === 0 || (remainingTickets ?? 0) > 0);
 
+  // ✅ Range-policy reads: if this buy would create a *new range*, enforce min tickets needed.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!lotteryContract || !me) {
+      setWouldCreateRange(null);
+      setMinTicketsForNewRange(1);
+      return;
+    }
+
+    let alive = true;
+
+    (async () => {
+      try {
+        const would = await readContract({
+          contract: lotteryContract as any,
+          method: "function wouldCreateNewRange(address buyer) view returns (bool)",
+          params: [me],
+        }).catch(() => null as any);
+
+        if (!alive) return;
+
+        const w = Boolean(would);
+        setWouldCreateRange(w);
+
+        if (!w) {
+          setMinTicketsForNewRange(1);
+          return;
+        }
+
+        const minT = await readContract({
+          contract: lotteryContract as any,
+          method: "function minTicketsToOpenNewRangeNow() view returns (uint256)",
+          params: [],
+        }).catch(() => null as any);
+
+        if (!alive) return;
+
+        const n = Number(minT ?? 1);
+        setMinTicketsForNewRange(Number.isFinite(n) && n > 0 ? Math.floor(n) : 1);
+      } catch {
+        if (!alive) return;
+        setWouldCreateRange(null);
+        setMinTicketsForNewRange(1);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [isOpen, lotteryContract, me]);
+
+  // ✅ Respect minPurchaseAmount (contract rule) + range min (BatchTooCheap guard)
+  const minPurchaseN = Number((data as any)?.minPurchaseAmount || "1");
+  const contractMinPurchase = Math.max(1, Number.isFinite(minPurchaseN) ? Math.floor(minPurchaseN) : 1);
+
+  const rangeMin = wouldCreateRange ? Math.max(1, minTicketsForNewRange) : 1;
+  const uiMinBuy = Math.max(contractMinPurchase, rangeMin);
+
+  // Cap by remaining tickets and contract MAX_BATCH_BUY (=1000)
+  const uiMaxBuy = (() => {
+    const maxByRemaining = maxTicketsN > 0 ? Math.max(0, remainingTickets || 0) : 1_000;
+    return Math.min(1_000, maxByRemaining);
+  })();
+
+  const ticketCount = clampInt(toInt(tickets, uiMinBuy), uiMinBuy, Math.max(uiMinBuy, uiMaxBuy));
+
+  const ticketPriceU = BigInt((data as any)?.ticketPrice || "0");
+  const totalCostU = BigInt(ticketCount) * ticketPriceU;
+
   const hasEnoughAllowance = allowance !== null ? allowance >= totalCostU : false;
 
   // ✅ Safer UX: unknown balance => not enough (prevents confusing reverts)
@@ -275,7 +365,6 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       setAllowLoading(true);
 
       try {
-        // ✅ Use function signatures to avoid thirdweb "never" inference issues
         const allowanceP = readContract({
           contract: usdcContract as any,
           method: "function allowance(address owner, address spender) view returns (uint256)",
@@ -339,14 +428,19 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       setBuyMsg("✅ Wallet prepared.");
 
       // Optimistic set
-      setAllowance(MaxUint256);
+      setAllowance(MaxUint256 as any);
 
       void refreshAllowance("postTx");
-      emitRevalidate(false);
-    } catch {
-      setBuyMsg("Prepare wallet failed.");
+      // also update other pages, but no delayed ping needed here
+      // (buy will do delayed ping)
+      try {
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      } catch {}
+    } catch (e: any) {
+      const { label } = parseTxError(e);
+      setBuyMsg(label === "Purchase failed." ? "Prepare wallet failed." : label);
     }
-  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance, emitRevalidate]);
+  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance]);
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
@@ -356,6 +450,14 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       await refreshAllowance("preTx");
 
       // ✅ Guard: don't send a tx we already know will revert
+      if (!lotteryIsOpen) {
+        setBuyMsg("Lottery is not open.");
+        return;
+      }
+      if (ticketCount < uiMinBuy) {
+        setBuyMsg(`Minimum purchase is ${uiMinBuy} ticket${uiMinBuy === 1 ? "" : "s"}.`);
+        return;
+      }
       if (allowance === null || allowance < totalCostU) {
         setBuyMsg("Please approve USDC first.");
         return;
@@ -367,7 +469,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
       const tx = prepareContractCall({
         contract: lotteryContract as any,
-        method: "function buyTickets(uint64 amount)",
+        // ✅ FIX: contract is `buyTickets(uint256 count)` (NOT uint64)
+        method: "function buyTickets(uint256 count)",
         params: [BigInt(ticketCount)],
       });
 
@@ -401,7 +504,8 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
         const key = cacheKey(acct, token, spender);
         const hit = allowBalCache.get(key);
 
-        const newAllowance = allowance != null ? (allowance > totalCostU ? allowance - totalCostU : 0n) : undefined;
+        const newAllowance =
+          allowance != null ? (allowance > totalCostU ? allowance - totalCostU : 0n) : undefined;
         const newBal = usdcBal != null ? (usdcBal > totalCostU ? usdcBal - totalCostU : 0n) : undefined;
 
         if (typeof newAllowance === "bigint") setAllowance(newAllowance);
@@ -417,16 +521,15 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       void refreshAllowance("postTx");
       emitRevalidate(true);
     } catch (e: any) {
-      const msg = String(e?.shortMessage || e?.message || e || "").toLowerCase();
-      if (msg.includes("insufficient")) setBuyMsg("Not enough USDC.");
-      else if (msg.includes("rejected") || msg.includes("user rejected")) setBuyMsg("You rejected the transaction.");
-      else setBuyMsg("Purchase failed.");
+      const { label } = parseTxError(e);
+      setBuyMsg(label);
     }
   }, [
     account?.address,
     lotteryContract,
     lotteryId,
     ticketCount,
+    uiMinBuy,
     sendAndConfirm,
     fireConfetti,
     refreshAllowance,
@@ -438,6 +541,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     usdcBal,
     totalCostU,
     paymentTokenAddr,
+    lotteryIsOpen,
   ]);
 
   // ✅ avoid timer leak for copy message
@@ -477,7 +581,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     setAllowance(null);
 
     void refreshAllowance("open");
-    // include uiMinBuy so reopen resets correctly if minPurchaseAmount changes
+    // include uiMinBuy so reopen resets correctly if minPurchaseAmount / range min changes
   }, [isOpen, uiMinBuy, lotteryId, account?.address, paymentTokenAddr, refreshAllowance]);
 
   return {
@@ -495,6 +599,10 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       usdcBal,
       allowance,
       paymentTokenAddr,
+
+      // NEW (optional UI usage)
+      wouldCreateRange,
+      minTicketsForNewRange,
     },
     math: {
       minBuy: uiMinBuy,
@@ -512,7 +620,7 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       hasEnoughAllowance,
       hasEnoughBalance,
       lotteryIsOpen,
-      canBuy: isConnected && lotteryIsOpen && hasEnoughAllowance && hasEnoughBalance,
+      canBuy: isConnected && lotteryIsOpen && hasEnoughAllowance && hasEnoughBalance && ticketCount >= uiMinBuy,
     },
     actions: {
       setTickets,
