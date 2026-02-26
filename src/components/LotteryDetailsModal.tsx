@@ -3,8 +3,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import { useLotteryParticipants } from "../hooks/useLotteryParticipants";
-
-// ✅ FIX: your subgraph.ts doesn't export fetchLotteryMetadata
 import { fetchLotteryById, type LotteryListItem } from "../indexer/subgraph";
 
 import "./LotteryDetailsModal.css";
@@ -47,9 +45,6 @@ function mustEnv(name: string): string {
   return v;
 }
 
-/**
- * ✅ Indexer-based timeline (typed entities from your schema)
- */
 type JourneyBundle = {
   lottery: {
     id: string;
@@ -248,7 +243,6 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
-// ✅ FIX: ParticipantUI shape varies by hook; derive a usable address safely.
 function participantAddr(p: any): string {
   return String(p?.buyer || p?.user || p?.address || p?.account || "").toLowerCase();
 }
@@ -257,9 +251,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
-  // ✅ NEW: third tab for range policy transparency
-  const [tab, setTab] = useState<"receipt" | "holders" | "ranges">("receipt");
-
+  const [tab, setTab] = useState<"receipt" | "holders" | "success">("receipt");
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
   const [journey, setJourney] = useState<JourneyBundle | null>(null);
 
@@ -292,6 +284,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   }, [lotteryId, open, initialLottery]);
 
   const displayData = (state.data || initialLottery || metadata) as any;
+
+  // ✅ Auto switch to success screen after buy
+  useEffect(() => {
+    if (!open) return;
+    if (state.lastBuy) setTab("success");
+  }, [open, state.lastBuy]);
 
   const soldForPct = Number(displayData?.sold || 0);
   const { participants, isLoading: loadingPart } = useLotteryParticipants(lotteryId, soldForPct);
@@ -445,9 +443,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   }, [state.usdcBal, ticketPriceU]);
 
   const remainingCap = Math.max(0, Number(math.maxBuy || 0));
-  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy)
-    ? Math.max(0, Math.min(remainingCap, affordableMaxBuy))
-    : remainingCap;
+  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy) ? Math.max(0, Math.min(remainingCap, affordableMaxBuy)) : remainingCap;
 
   const uiMaxForStepper = Math.max(1, effectiveMaxBuy);
   const uiTicket = clampTicketsUi(state.tickets);
@@ -491,35 +487,17 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     return "A winner will be selected at the deadline.";
   })();
 
-  // ✅ derived helpers for range UI (purely presentational)
-  const showRangePanel =
-    state.rangeCount != null ||
-    state.maxRanges != null ||
-    state.rangeTier != null ||
-    state.minCostToCreateNewRange != null ||
-    state.wouldCreateRange != null;
+  // ✅ Success-screen math (use optimistic sold to avoid “laggy odds”)
+  const soldEffective = useMemo(() => {
+    const base = Number(displayData?.sold || 0);
+    const add = state.lastBuy?.count || 0;
+    return Math.max(base, base + add);
+  }, [displayData?.sold, state.lastBuy?.count]);
 
-  const tierLabel =
-    state.rangeTier != null && state.rangeTier >= 0 ? `Tier ${state.rangeTier + 1}` : "Tier —";
-
-  const fmtCostTickets = (raw?: bigint | null) => {
-    if (raw == null) return "—";
-    if (ticketPriceU <= 0n) return "—";
-    const tix = raw / ticketPriceU;
-    return `${tix.toString()} ticket${tix === 1n ? "" : "s"}`;
-  };
-
-  const nextTierText = (() => {
-    if (state.rangesUntilNextTier == null) return null;
-    if (state.rangesUntilNextTier <= 0) return "Next tier is active now.";
-    return `${state.rangesUntilNextTier} range${state.rangesUntilNextTier === 1 ? "" : "s"} until next tier`;
-  })();
-
-  const minBuyHint = (() => {
-    if (!state.wouldCreateRange) return null;
-    const n = Number(state.minTicketsForNewRange || 1);
-    return `Your next buy will open a new range. Minimum is ${n} ticket${n === 1 ? "" : "s"}.`;
-  })();
+  const successOdds = useMemo(() => {
+    if (soldEffective <= 0) return "100%";
+    return clampPct(100 / soldEffective);
+  }, [soldEffective]);
 
   return (
     <div className="rdm-overlay" onMouseDown={onClose}>
@@ -581,9 +559,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         <div className="rdm-ticket-stub">
           <div className="rdm-buy-section">
             {!flags.lotteryIsOpen ? (
-              <div className="rdm-closed-msg">
-                {state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}
-              </div>
+              <div className="rdm-closed-msg">{state.displayStatus === "Finalizing" ? "Lottery is finalizing..." : "Lottery Closed"}</div>
             ) : isCreator ? (
               <div className="rdm-buy-disabled">Creator cannot participate.</div>
             ) : (
@@ -598,9 +574,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                     Only {(math as any).remainingTickets} ticket{(math as any).remainingTickets === 1 ? "" : "s"} remaining
                   </div>
                 )}
-
-                {/* ✅ NEW: range min hint (only when relevant) */}
-                {minBuyHint && <div className="rdm-warn-text">{minBuyHint}</div>}
 
                 {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
 
@@ -732,14 +705,77 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
             <button className={`rdm-tab ${tab === "holders" ? "active" : ""}`} onClick={() => setTab("holders")}>
               Holders
             </button>
-
-            {/* ✅ NEW */}
-            <button className={`rdm-tab ${tab === "ranges" ? "active" : ""}`} onClick={() => setTab("ranges")}>
-              Ranges
-            </button>
+            {state.lastBuy && (
+              <button className={`rdm-tab ${tab === "success" ? "active" : ""}`} onClick={() => setTab("success")}>
+                Success
+              </button>
+            )}
           </div>
 
           <div className="rdm-tab-content">
+            {tab === "success" && state.lastBuy && (
+              <div className="rdm-success">
+                <div className="rdm-success-badge">✓ Confirmed</div>
+                <div className="rdm-success-title">🎉 Tickets Purchased!</div>
+                <div className="rdm-success-sub">
+                  You bought <b>{state.lastBuy.count}</b> ticket{state.lastBuy.count === 1 ? "" : "s"}.
+                </div>
+
+                <div className="rdm-success-grid">
+                  <div className="rdm-success-box">
+                    <div className="rdm-success-lbl">You spent</div>
+                    <div className="rdm-success-val">{math.fmtUsdc(state.lastBuy.totalCostU.toString())} USDC</div>
+                  </div>
+
+                  <div className="rdm-success-box">
+                    <div className="rdm-success-lbl">Current win odds</div>
+                    <div className="rdm-success-val">{successOdds}</div>
+                    <div className="rdm-success-note">Odds update as tickets sell</div>
+                  </div>
+
+                  <div className="rdm-success-box">
+                    <div className="rdm-success-lbl">Ends at</div>
+                    <div className="rdm-success-val">{formatDate(displayData?.deadline || "0")}</div>
+                    {hasMax && <div className="rdm-success-note">May end earlier if sold out</div>}
+                  </div>
+
+                  <div className="rdm-success-box">
+                    <div className="rdm-success-lbl">Sold / Max</div>
+                    <div className="rdm-success-val">
+                      {soldEffective} / {hasMax ? maxTicketsN : "∞"}
+                    </div>
+                    {hasMax && remaining != null && <div className="rdm-success-note">{remaining} remaining</div>}
+                  </div>
+                </div>
+
+                <div className="rdm-success-actions">
+                  {state.lastBuy.txHash && (
+                    <a className="rdm-cta" href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`} target="_blank" rel="noreferrer">
+                      View Tx ↗
+                    </a>
+                  )}
+                  <button
+                    className="rdm-cta"
+                    onClick={() => {
+                      actions.clearLastBuy();
+                      setTab("receipt");
+                    }}
+                  >
+                    Back to details
+                  </button>
+                  <button
+                    className="rdm-cta primary"
+                    onClick={() => {
+                      actions.clearLastBuy();
+                      setTab("receipt");
+                    }}
+                  >
+                    Buy more
+                  </button>
+                </div>
+              </div>
+            )}
+
             {tab === "receipt" && (
               <div className="rdm-receipt">
                 <div className="rdm-receipt-line start">--- START OF LOG ---</div>
@@ -765,7 +801,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
             {tab === "holders" && (
               <div className="rdm-holders">
-                {/* ✅ FIX: only show Loading if we have nothing to show yet */}
                 {loadingPart && participants.length === 0 ? (
                   <div className="rdm-empty">Loading...</div>
                 ) : participants.length === 0 ? (
@@ -782,89 +817,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                       </div>
                     );
                   })
-                )}
-              </div>
-            )}
-
-            {/* ✅ NEW: range policy transparency */}
-            {tab === "ranges" && (
-              <div className="rdm-receipt">
-                <div className="rdm-receipt-line start">--- RANGE POLICY ---</div>
-
-                {!showRangePanel ? (
-                  <div className="rdm-empty">Range information unavailable.</div>
-                ) : (
-                  <>
-                    <div className="rdm-slip-row">
-                      <span>Current tier</span>
-                      <span>
-                        <b>{tierLabel}</b>
-                        {state.isNearTierUp ? <span style={{ marginLeft: 8 }}>⚠️</span> : null}
-                      </span>
-                    </div>
-
-                    <div className="rdm-slip-row">
-                      <span>Ranges used</span>
-                      <span>
-                        <b>
-                          {state.rangeCount ?? "—"} / {state.maxRanges ?? "—"}
-                        </b>
-                        {state.rangeCapacityPct != null ? (
-                          <span style={{ marginLeft: 8, opacity: 0.75 }}>({state.rangeCapacityPct.toFixed(0)}%)</span>
-                        ) : null}
-                      </span>
-                    </div>
-
-                    <div className="rdm-slip-row">
-                      <span>Tier progress</span>
-                      <span>
-                        {state.rangesUntilNextTier != null ? (
-                          <b>{nextTierText}</b>
-                        ) : (
-                          <b>—</b>
-                        )}
-                        {state.rangeTierProgressPct != null ? (
-                          <span style={{ marginLeft: 8, opacity: 0.75 }}>
-                            ({state.rangeTierProgressPct.toFixed(0)}%)
-                          </span>
-                        ) : null}
-                      </span>
-                    </div>
-
-                    <div className="rdm-slip-divider" />
-
-                    <div className="rdm-slip-row head">
-                      <span>Buying rules</span>
-                    </div>
-
-                    <div className="rdm-slip-row">
-                      <span>Your next buy opens new range?</span>
-                      <span>
-                        <b>
-                          {state.wouldCreateRange == null ? "—" : state.wouldCreateRange ? "Yes" : "No"}
-                        </b>
-                      </span>
-                    </div>
-
-                    <div className="rdm-slip-row">
-                      <span>Min tickets (if opening range)</span>
-                      <span>
-                        <b>{state.wouldCreateRange ? state.minTicketsForNewRange : "—"}</b>
-                      </span>
-                    </div>
-
-                    <div className="rdm-slip-row">
-                      <span>Min cost to open new range</span>
-                      <span>
-                        <b>{math.fmtUsdc(state.minCostToCreateNewRange?.toString() || "0")} USDC</b>
-                        <span style={{ marginLeft: 8, opacity: 0.75 }}>
-                          (~{fmtCostTickets(state.minCostToCreateNewRange)})
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="rdm-receipt-line end">--- END ---</div>
-                  </>
                 )}
               </div>
             )}
