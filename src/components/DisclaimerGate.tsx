@@ -22,19 +22,25 @@ export function DisclaimerGate({ open, onAccept }: Props) {
 
         <div className="dg-body">
           <p className="dg-text">
-            Ppopgi is a decentralized, experimental application running on the Etherlink Mainnet.
-            By continuing, you acknowledge and agree to the following:
+            Ppopgi is an experimental, unaudited decentralized application running on Etherlink.
+            By continuing, you acknowledge and accept the following:
           </p>
 
           <ul className="dg-list">
             <li>
-              <strong>No Guarantees:</strong> The protocol is provided "as is" without warranty of any kind.
+              <strong>Experimental Software:</strong> Smart contracts, indexers, bots, and UI may contain bugs, downtime, or unexpected behavior.
             </li>
             <li>
-              <strong>User Responsibility:</strong> You are solely responsible for your funds and interactions.
+              <strong>No Guarantees:</strong> The protocol is provided "as is" without warranties, guarantees, or uptime commitments.
             </li>
             <li>
-              <strong>Risk Awareness:</strong> Only participate with assets you can afford to lose.
+              <strong>Risk of Loss:</strong> Funds may be lost due to smart contract bugs, network issues, randomness failures, or infrastructure outages.
+            </li>
+            <li>
+              <strong>User Responsibility:</strong> You are solely responsible for your funds, transactions, and interactions with the protocol.
+            </li>
+            <li>
+              <strong>Use at Your Own Risk:</strong> Only participate with assets you can afford to lose.
             </li>
           </ul>
 
@@ -42,8 +48,16 @@ export function DisclaimerGate({ open, onAccept }: Props) {
             I Understand & Agree
           </button>
 
+          {/* ✅ FAQ link */}
+          <div className="dg-faq">
+            New here?{" "}
+            <a href="?page=faq" className="dg-faq-link">
+              Learn more in the FAQ →
+            </a>
+          </div>
+
           <div className="dg-footer">
-            Transactions are irreversible. Please proceed with caution.
+            By proceeding, you accept full responsibility and understand that blockchain transactions are irreversible.
           </div>
         </div>
       </div>
