@@ -327,7 +327,7 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
         {/* RECENTLY SETTLED */}
         <div>
           <div className="hp-section-header">
-            <div className="hp-section-title">✅ Recently Settled</div>
+            <div className="hp-section-title">✅ Recently Finalized</div>
             <div className="hp-section-line" />
           </div>
 
