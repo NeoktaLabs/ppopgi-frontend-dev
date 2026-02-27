@@ -103,27 +103,40 @@ async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }
 
   let transport: any = null;
 
-  // ✅ Best-effort silent reconnect after refresh if permission already granted
+  /**
+   * ✅ Updated behavior:
+   * - Try reconnect if a previously-authorized device exists
+   * - If that device is stale/locked/busy, FALL BACK to TransportWebHID.create()
+   *   (which triggers the browser HID picker prompt).
+   *
+   * This restores the “choose HID device” prompt when needed and prevents
+   * getting stuck without a working transport (which can break scanning).
+   */
   try {
     const hid: any = (navigator as any)?.hid;
-    if (hid?.getDevices) {
-      const devices = await hid.getDevices();
-      if (devices && devices.length > 0) {
-        transport = await (TransportWebHID as any).open(devices[0]);
-      }
-    }
-  } catch {}
+    const devices = await hid?.getDevices?.();
 
-  if (!transport) {
-    // requires user gesture/prompt
-    transport = await TransportWebHID.create();
+    if (devices?.length) {
+      try {
+        transport = await (TransportWebHID as any).open(devices[0]);
+      } catch {
+        // stale/locked device → force picker prompt
+        transport = await (TransportWebHID as any).create();
+      }
+    } else {
+      // no permission yet → picker prompt
+      transport = await (TransportWebHID as any).create();
+    }
+  } catch {
+    // last resort → picker prompt
+    transport = await (TransportWebHID as any).create();
   }
 
   const eth = new Eth(transport);
   return { transport, eth };
 }
 
-// ✅ NEW: open session with a chosen derivation path
+// ✅ open session with a chosen derivation path
 async function openLedgerSession(path: string): Promise<LedgerSession> {
   const { transport, eth } = await openLedgerTransportAndEth();
   const { address } = await eth.getAddress(path, false, true);
@@ -159,7 +172,6 @@ async function createLedgerEip1193Provider(opts: {
   chainId: number;
   rpcUrl: string;
   sessionRef: { current: LedgerSession | null };
-  // ✅ NEW: if user selected a path/address before connect, we use it
   preferredPath?: string;
 }): Promise<MinimalEip1193Provider> {
   const { chainId, rpcUrl, sessionRef, preferredPath } = opts;
@@ -353,24 +365,25 @@ export function useLedgerUsbWallet() {
   const sessionRef = useRef<LedgerSession | null>((globalThis as any).__ppopgiLedgerSession ?? null);
   (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
-  // ✅ NEW: allow UI to “preselect” a derivation path (and store it in sessionRef)
-  const setSelectedPath = useCallback(async (path: string) => {
-    setError("");
-    if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
+  const setSelectedPath = useCallback(
+    async (path: string) => {
+      setError("");
+      if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
 
-    // close old session if any
-    try {
-      await sessionRef.current?.transport?.close?.();
-    } catch {}
-    sessionRef.current = null;
+      // close old session if any
+      try {
+        await sessionRef.current?.transport?.close?.();
+      } catch {}
+      sessionRef.current = null;
 
-    const s = await openLedgerSession(path);
-    sessionRef.current = s;
-    (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
-    return { address: s.address, path: s.path };
-  }, [isSupported]);
+      const s = await openLedgerSession(path);
+      sessionRef.current = s;
+      (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
+      return { address: s.address, path: s.path };
+    },
+    [isSupported]
+  );
 
-  // ✅ NEW: scan addresses for a base path (returns a small list)
   const scanAccounts = useCallback(
     async (opts: { basePath: string; startIndex?: number; count?: number }) => {
       setError("");
