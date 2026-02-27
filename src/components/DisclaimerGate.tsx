@@ -13,41 +13,46 @@ export function DisclaimerGate({ open, onAccept }: Props) {
   return (
     <div className="dg-overlay">
       <div className="dg-card" role="dialog" aria-modal="true">
-        
         {/* Header with Icon */}
         <div className="dg-header">
           <div className="dg-icon">⚠️</div>
           <h1 className="dg-title">Before you enter</h1>
         </div>
 
-        <div className="dg-body">
-          <p className="dg-text">
-            Ppopgi is an experimental, unaudited decentralized application running on Etherlink.
-            By entering, you acknowledge and agree to the following:
-          </p>
+        {/* ✅ Scrollable content */}
+        <div className="dg-scroll">
+          <div className="dg-body">
+            <p className="dg-text">
+              Ppopgi is an experimental, unaudited decentralized application running on Etherlink.
+              By entering, you acknowledge and agree to the following:
+            </p>
 
-          <ul className="dg-list">
-            <li>
-              <strong>Experimental Technology:</strong> Smart contracts, infrastructure, and UI are provided "as is"
-              and may contain bugs, experience downtime, or behave unexpectedly.
-            </li>
+            <ul className="dg-list">
+              <li>
+                <strong>Experimental Technology:</strong> Smart contracts, infrastructure, and UI are provided "as is"
+                and may contain bugs, experience downtime, or behave unexpectedly.
+              </li>
 
-            <li>
-              <strong>Risk of Loss:</strong> Funds may be lost due to smart contract bugs, exploits, user error,
-              or failures across network, wallet, or infrastructure layers.
-            </li>
+              <li>
+                <strong>Risk of Loss:</strong> Funds may be lost due to smart contract bugs, exploits, user error,
+                or failures across network, wallet, or infrastructure layers.
+              </li>
 
-            <li>
-              <strong>No Liability:</strong> Ppopgi and its contributors are not responsible for any financial loss,
-              damages, or issues arising from the use of this application.
-            </li>
+              <li>
+                <strong>No Liability:</strong> Ppopgi and its contributors are not responsible for any financial loss,
+                damages, or issues arising from the use of this application.
+              </li>
 
-            <li>
-              <strong>Your Responsibility:</strong> You are solely responsible for your wallet, assets, transactions,
-              and any risks taken while interacting with the protocol.
-            </li>
-          </ul>
+              <li>
+                <strong>Your Responsibility:</strong> You are solely responsible for your wallet, assets, transactions,
+                and any risks taken while interacting with the protocol.
+              </li>
+            </ul>
+          </div>
+        </div>
 
+        {/* ✅ Fixed bottom actions */}
+        <div className="dg-actions">
           <button className="dg-accept-btn" onClick={onAccept}>
             Agree and take me to Ppopgi
           </button>
