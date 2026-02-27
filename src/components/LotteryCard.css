@@ -5,17 +5,19 @@
   position: relative;
   width: 100%;
   max-width: 320px;
-  border-radius: 24px; /* Pillowy corners */
+  border-radius: 24px; /* Pillowy corners kept */
   padding: 24px 20px 0 20px; 
   cursor: pointer;
   user-select: none;
   overflow: hidden;
 
-  /* Dreamy pastel festival gradient */
-  background-color: var(--soft-cream);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 182, 200, 0.15) 100%);
+  /* ✅ RESTORED: The beloved textured pastel pink! */
+  background-color: #ffeef6;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px),
+    linear-gradient(180deg, rgba(255,190,215,1), rgba(255,210,230,1) 42%, rgba(255,235,246,1));
 
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.9);
   
   /* Soft floating shadow */
   box-shadow: 
@@ -36,41 +38,44 @@
     0 8px 24px -4px rgba(246, 182, 200, 0.3);
 }
 
-/* --- Foil Variants (Harmonized with Ppopgi Palette) --- */
+/* --- Foil Variants (Textured + Ppopgi Palette) --- */
 .rc-card.gold {
-  background: linear-gradient(135deg, #FFF1D4 0%, var(--warm-lantern) 50%, #F5B041 100%);
+  background:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px),
+    linear-gradient(135deg, #FFF1D4 0%, var(--warm-lantern) 50%, #F5B041 100%);
   border-color: rgba(255, 255, 255, 0.8);
 }
 .rc-card.silver {
-  background: linear-gradient(135deg, #E2EFFF 0%, var(--sky-pastel) 50%, #8FBDF2 100%);
+  background:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px),
+    linear-gradient(135deg, #E2EFFF 0%, var(--sky-pastel) 50%, #8FBDF2 100%);
   border-color: rgba(255, 255, 255, 0.8);
 }
 .rc-card.bronze {
-  background: linear-gradient(135deg, #FFF0E5 0%, var(--peach-glow) 50%, #E8B494 100%);
+  background:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px),
+    linear-gradient(135deg, #FFF0E5 0%, var(--peach-glow) 50%, #E8B494 100%);
   border-color: rgba(255, 255, 255, 0.8);
 }
 
 /* --- Notches --- */
 .rc-notch {
   position: absolute;
-  top: 64px; /* Adjusted position */
+  top: 64px; 
   width: 32px;
   height: 32px;
   border-radius: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  
-  /* Matches the background of the app/modal */
   background: var(--soft-cream); 
   box-shadow: inset 0 2px 6px rgba(0,0,0,0.05);
   border: 1px solid rgba(255, 255, 255, 0.6);
   z-index: 10;
 }
 
-/* Ensure notches blend if on a white background or inside a modal */
 .db-grid .rc-notch, 
 .xp-results .rc-notch {
-  background: #f8fafc; /* Adjust to container background if needed, or leave transparent */
+  background: #f8fafc; 
 }
 
 .rc-notch.left { left: -16px; border-left: none; }
@@ -112,25 +117,24 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.03);
 }
 
-/* Pastel Status Chips */
-.rc-chip.open { background: rgba(169, 212, 255, 0.25); color: var(--ink); border-color: rgba(169, 212, 255, 0.5); }
-.rc-chip.drawing { background: rgba(203, 183, 246, 0.25); color: var(--ink); border-color: rgba(203, 183, 246, 0.5); }
-.rc-chip.canceled { background: rgba(246, 182, 200, 0.25); color: var(--ink); border-color: rgba(246, 182, 200, 0.5); }
+.rc-chip.open { background: rgba(169, 212, 255, 0.3); color: var(--ink); border-color: rgba(169, 212, 255, 0.6); }
+.rc-chip.drawing { background: rgba(203, 183, 246, 0.3); color: var(--ink); border-color: rgba(203, 183, 246, 0.6); }
+.rc-chip.canceled { background: rgba(246, 182, 200, 0.4); color: var(--ink); border-color: rgba(246, 182, 200, 0.7); }
 
 .rc-winrate-badge {
   margin-left: auto; margin-right: auto;
   padding: 6px 10px; border-radius: 8px;
   font-size: 10.5px; font-weight: 900; text-transform: uppercase;
-  background: rgba(246, 182, 200, 0.2);
+  background: rgba(255, 255, 255, 0.5);
   color: var(--ink);
-  border: 1px solid rgba(246, 182, 200, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .rc-actions { display: flex; gap: 6px; }
 .rc-btn-icon, .rc-shield-btn {
   width: 30px; height: 30px; border-radius: 8px;
-  background: rgba(255, 255, 255, 0.7); 
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.6); 
+  border: 1px solid rgba(255, 255, 255, 0.8);
   display: grid; place-items: center; cursor: pointer; transition: 0.2s;
   color: var(--ink);
 }
@@ -146,7 +150,7 @@
   text-align: center; display: flex; justify-content: center; gap: 6px;
   margin-bottom: 4px;
 }
-.rc-host-link { color: inherit; text-decoration: none; border-bottom: 2px solid var(--sakura-pink); }
+.rc-host-link { color: inherit; text-decoration: none; border-bottom: 2px solid rgba(0,0,0,0.3); }
 
 .rc-title {
   font-size: 20px; font-weight: 900; text-align: center; margin-bottom: 16px;
@@ -164,16 +168,16 @@
   font-weight: 900;
   letter-spacing: -2px;
   
-  /* Ppopgi Festival Holographic Gradient */
-  background: linear-gradient(135deg, var(--warm-lantern) 0%, var(--sakura-pink) 100%);
+  /* Pops nicely against the pink background */
+  background: linear-gradient(135deg, #BE185D 0%, #db2777 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   
-  filter: drop-shadow(0 4px 12px rgba(246, 182, 200, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(190, 24, 93, 0.2));
 }
 
 .rc-prize-unit {
-  font-size: 18px; font-weight: 900; color: var(--sakura-pink); margin-left: 6px;
+  font-size: 18px; font-weight: 900; color: #db2777; margin-left: 6px;
 }
 
 /* --- Stats Grid --- */
@@ -183,10 +187,10 @@
 }
 .rc-stat { 
   text-align: center; 
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.5); /* Semi-transparent to let pink peek through */
   padding: 10px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 .rc-stat-lbl { font-size: 10.5px; font-weight: 900; text-transform: uppercase; opacity: 0.5; }
 .rc-stat-val { font-size: 15px; font-weight: 900; color: var(--ink); margin-top: 4px; }
@@ -197,8 +201,8 @@
   display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; opacity: 0.7; text-transform: uppercase;
 }
 .rc-track {
-  height: 8px; /* Slightly thicker for pastel look */
-  background: rgba(255, 255, 255, 0.8);
+  height: 8px; 
+  background: rgba(255, 255, 255, 0.6);
   border-radius: 99px;
   overflow: hidden;
   border: 1px solid rgba(0,0,0,0.03);
@@ -218,7 +222,7 @@
 /* --- TEAR-OFF STUB (Footer) --- */
 .rc-stub-container {
   margin: auto -20px 0 -20px; 
-  background: rgba(255, 255, 255, 0.4); 
+  background: rgba(255, 255, 255, 0.6); /* Translucent white stub */
   display: flex;
   flex-direction: column;
 }
@@ -228,7 +232,7 @@
   background-image: radial-gradient(circle, transparent 4px, rgba(255,255,255,0.7) 4.5px);
   background-size: 14px 14px;
   background-position: -7px -7px;
-  border-top: 2px dashed rgba(246, 182, 200, 0.4); /* Sakura dash */
+  border-top: 2px dashed rgba(246, 182, 200, 0.5); 
   position: relative;
   z-index: 5;
   margin-top: -8px;
