@@ -117,9 +117,12 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.03);
 }
 
-.rc-chip.open { background: rgba(169, 212, 255, 0.3); color: var(--ink); border-color: rgba(169, 212, 255, 0.6); }
-.rc-chip.drawing { background: rgba(203, 183, 246, 0.3); color: var(--ink); border-color: rgba(203, 183, 246, 0.6); }
-.rc-chip.canceled { background: rgba(246, 182, 200, 0.4); color: var(--ink); border-color: rgba(246, 182, 200, 0.7); }
+/* ✅ UPDATED: Strict Status Colors */
+.rc-chip.open { background: rgba(169, 212, 255, 0.3); color: var(--ink); border-color: rgba(169, 212, 255, 0.6); } /* Sky Blue */
+.rc-chip.completed { background: rgba(74, 222, 128, 0.25); color: var(--ink); border-color: rgba(74, 222, 128, 0.6); } /* Pastel Green for Settled */
+.rc-chip.canceled, 
+.rc-chip.canceling { background: rgba(248, 113, 113, 0.25); color: var(--ink); border-color: rgba(248, 113, 113, 0.5); } /* Pastel Red for Canceled */
+.rc-chip.drawing { background: rgba(251, 191, 36, 0.3); color: var(--ink); border-color: rgba(251, 191, 36, 0.6); } /* Pastel Yellow for Drawing Pending */
 
 .rc-winrate-badge {
   margin-left: auto; margin-right: auto;
@@ -128,6 +131,7 @@
   background: rgba(255, 255, 255, 0.5);
   color: var(--ink);
   border: 1px solid rgba(255, 255, 255, 0.6);
+  white-space: nowrap; 
 }
 
 .rc-actions { display: flex; gap: 6px; }
@@ -150,7 +154,7 @@
   text-align: center; display: flex; justify-content: center; gap: 6px;
   margin-bottom: 4px;
 }
-.rc-host-link { color: inherit; text-decoration: none; border-bottom: 2px solid rgba(0,0,0,0.3); }
+.rc-host-link { color: inherit; text-decoration: none; border-bottom: 1px dotted rgba(0,0,0,0.3); }
 
 .rc-title {
   font-size: 20px; font-weight: 900; text-align: center; margin-bottom: 16px;
