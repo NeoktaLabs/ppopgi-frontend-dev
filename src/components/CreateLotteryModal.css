@@ -33,13 +33,15 @@
   backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 32px; /* Pillowy corners */
+  
+  /* ✅ REMOVED overflow: hidden; so tooltips can escape the boundaries! */
+  
   box-shadow:
     0 24px 50px -12px rgba(203, 183, 246, 0.4), /* Lavender shadow */
     0 4px 12px -2px rgba(246, 182, 200, 0.2);
   
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 
   animation: crm-scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: top center;
@@ -57,6 +59,9 @@
   border-bottom: 2px dashed rgba(246, 182, 200, 0.4); /* Sakura dash */
   background: rgba(255, 255, 255, 0.6);
   z-index: 10;
+  /* ✅ ADDED border-radius to preserve pillowy corners */
+  border-top-left-radius: 31px;
+  border-top-right-radius: 31px;
 }
 
 .crm-header-text h3 {
@@ -106,6 +111,7 @@
   padding: 36px;
   position: relative;
   z-index: 2;
+  border-bottom-left-radius: 31px;
 }
 
 /* --- Holographic Preview Column --- */
@@ -120,6 +126,8 @@
   align-items: center;
   position: relative;
   overflow: hidden;
+  /* ✅ ADDED border-radius */
+  border-bottom-right-radius: 31px;
 }
 
 /* Glow Orb behind the card */
@@ -202,9 +210,8 @@
   padding: 14px 16px;
   border-radius: 16px;
   
-  /* ✅ Highly visible demarcation */
   border: 2px solid rgba(43, 43, 51, 0.15); 
-  background: #f8fafc; /* Subtle contrast against modal white */
+  background: #f8fafc; 
   
   font-size: 15px;
   font-weight: 700;
@@ -223,7 +230,7 @@
   transform: translateY(-1px);
 }
 
-/* ✅ Validation Error State - Screams Red */
+/* Validation Error State */
 .crm-input.crm-input-invalid, 
 .crm-input-wrapper input.crm-input-invalid,
 .crm-select.crm-input-invalid {
@@ -436,15 +443,21 @@
 
   background: var(--ink, #2B2B33);
   color: var(--soft-cream, #FFF6EF);
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
-  white-space: nowrap;
-  box-shadow: 0 8px 24px rgba(43, 43, 51, 0.25);
+  
+  /* ✅ FIXED: Allows text to wrap instead of shooting infinitely sideways */
+  white-space: normal;
+  width: max-content;
+  max-width: 240px;
+  text-align: center;
+
+  box-shadow: 0 12px 30px rgba(43, 43, 51, 0.35);
   transition: all 0.2s ease;
-  z-index: 100;
+  z-index: 9999; /* Stays above everything */
   pointer-events: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   text-transform: none;
@@ -479,6 +492,9 @@
   flex-direction: column;
   align-items: center;
   background: radial-gradient(circle at top, rgba(250, 209, 184, 0.3) 0%, rgba(255, 255, 255, 0) 70%); /* Peach glow burst */
+  /* ✅ ADDED border-radius */
+  border-bottom-left-radius: 31px;
+  border-bottom-right-radius: 31px;
 }
 
 .crm-success-icon {
@@ -591,7 +607,7 @@
   .crm-overlay { padding-top: 80px; padding-left: 10px; padding-right: 10px; }
   .crm-body { flex-direction: column; }
   .crm-preview-col { display: none; }
-  .crm-form-col { border-right: none; padding: 24px; }
+  .crm-form-col { border-right: none; padding: 24px; border-bottom-left-radius: 31px; border-bottom-right-radius: 31px; }
   .crm-grid-2, .crm-grid-dur { grid-template-columns: 1fr; }
   
   .crm-command-center {
