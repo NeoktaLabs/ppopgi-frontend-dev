@@ -439,6 +439,50 @@ const FAQ_SECTIONS: FaqSection[] = [
         tags: ["usage", "roles"],
       },
 
+      // ✅ NEW: explains range policy / tiers in buying tickets
+      {
+        id: "ticket-ranges",
+        q: "Why do ticket purchases use “ranges”?",
+        a: (
+          <>
+            Ppopgi groups tickets into <b>on-chain ranges</b> when you buy.
+            <br />
+            <br />
+            Instead of storing one entry per ticket (which becomes expensive fast), the contract stores purchases like:
+            <div className="faq-callout">
+              <code>[startTicketIndex … endTicketIndex] → buyerAddress</code>
+            </div>
+            So a single purchase of 25 tickets becomes <b>one range</b>, not 25 separate records.
+            <br />
+            <br />
+            <b>Why this exists</b>
+            <ul className="faq-ul">
+              <li>
+                <b>Lower gas costs:</b> ranges reduce storage writes compared to tracking every ticket individually.
+              </li>
+              <li>
+                <b>Fast winner mapping:</b> when randomness gives a <code>winningIndex</code>, the contract finds the range that contains
+                it and assigns the winner deterministically.
+              </li>
+              <li>
+                <b>Prevents spam / bloat:</b> too many tiny buys would create lots of ranges and make the system heavier to operate.
+              </li>
+            </ul>
+            <b>So why do I sometimes see a “minimum buy” warning?</b>
+            <br />
+            When the contract is close to using up its range capacity, opening a <b>new range</b> can be more expensive than extending an
+            existing one. In those cases, the contract may require a slightly larger purchase to justify creating that new range.
+            <br />
+            <br />
+            <div className="faq-callout">
+              You can see this live per lottery in the <b>Ranges</b> tab inside the Lottery Details modal (tier, ranges used, and whether
+              your next buy opens a new range).
+            </div>
+          </>
+        ),
+        tags: ["usage", "tickets", "ranges"],
+      },
+
       {
         id: "finalizer-bot",
         q: "What is the finalizer bot?",
