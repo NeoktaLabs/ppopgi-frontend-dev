@@ -1,4 +1,3 @@
-// src/hooks/ledgerUsbWallet.ts
 import { useCallback, useMemo, useRef, useState } from "react";
 import { EIP1193 } from "thirdweb/wallets";
 import type { ThirdwebClient } from "thirdweb";
@@ -94,7 +93,9 @@ type LedgerSession = {
   path: string;
 };
 
-async function openLedgerSession(): Promise<LedgerSession> {
+type LedgerScanRow = { path: string; address: string };
+
+async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }> {
   const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
     import("@ledgerhq/hw-app-eth"),
@@ -103,7 +104,6 @@ async function openLedgerSession(): Promise<LedgerSession> {
   let transport: any = null;
 
   // ✅ Best-effort silent reconnect after refresh if permission already granted
-  // NOTE: still not guaranteed; browser/device policies can block this.
   try {
     const hid: any = (navigator as any)?.hid;
     if (hid?.getDevices) {
@@ -114,16 +114,19 @@ async function openLedgerSession(): Promise<LedgerSession> {
     }
   } catch {}
 
-  // Fallback (will require user gesture/prompt)
   if (!transport) {
+    // requires user gesture/prompt
     transport = await TransportWebHID.create();
   }
 
   const eth = new Eth(transport);
+  return { transport, eth };
+}
 
-  const path = "44'/60'/0'/0/0";
+// ✅ NEW: open session with a chosen derivation path
+async function openLedgerSession(path: string): Promise<LedgerSession> {
+  const { transport, eth } = await openLedgerTransportAndEth();
   const { address } = await eth.getAddress(path, false, true);
-
   return { transport, eth, address, path };
 }
 
@@ -156,13 +159,18 @@ async function createLedgerEip1193Provider(opts: {
   chainId: number;
   rpcUrl: string;
   sessionRef: { current: LedgerSession | null };
+  // ✅ NEW: if user selected a path/address before connect, we use it
+  preferredPath?: string;
 }): Promise<MinimalEip1193Provider> {
-  const { chainId, rpcUrl, sessionRef } = opts;
+  const { chainId, rpcUrl, sessionRef, preferredPath } = opts;
   const hexChainId = `0x${chainId.toString(16)}`;
 
   async function getSession() {
     if (sessionRef.current) return sessionRef.current;
-    const s = await openLedgerSession();
+
+    // default path (Ledger Live style)
+    const path = preferredPath || "44'/60'/0'/0/0";
+    const s = await openLedgerSession(path);
     sessionRef.current = s;
     return s;
   }
@@ -301,8 +309,6 @@ async function createLedgerEip1193Provider(opts: {
           const sSig = "0x" + sig.s;
 
           const signature = Signature.from({ v, r, s: sSig });
-
-          // ✅ don’t spread a Transaction instance
           const txData = unsignedTx.toJSON();
           const signedTx = Transaction.from({ ...txData, signature }).serialized;
 
@@ -344,15 +350,71 @@ export function useLedgerUsbWallet() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState("");
 
-  /**
-   * ✅ Keep session for the current tab lifetime (best possible).
-   * NOTE: after a full refresh, this resets (expected). Silent HID reconnect above helps.
-   */
   const sessionRef = useRef<LedgerSession | null>((globalThis as any).__ppopgiLedgerSession ?? null);
   (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
+  // ✅ NEW: allow UI to “preselect” a derivation path (and store it in sessionRef)
+  const setSelectedPath = useCallback(async (path: string) => {
+    setError("");
+    if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
+
+    // close old session if any
+    try {
+      await sessionRef.current?.transport?.close?.();
+    } catch {}
+    sessionRef.current = null;
+
+    const s = await openLedgerSession(path);
+    sessionRef.current = s;
+    (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
+    return { address: s.address, path: s.path };
+  }, [isSupported]);
+
+  // ✅ NEW: scan addresses for a base path (returns a small list)
+  const scanAccounts = useCallback(
+    async (opts: { basePath: string; startIndex?: number; count?: number }) => {
+      setError("");
+      if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
+
+      const base = String(opts.basePath || "").trim();
+      const start = Math.max(0, Number(opts.startIndex ?? 0));
+      const count = Math.max(1, Math.min(25, Number(opts.count ?? 5)));
+
+      // Reuse existing transport if we already have it, else open a temporary one.
+      let tempTransport: any = null;
+      let eth: any = null;
+
+      try {
+        if (sessionRef.current?.eth && sessionRef.current?.transport) {
+          eth = sessionRef.current.eth;
+        } else {
+          const opened = await openLedgerTransportAndEth();
+          tempTransport = opened.transport;
+          eth = opened.eth;
+        }
+
+        const out: LedgerScanRow[] = [];
+        for (let i = 0; i < count; i++) {
+          const idx = start + i;
+          const fullPath = `${base}/${idx}`;
+          const { address } = await eth.getAddress(fullPath, false, true);
+          out.push({ path: fullPath, address });
+        }
+        return out;
+      } finally {
+        // If we opened a temporary transport, close it.
+        if (tempTransport) {
+          try {
+            await tempTransport.close?.();
+          } catch {}
+        }
+      }
+    },
+    [isSupported]
+  );
+
   const connectLedgerUsb = useCallback(
-    async (opts: { client: ThirdwebClient; chain: Chain }) => {
+    async (opts: { client: ThirdwebClient; chain: Chain; preferredPath?: string }) => {
       setError("");
       if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
 
@@ -361,19 +423,18 @@ export function useLedgerUsbWallet() {
         const rpcUrl = pickRpcUrl(opts.chain);
 
         const wallet = EIP1193.fromProvider({
-          // ✅ IMPORTANT: do NOT set a custom walletId (thirdweb types reject it)
           provider: async () => {
             return await createLedgerEip1193Provider({
               chainId: opts.chain.id,
               rpcUrl,
               sessionRef,
+              preferredPath: opts.preferredPath,
             });
           },
         });
 
         await wallet.connect({ client: opts.client, chain: opts.chain });
 
-        // keep ref cached for tab life
         (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
         return wallet;
@@ -387,5 +448,5 @@ export function useLedgerUsbWallet() {
     [isSupported]
   );
 
-  return { isSupported, isConnecting, error, connectLedgerUsb };
+  return { isSupported, isConnecting, error, connectLedgerUsb, scanAccounts, setSelectedPath };
 }
