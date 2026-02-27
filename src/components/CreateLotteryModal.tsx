@@ -391,7 +391,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
                   <span style={{ fontWeight: 1000 }}>{protocolFeePercent}%</span>
                 </div>
                 <div style={{ marginTop: 6, opacity: 0.9 }}>
-                  This fee is applied to both the <b>prize payout</b> and the <b>ticket revenue</b> when the lottery completes.
+                  This fee is applied to both the <b>prize payout</b> and the <b>ticket revenue</b> when the lottery completes.<br /> No fee is applied if the lottery is canceled.
                 </div>
               </div>
 
@@ -450,7 +450,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
               <div className="crm-grid-dur">
                 <div className="crm-input-group">
                   <label>
-                    Duration
+                    Duration (Min: 10m / Max: 365d)
                     <HelpTip text="How long ticket sales stay open. After this time (or sold-out), the lottery can settle." />
                   </label>
                   <input
