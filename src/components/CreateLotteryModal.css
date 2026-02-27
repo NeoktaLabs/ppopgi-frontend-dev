@@ -401,6 +401,75 @@
 }
 
 /* =========================================================
+   ✅ CSS TOOLTIP (Matches InfraStatusPill)
+   ========================================================= */
+.crm-q {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: rgba(169, 212, 255, 0.3); /* Soft sky pastel */
+  color: var(--ink, #2B2B33);
+  font-size: 10px;
+  font-weight: 900;
+  cursor: help;
+  position: relative;
+  transition: all 0.2s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.crm-q:hover {
+  background: var(--sky-pastel, #A9D4FF);
+  transform: scale(1.1);
+}
+
+.crm-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  opacity: 0;
+  visibility: hidden;
+
+  background: var(--ink, #2B2B33);
+  color: var(--soft-cream, #FFF6EF);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(43, 43, 51, 0.25);
+  transition: all 0.2s ease;
+  z-index: 100;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.crm-tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: var(--ink, #2B2B33) transparent transparent transparent;
+}
+
+.crm-q:hover .crm-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+
+/* =========================================================
    ✅ TICKET STUB SUCCESS VIEW
    ========================================================= */
 .crm-success-view {
