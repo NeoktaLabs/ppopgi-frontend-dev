@@ -180,7 +180,10 @@ export const TopNav = memo(function TopNav({
           </div>
 
           <nav className="topnav-desktop-links">
-            <button className={`nav-link ${page === "explore" ? "active" : ""}`} onClick={() => handleNav(onOpenExplore, "explore")}>
+            <button
+              className={`nav-link ${page === "explore" ? "active" : ""}`}
+              onClick={() => handleNav(onOpenExplore, "explore")}
+            >
               Explore
             </button>
 
@@ -239,10 +242,19 @@ export const TopNav = memo(function TopNav({
               )}
             </div>
 
-            {/* ✅ NEW: Mini Quick-Balance for Mobile */}
+            {/* ✅ Mini Quick-Balance for Mobile (USDC + XTZ) */}
             {account && (
-              <button className="mobile-quick-bal" onClick={() => handleNav(onOpenCashier)}>
-                {usdcText} <span>{usdcSym}</span>
+              <button className="mobile-quick-bal" onClick={() => handleNav(onOpenCashier)} aria-label="Open Cashier">
+                <div className="mobile-quick-bal-rows">
+                  <div className="mobile-quick-bal-row">
+                    <b>{usdcText}</b>
+                    <span>{usdcSym}</span>
+                  </div>
+                  <div className="mobile-quick-bal-row">
+                    <b>{xtzText}</b>
+                    <span>{xtzSym}</span>
+                  </div>
+                </div>
               </button>
             )}
 
