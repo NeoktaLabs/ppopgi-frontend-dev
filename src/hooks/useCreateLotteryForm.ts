@@ -163,6 +163,29 @@ function topicToAddress(topic: string): string {
   return ("0x" + topic.slice(26)).toLowerCase();
 }
 
+// ✅ Try multiple getter names (deployer ABI can vary across builds)
+async function tryRead<T>(
+  contract: any,
+  methodNames: string[],
+  params: any[] = []
+): Promise<{ method: string; value: T } | null> {
+  for (const method of methodNames) {
+    try {
+      const value = await readContract({ contract, method, params });
+      return { method, value: value as T };
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
+function clampFeePct(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  // your contracts mention 0–20%, clamp for safety
+  return Math.max(0, Math.min(20, n));
+}
+
 /* -------------------- hook -------------------- */
 
 type AllowanceSnapshot = { bal: bigint; allowance: bigint; ts: number };
@@ -195,6 +218,10 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const [usdcBal, setUsdcBal] = useState<bigint | null>(null);
   const [allowance, setAllowance] = useState<bigint | null>(null);
   const [allowLoading, setAllowLoading] = useState(false);
+
+  // ✅ Deployer fee config (on-chain)
+  const [protocolFeePct, setProtocolFeePct] = useState<number | null>(null);
+  const [feeRecipient, setFeeRecipient] = useState<string | null>(null);
 
   const reqIdRef = useRef(0);
   const lastSnapRef = useRef<AllowanceSnapshot | null>(null);
@@ -288,6 +315,49 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     },
     [isOpen, me, usdcContract]
   );
+
+  /* ---------- deployer fee refresh ---------- */
+
+  const refreshDeployerFee = useCallback(async () => {
+    if (!isOpen) return;
+
+    const reqId = ++reqIdRef.current;
+
+    try {
+      // fee percent: try % first, then bps variants
+      const feeRes = await tryRead<any>(deployerContract, [
+        "protocolFeePercent",
+        "feePercent",
+        "protocolFee",
+        "protocolFeePercentBps",
+        "protocolFeeBps",
+        "feeBps",
+      ]);
+
+      // fee recipient: common names
+      const recRes = await tryRead<any>(deployerContract, ["protocolFeeRecipient", "feeRecipient"]);
+
+      if (reqId !== reqIdRef.current) return;
+
+      let pct: number | null = null;
+      if (feeRes?.value != null) {
+        const raw = BigInt(feeRes.value.toString());
+        const isBps = feeRes.method.toLowerCase().includes("bps");
+        const n = isBps ? Number(raw) / 100 : Number(raw);
+        pct = clampFeePct(n);
+      }
+
+      const rec = recRes?.value != null ? String(recRes.value).toLowerCase() : null;
+
+      setProtocolFeePct(pct);
+      setFeeRecipient(rec);
+    } catch {
+      if (reqId !== reqIdRef.current) return;
+      // silent failure: leave nulls rather than lying
+      setProtocolFeePct(null);
+      setFeeRecipient(null);
+    }
+  }, [isOpen, deployerContract]);
 
   /* ---------- approve ---------- */
 
@@ -412,21 +482,25 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   useEffect(() => {
     if (!isOpen) return;
     refreshAllowance({ force: true });
+    void refreshDeployerFee();
     return () => {
       reqIdRef.current++;
     };
-  }, [isOpen, me, refreshAllowance]);
+  }, [isOpen, me, refreshAllowance, refreshDeployerFee]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const onVis = () => {
-      if (document.visibilityState === "visible") refreshAllowance({ force: false });
+      if (document.visibilityState === "visible") {
+        refreshAllowance({ force: false });
+        void refreshDeployerFee();
+      }
     };
 
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [isOpen, refreshAllowance]);
+  }, [isOpen, refreshAllowance, refreshDeployerFee]);
 
   return {
     form: {
@@ -454,7 +528,8 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       canSubmit,
       durationSecondsN,
     },
-    derived: { ticketPriceU, winningPotU, minT, maxT, me },
+    // ✅ expose fee config for the UI
+    derived: { ticketPriceU, winningPotU, minT, maxT, me, protocolFeePct, feeRecipient },
     status: { msg, isPending, allowLoading, usdcBal, approve, create, refresh: refreshAllowance },
     helpers: { sanitizeInt },
   };
