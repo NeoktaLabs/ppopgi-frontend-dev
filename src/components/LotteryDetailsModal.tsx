@@ -813,7 +813,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
               <div className="rdm-tabs">
                 <button className={`rdm-tab ${tab === "receipt" ? "active" : ""}`} onClick={() => setTab("receipt")}>
-                  Blockchain Log
+                  Blockchain
                 </button>
                 <button className={`rdm-tab ${tab === "holders" ? "active" : ""}`} onClick={() => setTab("holders")}>
                   Holders
