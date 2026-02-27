@@ -90,6 +90,28 @@ export function Footer({ onNavigate }: Props) {
               </>
             )}
           </div>
+          {/* SolidityScan */}
+          <div className="footer-col">
+            <h4>Audit (SolidityScan)</h4>
+
+            {!hasAnyRepoLink ? (
+              <span className="footer-link-disabled">Links coming soon</span>
+            ) : (
+              <>
+                {LINKS.repoFrontend ? (
+                  <a href={LINKS.solidityScanRegistry} target="_blank" rel="noreferrer" className="footer-link-btn">
+                    Ppopgi Registry Contract ↗
+                  </a>
+                ) : null}
+
+                {LINKS.repoContracts ? (
+                  <a href={LINKS.solidityScanDeployer} target="_blank" rel="noreferrer" className="footer-link-btn">
+                    Ppopgi Lottery Contract ↗
+                  </a>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </footer>
