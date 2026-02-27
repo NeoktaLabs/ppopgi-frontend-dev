@@ -540,7 +540,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 <ExplorerLink addr={String(displayData?.creator || "")} label={math.short(String(displayData?.creator || ""))} />
               </div>
               <div className="rdm-createdon">
-                <span>on</span>
+                <span>on </span>
                 <span className="rdm-createdon-val">{formatDate(createdOnTs)}</span>
               </div>
             </div>
