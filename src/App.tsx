@@ -90,26 +90,47 @@ export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
 
   // 5) Disclaimer gate
-  // ✅ allow browsing info pages without accepting
-  const shouldGateThisPage = page !== "faq" && page !== "about";
-
   const [showGate, setShowGate] = useState(false);
+  const [hasAcceptedGate, setHasAcceptedGate] = useState(false);
+
+  // if user triggers a gated action without acceptance, we store it and run it after accept
+  const pendingAfterGateRef = useRef<null | (() => void)>(null);
+
   useEffect(() => {
-    const hasAccepted = localStorage.getItem("ppopgi_terms_accepted");
+    const hasAccepted = localStorage.getItem("ppopgi_terms_accepted") === "true";
+    setHasAcceptedGate(hasAccepted);
 
-    // ✅ if user is on FAQ/About, don't show the gate
-    if (!shouldGateThisPage) {
-      setShowGate(false);
-      return;
-    }
-
-    if (!hasAccepted) setShowGate(true);
+    // ✅ show gate automatically on non-info pages only
+    const isInfoPage = page === "faq" || page === "about";
+    if (!hasAccepted && !isInfoPage) setShowGate(true);
     else setShowGate(false);
-  }, [shouldGateThisPage]);
+  }, [page]);
+
+  const ensureGateAccepted = useCallback(
+    (action: () => void) => {
+      const accepted = localStorage.getItem("ppopgi_terms_accepted") === "true";
+      if (accepted) {
+        action();
+        return;
+      }
+      pendingAfterGateRef.current = action;
+      setShowGate(true);
+    },
+    [setShowGate]
+  );
 
   const handleAcceptGate = () => {
     localStorage.setItem("ppopgi_terms_accepted", "true");
+    setHasAcceptedGate(true);
     setShowGate(false);
+
+    const pending = pendingAfterGateRef.current;
+    pendingAfterGateRef.current = null;
+    try {
+      pending?.();
+    } catch {
+      // no-op
+    }
   };
 
   // 6) Clock
@@ -181,7 +202,6 @@ export default function App() {
       // gate dashboard behind wallet if needed
       if (next === "dashboard" && !account) {
         setPage("home");
-        // keep URL consistent too
         setPageInUrl("home");
         setSignInOpen(true);
         return;
@@ -215,8 +235,11 @@ export default function App() {
   // 9) Global events (Home banner + external navigation)
   useEffect(() => {
     const onOpenCashier = () => {
-      if (account) setCashierOpen(true);
-      else setSignInOpen(true);
+      // ✅ cashier is a gated action
+      ensureGateAccepted(() => {
+        if (account) setCashierOpen(true);
+        else setSignInOpen(true);
+      });
     };
 
     const onNavigate = (e: Event) => {
@@ -233,31 +256,58 @@ export default function App() {
       window.removeEventListener("ppopgi:open-cashier", onOpenCashier);
       window.removeEventListener("ppopgi:navigate", onNavigate as EventListener);
     };
-  }, [account, navigateTo]);
+  }, [account, navigateTo, ensureGateAccepted]);
+
+  // ✅ Gate wrapper for opening a lottery (details modal)
+  const gatedOpenLottery = useCallback(
+    (id: string) => {
+      ensureGateAccepted(() => openLottery(id));
+    },
+    [ensureGateAccepted, openLottery]
+  );
+
+  // ✅ Gate wrapper for safety modal too (optional but consistent)
+  const gatedOpenSafety = useCallback(
+    (id: string) => {
+      ensureGateAccepted(() => handleOpenSafety(id));
+    },
+    [ensureGateAccepted]
+  );
 
   return (
     <>
       <GlobalDataRefresher intervalMs={5000} />
 
-      {/* ✅ Gate is auto-disabled on FAQ/About via showGate */}
       <DisclaimerGate open={showGate} onAccept={handleAcceptGate} />
 
       <MainLayout
         page={page}
-        onNavigate={navigateTo} // ✅ IMPORTANT: use navigateTo so URL updates
+        onNavigate={navigateTo}
         account={account}
+        // sign-in itself can stay available (FAQ can explain without forcing acceptance),
+        // but any action that touches funds / creates raffles should be gated.
         onOpenSignIn={() => setSignInOpen(true)}
-        onOpenCreate={() => (account ? setCreateOpen(true) : setSignInOpen(true))}
-        onOpenCashier={() => (account ? setCashierOpen(true) : setSignInOpen(true))}
+        onOpenCreate={() =>
+          ensureGateAccepted(() => {
+            if (account) setCreateOpen(true);
+            else setSignInOpen(true);
+          })
+        }
+        onOpenCashier={() =>
+          ensureGateAccepted(() => {
+            if (account) setCashierOpen(true);
+            else setSignInOpen(true);
+          })
+        }
         onSignOut={handleSignOut}
         hideChrome={anyModalOpen}
       >
-        {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
+        {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={gatedOpenLottery} onOpenSafety={gatedOpenSafety} />}
 
-        {page === "explore" && <ExplorePage onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
+        {page === "explore" && <ExplorePage onOpenLottery={gatedOpenLottery} onOpenSafety={gatedOpenSafety} />}
 
         {page === "dashboard" && (
-          <DashboardPage account={account} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />
+          <DashboardPage account={account} onOpenLottery={gatedOpenLottery} onOpenSafety={gatedOpenSafety} />
         )}
 
         {page === "about" && <AboutPage />}
