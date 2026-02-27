@@ -540,8 +540,8 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
                     disabled={!isConnected || isReady || status.isPending}
                     title="Approves USDC for the prize deposit"
                   >
-                    <span className="crm-dock-icon">{isReady ? "✓" : "1"}</span>
-                    <span className="crm-dock-label">{isReady ? "Wallet Ready" : "Prepare"}</span>
+                    <span className="crm-dock-icon">{isReady ? "✓" : "Step 1"}</span>
+                    <span className="crm-dock-label">{isReady ? "Wallet Ready" : "Get Wallet Ready"}</span>
                   </button>
 
                   <div className="crm-dock-sep" />
@@ -555,8 +555,8 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
                     disabled={createDisabled}
                     title="Deploys your lottery contract with these parameters"
                   >
-                    <span className="crm-dock-icon">{status.isPending ? "⏳" : "2"}</span>
-                    <span className="crm-dock-label">{status.isPending ? "Creating..." : "Create"}</span>
+                    <span className="crm-dock-icon">{status.isPending ? "⏳" : "Step 2"}</span>
+                    <span className="crm-dock-label">{status.isPending ? "Creating..." : "Create your Lottery"}</span>
                   </button>
                 </div>
 
