@@ -13,6 +13,7 @@ export function DisclaimerGate({ open, onAccept }: Props) {
   return (
     <div className="dg-overlay">
       <div className="dg-card" role="dialog" aria-modal="true">
+        
         {/* Header with Icon */}
         <div className="dg-header">
           <div className="dg-icon">⚠️</div>
@@ -21,26 +22,29 @@ export function DisclaimerGate({ open, onAccept }: Props) {
 
         <div className="dg-body">
           <p className="dg-text">
-            Ppopgi is an experimental, unaudited decentralized app on Etherlink.
-            By entering, you acknowledge:
+            Ppopgi is an experimental, unaudited decentralized application running on Etherlink.
+            By entering, you acknowledge and agree to the following:
           </p>
 
           <ul className="dg-list">
             <li>
-              <strong>Experimental Tech:</strong> Smart contracts and UI are provided "as is" and may contain bugs or
-              experience downtime.
+              <strong>Experimental Technology:</strong> Smart contracts, infrastructure, and UI are provided "as is"
+              and may contain bugs, experience downtime, or behave unexpectedly.
             </li>
+
             <li>
-              <strong>Risk of Loss:</strong> You could lose funds due to network failures, contract exploits, or
-              infrastructure outages.
+              <strong>Risk of Loss:</strong> Funds may be lost due to smart contract bugs, exploits, user error,
+              or failures across network, wallet, or infrastructure layers.
             </li>
+
             <li>
-              <strong>Service Availability:</strong> Off-chain components (indexer, bots, frontend, cache) may fail or
-              lag, affecting UI accuracy or availability.
+              <strong>No Liability:</strong> Ppopgi and its contributors are not responsible for any financial loss,
+              damages, or issues arising from the use of this application.
             </li>
+
             <li>
-              <strong>Your Responsibility:</strong> You are solely responsible for your assets, transactions, and any
-              risks taken.
+              <strong>Your Responsibility:</strong> You are solely responsible for your wallet, assets, transactions,
+              and any risks taken while interacting with the protocol.
             </li>
           </ul>
 
@@ -49,11 +53,8 @@ export function DisclaimerGate({ open, onAccept }: Props) {
           </button>
 
           <div className="dg-footer">
-            Only participate with assets you can afford to lose.
-            <br />
+            Only participate with assets you can afford to lose.<br />
             All blockchain transactions are irreversible.
-            <br />
-            Ppopgi creators are not liable for losses, downtime, or unexpected behavior.
           </div>
         </div>
       </div>
