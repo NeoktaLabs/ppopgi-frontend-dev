@@ -47,7 +47,7 @@ function hexToBigInt(v?: string | null): bigint {
   try {
     if (!v) return 0n;
     const s = String(v);
-    if (!s || s === "0x" || s === "0x0" || s === "0") return 0n;
+    if (!s || s === "0x" || s === "0x0" || s === "0" || s === "0x00") return 0n;
     return BigInt(s);
   } catch {
     return 0n;
@@ -65,7 +65,7 @@ function isZeroHex(v: any): boolean {
   if (typeof v === "bigint") return v === 0n;
   if (typeof v === "string") {
     const s = v.toLowerCase();
-    return s === "0x0" || s === "0x" || s === "0";
+    return s === "0x0" || s === "0x" || s === "0" || s === "0x00";
   }
   try {
     return BigInt(v) === 0n;
@@ -95,6 +95,31 @@ type LedgerSession = {
 
 type LedgerScanRow = { path: string; address: string };
 
+const LEDGER_VENDOR_ID = 0x2c97;
+
+function assertWebHid() {
+  const hid: any = (navigator as any)?.hid;
+  if (!hid?.requestDevice) {
+    throw new Error("WebHID not available. Use Chrome / Edge / Brave (desktop).");
+  }
+  return hid as HID;
+}
+
+async function requestLedgerDevice(): Promise<HIDDevice> {
+  const hid = assertWebHid();
+
+  // This MUST be called from a user gesture (button click).
+  const devices = await hid.requestDevice({
+    filters: [{ vendorId: LEDGER_VENDOR_ID }],
+  });
+
+  if (!devices || devices.length === 0) {
+    throw new Error("No Ledger device selected. Please select your Ledger in the browser prompt.");
+  }
+
+  return devices[0];
+}
+
 async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }> {
   const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
@@ -103,40 +128,46 @@ async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }
 
   let transport: any = null;
 
-  /**
-   * ✅ Updated behavior:
-   * - Try reconnect if a previously-authorized device exists
-   * - If that device is stale/locked/busy, FALL BACK to TransportWebHID.create()
-   *   (which triggers the browser HID picker prompt).
-   *
-   * This restores the “choose HID device” prompt when needed and prevents
-   * getting stuck without a working transport (which can break scanning).
-   */
+  // 1) Try silent open if permission exists
   try {
     const hid: any = (navigator as any)?.hid;
     const devices = await hid?.getDevices?.();
-
     if (devices?.length) {
       try {
         transport = await (TransportWebHID as any).open(devices[0]);
       } catch {
-        // stale/locked device → force picker prompt
-        transport = await (TransportWebHID as any).create();
+        transport = null;
       }
-    } else {
-      // no permission yet → picker prompt
-      transport = await (TransportWebHID as any).create();
     }
   } catch {
-    // last resort → picker prompt
-    transport = await (TransportWebHID as any).create();
+    transport = null;
+  }
+
+  // 2) If silent open failed or no devices, force a chooser explicitly
+  if (!transport) {
+    let picked: HIDDevice;
+    try {
+      picked = await requestLedgerDevice();
+    } catch (e: any) {
+      // If user cancels, we want a clean message
+      const msg = e?.message ? String(e.message) : "Ledger device selection was cancelled.";
+      throw new Error(msg);
+    }
+
+    try {
+      transport = await (TransportWebHID as any).open(picked);
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : "Failed to open Ledger HID transport.";
+      throw new Error(
+        `${msg}\n\nTip: close Ledger Live and any other app using the Ledger, then try again.`
+      );
+    }
   }
 
   const eth = new Eth(transport);
   return { transport, eth };
 }
 
-// ✅ open session with a chosen derivation path
 async function openLedgerSession(path: string): Promise<LedgerSession> {
   const { transport, eth } = await openLedgerTransportAndEth();
   const { address } = await eth.getAddress(path, false, true);
@@ -180,7 +211,6 @@ async function createLedgerEip1193Provider(opts: {
   async function getSession() {
     if (sessionRef.current) return sessionRef.current;
 
-    // default path (Ledger Live style)
     const path = preferredPath || "44'/60'/0'/0/0";
     const s = await openLedgerSession(path);
     sessionRef.current = s;
@@ -267,13 +297,7 @@ async function createLedgerEip1193Provider(opts: {
           const maxFeeHexResolved = maxFeePerGasHex ?? gasPriceHexResolved;
           const maxPrioHexResolved = maxPriorityFeePerGasHex ?? "0x3b9aca00";
 
-          const estimateCall: any = {
-            from: tx.from,
-            to,
-            data,
-            value: tx.value ?? "0x0",
-          };
-
+          const estimateCall: any = { from: tx.from, to, data, value: tx.value ?? "0x0" };
           if (is1559) {
             estimateCall.maxFeePerGas = maxFeeHexResolved;
             estimateCall.maxPriorityFeePerGas = maxPrioHexResolved;
@@ -300,13 +324,8 @@ async function createLedgerEip1193Provider(opts: {
             data,
             value,
             ...(is1559
-              ? {
-                  maxFeePerGas: BigInt(maxFeeHexResolved),
-                  maxPriorityFeePerGas: BigInt(maxPrioHexResolved),
-                }
-              : {
-                  gasPrice: BigInt(gasPriceHexResolved),
-                }),
+              ? { maxFeePerGas: BigInt(maxFeeHexResolved), maxPriorityFeePerGas: BigInt(maxPrioHexResolved) }
+              : { gasPrice: BigInt(gasPriceHexResolved) }),
           });
 
           const payloadHex = unsignedTx.unsignedSerialized.startsWith("0x")
@@ -370,7 +389,6 @@ export function useLedgerUsbWallet() {
       setError("");
       if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
 
-      // close old session if any
       try {
         await sessionRef.current?.transport?.close?.();
       } catch {}
@@ -393,7 +411,6 @@ export function useLedgerUsbWallet() {
       const start = Math.max(0, Number(opts.startIndex ?? 0));
       const count = Math.max(1, Math.min(25, Number(opts.count ?? 5)));
 
-      // Reuse existing transport if we already have it, else open a temporary one.
       let tempTransport: any = null;
       let eth: any = null;
 
@@ -415,7 +432,6 @@ export function useLedgerUsbWallet() {
         }
         return out;
       } finally {
-        // If we opened a temporary transport, close it.
         if (tempTransport) {
           try {
             await tempTransport.close?.();
@@ -449,7 +465,6 @@ export function useLedgerUsbWallet() {
         await wallet.connect({ client: opts.client, chain: opts.chain });
 
         (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
-
         return wallet;
       } catch (e: any) {
         setError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
