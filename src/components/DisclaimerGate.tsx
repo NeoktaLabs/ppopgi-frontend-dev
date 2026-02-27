@@ -1,5 +1,6 @@
 // src/components/DisclaimerGate.tsx
 
+import { useCallback } from "react";
 import "./DisclaimerGate.css";
 
 type Props = {
@@ -8,6 +9,16 @@ type Props = {
 };
 
 export function DisclaimerGate({ open, onAccept }: Props) {
+  
+  const handleReadFAQ = useCallback(() => {
+    // Dismiss the modal
+    onAccept(); 
+    // Dispatch the custom event to switch the page to FAQ
+    try {
+      window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page: "faq" } }));
+    } catch {}
+  }, [onAccept]);
+
   if (!open) return null;
 
   return (
@@ -44,16 +55,14 @@ export function DisclaimerGate({ open, onAccept }: Props) {
             </li>
           </ul>
 
-          <button className="dg-accept-btn" onClick={onAccept}>
-            I Understand & Agree
-          </button>
-
-          {/* ✅ FAQ link */}
-          <div className="dg-faq">
-            New here?{" "}
-            <a href="?page=faq" className="dg-faq-link">
-              Learn more in the FAQ →
-            </a>
+          <div className="dg-action-stack">
+            <button className="dg-accept-btn" onClick={onAccept}>
+              I Understand & Enter
+            </button>
+            
+            <button className="dg-secondary-btn" onClick={handleReadFAQ}>
+              Let me read the FAQ first
+            </button>
           </div>
 
           <div className="dg-footer">
