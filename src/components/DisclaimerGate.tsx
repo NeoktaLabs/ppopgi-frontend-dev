@@ -1,5 +1,6 @@
 // src/components/DisclaimerGate.tsx
 
+import { useRef, useState, useEffect } from "react";
 import "./DisclaimerGate.css";
 
 type Props = {
@@ -8,19 +9,38 @@ type Props = {
 };
 
 export function DisclaimerGate({ open, onAccept }: Props) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [atBottom, setAtBottom] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const threshold = 8; // small tolerance
+      const reached =
+        el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+      if (reached) setAtBottom(true);
+    };
+
+    el.addEventListener("scroll", handleScroll);
+    handleScroll(); // check on mount
+
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
   if (!open) return null;
 
   return (
     <div className="dg-overlay">
       <div className="dg-card" role="dialog" aria-modal="true">
-        {/* Header with Icon */}
         <div className="dg-header">
           <div className="dg-icon">⚠️</div>
           <h1 className="dg-title">Before you enter</h1>
         </div>
 
         {/* ✅ Scrollable content */}
-        <div className="dg-scroll">
+        <div ref={scrollRef} className="dg-scroll">
           <div className="dg-body">
             <p className="dg-text">
               Ppopgi is an experimental, unaudited decentralized application running on Etherlink.
@@ -35,7 +55,7 @@ export function DisclaimerGate({ open, onAccept }: Props) {
 
               <li>
                 <strong>Risk of Loss:</strong> Funds may be lost due to smart contract bugs, exploits, user error,
-                or failures across network, wallet, or infrastructure layers.
+                or failures across blockchain, wallet, or infrastructure layers.
               </li>
 
               <li>
@@ -51,10 +71,18 @@ export function DisclaimerGate({ open, onAccept }: Props) {
           </div>
         </div>
 
-        {/* ✅ Fixed bottom actions */}
+        {/* ✅ Fixed actions */}
         <div className="dg-actions">
-          <button className="dg-accept-btn" onClick={onAccept}>
-            Agree and take me to Ppopgi
+          <button
+            className="dg-accept-btn"
+            onClick={onAccept}
+            disabled={!atBottom}
+            style={{
+              opacity: atBottom ? 1 : 0.5,
+              cursor: atBottom ? "pointer" : "not-allowed",
+            }}
+          >
+            {atBottom ? "Agree and take me to Ppopgi" : "Scroll to continue"}
           </button>
 
           <div className="dg-footer">
