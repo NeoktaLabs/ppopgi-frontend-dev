@@ -1,51 +1,18 @@
-# Etherlink Lottery Frontend
+Ppopgi Frontend is the **user interface** of the Ppopgi on-chain raffle protocol, built to provide a smooth and intuitive experience for creating lotteries, buying tickets and tracking outcomes on **Etherlink**.
 
-Frontend for an on-chain USDC lottery app on Etherlink (Tezos L2, EVM).  
-Users can browse lotteries, buy tickets, view participants, and follow an on-chain timeline of each lottery.
+The app is a modern React + TypeScript single-page application powered by Vite. It integrates directly with the deployed smart contracts for all state-changing interactions while leveraging the Ppopgi subgraph for fast reads, activity feeds and historical data.
 
-## Features
+Key features include:
+- Lottery discovery and detail views
+- Ticket purchasing with wallet preparation and allowance flow
+- Real-time activity feed and timeline tracking
+- Participant distribution and ticket range visualization
+- Creator dashboard and refund/claim flows
+- Shareable lottery deep links and explorer integrations
 
-- Wallet connect + transactions (buy tickets / approvals)
-- Lottery list + details modal (receipt-style UI)
-- Live activity feed (buys / creates / wins / cancels)
-- Holders list + participant stats
-- Range policy UI (explains ticket range behavior)
-- Subgraph-powered fast reads + on-chain reads for critical values
+The frontend follows a **trust-minimized architecture** where:
+- Writes always go directly to smart contracts
+- Reads are hydrated from both on-chain calls and indexed data
+- All balances and critical states are verified against contracts
 
-## Tech Stack
-
-- React + Vite
-- TypeScript
-- thirdweb (wallet + contract interactions)
-- The Graph (Subgraph indexing)
-- Etherlink (EVM L2)
-- USDC (ticket currency)
-
-## Project Structure
-
-- `src/components/` UI components (LotteryCard, LotteryDetailsModal, ActivityBoard, etc.)
-- `src/hooks/` app hooks (contract reads/writes, activity store, participants, etc.)
-- `src/indexer/` subgraph queries / typed entities
-- `src/lib/` shared utilities (formatters, helpers)
-
-## Data Sources
-
-The frontend reads from two sources:
-
-1. On-chain reads (RPC)
-   - balances / allowance
-   - ticket pricing
-   - lottery config and state
-
-2. Subgraph (GraphQL)
-   - lottery lists and history
-   - participants / ranges data
-   - activity feed events
-   - timeline reconstruction (fast UX)
-
-## Setup
-
-### Install
-
-```bash
-npm install
+The interface is designed to feel playful and engaging while preserving transparency, deterministic behavior and clear lifecycle visibility for every lottery.
