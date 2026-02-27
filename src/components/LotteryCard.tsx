@@ -148,7 +148,7 @@ export function LotteryCard({
           <div className="rc-end-sub">
             Min tickets not reached.
             <br />
-            Reclaim available.
+            Reclaim available soon on your dashboard.
           </div>
         </div>
       );
