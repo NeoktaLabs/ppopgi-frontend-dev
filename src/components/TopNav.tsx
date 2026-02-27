@@ -59,7 +59,7 @@ export const TopNav = memo(function TopNav({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const burgerRef = useRef<HTMLButtonElement | null>(null);
 
-  // ✅ pause balance polling when tab hidden
+  // pause balance polling when tab hidden
   const [pollEnabled, setPollEnabled] = useState(() => !isHidden());
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export const TopNav = memo(function TopNav({
     };
   }, [menuOpen]);
 
-  // ✅ keep polling off in background tabs
+  // keep polling off in background tabs
   useEffect(() => {
     const onVis = () => {
       const enabled = !isHidden();
@@ -109,7 +109,7 @@ export const TopNav = memo(function TopNav({
     };
   }, []);
 
-  // (optional UX) close mobile menu when tab loses focus
+  // close mobile menu when tab loses focus
   useEffect(() => {
     const onBlur = () => setMenuOpen(false);
     window.addEventListener("blur", onBlur);
@@ -153,7 +153,7 @@ export const TopNav = memo(function TopNav({
     } as any
   );
 
-  // ✅ refresh balances immediately when tab becomes visible again
+  // refresh balances immediately when tab becomes visible again
   useEffect(() => {
     if (!account) return;
     if (!pollEnabled) return;
@@ -202,12 +202,10 @@ export const TopNav = memo(function TopNav({
             <div className="desktop-actions">
               {account ? (
                 <>
-                  {/* ✅ Keep Cashier CTA even when signed in */}
                   <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
                     🏦 Cashier
                   </button>
 
-                  {/* ✅ Show balances as read-only */}
                   <div className="balances-pill" title="Wallet balances">
                     <div className="balances-rows">
                       <div className="bal-row">
@@ -240,6 +238,13 @@ export const TopNav = memo(function TopNav({
                 </button>
               )}
             </div>
+
+            {/* ✅ NEW: Mini Quick-Balance for Mobile */}
+            {account && (
+              <button className="mobile-quick-bal" onClick={() => handleNav(onOpenCashier)}>
+                {usdcText} <span>{usdcSym}</span>
+              </button>
+            )}
 
             <button
               ref={burgerRef}
