@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 .env
 package-lock.json
-.DS_Store
+*.DS_Store
