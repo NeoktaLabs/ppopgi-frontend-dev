@@ -4,7 +4,7 @@ import { formatUnits } from "ethers";
 import { useActivityStore } from "../hooks/useActivityStore";
 import "./ActivityBoard.css";
 
-// ✅ NEW: shared UI formatter (removes trailing .0 / trims zeros)
+// ✅ shared UI formatter (removes trailing .0 / trims zeros)
 import { fmtUsdcUi } from "../lib/format";
 
 const NEW_WINDOW_SEC = 30;
@@ -18,7 +18,6 @@ function isFresh(ts: string, seconds = NEW_WINDOW_SEC) {
   return now - t <= seconds;
 }
 
-// ✅ Updated: seconds / minutes / hours / days / months / years
 function timeAgoFrom(nowSec: number, ts: string) {
   const t = Number(ts);
   if (!Number.isFinite(t) || t <= 0) return "—";
@@ -66,15 +65,11 @@ function getLotteryName(item: any): string {
 
 function buildDetailHref(lotteryId: string) {
   const u = new URL("/", window.location.origin);
-  if (lotteryId) {
-    u.searchParams.set("lottery", lotteryId);
-  }
+  if (lotteryId) u.searchParams.set("lottery", lotteryId);
   return u.toString();
 }
 
 function fmtUsdcFromU6(valueU6: string): string {
-  // value is USDC 6-decimals integer (string)
-  // formatUnits -> "12.0" etc; then fmtUsdcUi trims trailing .0/zeros
   const s = formatUnits(valueU6 || "0", 6);
   return fmtUsdcUi(s);
 }
@@ -164,14 +159,13 @@ export function ActivityBoard() {
           const lotteryName = getLotteryName(item);
 
           const subject = String((item as any).subject || "");
-          const value = String((item as any).value || "0"); // BUY: ticket count (string), others: pot u6 (string)
+          const value = String((item as any).value || "0"); // BUY: ticket count; others: pot u6
 
           const pendingLabel = String((item as any).pendingLabel || "PENDING");
           const pending = !!(item as any).pending;
 
           const detailHref = buildDetailHref(lotteryId);
 
-          // ✅ Move pot into the message (CREATE/WIN), formatted without ".0"
           const potUi = !isBuy && !isCancel ? fmtUsdcFromU6(value) : null;
 
           return (
@@ -202,6 +196,9 @@ export function ActivityBoard() {
                         <>
                           {" "}
                           bought <b>{value} tix</b> in{" "}
+                          <a href={detailHref} className="ab-link">
+                            {lotteryName}
+                          </a>
                         </>
                       )}
 
@@ -209,12 +206,16 @@ export function ActivityBoard() {
                         <>
                           {" "}
                           created{" "}
+                          <a href={detailHref} className="ab-link">
+                            {lotteryName}
+                          </a>
                           {potUi ? (
                             <>
-                              a <b>{potUi} USDC</b> pot on{" "}
+                              {" "}
+                              with <b>{potUi} USDC</b> to win!
                             </>
                           ) : (
-                            <>a lottery on </>
+                            <>!</>
                           )}
                         </>
                       )}
@@ -222,36 +223,25 @@ export function ActivityBoard() {
                       {isWin && (
                         <>
                           {" "}
-                          <b style={{ color: "#166534" }}>won</b>
+                          won{" "}
                           {potUi ? (
                             <>
-                              {" "}
-                              <b>{potUi} USDC</b> on{" "}
+                              <b style={{ color: "#166534" }}>{potUi} USDC</b>
                             </>
                           ) : (
-                            <> the pot on </>
-                          )}
+                            <b style={{ color: "#166534" }}>the prize</b>
+                          )}{" "}
+                          on{" "}
+                          <a href={detailHref} className="ab-link">
+                            {lotteryName}
+                          </a>
+                          !
                         </>
-                      )}
-
-                      {/* For BUY we still want "...in {lotteryName}" */}
-                      {isBuy && (
-                        <a href={detailHref} className="ab-link">
-                          {lotteryName}
-                        </a>
-                      )}
-
-                      {/* For CREATE/WIN we want "...on {lotteryName}" */}
-                      {!isBuy && (
-                        <a href={detailHref} className="ab-link">
-                          {lotteryName}
-                        </a>
                       )}
                     </>
                   )}
                 </div>
 
-                {/* ✅ Right side: ONLY time ago (with NEW + PENDING pills) */}
                 <div className="ab-meta">
                   <span className="ab-time">
                     {timeAgoFrom(nowSec, timestamp)}
