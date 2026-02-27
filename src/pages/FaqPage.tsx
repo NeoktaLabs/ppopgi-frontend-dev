@@ -439,7 +439,31 @@ const FAQ_SECTIONS: FaqSection[] = [
         tags: ["usage", "roles"],
       },
 
-      // ✅ NEW: explains range policy / tiers in buying tickets
+      // ✅ NEW: deployer admin explanation
+      {
+        id: "deployer-admin",
+        q: "Who is the deployer admin?",
+        a: (
+          <>
+            The “deployer admin” is the <b>admin/owner of the SingleWinnerDeployer contract</b> (the factory that creates new lottery
+            instances).
+            <br />
+            <br />
+            Today, this admin is a <b>multisig contract</b> controlled by <b>one signer (the project creator)</b>. If Ppopgi grows, the
+            multisig can be updated to add more participants (multiple signers) for better shared governance and operational safety.
+            <br />
+            <br />
+            You can always verify the deployer contract on-chain here:{" "}
+            <LinkOut href={explorerAddressUrl(CONTRACTS.deployer)}>{CONTRACTS.deployer}</LinkOut>
+            <div className="faq-callout">
+              Important: deployer admin powers apply to <b>future lotteries</b> (configuration / deployment defaults). They do not let
+              anyone change the outcome of an already deployed lottery.
+            </div>
+          </>
+        ),
+        tags: ["usage", "roles", "admin"],
+      },
+
       {
         id: "ticket-ranges",
         q: "Why do ticket purchases use “ranges”?",
@@ -682,7 +706,8 @@ export function FaqPage() {
     document.title = "Ppopgi 뽑기 — FAQ";
   }, []);
 
-  const [openId, setOpenId] = useState<string | null>("what-is");
+  // ✅ collapse everything by default (including the first question)
+  const [openId, setOpenId] = useState<string | null>(null);
   const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
 
   return (
