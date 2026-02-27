@@ -55,29 +55,14 @@ function secondsToBestUnitValue(seconds: number, unit: DurUnit): { value: number
   return { value: v, unit };
 }
 
-/** Tiny tooltip icon that works immediately (native title) */
+/** ✅ UPDATED: Custom CSS Tooltip matching InfraStatusPill */
 function HelpTip({ text }: { text: string }) {
   return (
-    <span
-      title={text}
-      aria-label={text}
-      style={{
-        display: "inline-grid",
-        placeItems: "center",
-        width: 16,
-        height: 16,
-        marginLeft: 6,
-        borderRadius: 999,
-        fontWeight: 900,
-        fontSize: 11,
-        cursor: "help",
-        userSelect: "none",
-        background: "rgba(15, 23, 42, 0.06)",
-        border: "1px solid rgba(15, 23, 42, 0.10)",
-        color: "rgba(15, 23, 42, 0.75)",
-      }}
-    >
+    <span className="crm-q" tabIndex={0} aria-label={text}>
       ?
+      <span className="crm-tip" role="tooltip">
+        {text}
+      </span>
     </span>
   );
 }
