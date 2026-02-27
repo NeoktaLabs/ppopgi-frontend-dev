@@ -42,7 +42,7 @@
 .hp-banner-wrapper {
   width: 100%;
   max-width: 700px; 
-  height: 22px; 
+  height: 28px; /* Slightly taller to accommodate the hover pill */
   overflow: hidden; 
   position: relative;
 }
@@ -62,11 +62,13 @@
   align-items: center;
 }
 
+/* ✅ UPDATED: Banner button now has padding and border-radius for the pill effect */
 .hp-banner-btn {
   appearance: none;
   border: none;
   background: transparent;
-  padding: 0 16px;
+  padding: 4px 16px;
+  border-radius: 999px;
   color: var(--ink);
   font-size: 14px;
   font-weight: 900;
@@ -78,13 +80,14 @@
   max-width: 90vw;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
+/* ✅ FIXED: Hover now applies a soft glass pill instead of washing out the text */
 .hp-banner-btn:hover {
   transform: scale(1.02);
-  color: #fff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  color: var(--ink); /* Keep text dark for contrast against the bright background */
 }
 
 /* =========================================================
