@@ -246,7 +246,6 @@ function prettyStatus(s: any) {
   return "Unknown";
 }
 
-// ✅ FIX: ParticipantUI shape varies by hook; derive a usable address safely.
 function participantAddr(p: any): string {
   return String(p?.buyer || p?.user || p?.address || p?.account || "").toLowerCase();
 }
@@ -255,7 +254,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
-  // ✅ third tab for range policy transparency
   const [tab, setTab] = useState<"receipt" | "holders" | "ranges">("receipt");
   const [metadata, setMetadata] = useState<Partial<LotteryListItem> | null>(null);
   const [journey, setJourney] = useState<JourneyBundle | null>(null);
@@ -440,6 +438,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lotteryId, uiMaxForStepper]);
 
+  // Optional UX: when success appears, keep tab stable (no impact on hooks)
+  useEffect(() => {
+    if (!open) return;
+    if (state.lastBuy) setTab("receipt");
+  }, [open, state.lastBuy]);
+
   const createdOnTs = timeline?.[0]?.date ?? null;
   const showRemainingNote = typeof (math as any).remainingTickets === "number" && (math as any).remainingTickets > 0;
 
@@ -466,7 +470,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     return "A winner will be selected at the deadline.";
   })();
 
-  // ✅ derived helpers for range UI (purely presentational) — copied from your file
   const showRangePanel =
     state.rangeCount != null ||
     state.maxRanges != null ||
@@ -495,7 +498,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     return `Your next buy will open a new range. Minimum is ${n} ticket${n === 1 ? "" : "s"}.`;
   })();
 
-  // ✅ Success math (always computed; no hook-order issues)
   const soldEffective = useMemo(() => {
     const base = Number(displayData?.sold || 0);
     const add = state.lastBuy?.count || 0;
@@ -509,7 +511,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
   const showSuccess = !!state.lastBuy;
 
-  // ✅ IMPORTANT: keep hooks stable by returning conditionally ONLY here
   return !open ? null : (
     <div className="rdm-overlay" onMouseDown={handleClose}>
       <div className="rdm-card" onMouseDown={(e) => e.stopPropagation()}>
@@ -568,7 +569,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
         <div className="rdm-perforation-line" />
 
         <div className="rdm-ticket-stub">
-          {/* ✅ SUCCESS SCREEN (replaces details UI) */}
           {showSuccess && state.lastBuy ? (
             <div className="rdm-success">
               <div className="rdm-success-icon">✓</div>
@@ -606,7 +606,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
               <div className="rdm-success-actions">
                 {state.lastBuy.txHash && (
-                  <a className="rdm-cta" href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`} target="_blank" rel="noreferrer">
+                  <a
+                    className="rdm-cta"
+                    href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     View Tx ↗
                   </a>
                 )}
@@ -648,7 +653,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                       </div>
                     )}
 
-                    {/* ✅ range min hint (only when relevant) */}
                     {minBuyHint && <div className="rdm-warn-text">{minBuyHint}</div>}
 
                     {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
@@ -695,8 +699,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                       </button>
                     )}
 
-                    {state.buyMsg && <div className="rdm-error-msg">{state.buyMsg}</div>}
-
+                    {/* ✅ Removed state.buyMsg rendering entirely — rely on button states + success screen */}
                     {blurBuy && (
                       <div className="rdm-overlay-msg">
                         <span>Connect Wallet to Buy</span>
@@ -774,7 +777,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 </div>
               )}
 
-              {/* ✅ Tabs (WITH RANGES TAB restored exactly like your file) */}
               <div className="rdm-tabs">
                 <button className={`rdm-tab ${tab === "receipt" ? "active" : ""}`} onClick={() => setTab("receipt")}>
                   Receipt Log
@@ -833,7 +835,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                   </div>
                 )}
 
-                {/* ✅ Ranges panel restored exactly like your file */}
                 {tab === "ranges" && (
                   <div className="rdm-receipt">
                     <div className="rdm-receipt-line start">--- RANGE POLICY ---</div>
