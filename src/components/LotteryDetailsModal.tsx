@@ -41,6 +41,28 @@ const formatDate = (ts: any) => {
   });
 };
 
+// ✅ NEW: timeline wants date + HH:mm (under date)
+const formatDateParts = (ts: any) => {
+  const n = Number(ts);
+  if (!ts || ts === "0" || !Number.isFinite(n) || n <= 0) return { date: "—", time: "—" };
+
+  const d = new Date(n * 1000);
+
+  const date = d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const time = d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false, // ✅ HH:mm
+  });
+
+  return { date, time };
+};
+
 function mustEnv(name: string): string {
   const v = (import.meta as any).env?.[name];
   if (!v) throw new Error(`MISSING_ENV_${name}`);
@@ -343,6 +365,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     } else if (status === "DRAWING") {
       steps.push({ label: "Randomness Requested", date: null, tx: null, status: "active" });
     } else {
+      // ✅ Draw Deadline uses the real on-chain deadline timestamp
       steps.push({ label: "Draw Deadline", date: deadline, tx: null, status: status === "OPEN" ? "active" : "future" });
     }
 
@@ -615,7 +638,12 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
 
               <div className="rdm-success-actions">
                 {state.lastBuy.txHash && (
-                  <a className="rdm-cta" href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`} target="_blank" rel="noreferrer">
+                  <a
+                    className="rdm-cta"
+                    href={`https://explorer.etherlink.com/tx/${state.lastBuy.txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     View Tx ↗
                   </a>
                 )}
@@ -797,22 +825,30 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 {tab === "receipt" && (
                   <div className="rdm-receipt">
                     <div className="rdm-receipt-line start">--- START OF LOG ---</div>
-                    {timeline.map((step, i) => (
-                      <div key={i} className={`rdm-tl-row ${step.status}`}>
-                        <div className="rdm-tl-time">{step.date ? formatDate(step.date).split(",")[0] : "--/--"}</div>
-                        <div className="rdm-tl-desc">
-                          <div className="rdm-tl-label">{step.label}</div>
-                          <div className="rdm-tl-sub">
-                            {step.tx && <TxLink hash={step.tx} />}
-                            {step.winner && (
-                              <div className="rdm-winner-hl">
-                                Winner: <ExplorerLink addr={step.winner} label={String(step.winner).slice(0, 6) + "..."} />
-                              </div>
-                            )}
+                    {timeline.map((step, i) => {
+                      const parts = step.date ? formatDateParts(step.date) : { date: "—", time: "—" };
+
+                      return (
+                        <div key={i} className={`rdm-tl-row ${step.status}`}>
+                          <div className="rdm-tl-time">
+                            <div className="rdm-tl-date">{parts.date}</div>
+                            <div className="rdm-tl-hm">{parts.time}</div>
+                          </div>
+
+                          <div className="rdm-tl-desc">
+                            <div className="rdm-tl-label">{step.label}</div>
+                            <div className="rdm-tl-sub">
+                              {step.tx && <TxLink hash={step.tx} />}
+                              {step.winner && (
+                                <div className="rdm-winner-hl">
+                                  Winner: <ExplorerLink addr={step.winner} label={String(step.winner).slice(0, 6) + "..."} />
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div className="rdm-receipt-line end">--- END OF LOG ---</div>
                   </div>
                 )}
@@ -918,3 +954,5 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
     </div>
   );
 }
+
+export default LotteryDetailsModal;
