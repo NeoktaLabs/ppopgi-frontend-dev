@@ -63,13 +63,13 @@
   margin: 0;
   font-size: 24px;
   font-weight: 900;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   letter-spacing: -0.5px;
 }
 .crm-header-text span {
   font-size: 14px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   opacity: 0.6;
 }
 
@@ -81,14 +81,14 @@
   border-radius: 50%;
   cursor: pointer;
   font-weight: 800;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   transition: all 0.2s ease;
   display: grid;
   place-items: center;
 }
 .crm-close-btn:hover {
-  background: var(--sky-pastel);
-  color: var(--ink);
+  background: var(--sky-pastel, #A9D4FF);
+  color: var(--ink, #2B2B33);
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(169, 212, 255, 0.4);
 }
@@ -139,7 +139,7 @@
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   opacity: 0.5;
   letter-spacing: 1px;
   margin-bottom: 24px;
@@ -184,28 +184,31 @@
 /* --- Float & Glow Inputs --- */
 .crm-input-group { margin-bottom: 24px; }
 .crm-input-group label {
-  display: block;
+  display: flex;
+  align-items: center;
   font-size: 11px;
   font-weight: 900;
-  color: var(--ink);
-  opacity: 0.6;
+  color: var(--ink, #2B2B33);
+  opacity: 0.8;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin-bottom: 8px;
   margin-left: 4px;
 }
 
-/* Base Input Style */
+/* Base Input Style - Fixed White on White */
 .crm-input, .crm-select, .crm-input-wrapper input {
   width: 100%;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 2px solid transparent; 
-  background: rgba(255, 255, 255, 0.6);
+  
+  /* ✅ Highly visible demarcation */
+  border: 2px solid rgba(43, 43, 51, 0.15); 
+  background: #f8fafc; /* Subtle contrast against modal white */
   
   font-size: 15px;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
   transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -215,9 +218,19 @@
 /* Focus State: Glow + White BG */
 .crm-input:focus, .crm-select:focus, .crm-input-wrapper input:focus {
   background: #ffffff;
-  border-color: var(--sky-pastel);
+  border-color: var(--sky-pastel, #A9D4FF);
   box-shadow: 0 0 0 4px rgba(169, 212, 255, 0.3);
   transform: translateY(-1px);
+}
+
+/* ✅ Validation Error State - Screams Red */
+.crm-input.crm-input-invalid, 
+.crm-input-wrapper input.crm-input-invalid,
+.crm-select.crm-input-invalid {
+  border-color: #ef4444 !important;
+  background-color: #fef2f2 !important;
+  color: #991b1b !important;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15) !important;
 }
 
 .crm-input-wrapper { position: relative; width: 100%; }
@@ -229,7 +242,7 @@
   transform: translateY(-50%);
   font-size: 12px;
   font-weight: 900;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   opacity: 0.4;
   pointer-events: none;
 }
@@ -243,8 +256,8 @@
   border: 2px dashed rgba(246, 182, 200, 0.5); /* Sakura dash */
   border-radius: 16px;
 }
-.crm-bal-label { font-size: 11px; font-weight: 900; color: var(--ink); opacity: 0.6; text-transform: uppercase; }
-.crm-bal-val { font-size: 14px; font-weight: 900; color: var(--ink); font-family: ui-monospace, monospace; }
+.crm-bal-label { font-size: 11px; font-weight: 900; color: var(--ink, #2B2B33); opacity: 0.6; text-transform: uppercase; }
+.crm-bal-val { font-size: 14px; font-weight: 900; color: var(--ink, #2B2B33); font-family: ui-monospace, monospace; }
 
 /* --- Grids --- */
 .crm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -255,13 +268,13 @@
   margin-top: -10px;
   margin-bottom: 20px;
   padding: 12px;
-  background: rgba(250, 209, 184, 0.2); /* Very soft peach */
+  background: rgba(254, 242, 242, 0.8); /* Soft red background */
   border-radius: 12px;
-  color: var(--ink);
+  color: #b91c1c; /* Deep red text */
   font-size: 13px;
   font-weight: 800;
   text-align: center;
-  border: 1px solid rgba(250, 209, 184, 0.6);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   animation: crm-fade-in 0.2s;
 }
 
@@ -269,8 +282,8 @@
 .crm-advanced { margin-top: 10px; margin-bottom: 40px; }
 .crm-adv-toggle {
   background: none; border: none; padding: 0;
-  font-size: 12.5px; font-weight: 800; color: var(--ink);
-  cursor: pointer; text-decoration: none; border-bottom: 2px solid var(--sakura-pink); opacity: 0.7;
+  font-size: 12.5px; font-weight: 800; color: var(--ink, #2B2B33);
+  cursor: pointer; text-decoration: none; border-bottom: 2px solid var(--sakura-pink, #F6B6C8); opacity: 0.7;
   transition: opacity 0.2s;
 }
 .crm-adv-toggle:hover { opacity: 1; }
@@ -316,7 +329,7 @@
   flex: 1;
   border: 2px solid transparent;
   background: rgba(255, 255, 255, 0.6);
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   opacity: 0.6;
   border-radius: 16px;
   padding: 14px;
@@ -341,7 +354,7 @@
 .crm-dock-btn.active {
   cursor: pointer;
   background: rgba(169, 212, 255, 0.2); /* Soft sky */
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   opacity: 1;
   border-color: rgba(255, 255, 255, 0.9);
   box-shadow: 0 4px 12px rgba(169, 212, 255, 0.3);
@@ -359,14 +372,14 @@
 
 /* Primary (Launch) Button Override */
 .crm-dock-btn.active.primary {
-  background: linear-gradient(135deg, var(--peach-glow), var(--sakura-pink));
+  background: linear-gradient(135deg, var(--peach-glow, #FAD1B8), var(--sakura-pink, #F6B6C8));
   border-color: #ffffff;
   box-shadow: 0 6px 20px rgba(246, 182, 200, 0.4), inset 0 0 0 1px rgba(255,255,255,0.4);
 }
 
 .crm-dock-btn.active.primary:hover {
-  background: linear-gradient(135deg, var(--sakura-pink), #D88EAA);
-  color: var(--soft-cream);
+  background: linear-gradient(135deg, var(--sakura-pink, #F6B6C8), #D88EAA);
+  color: var(--soft-cream, #FFF6EF);
 }
 
 /* Done State (Green Pill) */
@@ -383,7 +396,7 @@
   text-align: center;
   font-size: 12px;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   opacity: 0.6;
 }
 
@@ -401,8 +414,8 @@
 
 .crm-success-icon {
   width: 80px; height: 80px;
-  background: var(--sakura-pink);
-  color: var(--soft-cream);
+  background: var(--sakura-pink, #F6B6C8);
+  color: var(--soft-cream, #FFF6EF);
   border-radius: 50%;
   font-size: 36px;
   display: grid; place-items: center;
@@ -411,10 +424,10 @@
 }
 
 .crm-success-title {
-  font-size: 32px; font-weight: 900; color: var(--ink); margin-bottom: 12px; letter-spacing: -0.5px;
+  font-size: 32px; font-weight: 900; color: var(--ink, #2B2B33); margin-bottom: 12px; letter-spacing: -0.5px;
 }
 .crm-success-sub {
-  font-size: 15px; color: var(--ink); opacity: 0.7; font-weight: 600; margin-bottom: 40px; max-width: 440px; line-height: 1.5;
+  font-size: 15px; color: var(--ink, #2B2B33); opacity: 0.7; font-weight: 600; margin-bottom: 40px; max-width: 440px; line-height: 1.5;
 }
 
 /* Ticket Stub Container */
@@ -456,10 +469,10 @@
 }
 
 .crm-label-ticket {
-  font-size: 10px; font-weight: 900; color: var(--ink); opacity: 0.5; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;
+  font-size: 10px; font-weight: 900; color: var(--ink, #2B2B33); opacity: 0.5; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;
 }
 .crm-ticket-code {
-  font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; color: var(--ink);
+  font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; color: var(--ink, #2B2B33);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -473,9 +486,9 @@
 .crm-stamp-btn {
   width: 64px; height: 64px;
   border-radius: 50%;
-  border: 3px solid var(--warm-lantern);
+  border: 3px solid var(--warm-lantern, #FFD89A);
   background: rgba(255, 255, 255, 0.5);
-  color: var(--ink);
+  color: var(--ink, #2B2B33);
   font-weight: 900;
   font-size: 11px;
   cursor: pointer;
@@ -486,7 +499,7 @@
 .crm-stamp-btn:hover { background: #ffffff; transform: rotate(-12deg) scale(1.05); box-shadow: 0 4px 12px rgba(255, 216, 154, 0.4); }
 
 .crm-stamp-btn.stamped {
-  background: var(--warm-lantern); color: var(--ink); border-color: #ffffff;
+  background: var(--warm-lantern, #FFD89A); color: var(--ink, #2B2B33); border-color: #ffffff;
   transform: rotate(0deg) scale(1);
   box-shadow: 0 0 0 4px rgba(255, 216, 154, 0.3);
 }
@@ -495,12 +508,12 @@
 .crm-social-btn {
   padding: 12px 24px; border-radius: 99px; text-decoration: none; font-weight: 900; font-size: 14px; transition: transform 0.2s; border: 2px solid transparent;
 }
-.crm-social-btn.twitter { background: var(--ink); color: var(--soft-cream); box-shadow: 0 4px 12px rgba(43, 43, 51, 0.2); }
-.crm-social-btn.telegram { background: rgba(169, 212, 255, 0.4); color: var(--ink); border-color: #ffffff; box-shadow: 0 4px 12px rgba(169, 212, 255, 0.2); }
+.crm-social-btn.twitter { background: var(--ink, #2B2B33); color: var(--soft-cream, #FFF6EF); box-shadow: 0 4px 12px rgba(43, 43, 51, 0.2); }
+.crm-social-btn.telegram { background: rgba(169, 212, 255, 0.4); color: var(--ink, #2B2B33); border-color: #ffffff; box-shadow: 0 4px 12px rgba(169, 212, 255, 0.2); }
 .crm-social-btn:hover { transform: translateY(-2px); }
 
 .crm-done-btn {
-  margin-top: 12px; background: none; border: none; font-weight: 800; font-size: 14px; color: var(--ink); opacity: 0.6; cursor: pointer; text-decoration: underline; transition: opacity 0.2s;
+  margin-top: 12px; background: none; border: none; font-weight: 800; font-size: 14px; color: var(--ink, #2B2B33); opacity: 0.6; cursor: pointer; text-decoration: underline; transition: opacity 0.2s;
 }
 .crm-done-btn:hover { opacity: 1; }
 
