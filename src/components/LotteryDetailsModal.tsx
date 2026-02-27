@@ -9,6 +9,8 @@ import "./LotteryDetailsModal.css";
 // ✅ NEW: shared UI formatter (removes trailing .0 / trims zeros)
 import { fmtUsdcUi } from "../lib/format";
 
+const FAQ_HREF = "/faq#ranges"; // ✅ adjust if your FAQ lives elsewhere
+
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
   if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{label || "—"}</span>;
   const a = String(addr).toLowerCase();
@@ -878,6 +880,15 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 {tab === "ranges" && (
                   <div className="rdm-receipt">
                     <div className="rdm-receipt-line start">--- RANGE POLICY ---</div>
+
+                    {/* ✅ NEW: small note + FAQ link */}
+                    <div className="rdm-range-note" style={{ margin: "8px 0 12px", fontSize: 12, opacity: 0.8 }}>
+                      Learn more about ranges in the{" "}
+                      <a href={FAQ_HREF} className="rdm-info-link" target="_blank" rel="noreferrer">
+                        FAQ
+                      </a>
+                      .
+                    </div>
 
                     {!showRangePanel ? (
                       <div className="rdm-empty">Range information unavailable.</div>
