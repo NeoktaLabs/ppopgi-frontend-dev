@@ -117,13 +117,13 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.03);
 }
 
-/* ✅ UPDATED: Added .settled along with .completed for the green pill */
+/* ✅ UPDATED: A truer, more vibrant green for the success state */
 .rc-chip.open { background: rgba(169, 212, 255, 0.3); color: var(--ink); border-color: rgba(169, 212, 255, 0.6); } /* Sky Blue */
 .rc-chip.completed,
-.rc-chip.settled { background: rgba(34, 197, 94, 0.25); color: #14532d; border-color: rgba(34, 197, 94, 0.7); } /* Rich, vibrant Green for Settled */
+.rc-chip.settled { background: rgba(34, 197, 94, 0.2); color: #15803d; border-color: rgba(34, 197, 94, 0.6); } /* True Emerald Green */
 .rc-chip.canceled, 
-.rc-chip.canceling { background: rgba(248, 113, 113, 0.25); color: var(--ink); border-color: rgba(248, 113, 113, 0.5); } /* Pastel Red for Canceled */
-.rc-chip.drawing { background: rgba(251, 191, 36, 0.3); color: var(--ink); border-color: rgba(251, 191, 36, 0.6); } /* Pastel Yellow for Drawing Pending */
+.rc-chip.canceling { background: rgba(248, 113, 113, 0.25); color: var(--ink); border-color: rgba(248, 113, 113, 0.5); } /* Pastel Red */
+.rc-chip.drawing { background: rgba(251, 191, 36, 0.3); color: var(--ink); border-color: rgba(251, 191, 36, 0.6); } /* Pastel Yellow */
 
 .rc-winrate-badge {
   margin-left: auto; margin-right: auto;
