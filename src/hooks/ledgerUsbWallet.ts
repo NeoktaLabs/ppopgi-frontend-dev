@@ -105,22 +105,32 @@ function assertWebHid() {
   return hid as HID;
 }
 
-async function requestLedgerDevice(): Promise<HIDDevice> {
+/**
+ * IMPORTANT:
+ * hid.requestDevice() MUST be CALLED synchronously within a user gesture.
+ * That means: no `await` before the call, and no dynamic imports before the call.
+ */
+function startLedgerDeviceRequest(): Promise<HIDDevice> {
   const hid = assertWebHid();
 
-  // This MUST be called from a user gesture (button click).
-  const devices = await hid.requestDevice({
+  // Call requestDevice() immediately (no await before this line).
+  const p = hid.requestDevice({
     filters: [{ vendorId: LEDGER_VENDOR_ID }],
+  }) as Promise<HIDDevice[]>;
+
+  return p.then((devices) => {
+    if (!devices || devices.length === 0) {
+      throw new Error("No Ledger device selected. Please select your Ledger in the browser prompt.");
+    }
+    return devices[0];
   });
-
-  if (!devices || devices.length === 0) {
-    throw new Error("No Ledger device selected. Please select your Ledger in the browser prompt.");
-  }
-
-  return devices[0];
 }
 
 async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }> {
+  // ✅ CRITICAL FIX:
+  // Start the HID chooser FIRST (within the click gesture), then do imports.
+  const pickedDevicePromise = startLedgerDeviceRequest();
+
   const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
     import("@ledgerhq/hw-app-eth"),
@@ -128,7 +138,7 @@ async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }
 
   let transport: any = null;
 
-  // 1) Try silent open if permission exists
+  // 1) Try silent open if permission already exists (nice UX)
   try {
     const hid: any = (navigator as any)?.hid;
     const devices = await hid?.getDevices?.();
@@ -143,13 +153,12 @@ async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }
     transport = null;
   }
 
-  // 2) If silent open failed or no devices, force a chooser explicitly
+  // 2) If silent open failed, use the device the user picked in the chooser
   if (!transport) {
     let picked: HIDDevice;
     try {
-      picked = await requestLedgerDevice();
+      picked = await pickedDevicePromise;
     } catch (e: any) {
-      // If user cancels, we want a clean message
       const msg = e?.message ? String(e.message) : "Ledger device selection was cancelled.";
       throw new Error(msg);
     }
@@ -158,9 +167,7 @@ async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }
       transport = await (TransportWebHID as any).open(picked);
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : "Failed to open Ledger HID transport.";
-      throw new Error(
-        `${msg}\n\nTip: close Ledger Live and any other app using the Ledger, then try again.`
-      );
+      throw new Error(`${msg}\n\nTip: close Ledger Live and any other app using the Ledger, then try again.`);
     }
   }
 
@@ -450,6 +457,14 @@ export function useLedgerUsbWallet() {
       setIsConnecting(true);
       try {
         const rpcUrl = pickRpcUrl(opts.chain);
+
+        // ✅ Reliability: pre-open a session so the HID chooser definitely happens from the click.
+        if (!sessionRef.current) {
+          const path = opts.preferredPath || "44'/60'/0'/0/0";
+          const s = await openLedgerSession(path);
+          sessionRef.current = s;
+          (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
+        }
 
         const wallet = EIP1193.fromProvider({
           provider: async () => {
