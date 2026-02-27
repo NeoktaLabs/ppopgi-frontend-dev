@@ -54,7 +54,7 @@ flowchart TD
   E{Deadline?}:::decision
   F{Min Tickets?}:::decision
 
-  Bot[Finalizer Bot<br/>runs ~every 5 min]:::tech
+  Bot[Finalizer Bot<br/>runs ~every 3 min]:::tech
   User[Any User]:::tech
 
   H[Drawing Phase]:::tech
