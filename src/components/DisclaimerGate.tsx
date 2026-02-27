@@ -1,6 +1,5 @@
 // src/components/DisclaimerGate.tsx
 
-import { useCallback } from "react";
 import "./DisclaimerGate.css";
 
 type Props = {
@@ -9,16 +8,6 @@ type Props = {
 };
 
 export function DisclaimerGate({ open, onAccept }: Props) {
-  
-  const handleReadFAQ = useCallback(() => {
-    // Dismiss the modal
-    onAccept(); 
-    // Dispatch the custom event to switch the page to FAQ
-    try {
-      window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page: "faq" } }));
-    } catch {}
-  }, [onAccept]);
-
   if (!open) return null;
 
   return (
@@ -33,40 +22,29 @@ export function DisclaimerGate({ open, onAccept }: Props) {
 
         <div className="dg-body">
           <p className="dg-text">
-            Ppopgi is an experimental, unaudited decentralized application running on Etherlink.
-            By continuing, you acknowledge and accept the following:
+            Ppopgi is an experimental, unaudited decentralized app on Etherlink.
+            By entering, you acknowledge:
           </p>
 
           <ul className="dg-list">
             <li>
-              <strong>Experimental Software:</strong> Smart contracts, indexers, bots, and UI may contain bugs, downtime, or unexpected behavior.
+              <strong>Experimental Tech:</strong> Smart contracts and UI are provided "as is" and may contain bugs or experience downtime.
             </li>
             <li>
-              <strong>No Guarantees:</strong> The protocol is provided "as is" without warranties, guarantees, or uptime commitments.
+              <strong>Risk of Loss:</strong> You could lose funds due to network failures, contract exploits, or infrastructure outages.
             </li>
             <li>
-              <strong>Risk of Loss:</strong> Funds may be lost due to smart contract bugs, network issues, randomness failures, or infrastructure outages.
-            </li>
-            <li>
-              <strong>User Responsibility:</strong> You are solely responsible for your funds, transactions, and interactions with the protocol.
-            </li>
-            <li>
-              <strong>Use at Your Own Risk:</strong> Only participate with assets you can afford to lose.
+              <strong>Your Responsibility:</strong> You are solely responsible for your assets, transactions, and any risks taken.
             </li>
           </ul>
 
-          <div className="dg-action-stack">
-            <button className="dg-accept-btn" onClick={onAccept}>
-              I Understand & Enter
-            </button>
-            
-            <button className="dg-secondary-btn" onClick={handleReadFAQ}>
-              Let me read the FAQ first
-            </button>
-          </div>
+          <button className="dg-accept-btn" onClick={onAccept}>
+            Agree and take me to Ppopgi
+          </button>
 
           <div className="dg-footer">
-            By proceeding, you accept full responsibility and understand that blockchain transactions are irreversible.
+            Only participate with assets you can afford to lose.<br />
+            All blockchain transactions are irreversible.
           </div>
         </div>
       </div>
