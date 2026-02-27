@@ -13,7 +13,6 @@ export function DisclaimerGate({ open, onAccept }: Props) {
   return (
     <div className="dg-overlay">
       <div className="dg-card" role="dialog" aria-modal="true">
-        
         {/* Header with Icon */}
         <div className="dg-header">
           <div className="dg-icon">⚠️</div>
@@ -28,13 +27,20 @@ export function DisclaimerGate({ open, onAccept }: Props) {
 
           <ul className="dg-list">
             <li>
-              <strong>Experimental Tech:</strong> Smart contracts and UI are provided "as is" and may contain bugs or experience downtime.
+              <strong>Experimental Tech:</strong> Smart contracts and UI are provided "as is" and may contain bugs or
+              experience downtime.
             </li>
             <li>
-              <strong>Risk of Loss:</strong> You could lose funds due to network failures, contract exploits, or infrastructure outages.
+              <strong>Risk of Loss:</strong> You could lose funds due to network failures, contract exploits, or
+              infrastructure outages.
             </li>
             <li>
-              <strong>Your Responsibility:</strong> You are solely responsible for your assets, transactions, and any risks taken.
+              <strong>Service Availability:</strong> Off-chain components (indexer, bots, frontend, cache) may fail or
+              lag, affecting UI accuracy or availability.
+            </li>
+            <li>
+              <strong>Your Responsibility:</strong> You are solely responsible for your assets, transactions, and any
+              risks taken.
             </li>
           </ul>
 
@@ -43,8 +49,11 @@ export function DisclaimerGate({ open, onAccept }: Props) {
           </button>
 
           <div className="dg-footer">
-            Only participate with assets you can afford to lose.<br />
+            Only participate with assets you can afford to lose.
+            <br />
             All blockchain transactions are irreversible.
+            <br />
+            Ppopgi creators are not liable for losses, downtime, or unexpected behavior.
           </div>
         </div>
       </div>
