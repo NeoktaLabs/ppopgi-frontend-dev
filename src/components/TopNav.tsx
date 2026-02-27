@@ -172,9 +172,7 @@ export const TopNav = memo(function TopNav({
 
   return (
     <div className="topnav-wrapper">
-      {/* ✅ ONE single “header shell” (nav + infra are inside the same glass container) */}
       <div className="topnav-shell">
-        {/* NAV ROW */}
         <div className="topnav-pill">
           <div className="topnav-brand" onClick={() => handleNav(() => {}, "home")}>
             <img className="topnav-logo" src="/ppopgi-logo.png" alt="Ppopgi logo" draggable={false} />
@@ -182,10 +180,7 @@ export const TopNav = memo(function TopNav({
           </div>
 
           <nav className="topnav-desktop-links">
-            <button
-              className={`nav-link ${page === "explore" ? "active" : ""}`}
-              onClick={() => handleNav(onOpenExplore, "explore")}
-            >
+            <button className={`nav-link ${page === "explore" ? "active" : ""}`} onClick={() => handleNav(onOpenExplore, "explore")}>
               Explore
             </button>
 
@@ -206,23 +201,26 @@ export const TopNav = memo(function TopNav({
           <div className="topnav-right">
             <div className="desktop-actions">
               {account ? (
-                <button
-                  className="balances-pill"
-                  onClick={() => handleNav(onOpenCashier)}
-                  title="Open Cashier"
-                  type="button"
-                >
-                  <div className="balances-rows">
-                    <div className="bal-row">
-                      <span className="bal-sym">{xtzSym}</span>
-                      <span className="bal-val">{xtzText}</span>
-                    </div>
-                    <div className="bal-row">
-                      <span className="bal-sym">{usdcSym}</span>
-                      <span className="bal-val">{usdcText}</span>
+                <>
+                  {/* ✅ Keep Cashier CTA even when signed in */}
+                  <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
+                    🏦 Cashier
+                  </button>
+
+                  {/* ✅ Show balances as read-only */}
+                  <div className="balances-pill" title="Wallet balances">
+                    <div className="balances-rows">
+                      <div className="bal-row">
+                        <span className="bal-sym">{xtzSym}</span>
+                        <span className="bal-val">{xtzText}</span>
+                      </div>
+                      <div className="bal-row">
+                        <span className="bal-sym">{usdcSym}</span>
+                        <span className="bal-val">{usdcText}</span>
+                      </div>
                     </div>
                   </div>
-                </button>
+                </>
               ) : (
                 <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
                   🏦 Cashier
@@ -234,12 +232,7 @@ export const TopNav = memo(function TopNav({
                   Sign In
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="nav-link primary-pill-btn"
-                  onClick={() => handleNav(onSignOut)}
-                  title="Log Off"
-                >
+                <button type="button" className="nav-link primary-pill-btn" onClick={() => handleNav(onSignOut)} title="Log Off">
                   <div className="acct-stack">
                     <div className="acct-top">Log Off</div>
                     <div className="acct-bottom">{short(account)}</div>
@@ -261,13 +254,11 @@ export const TopNav = memo(function TopNav({
           </div>
         </div>
 
-        {/* INFRA ROW (now “wired” inside the same header shell) */}
         <div className="topnav-infra">
           <InfraStatusPill />
         </div>
       </div>
 
-      {/* MOBILE MENU (still anchored to the whole header shell) */}
       <div ref={menuRef} className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
         <div className="mobile-menu-inner">
           {account && (
