@@ -79,7 +79,7 @@
 }
 
 .dg-list {
-  margin: 0 0 24px 0;
+  margin: 0 0 28px 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -108,14 +108,7 @@
   opacity: 1;
 }
 
-/* --- ACTION STACK (The two buttons) --- */
-.dg-action-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Primary Accept Button */
+/* Action Button */
 .dg-accept-btn {
   width: 100%;
   padding: 16px;
@@ -143,40 +136,13 @@
   transform: translateY(1px);
 }
 
-/* Secondary FAQ Button */
-.dg-secondary-btn {
-  width: 100%;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--ink);
-  opacity: 0.8;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  font-size: 13.5px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.dg-secondary-btn:hover {
-  opacity: 1;
-  background: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-}
-
-.dg-secondary-btn:active {
-  transform: translateY(1px);
-}
-
 /* Footer Note */
 .dg-footer {
   margin-top: 24px;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--ink);
   opacity: 0.5;
   font-weight: 700;
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.5;
 }
