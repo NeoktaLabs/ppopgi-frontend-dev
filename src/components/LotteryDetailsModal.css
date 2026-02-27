@@ -39,10 +39,9 @@
 }
 
 /* =========================================================
-   ✅ TICKET BODY (Restored Textured Pastel Pink)
+   ✅ TICKET BODY (Textured Pastel Pink)
    ========================================================= */
 .rdm-ticket-body {
-  /* Restored the physical ticket texture */
   background-color: #ffeef6;
   background-image:
     repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px),
@@ -102,7 +101,6 @@
   font-size: 52px;
   font-weight: 900;
   margin: 4px 0 8px 0;
-
   background: linear-gradient(135deg, #BE185D 0%, #db2777 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -148,7 +146,7 @@
   padding: 0 24px;
 }
 .rdm-stat-box {
-  background: rgba(255, 255, 255, 0.5); /* Semi-transparent to show pink */
+  background: rgba(255, 255, 255, 0.5); 
   padding: 12px 8px;
   border-radius: 16px;
   text-align: center;
@@ -182,7 +180,7 @@
   background-image: radial-gradient(circle, transparent 6px, rgba(255,255,255,0.9) 6.5px);
   background-size: 20px 20px;
   background-position: -10px -10px;
-  border-top: 2px dashed rgba(246, 182, 200, 0.5); /* Sakura dash */
+  border-top: 2px dashed rgba(246, 182, 200, 0.5); 
   position: relative;
   z-index: 5;
   margin-top: -10px;
@@ -194,7 +192,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(43, 43, 51, 0.45); /* Matches the overlay color exactly */
+  background: rgba(43, 43, 51, 0.45); 
   z-index: 10;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
@@ -219,7 +217,6 @@
   font-size: 15px;
   padding: 16px 12px;
   border-radius: 20px;
-
   color: var(--ink);
   background: rgba(246, 182, 200, 0.2); 
   border: 2px dashed rgba(246, 182, 200, 0.6);
@@ -442,23 +439,115 @@
   margin-bottom: -2px;
 }
 
-/* Receipt Log */
-.rdm-receipt { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: var(--ink); font-size: 12px; }
-.rdm-receipt-line { text-align: center; opacity: 0.5; margin: 12px 0; font-weight: 700; }
-.rdm-tl-row { display: flex; gap: 12px; margin-bottom: 12px; }
-.rdm-tl-time { opacity: 0.6; white-space: nowrap; width: 44px; font-weight: 600; }
-.rdm-tl-desc { flex: 1; }
-.rdm-tl-label { font-weight: 900; text-transform: uppercase; }
-.rdm-tl-sub { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; opacity: 0.85; }
-.rdm-tl-tx { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--sakura-pink); width: fit-content; }
-.rdm-winner-hl { color: var(--warm-lantern); font-weight: 900; background: var(--ink); padding: 2px 6px; border-radius: 6px; width: fit-content; }
+/* =========================================================
+   ✅ RECEIPT LOG & HOLDERS (Polished Paper Look)
+   ========================================================= */
+.rdm-receipt { 
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; 
+  color: var(--ink); 
+  font-size: 12px; 
+  background: rgba(250, 209, 184, 0.15); /* Faint peach paper */
+  border: 2px dashed rgba(250, 209, 184, 0.6); /* Peach dashed border */
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.02);
+}
 
-.rdm-holders { display: grid; gap: 10px; }
+.rdm-receipt-line { 
+  text-align: center; 
+  opacity: 0.4; 
+  margin: 16px 0; 
+  font-weight: 800; 
+  letter-spacing: 2px;
+}
+
+.rdm-tl-row { 
+  display: flex; 
+  gap: 16px; 
+  margin-bottom: 16px; 
+  padding-bottom: 12px;
+  border-bottom: 1px dotted rgba(0,0,0,0.1);
+}
+
+.rdm-tl-row:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.rdm-tl-row.future {
+  opacity: 0.5; /* Fade out steps that haven't happened yet */
+}
+
+/* The new Date/Time column */
+.rdm-tl-time { 
+  display: flex;
+  flex-direction: column;
+  min-width: 65px; 
+}
+.rdm-tl-date { 
+  font-size: 10px; 
+  opacity: 0.6; 
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.rdm-tl-hm { 
+  font-size: 13px; 
+  font-weight: 900; 
+  color: var(--ink);
+}
+
+.rdm-tl-desc { flex: 1; }
+
+.rdm-tl-label { 
+  font-weight: 900; 
+  font-size: 12.5px;
+  text-transform: uppercase; 
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.rdm-tl-sub { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 6px; 
+  opacity: 0.9; 
+}
+
+.rdm-tl-tx { 
+  color: var(--ink); 
+  text-decoration: none; 
+  border-bottom: 1px solid var(--sakura-pink); 
+  width: fit-content; 
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+.rdm-tl-tx:hover {
+  background: var(--sakura-pink);
+  color: var(--soft-cream);
+}
+
+.rdm-winner-hl { 
+  color: var(--ink); 
+  font-weight: 900; 
+  background: var(--warm-lantern); 
+  padding: 4px 8px; 
+  border-radius: 6px; 
+  width: fit-content; 
+  box-shadow: 0 2px 4px rgba(255, 216, 154, 0.4);
+}
+
+/* Holders Tab */
+.rdm-holders { 
+  display: grid; 
+  gap: 12px; 
+  padding: 0 8px;
+}
 .rdm-holder-row {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   border-bottom: 2px dashed rgba(246, 182, 200, 0.3);
 }
 .rdm-holder-row b { color: var(--ink); font-weight: 800; }
