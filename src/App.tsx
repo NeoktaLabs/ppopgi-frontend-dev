@@ -179,14 +179,15 @@ export default function App() {
       if (next === "dashboard" && !account) {
         setPage("home");
         setPageInUrl("home");
-        setSignInOpen(true);
+        // ✅ require gate before sign-in (connect wallet)
+        ensureGateAccepted(() => setSignInOpen(true));
         return;
       }
 
       setPage(next);
       setPageInUrl(next);
     },
-    [account]
+    [account, ensureGateAccepted]
   );
 
   /**
@@ -203,7 +204,8 @@ export default function App() {
       if (next === "dashboard" && !account) {
         setPage("home");
         setPageInUrl("home");
-        setSignInOpen(true);
+        // ✅ require gate before sign-in (connect wallet)
+        ensureGateAccepted(() => setSignInOpen(true));
         return;
       }
 
@@ -219,7 +221,7 @@ export default function App() {
     // popstate (back/forward)
     window.addEventListener("popstate", applyFromUrl);
     return () => window.removeEventListener("popstate", applyFromUrl);
-  }, [account]);
+  }, [account, ensureGateAccepted]);
 
   // 8) Session sync
   useEffect(() => {
@@ -284,9 +286,12 @@ export default function App() {
         page={page}
         onNavigate={navigateTo}
         account={account}
-        // sign-in itself can stay available (FAQ can explain without forcing acceptance),
-        // but any action that touches funds / creates raffles should be gated.
-        onOpenSignIn={() => setSignInOpen(true)}
+        // ✅ SIGN-IN is now gated: no wallet connect until disclaimer accepted
+        onOpenSignIn={() =>
+          ensureGateAccepted(() => {
+            setSignInOpen(true);
+          })
+        }
         onOpenCreate={() =>
           ensureGateAccepted(() => {
             if (account) setCreateOpen(true);
