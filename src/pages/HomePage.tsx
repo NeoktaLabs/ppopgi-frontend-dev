@@ -213,7 +213,7 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
           <div className="hp-hero-content">
             <div className="hp-hero-badge">🎟️ The Festival is Open</div>
             <h1 className="hp-hero-title">
-              Welcome to <span className="hp-text-gradient">Ppopgi</span>
+              Welcome to <span className="hp-text-gradient">Ppopgi (뽑기)</span>
             </h1>
             <p className="hp-hero-sub">
               Where fun meets fairness. Experience the thrill of fully transparent, on-chain lotteries. No tricks — just luck.
