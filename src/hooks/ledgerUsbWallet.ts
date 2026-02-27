@@ -105,32 +105,7 @@ function assertWebHid() {
   return hid as HID;
 }
 
-/**
- * IMPORTANT:
- * hid.requestDevice() MUST be CALLED synchronously within a user gesture.
- * That means: no `await` before the call, and no dynamic imports before the call.
- */
-function startLedgerDeviceRequest(): Promise<HIDDevice> {
-  const hid = assertWebHid();
-
-  // Call requestDevice() immediately (no await before this line).
-  const p = hid.requestDevice({
-    filters: [{ vendorId: LEDGER_VENDOR_ID }],
-  }) as Promise<HIDDevice[]>;
-
-  return p.then((devices) => {
-    if (!devices || devices.length === 0) {
-      throw new Error("No Ledger device selected. Please select your Ledger in the browser prompt.");
-    }
-    return devices[0];
-  });
-}
-
-async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }> {
-  // ✅ CRITICAL FIX:
-  // Start the HID chooser FIRST (within the click gesture), then do imports.
-  const pickedDevicePromise = startLedgerDeviceRequest();
-
+async function openLedgerTransportAndEth(opts: { device?: HIDDevice } = {}): Promise<{ transport: any; eth: any }> {
   const [{ default: TransportWebHID }, { default: Eth }] = await Promise.all([
     import("@ledgerhq/hw-transport-webhid"),
     import("@ledgerhq/hw-app-eth"),
@@ -138,45 +113,36 @@ async function openLedgerTransportAndEth(): Promise<{ transport: any; eth: any }
 
   let transport: any = null;
 
-  // 1) Try silent open if permission already exists (nice UX)
+  // ✅ If caller already selected a device, ALWAYS use it (no prompting here)
+  if (opts.device) {
+    transport = await (TransportWebHID as any).open(opts.device);
+    const eth = new Eth(transport);
+    return { transport, eth };
+  }
+
+  // Otherwise try silent open (only works if permission already granted)
   try {
     const hid: any = (navigator as any)?.hid;
     const devices = await hid?.getDevices?.();
     if (devices?.length) {
-      try {
-        transport = await (TransportWebHID as any).open(devices[0]);
-      } catch {
-        transport = null;
-      }
+      transport = await (TransportWebHID as any).open(devices[0]);
     }
   } catch {
     transport = null;
   }
 
-  // 2) If silent open failed, use the device the user picked in the chooser
   if (!transport) {
-    let picked: HIDDevice;
-    try {
-      picked = await pickedDevicePromise;
-    } catch (e: any) {
-      const msg = e?.message ? String(e.message) : "Ledger device selection was cancelled.";
-      throw new Error(msg);
-    }
-
-    try {
-      transport = await (TransportWebHID as any).open(picked);
-    } catch (e: any) {
-      const msg = e?.message ? String(e.message) : "Failed to open Ledger HID transport.";
-      throw new Error(`${msg}\n\nTip: close Ledger Live and any other app using the Ledger, then try again.`);
-    }
+    // IMPORTANT: we do NOT call requestDevice() here anymore
+    // because this function is often reached after async boundaries.
+    throw new Error("Ledger device not selected yet. Click “Connect Ledger” again to choose the device.");
   }
 
   const eth = new Eth(transport);
   return { transport, eth };
 }
 
-async function openLedgerSession(path: string): Promise<LedgerSession> {
-  const { transport, eth } = await openLedgerTransportAndEth();
+async function openLedgerSession(path: string, device?: HIDDevice): Promise<LedgerSession> {
+  const { transport, eth } = await openLedgerTransportAndEth({ device });
   const { address } = await eth.getAddress(path, false, true);
   return { transport, eth, address, path };
 }
@@ -211,15 +177,16 @@ async function createLedgerEip1193Provider(opts: {
   rpcUrl: string;
   sessionRef: { current: LedgerSession | null };
   preferredPath?: string;
+  deviceRef: { current: HIDDevice | null };
 }): Promise<MinimalEip1193Provider> {
-  const { chainId, rpcUrl, sessionRef, preferredPath } = opts;
+  const { chainId, rpcUrl, sessionRef, preferredPath, deviceRef } = opts;
   const hexChainId = `0x${chainId.toString(16)}`;
 
   async function getSession() {
     if (sessionRef.current) return sessionRef.current;
 
     const path = preferredPath || "44'/60'/0'/0/0";
-    const s = await openLedgerSession(path);
+    const s = await openLedgerSession(path, deviceRef.current ?? undefined);
     sessionRef.current = s;
     return s;
   }
@@ -391,6 +358,34 @@ export function useLedgerUsbWallet() {
   const sessionRef = useRef<LedgerSession | null>((globalThis as any).__ppopgiLedgerSession ?? null);
   (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
 
+  // ✅ NEW: cache the HID device chosen by the user
+  const deviceRef = useRef<HIDDevice | null>((globalThis as any).__ppopgiLedgerDevice ?? null);
+  (globalThis as any).__ppopgiLedgerDevice = deviceRef.current;
+
+  /**
+   * ✅ NEW: Must be called directly from a button click (no awaits before calling it).
+   * This is what guarantees the Chrome HID chooser prompt shows up.
+   */
+  const ensureLedgerDevice = useCallback(async () => {
+    setError("");
+    if (!isSupported) throw new Error("WebHID not supported. Use Chrome/Edge/Brave.");
+
+    const hid = assertWebHid();
+
+    const devices = await hid.requestDevice({
+      filters: [{ vendorId: LEDGER_VENDOR_ID }],
+    });
+
+    if (!devices || devices.length === 0) {
+      throw new Error("No Ledger device selected. Please select your Ledger in the browser prompt.");
+    }
+
+    deviceRef.current = devices[0];
+    (globalThis as any).__ppopgiLedgerDevice = deviceRef.current;
+
+    return deviceRef.current;
+  }, [isSupported]);
+
   const setSelectedPath = useCallback(
     async (path: string) => {
       setError("");
@@ -401,7 +396,8 @@ export function useLedgerUsbWallet() {
       } catch {}
       sessionRef.current = null;
 
-      const s = await openLedgerSession(path);
+      // requires device to be selected already (or silent permission)
+      const s = await openLedgerSession(path, deviceRef.current ?? undefined);
       sessionRef.current = s;
       (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
       return { address: s.address, path: s.path };
@@ -425,7 +421,7 @@ export function useLedgerUsbWallet() {
         if (sessionRef.current?.eth && sessionRef.current?.transport) {
           eth = sessionRef.current.eth;
         } else {
-          const opened = await openLedgerTransportAndEth();
+          const opened = await openLedgerTransportAndEth({ device: deviceRef.current ?? undefined });
           tempTransport = opened.transport;
           eth = opened.eth;
         }
@@ -458,12 +454,20 @@ export function useLedgerUsbWallet() {
       try {
         const rpcUrl = pickRpcUrl(opts.chain);
 
-        // ✅ Reliability: pre-open a session so the HID chooser definitely happens from the click.
-        if (!sessionRef.current) {
-          const path = opts.preferredPath || "44'/60'/0'/0/0";
-          const s = await openLedgerSession(path);
-          sessionRef.current = s;
-          (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
+        // ✅ Require device selection already OR previously granted permission
+        // If neither is true, show a clean message telling the UI what to do.
+        if (!deviceRef.current) {
+          try {
+            const hid: any = (navigator as any)?.hid;
+            const granted = await hid?.getDevices?.();
+            if (!granted?.length) {
+              throw new Error(
+                "Ledger not selected yet. Click “Connect Ledger” again and choose the Ledger device in the browser prompt."
+              );
+            }
+          } catch (e: any) {
+            throw e;
+          }
         }
 
         const wallet = EIP1193.fromProvider({
@@ -473,6 +477,7 @@ export function useLedgerUsbWallet() {
               rpcUrl,
               sessionRef,
               preferredPath: opts.preferredPath,
+              deviceRef,
             });
           },
         });
@@ -480,6 +485,8 @@ export function useLedgerUsbWallet() {
         await wallet.connect({ client: opts.client, chain: opts.chain });
 
         (globalThis as any).__ppopgiLedgerSession = sessionRef.current;
+        (globalThis as any).__ppopgiLedgerDevice = deviceRef.current;
+
         return wallet;
       } catch (e: any) {
         setError(e?.message ? String(e.message) : "Failed to connect Ledger via USB.");
@@ -491,5 +498,13 @@ export function useLedgerUsbWallet() {
     [isSupported]
   );
 
-  return { isSupported, isConnecting, error, connectLedgerUsb, scanAccounts, setSelectedPath };
+  return {
+    isSupported,
+    isConnecting,
+    error,
+    ensureLedgerDevice, // ✅ NEW
+    connectLedgerUsb,
+    scanAccounts,
+    setSelectedPath,
+  };
 }
