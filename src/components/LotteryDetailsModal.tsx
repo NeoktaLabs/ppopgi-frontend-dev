@@ -9,7 +9,7 @@ import "./LotteryDetailsModal.css";
 // ✅ NEW: shared UI formatter (removes trailing .0 / trims zeros)
 import { fmtUsdcUi } from "../lib/format";
 
-const FAQ_HREF = "/faq#ranges"; // ✅ adjust if your FAQ lives elsewhere
+const FAQ_HREF = "/?page=faq"; // ✅ adjust if your FAQ lives elsewhere
 
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
   if (!addr || addr === "0x0000000000000000000000000000000000000000") return <span>{label || "—"}</span>;
