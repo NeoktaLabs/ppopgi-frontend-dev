@@ -25,13 +25,13 @@
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 32px;
-  
+
   box-shadow:
     0 10px 30px -10px rgba(203, 183, 246, 0.3),
     0 4px 12px -2px rgba(246, 182, 200, 0.15),
     inset 0 0 0 1px rgba(255, 255, 255, 0.6);
 
-  overflow: hidden; 
+  overflow: hidden;
   position: relative;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -52,7 +52,7 @@
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 0 12px 12px 12px; 
+  padding: 0 12px 12px 12px;
   pointer-events: auto;
 }
 
@@ -144,7 +144,7 @@
 .desktop-actions {
   display: flex;
   align-items: center;
-  gap: 10px; 
+  gap: 10px;
 }
 
 /* Balances Pill (Inset Read-Only Screen) */
@@ -154,7 +154,7 @@
   justify-content: center;
   padding: 6px 16px;
   border-radius: 16px;
-  
+
   background: #f8fafc;
   border: 1px solid rgba(43, 43, 51, 0.1);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -286,21 +286,15 @@
   transform: translateY(-4px) rotate(-45deg);
 }
 
-/* Hide the mobile quick balance by default */
+/* ✅ Mobile quick balance (STACKED: USDC + XTZ) */
 .mobile-quick-bal {
   display: none;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(43, 43, 51, 0.1);
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-  border-radius: 999px;
-  font-weight: 900;
-  font-size: 14px;
-  color: var(--ink);
+  border-radius: 14px;
   cursor: pointer;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   transition: background 0.2s ease;
 }
 
@@ -308,11 +302,32 @@
   background: rgba(169, 212, 255, 0.2);
 }
 
-.mobile-quick-bal span {
-  font-size: 10px;
+.mobile-quick-bal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.mobile-quick-bal-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.05;
+}
+
+.mobile-quick-bal-row b {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.mobile-quick-bal-row span {
+  font-size: 9px;
+  opacity: 0.6;
   text-transform: uppercase;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  opacity: 0.6;
 }
 
 /* When screen gets small: */
