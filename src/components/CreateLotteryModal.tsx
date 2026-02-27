@@ -497,7 +497,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
                       <div className="crm-input-group">
                         <label>
                           Min Tickets
-                          <HelpTip text="Minimum tickets required to draw a winner. If not reached by the deadline, it may cancel." />
+                          <HelpTip text="Minimum tickets required to draw a winner. If not reached by the deadline, it will cancel." />
                         </label>
                         <input
                           className="crm-input"
@@ -511,8 +511,8 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
 
                       <div className="crm-input-group">
                         <label>
-                          Max Capacity
-                          <HelpTip text="Optional cap on total tickets. Leave empty (or 0) for unlimited capacity." />
+                          Max Tickets
+                          <HelpTip text="Optional cap on total tickets. Leave empty (or 0) for unlimited capacity. The draw will happen as soon as max tickets is reached" />
                         </label>
                         <input
                           className="crm-input"
@@ -540,7 +540,7 @@ export function CreateLotteryModal({ open, onClose, onCreated }: Props) {
                     disabled={!isConnected || isReady || status.isPending}
                     title="Approves USDC for the prize deposit"
                   >
-                    <span className="crm-dock-icon">{isReady ? "✓" : "Step 1"}</span>
+                    <span className="crm-dock-icon">{isReady ? "Step 1 ✓" : "Step 1"}</span>
                     <span className="crm-dock-label">{isReady ? "Wallet Ready" : "Get Wallet Ready"}</span>
                   </button>
 

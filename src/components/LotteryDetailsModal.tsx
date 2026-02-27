@@ -4,7 +4,6 @@ import { useActiveAccount } from "thirdweb/react";
 import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import { useLotteryParticipants } from "../hooks/useLotteryParticipants";
 import { fetchLotteryById, type LotteryListItem } from "../indexer/subgraph";
-
 import "./LotteryDetailsModal.css";
 
 const ExplorerLink = ({ addr, label }: { addr: string; label?: string }) => {
@@ -748,7 +747,7 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 <div className="rdm-dist-section">
                   <div className="rdm-dist-header">Payout Distribution</div>
                   {distribution.isCanceled ? (
-                    <div className="rdm-dist-note warn">Canceled. Reclaim available on dashboard.</div>
+                    <div className="rdm-dist-note warn">Canceled. Reclaim available on your dashboard.</div>
                   ) : (
                     <div className="rdm-payout-slip">
                       <div className="rdm-slip-row head">
