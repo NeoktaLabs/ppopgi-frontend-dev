@@ -1,3 +1,4 @@
+// src/components/SignInModal.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "../state/useSession";
 import {
@@ -175,7 +176,7 @@ export function SignInModal({ open, onClose }: Props) {
               <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
                 <div className="sim-header">
                   <div>
-                    <h2 className="sim-title">Select Ledger account</h2>
+                    <h2 className="sim-title">Select Account</h2>
                     <div className="sim-subtitle">Choose a derivation path and pick an address</div>
                   </div>
                   <button className="sim-close-btn" onClick={() => setPickerOpen(false)}>
@@ -184,9 +185,10 @@ export function SignInModal({ open, onClose }: Props) {
                 </div>
 
                 <div className="sim-body">
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-                    <label style={{ fontWeight: 700, fontSize: 13, opacity: 0.85 }}>Path</label>
+                  <div className="sim-picker-row">
+                    <label className="sim-picker-label">Path</label>
                     <select
+                      className="sim-select"
                       value={pathPreset.id}
                       onChange={(e) => {
                         const next = LEDGER_PATH_PRESETS.find((p) => p.id === e.target.value) || LEDGER_PATH_PRESETS[0];
@@ -194,7 +196,6 @@ export function SignInModal({ open, onClose }: Props) {
                         setScanRows([]);
                         setSelectedRow(null);
                       }}
-                      style={{ flex: 1, padding: 10, borderRadius: 10 }}
                     >
                       {LEDGER_PATH_PRESETS.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -204,40 +205,32 @@ export function SignInModal({ open, onClose }: Props) {
                     </select>
 
                     <button
-                      className="sim-ledger-btn"
-                      style={{ width: 150 }}
+                      className="sim-scan-btn"
                       onClick={doScan}
                       disabled={scanBusy}
                     >
-                      {scanBusy ? "Scanning..." : "Scan"}
+                      {scanBusy ? "..." : "Scan"}
                     </button>
                   </div>
 
                   {scanRows.length > 0 ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                    <div className="sim-address-list">
                       {scanRows.map((row) => {
                         const picked = selectedRow?.path === row.path;
                         return (
                           <button
                             key={row.path}
+                            className={`sim-address-item ${picked ? "selected" : ""}`}
                             onClick={() => setSelectedRow(row)}
-                            style={{
-                              textAlign: "left",
-                              padding: 12,
-                              borderRadius: 12,
-                              border: picked ? "2px solid #db2777" : "1px solid rgba(0,0,0,0.12)",
-                              background: picked ? "rgba(219,39,119,0.06)" : "#fff",
-                              cursor: "pointer",
-                            }}
                           >
-                            <div style={{ fontWeight: 900 }}>{shortAddr(row.address)}</div>
-                            <div style={{ fontSize: 12, opacity: 0.75 }}>{row.path}</div>
+                            <div className="sim-address-val">{shortAddr(row.address)}</div>
+                            <div className="sim-address-path">{row.path}</div>
                           </button>
                         );
                       })}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, opacity: 0.75, marginBottom: 12 }}>
+                    <div className="sim-empty-msg">
                       Click <b>Scan</b> to fetch the first few Ledger addresses for this path.
                     </div>
                   )}
@@ -246,12 +239,11 @@ export function SignInModal({ open, onClose }: Props) {
                     className="sim-ledger-btn"
                     onClick={confirmLedgerSelection}
                     disabled={!selectedRow || isConnecting || isLedgerConnecting}
-                    style={{ width: "100%" }}
                   >
                     Use selected address
                   </button>
 
-                  <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
+                  <div className="sim-footer-hint">
                     Make sure the <b>Ethereum app</b> is open on your Ledger.
                   </div>
                 </div>
