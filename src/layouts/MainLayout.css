@@ -19,10 +19,11 @@
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   position: relative;
   overflow-x: hidden;
-  background-color: var(--soft-cream);
+  /* Removed the solid background color so it doesn't interfere */
+  background-color: transparent; 
 }
 
-/* The fixed background layer */
+/* The fixed background layer (Your images) */
 .layout-bg {
   position: fixed;
   inset: 0;
@@ -33,23 +34,21 @@
   transition: opacity 0.5s ease;
 }
 
-/* The global overlay gradient (dreamy festival glass effect) */
+/* The global overlay gradient (Restored transparency!) */
 .layout-overlay {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   
-  /* Soft lantern-like glows using the Ppopgi palette */
+  /* Extremely light lantern-like glows so your image is the star */
   background:
-      radial-gradient(800px 600px at 10% 0%, rgba(246, 182, 200, 0.45), transparent 70%), /* Sakura Pink */
-      radial-gradient(800px 600px at 90% 5%, rgba(169, 212, 255, 0.4), transparent 70%),  /* Sky Pastel */
-      radial-gradient(900px 600px at 50% 100%, rgba(255, 216, 154, 0.25), transparent 70%), /* Warm Lantern */
-      rgba(255, 246, 239, 0.5); /* Soft Cream tint over the background */
+      radial-gradient(800px 600px at 10% 0%, rgba(246, 182, 200, 0.15), transparent 70%),
+      radial-gradient(800px 600px at 90% 5%, rgba(169, 212, 255, 0.15), transparent 70%), 
+      radial-gradient(900px 600px at 50% 100%, rgba(255, 216, 154, 0.1), transparent 70%), 
+      rgba(255, 255, 255, 0.05); /* Barely-there tint */
   
-  /* Blurs the background images for a soft-focus, cute aesthetic */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* Removed the blur completely so your background images are sharp and visible */
 }
 
 /* The scrollable content area */
@@ -58,7 +57,7 @@
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 32px 24px; /* Slightly increased for a more airy feel */
+  padding: 32px 24px; 
   position: relative;
   z-index: 1;
 }
