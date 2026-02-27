@@ -65,12 +65,12 @@
   transition: background 0.2s ease, transform 0.12s ease;
 }
 
-/* Very soft, almost imperceptible striping */
-.ab-row:nth-child(odd) { background: rgba(250, 209, 184, 0.05); } 
-.ab-row:nth-child(even){ background: rgba(169, 212, 255, 0.05); }
+/* More visible pastel striping for desktop readability */
+.ab-row:nth-child(odd) { background: rgba(246, 182, 200, 0.12); } /* Soft Sakura */
+.ab-row:nth-child(even){ background: rgba(169, 212, 255, 0.15); } /* Soft Sky */
 
 .ab-row:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .ab-row:last-child {
