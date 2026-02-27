@@ -90,11 +90,22 @@ export default function App() {
   const [cashierOpen, setCashierOpen] = useState(false);
 
   // 5) Disclaimer gate
+  // ✅ allow browsing info pages without accepting
+  const shouldGateThisPage = page !== "faq" && page !== "about";
+
   const [showGate, setShowGate] = useState(false);
   useEffect(() => {
     const hasAccepted = localStorage.getItem("ppopgi_terms_accepted");
+
+    // ✅ if user is on FAQ/About, don't show the gate
+    if (!shouldGateThisPage) {
+      setShowGate(false);
+      return;
+    }
+
     if (!hasAccepted) setShowGate(true);
-  }, []);
+    else setShowGate(false);
+  }, [shouldGateThisPage]);
 
   const handleAcceptGate = () => {
     localStorage.setItem("ppopgi_terms_accepted", "true");
@@ -228,6 +239,7 @@ export default function App() {
     <>
       <GlobalDataRefresher intervalMs={5000} />
 
+      {/* ✅ Gate is auto-disabled on FAQ/About via showGate */}
       <DisclaimerGate open={showGate} onAccept={handleAcceptGate} />
 
       <MainLayout
