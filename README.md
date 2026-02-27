@@ -1,3 +1,5 @@
+# Ppopgi (뽑기) Frontend
+
 Ppopgi Frontend is the **user interface** of the Ppopgi on-chain raffle protocol, built to provide a smooth and intuitive experience for creating lotteries, buying tickets and tracking outcomes on **Etherlink**.
 
 The app is a modern React + TypeScript single-page application powered by Vite. It integrates directly with the deployed smart contracts for all state-changing interactions while leveraging the Ppopgi subgraph for fast reads, activity feeds and historical data.
