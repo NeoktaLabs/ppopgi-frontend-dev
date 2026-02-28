@@ -18,7 +18,6 @@ function numOr0(v?: string | null) {
 function intOr0(v?: string | number | null) {
   const n = typeof v === "number" ? v : Number(v ?? 0);
   if (!Number.isFinite(n)) return 0;
-  // sold should never be negative, but clamp anyway
   return Math.max(0, Math.floor(n));
 }
 
@@ -50,6 +49,79 @@ function shouldFallback(note: string | null) {
   );
 }
 
+// --------------------- GlobalStats fetching ---------------------
+
+type GlobalStatsRow = {
+  totalLotteriesCreated: string;
+  totalLotteriesSettled: string;
+  totalLotteriesCanceled: string;
+  totalTicketsSold: string;
+  totalTicketRevenueUSDC: string;
+  totalPrizesSettledUSDC: string;
+  activeVolumeUSDC: string;
+  updatedAt: string;
+  updatedTx: string;
+};
+
+function getSubgraphUrl(): string | null {
+  // ✅ Works with Vite (recommended)
+  const vite = (import.meta as any)?.env?.VITE_SUBGRAPH_URL;
+  if (vite && typeof vite === "string") return vite;
+
+  // ✅ Works with CRA/Next-style envs
+  const nodeEnv = (process as any)?.env?.REACT_APP_SUBGRAPH_URL || (process as any)?.env?.SUBGRAPH_URL;
+  if (nodeEnv && typeof nodeEnv === "string") return nodeEnv;
+
+  return null;
+}
+
+async function fetchGlobalStats(): Promise<GlobalStatsRow | null> {
+  const url = getSubgraphUrl();
+  if (!url) return null;
+
+  const query = `
+    query GlobalStatsBillboard {
+      globalStats(id: "global") {
+        totalLotteriesCreated
+        totalLotteriesSettled
+        totalLotteriesCanceled
+        totalTicketsSold
+        totalTicketRevenueUSDC
+        totalPrizesSettledUSDC
+        activeVolumeUSDC
+        updatedAt
+        updatedTx
+      }
+    }
+  `;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!res.ok) return null;
+
+  const json = await res.json();
+  const row = json?.data?.globalStats as GlobalStatsRow | null;
+  return row ?? null;
+}
+
+function bigIntFromString(v?: string | null): bigint {
+  try {
+    return BigInt(v ?? "0");
+  } catch {
+    return 0n;
+  }
+}
+
+function intFromString(v?: string | null): number {
+  return intOr0(v ?? "0");
+}
+
+// --------------------- hook ---------------------
+
 export function useHomeLotteries() {
   // ✅ Shared store snapshot (indexer)
   const store = useLotteryStore("home", 20_000);
@@ -62,6 +134,12 @@ export function useHomeLotteries() {
   const [note, setNote] = useState<string | null>(null);
   const [liveItems, setLiveItems] = useState<LotteryListItem[] | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
+
+  // ✅ GlobalStats state (billboard)
+  const [globalRow, setGlobalRow] = useState<GlobalStatsRow | null>(null);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const lastGlobalAtRef = useRef<number>(0);
+  const GLOBAL_CACHE_MS = 15_000;
 
   // Prevent hammering live fallback
   const lastLiveAtRef = useRef<number>(0);
@@ -97,7 +175,29 @@ export function useHomeLotteries() {
     void refreshLotteryStore(false, true);
   }, []);
 
-  // ✅ Background refresh on revalidate tick (throttled) — use soft refresh to avoid UI snapping
+  // ✅ Fetch GlobalStats (throttled)
+  const refreshGlobalStats = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastGlobalAtRef.current < GLOBAL_CACHE_MS) return;
+    lastGlobalAtRef.current = now;
+
+    setGlobalLoading(true);
+    try {
+      const row = await fetchGlobalStats();
+      if (row) setGlobalRow(row);
+    } catch {
+      // silent: we'll fallback to computed stats
+    } finally {
+      setGlobalLoading(false);
+    }
+  }, []);
+
+  // initial fetch
+  useEffect(() => {
+    void refreshGlobalStats(true);
+  }, [refreshGlobalStats]);
+
+  // ✅ Background refresh on revalidate tick (throttled)
   useEffect(() => {
     if (!rvTick) return;
 
@@ -106,7 +206,8 @@ export function useHomeLotteries() {
     lastRvAtRef.current = now;
 
     softRefetch();
-  }, [rvTick, softRefetch]);
+    void refreshGlobalStats(false);
+  }, [rvTick, softRefetch, refreshGlobalStats]);
 
   // If we have indexer data, always prefer it and exit live mode
   useEffect(() => {
@@ -115,8 +216,11 @@ export function useHomeLotteries() {
       setNote(null);
       setLiveItems(null);
       setLiveLoading(false);
+
+      // also opportunistically refresh global stats
+      void refreshGlobalStats(false);
     }
-  }, [indexerItems]);
+  }, [indexerItems, refreshGlobalStats]);
 
   // If indexer is rate-limited, surface the note but do NOT flip to live
   useEffect(() => {
@@ -133,7 +237,6 @@ export function useHomeLotteries() {
       shouldFallback(indexerNote);
 
     if (!canTry) {
-      // if store has an error note, show it (but don't constantly overwrite)
       if (indexerNote && !isRateLimitNote(indexerNote)) setNote(indexerNote);
       return;
     }
@@ -217,26 +320,45 @@ export function useHomeLotteries() {
       .slice(0, 5);
   }, [all, mode]);
 
-  // ✅ REAL billboard stats (no fake drift)
+  // ✅ Billboard stats: prefer GlobalStats (O(1)) when indexer mode
   const stats = useMemo(() => {
+    // ---- If we have GlobalStats and we're in indexer mode, use it ----
+    if (mode === "indexer" && globalRow) {
+      return {
+        // keep your existing keys used by HomePage
+        totalLotteries: intFromString(globalRow.totalLotteriesCreated),
+        totalTicketsSold: intFromString(globalRow.totalTicketsSold),
+        settledVolume: bigIntFromString(globalRow.totalPrizesSettledUSDC), // micro-USDC
+        activeVolume: bigIntFromString(globalRow.activeVolumeUSDC),        // micro-USDC
+
+        // add these so HomePage can use them instead of filtering items
+        totalLotteriesSettled: intFromString(globalRow.totalLotteriesSettled),
+        totalLotteriesCanceled: intFromString(globalRow.totalLotteriesCanceled),
+
+        // optional extra fields (in case you want them later)
+        totalTicketRevenueUSDC: bigIntFromString(globalRow.totalTicketRevenueUSDC),
+        updatedAt: intFromString(globalRow.updatedAt),
+        updatedTx: globalRow.updatedTx,
+      };
+    }
+
+    // ---- Otherwise fallback to computed (works for live mode / early indexing) ----
     const totalLotteries = all.length;
 
-    // ✅ total tickets sold across ALL lotteries (OPEN, COMPLETED, CANCELED…)
-    const totalTicketsSold = all.reduce((acc, r) => {
-      return acc + intOr0(r.sold);
-    }, 0);
+    const totalTicketsSold = all.reduce((acc, r) => acc + intOr0(r.sold), 0);
 
-    // ✅ total prizes settled = COMPLETED only
     const settledVolume = all.reduce((acc, r) => {
       if (r.status === "COMPLETED") return acc + BigInt(r.winningPot || "0");
       return acc;
     }, 0n);
 
-    // ✅ active volume = OPEN + FUNDING_PENDING only
     const activeVolume = active.reduce((acc, r) => acc + BigInt(r.winningPot || "0"), 0n);
 
-    return { totalLotteries, totalTicketsSold, settledVolume, activeVolume };
-  }, [all, active]);
+    const totalLotteriesSettled = all.filter((r) => r.status === "COMPLETED").length;
+    const totalLotteriesCanceled = all.filter((r) => r.status === "CANCELED").length;
+
+    return { totalLotteries, totalTicketsSold, settledVolume, activeVolume, totalLotteriesSettled, totalLotteriesCanceled };
+  }, [all, active, mode, globalRow]);
 
   return {
     items,
@@ -246,7 +368,7 @@ export function useHomeLotteries() {
     stats,
     mode,
     note,
-    isLoading,
+    isLoading: isLoading || (mode === "indexer" && globalLoading && !globalRow),
     refetch, // manual/hard refresh
   };
 }
