@@ -8,7 +8,7 @@ import {
   useConnect,
   useDisconnect,
 } from "thirdweb/react";
-import { createWallet } from "thirdweb/wallets";
+import { createWallet, inAppWallet } from "thirdweb/wallets"; // ✅ added inAppWallet
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { useLedgerUsbWallet } from "../hooks/ledgerUsbWallet";
@@ -19,7 +19,8 @@ type Props = {
   onClose: () => void;
 };
 
-const shortAddr = (a: string) => (a ? `${a.slice(0, 6)}...${a.slice(-4)}` : "—");
+const shortAddr = (a: string) =>
+  a ? `${a.slice(0, 6)}...${a.slice(-4)}` : "—";
 
 const LEDGER_PATH_PRESETS = [
   { id: "ledgerlive", label: "Ledger Live", base: "44'/60'/0'/0" },
@@ -33,7 +34,8 @@ export function SignInModal({ open, onClose }: Props) {
   const wallet = useActiveWallet();
   const { disconnect } = useDisconnect();
 
-  const { connect, isConnecting, error: connectError } = useConnect({ client: thirdwebClient });
+  const { connect, isConnecting, error: connectError } =
+    useConnect({ client: thirdwebClient });
 
   const {
     ensureLedgerDevice,
@@ -50,11 +52,23 @@ export function SignInModal({ open, onClose }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pathPreset, setPathPreset] = useState(LEDGER_PATH_PRESETS[0]);
   const [scanBusy, setScanBusy] = useState(false);
-  const [scanRows, setScanRows] = useState<{ path: string; address: string }[]>([]);
-  const [selectedRow, setSelectedRow] = useState<{ path: string; address: string } | null>(null);
+  const [scanRows, setScanRows] = useState<
+    { path: string; address: string }[]
+  >([]);
+  const [selectedRow, setSelectedRow] = useState<{
+    path: string;
+    address: string;
+  } | null>(null);
 
   const errorMessage = useMemo(() => {
-    return localError || ledgerError || (connectError ? String(connectError.message || connectError) : "") || "";
+    return (
+      localError ||
+      ledgerError ||
+      (connectError
+        ? String(connectError.message || connectError)
+        : "") ||
+      ""
+    );
   }, [localError, ledgerError, connectError]);
 
   useEffect(() => {
@@ -84,12 +98,13 @@ export function SignInModal({ open, onClose }: Props) {
   const openLedgerPicker = async () => {
     setLocalError("");
     if (!isLedgerSupported) {
-      setLocalError("Ledger USB requires Chrome/Edge/Brave (WebHID).");
+      setLocalError(
+        "Ledger USB requires Chrome/Edge/Brave (WebHID)."
+      );
       return;
     }
 
     try {
-      // ✅ Force HID chooser from user gesture
       await ensureLedgerDevice();
       setPickerOpen(true);
     } catch (e: any) {
@@ -142,13 +157,21 @@ export function SignInModal({ open, onClose }: Props) {
 
   return (
     <div className="sim-overlay" onMouseDown={onClose}>
-      <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="sim-card"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="sim-header">
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
-            <div className="sim-subtitle">Connect your wallet to start playing</div>
+            <div className="sim-subtitle">
+              Connect your wallet to start playing
+            </div>
           </div>
-          <button className="sim-close-btn" onClick={onClose}>
+          <button
+            className="sim-close-btn"
+            onClick={onClose}
+          >
             ✕
           </button>
         </div>
@@ -159,111 +182,42 @@ export function SignInModal({ open, onClose }: Props) {
             <button
               className="sim-ledger-btn"
               onClick={openLedgerPicker}
-              disabled={!isLedgerSupported || isConnecting || isLedgerConnecting}
+              disabled={
+                !isLedgerSupported ||
+                isConnecting ||
+                isLedgerConnecting
+              }
             >
               <span className="sim-ledger-btn-text">
-                {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
+                {isLedgerConnecting
+                  ? "Connecting Ledger..."
+                  : "Connect Ledger (USB)"}
               </span>
-              <span className="sim-ledger-badge">Chromium</span>
+              <span className="sim-ledger-badge">
+                Chromium
+              </span>
             </button>
 
             <div className="sim-ledger-hint">
-              Plug in your Ledger, unlock it, and open the <b>Ethereum</b> app.
+              Plug in your Ledger, unlock it, and open
+              the <b>Ethereum</b> app.
               <br />
               (Chrome / Edge / Brave only)
             </div>
 
-            {errorMessage && <div className="sim-error">{errorMessage}</div>}
-          </div>
-
-          {/* Ledger Picker */}
-          {pickerOpen && (
-            <div
-              className="sim-overlay"
-              style={{ zIndex: 9999 }}
-              onMouseDown={() => setPickerOpen(false)}
-            >
-              <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
-                <div className="sim-header">
-                  <div>
-                    <h2 className="sim-title">Select Account</h2>
-                    <div className="sim-subtitle">Choose a derivation path and pick an address</div>
-                  </div>
-                  <button className="sim-close-btn" onClick={() => setPickerOpen(false)}>
-                    ✕
-                  </button>
-                </div>
-
-                <div className="sim-body">
-                  <div className="sim-picker-row">
-                    <label className="sim-picker-label">Path</label>
-                    <select
-                      className="sim-select"
-                      value={pathPreset.id}
-                      onChange={(e) => {
-                        const next =
-                          LEDGER_PATH_PRESETS.find((p) => p.id === e.target.value) ||
-                          LEDGER_PATH_PRESETS[0];
-                        setPathPreset(next);
-                        setScanRows([]);
-                        setSelectedRow(null);
-                      }}
-                    >
-                      {LEDGER_PATH_PRESETS.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.label} ({p.base}/0)
-                        </option>
-                      ))}
-                    </select>
-
-                    <button className="sim-scan-btn" onClick={doScan} disabled={scanBusy}>
-                      {scanBusy ? "..." : "Scan"}
-                    </button>
-                  </div>
-
-                  {scanRows.length > 0 ? (
-                    <div className="sim-address-list">
-                      {scanRows.map((row) => {
-                        const picked = selectedRow?.path === row.path;
-                        return (
-                          <button
-                            key={row.path}
-                            className={`sim-address-item ${picked ? "selected" : ""}`}
-                            onClick={() => setSelectedRow(row)}
-                          >
-                            <div className="sim-address-val">{shortAddr(row.address)}</div>
-                            <div className="sim-address-path">{row.path}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="sim-empty-msg">
-                      Click <b>Scan</b> to fetch Ledger addresses.
-                    </div>
-                  )}
-
-                  <button
-                    className="sim-ledger-btn"
-                    onClick={confirmLedgerSelection}
-                    disabled={!selectedRow || isConnecting || isLedgerConnecting}
-                  >
-                    Use selected address
-                  </button>
-
-                  <div className="sim-footer-hint">
-                    Make sure the <b>Ethereum app</b> is open on your Ledger.
-                  </div>
-                </div>
+            {errorMessage && (
+              <div className="sim-error">
+                {errorMessage}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Divider */}
           <div className="sim-divider">
             <span>or</span>
           </div>
 
+          {/* ✅ Social + Email + Wallets */}
           <div className="sim-embed-wrapper">
             <ConnectEmbed
               client={thirdwebClient}
@@ -273,6 +227,24 @@ export function SignInModal({ open, onClose }: Props) {
               modalSize="compact"
               showThirdwebBranding={false}
               wallets={[
+                // 🔐 Email + Social login
+                inAppWallet({
+                  auth: {
+                    options: [
+                      "email",
+                      "phone",
+                      "google",
+                      "apple",
+                      "facebook",
+                      "discord",
+                      "farcaster",
+                      "passkey",
+                    ],
+                  },
+                  metadata: { name: "Ppopgi" },
+                }),
+
+                // 🔌 Standard wallets
                 createWallet("io.metamask"),
                 createWallet("walletConnect"),
                 createWallet("com.coinbase.wallet"),
@@ -282,13 +254,17 @@ export function SignInModal({ open, onClose }: Props) {
 
           <div className="sim-footer">
             <div className="sim-note">
-              By connecting, you agree to the rules of the lottery.
+              By connecting, you agree to the rules of
+              the lottery.
               <br />
               Always check the URL before signing.
             </div>
 
             {wallet && (
-              <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
+              <button
+                className="sim-disconnect-btn"
+                onClick={() => disconnect(wallet)}
+              >
                 Disconnect current session
               </button>
             )}
