@@ -70,8 +70,8 @@ const BANNER_MESSAGES = [
   { id: "cashier", text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC", action: openCashierFromHome },
   { id: "explore", text: "🔎 Discover all lotteries from the Explore page", action: () => navigateFromHome("explore") },
   { id: "dashboard", text: "🎁 Visit your dashboard to reclaim prizes or tickets", action: () => navigateFromHome("dashboard") },
-  { id: "about", text: "📖 Read the story behind Ppopgi", action: () => navigateFromHome("about") },
-  { id: "faq", text: "❓ Learn how Ppopgi works (FAQ)", action: () => navigateFromHome("faq") },
+  { id: "about", text: "📖 Read the story behind Ppopgi (뽑기)", action: () => navigateFromHome("about") },
+  { id: "faq", text: "❓ Learn how Ppopgi (뽑기) works (FAQ)", action: () => navigateFromHome("faq") },
 ];
 
 function BannerSlider() {
@@ -296,7 +296,7 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
           <div className="hp-stats-dock hp-stats-billboard">
             {/* ✅ Title centered above stats */}
             <div className="hp-stats-title-wrap">
-              <div className="hp-stats-title">Live Ppopgi stats</div>
+              <div className="hp-stats-title">Live Ppopgi (뽑기) stats</div>
             </div>
 
             <div className="hp-stats-row">

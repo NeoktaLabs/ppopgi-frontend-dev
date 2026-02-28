@@ -148,7 +148,7 @@ export function SignInModal({ open, onClose }: Props) {
       <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="sim-header">
           <div>
-            <h2 className="sim-title">Welcome to Ppopgi</h2>
+            <h2 className="sim-title">Welcome to Ppopgi (뽑기)</h2>
             <div className="sim-subtitle">Connect your wallet to start playing</div>
           </div>
           <button className="sim-close-btn" onClick={onClose}>
