@@ -101,7 +101,7 @@ function BannerSlider() {
 
 /**
  * ✅ Billboard stat animation:
- * - First render animates from 0 -> target
+ * - First render animates from 0 -> target (slow start, fast finish)
  * - Subsequent updates animate from current -> next (for live updates)
  */
 function useAnimatedNumber(target: number, durationMs = 900) {
@@ -125,7 +125,13 @@ function useAnimatedNumber(target: number, durationMs = 900) {
 
     const tick = (now: number) => {
       const p = Math.min((now - start) / durationMs, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
+
+      // ✅ Ease-in (slow at the beginning, faster near the end)
+      // Options:
+      // - p * p (easeInQuad)
+      // - p * p * p (easeInCubic)  <-- slightly more dramatic
+      const eased = p * p * p;
+
       const next = Math.round(from + (to - from) * eased);
       setValue(next);
       if (p < 1) requestAnimationFrame(tick);
@@ -321,14 +327,18 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
               <div className="hp-stat-sep" />
 
               <div className="hp-stat-item">
-                <div className="hp-stat-val hp-count-pop">{isLoading ? "..." : fmtUsd(BigInt(animatedSettledUsd) * 1_000_000n)}</div>
+                <div className="hp-stat-val hp-count-pop">
+                  {isLoading ? "..." : fmtUsd(BigInt(animatedSettledUsd) * 1_000_000n)}
+                </div>
                 <div className="hp-stat-lbl">Prizes Settled</div>
               </div>
 
               <div className="hp-stat-sep" />
 
               <div className="hp-stat-item highlight">
-                <div className="hp-stat-val hp-count-pop">{isLoading ? "..." : fmtUsd(BigInt(animatedActiveUsd) * 1_000_000n)}</div>
+                <div className="hp-stat-val hp-count-pop">
+                  {isLoading ? "..." : fmtUsd(BigInt(animatedActiveUsd) * 1_000_000n)}
+                </div>
                 <div className="hp-stat-lbl">Active Volume</div>
               </div>
             </div>
