@@ -33,8 +33,7 @@ export function SignInModal({ open, onClose }: Props) {
   const wallet = useActiveWallet();
   const { disconnect } = useDisconnect();
 
-  const { connect, isConnecting, error: connectError } =
-    useConnect({ client: thirdwebClient });
+  const { connect, isConnecting, error: connectError } = useConnect({ client: thirdwebClient });
 
   const {
     ensureLedgerDevice,
@@ -147,9 +146,7 @@ export function SignInModal({ open, onClose }: Props) {
         <div className="sim-header">
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
-            <div className="sim-subtitle">
-              Connect your wallet to start playing
-            </div>
+            <div className="sim-subtitle">Connect your wallet to start playing</div>
           </div>
           <button className="sim-close-btn" onClick={onClose}>
             ✕
@@ -157,43 +154,6 @@ export function SignInModal({ open, onClose }: Props) {
         </div>
 
         <div className="sim-body">
-
-          {/* 🔌 DEBUG: HID TEST BUTTON */}
-          <button
-            onClick={() => {
-              console.log("=== HID TEST CLICK ===", {
-                isSecureContext: window.isSecureContext,
-                protocol: window.location.protocol,
-                topLevel: window.top === window.self,
-                hasHid: !!(navigator as any).hid,
-                hasRequestDevice: !!(navigator as any).hid?.requestDevice,
-              });
-
-              (navigator as any).hid
-                ?.requestDevice({ filters: [{ vendorId: 0x2c97 }] })
-                .then((devices: any[]) => {
-                  console.log("HID devices selected:", devices);
-                })
-                .catch((e: any) => {
-                  console.error(
-                    "HID requestDevice error:",
-                    e,
-                    e?.name,
-                    e?.message
-                  );
-                });
-            }}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 16,
-              borderRadius: 8,
-              fontWeight: 600,
-            }}
-          >
-            🔌 HID Test (Temporary Debug)
-          </button>
-
           {/* Ledger Section */}
           <div className="sim-ledger-section">
             <button
@@ -202,9 +162,7 @@ export function SignInModal({ open, onClose }: Props) {
               disabled={!isLedgerSupported || isConnecting || isLedgerConnecting}
             >
               <span className="sim-ledger-btn-text">
-                {isLedgerConnecting
-                  ? "Connecting Ledger..."
-                  : "Connect Ledger (USB)"}
+                {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
               </span>
               <span className="sim-ledger-badge">Chromium</span>
             </button>
@@ -220,14 +178,16 @@ export function SignInModal({ open, onClose }: Props) {
 
           {/* Ledger Picker */}
           {pickerOpen && (
-            <div className="sim-overlay" style={{ zIndex: 9999 }} onMouseDown={() => setPickerOpen(false)}>
+            <div
+              className="sim-overlay"
+              style={{ zIndex: 9999 }}
+              onMouseDown={() => setPickerOpen(false)}
+            >
               <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
                 <div className="sim-header">
                   <div>
                     <h2 className="sim-title">Select Account</h2>
-                    <div className="sim-subtitle">
-                      Choose a derivation path and pick an address
-                    </div>
+                    <div className="sim-subtitle">Choose a derivation path and pick an address</div>
                   </div>
                   <button className="sim-close-btn" onClick={() => setPickerOpen(false)}>
                     ✕
@@ -256,11 +216,7 @@ export function SignInModal({ open, onClose }: Props) {
                       ))}
                     </select>
 
-                    <button
-                      className="sim-scan-btn"
-                      onClick={doScan}
-                      disabled={scanBusy}
-                    >
+                    <button className="sim-scan-btn" onClick={doScan} disabled={scanBusy}>
                       {scanBusy ? "..." : "Scan"}
                     </button>
                   </div>
@@ -275,9 +231,7 @@ export function SignInModal({ open, onClose }: Props) {
                             className={`sim-address-item ${picked ? "selected" : ""}`}
                             onClick={() => setSelectedRow(row)}
                           >
-                            <div className="sim-address-val">
-                              {shortAddr(row.address)}
-                            </div>
+                            <div className="sim-address-val">{shortAddr(row.address)}</div>
                             <div className="sim-address-path">{row.path}</div>
                           </button>
                         );
@@ -334,10 +288,7 @@ export function SignInModal({ open, onClose }: Props) {
             </div>
 
             {wallet && (
-              <button
-                className="sim-disconnect-btn"
-                onClick={() => disconnect(wallet)}
-              >
+              <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
                 Disconnect current session
               </button>
             )}
