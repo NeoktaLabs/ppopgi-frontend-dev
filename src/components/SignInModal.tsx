@@ -21,7 +21,6 @@ type Props = {
 
 const shortAddr = (a: string) => (a ? `${a.slice(0, 6)}...${a.slice(-4)}` : "—");
 
-// common base paths
 const LEDGER_PATH_PRESETS = [
   { id: "ledgerlive", label: "Ledger Live", base: "44'/60'/0'/0" },
   { id: "legacy", label: "Legacy", base: "44'/60'/0'" },
@@ -34,9 +33,11 @@ export function SignInModal({ open, onClose }: Props) {
   const wallet = useActiveWallet();
   const { disconnect } = useDisconnect();
 
-  const { connect, isConnecting, error: connectError } = useConnect({ client: thirdwebClient });
+  const { connect, isConnecting, error: connectError } =
+    useConnect({ client: thirdwebClient });
 
   const {
+    ensureLedgerDevice,
     connectLedgerUsb,
     isSupported: isLedgerSupported,
     isConnecting: isLedgerConnecting,
@@ -47,7 +48,6 @@ export function SignInModal({ open, onClose }: Props) {
 
   const [localError, setLocalError] = useState("");
 
-  // ✅ NEW: picker modal state
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pathPreset, setPathPreset] = useState(LEDGER_PATH_PRESETS[0]);
   const [scanBusy, setScanBusy] = useState(false);
@@ -74,7 +74,6 @@ export function SignInModal({ open, onClose }: Props) {
   useEffect(() => {
     if (open) {
       setLocalError("");
-      // reset picker on open
       setPickerOpen(false);
       setScanRows([]);
       setSelectedRow(null);
@@ -89,18 +88,30 @@ export function SignInModal({ open, onClose }: Props) {
       setLocalError("Ledger USB requires Chrome/Edge/Brave (WebHID).");
       return;
     }
-    setPickerOpen(true);
+
+    try {
+      // ✅ Force HID chooser from user gesture
+      await ensureLedgerDevice();
+      setPickerOpen(true);
+    } catch (e: any) {
+      setLocalError(e?.message || "Failed to select Ledger device.");
+    }
   };
 
   const doScan = async () => {
     setLocalError("");
     setScanBusy(true);
     setSelectedRow(null);
+
     try {
-      const rows = await scanAccounts({ basePath: pathPreset.base, startIndex: 0, count: 5 });
+      const rows = await scanAccounts({
+        basePath: pathPreset.base,
+        startIndex: 0,
+        count: 5,
+      });
       setScanRows(rows);
     } catch (e: any) {
-      setLocalError(e?.message ? String(e.message) : "Failed to scan Ledger accounts.");
+      setLocalError(e?.message || "Failed to scan Ledger accounts.");
     } finally {
       setScanBusy(false);
     }
@@ -111,7 +122,6 @@ export function SignInModal({ open, onClose }: Props) {
 
     setLocalError("");
     try {
-      // ✅ set the selected session (path + address) BEFORE connecting thirdweb wallet
       await setSelectedPath(selectedRow.path);
 
       await connect(async () => {
@@ -125,7 +135,7 @@ export function SignInModal({ open, onClose }: Props) {
 
       setPickerOpen(false);
     } catch (e: any) {
-      setLocalError(e?.message ? String(e.message) : "Failed to connect Ledger.");
+      setLocalError(e?.message || "Failed to connect Ledger.");
     }
   };
 
@@ -134,29 +144,67 @@ export function SignInModal({ open, onClose }: Props) {
   return (
     <div className="sim-overlay" onMouseDown={onClose}>
       <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="sim-header">
           <div>
             <h2 className="sim-title">Welcome to Ppopgi</h2>
-            <div className="sim-subtitle">Connect your wallet to start playing</div>
+            <div className="sim-subtitle">
+              Connect your wallet to start playing
+            </div>
           </div>
           <button className="sim-close-btn" onClick={onClose}>
             ✕
           </button>
         </div>
 
-        {/* Body */}
         <div className="sim-body">
-          {/* Ledger USB section */}
+
+          {/* 🔌 DEBUG: HID TEST BUTTON */}
+          <button
+            onClick={() => {
+              console.log("=== HID TEST CLICK ===", {
+                isSecureContext: window.isSecureContext,
+                protocol: window.location.protocol,
+                topLevel: window.top === window.self,
+                hasHid: !!(navigator as any).hid,
+                hasRequestDevice: !!(navigator as any).hid?.requestDevice,
+              });
+
+              (navigator as any).hid
+                ?.requestDevice({ filters: [{ vendorId: 0x2c97 }] })
+                .then((devices: any[]) => {
+                  console.log("HID devices selected:", devices);
+                })
+                .catch((e: any) => {
+                  console.error(
+                    "HID requestDevice error:",
+                    e,
+                    e?.name,
+                    e?.message
+                  );
+                });
+            }}
+            style={{
+              width: "100%",
+              padding: 12,
+              marginBottom: 16,
+              borderRadius: 8,
+              fontWeight: 600,
+            }}
+          >
+            🔌 HID Test (Temporary Debug)
+          </button>
+
+          {/* Ledger Section */}
           <div className="sim-ledger-section">
             <button
               className="sim-ledger-btn"
               onClick={openLedgerPicker}
               disabled={!isLedgerSupported || isConnecting || isLedgerConnecting}
-              title={!isLedgerSupported ? "Ledger USB requires Chrome/Edge/Brave (WebHID)" : ""}
             >
               <span className="sim-ledger-btn-text">
-                {isLedgerConnecting ? "Connecting Ledger..." : "Connect Ledger (USB)"}
+                {isLedgerConnecting
+                  ? "Connecting Ledger..."
+                  : "Connect Ledger (USB)"}
               </span>
               <span className="sim-ledger-badge">Chromium</span>
             </button>
@@ -164,20 +212,22 @@ export function SignInModal({ open, onClose }: Props) {
             <div className="sim-ledger-hint">
               Plug in your Ledger, unlock it, and open the <b>Ethereum</b> app.
               <br />
-              (Works on Chrome / Edge / Brave via WebHID)
+              (Chrome / Edge / Brave only)
             </div>
 
             {errorMessage && <div className="sim-error">{errorMessage}</div>}
           </div>
 
-          {/* ✅ NEW: Ledger Picker Modal */}
+          {/* Ledger Picker */}
           {pickerOpen && (
             <div className="sim-overlay" style={{ zIndex: 9999 }} onMouseDown={() => setPickerOpen(false)}>
               <div className="sim-card" onMouseDown={(e) => e.stopPropagation()}>
                 <div className="sim-header">
                   <div>
                     <h2 className="sim-title">Select Account</h2>
-                    <div className="sim-subtitle">Choose a derivation path and pick an address</div>
+                    <div className="sim-subtitle">
+                      Choose a derivation path and pick an address
+                    </div>
                   </div>
                   <button className="sim-close-btn" onClick={() => setPickerOpen(false)}>
                     ✕
@@ -191,7 +241,9 @@ export function SignInModal({ open, onClose }: Props) {
                       className="sim-select"
                       value={pathPreset.id}
                       onChange={(e) => {
-                        const next = LEDGER_PATH_PRESETS.find((p) => p.id === e.target.value) || LEDGER_PATH_PRESETS[0];
+                        const next =
+                          LEDGER_PATH_PRESETS.find((p) => p.id === e.target.value) ||
+                          LEDGER_PATH_PRESETS[0];
                         setPathPreset(next);
                         setScanRows([]);
                         setSelectedRow(null);
@@ -223,7 +275,9 @@ export function SignInModal({ open, onClose }: Props) {
                             className={`sim-address-item ${picked ? "selected" : ""}`}
                             onClick={() => setSelectedRow(row)}
                           >
-                            <div className="sim-address-val">{shortAddr(row.address)}</div>
+                            <div className="sim-address-val">
+                              {shortAddr(row.address)}
+                            </div>
                             <div className="sim-address-path">{row.path}</div>
                           </button>
                         );
@@ -231,7 +285,7 @@ export function SignInModal({ open, onClose }: Props) {
                     </div>
                   ) : (
                     <div className="sim-empty-msg">
-                      Click <b>Scan</b> to fetch the first few Ledger addresses for this path.
+                      Click <b>Scan</b> to fetch Ledger addresses.
                     </div>
                   )}
 
@@ -256,7 +310,6 @@ export function SignInModal({ open, onClose }: Props) {
             <span>or</span>
           </div>
 
-          {/* Thirdweb embed */}
           <div className="sim-embed-wrapper">
             <ConnectEmbed
               client={thirdwebClient}
@@ -273,7 +326,6 @@ export function SignInModal({ open, onClose }: Props) {
             />
           </div>
 
-          {/* Footer */}
           <div className="sim-footer">
             <div className="sim-note">
               By connecting, you agree to the rules of the lottery.
@@ -282,7 +334,10 @@ export function SignInModal({ open, onClose }: Props) {
             </div>
 
             {wallet && (
-              <button className="sim-disconnect-btn" onClick={() => disconnect(wallet)}>
+              <button
+                className="sim-disconnect-btn"
+                onClick={() => disconnect(wallet)}
+              >
                 Disconnect current session
               </button>
             )}
