@@ -191,6 +191,9 @@
   gap: 12px;
   align-items: center;
   margin-bottom: 20px;
+
+  /* ✅ FIX: prevent select from pushing Scan off-screen */
+  flex-wrap: wrap;
 }
 
 .sim-picker-label {
@@ -215,6 +218,9 @@
   transition: all 0.2s ease;
   outline: none;
   cursor: pointer;
+
+  /* ✅ FIX: allow select to shrink in flex row (prevents overflow) */
+  min-width: 0;
 }
 
 .sim-select:focus {
@@ -234,6 +240,10 @@
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+
+  /* ✅ FIX: keep button visible / not squashed */
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .sim-scan-btn:hover:not(:disabled) {
@@ -311,6 +321,13 @@
   opacity: 0.6;
   text-align: center;
   font-weight: 600;
+}
+
+/* ✅ Optional: on very small widths, make Scan full-width so it's impossible to miss */
+@media (max-width: 420px) {
+  .sim-scan-btn {
+    width: 100%;
+  }
 }
 
 /* --- Divider --- */
