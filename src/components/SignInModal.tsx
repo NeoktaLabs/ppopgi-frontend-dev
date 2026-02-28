@@ -232,12 +232,12 @@ export function SignInModal({ open, onClose }: Props) {
                   auth: {
                     options: [
                       "email",
-                      "phone",
+                      "x",
                       "google",
                       "apple",
                       "facebook",
                       "discord",
-                      "farcaster",
+                      "phone",
                       "passkey",
                     ],
                   },
