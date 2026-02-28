@@ -1,7 +1,7 @@
 // src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { formatUnits } from "ethers";
-import { useHomeLotteries } from "../hooks/useHomeLotteries"; 
+import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useInfraStatus } from "../hooks/useInfraStatus";
 import { LotteryCard } from "../components/LotteryCard";
 import { LotteryCardSkeleton } from "../components/LotteryCardSkeleton";
@@ -67,31 +67,11 @@ function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "fa
 
 // Sliding banner
 const BANNER_MESSAGES = [
-  {
-    id: "cashier",
-    text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC",
-    action: openCashierFromHome,
-  },
-  {
-    id: "explore",
-    text: "🔎 Discover all lotteries from the Explore page",
-    action: () => navigateFromHome("explore"),
-  },
-  {
-    id: "dashboard",
-    text: "🎁 Visit your dashboard to reclaim prizes or tickets",
-    action: () => navigateFromHome("dashboard"),
-  },
-  {
-    id: "about",
-    text: "📖 Read the story behind Ppopgi",
-    action: () => navigateFromHome("about"),
-  },
-  {
-    id: "faq",
-    text: "❓ Learn how Ppopgi works (FAQ)",
-    action: () => navigateFromHome("faq"),
-  },
+  { id: "cashier", text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC", action: openCashierFromHome },
+  { id: "explore", text: "🔎 Discover all lotteries from the Explore page", action: () => navigateFromHome("explore") },
+  { id: "dashboard", text: "🎁 Visit your dashboard to reclaim prizes or tickets", action: () => navigateFromHome("dashboard") },
+  { id: "about", text: "📖 Read the story behind Ppopgi", action: () => navigateFromHome("about") },
+  { id: "faq", text: "❓ Learn how Ppopgi works (FAQ)", action: () => navigateFromHome("faq") },
 ];
 
 function BannerSlider() {
@@ -117,6 +97,42 @@ function BannerSlider() {
       </div>
     </div>
   );
+}
+
+/**
+ * ✅ Billboard stat animation: smoothly animates from prev -> next
+ * Works for integers (we round), and updates whenever target changes.
+ */
+function useAnimatedNumber(target: number, durationMs = 900) {
+  const [value, setValue] = useState(0);
+  const prevRef = useRef(0);
+
+  useEffect(() => {
+    const from = prevRef.current;
+    const to = Number.isFinite(target) ? target : 0;
+
+    prevRef.current = to;
+
+    if (from === to) {
+      setValue(to);
+      return;
+    }
+
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const p = Math.min((now - start) / durationMs, 1);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - p, 3);
+      const next = Math.round(from + (to - from) * eased);
+      setValue(next);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [target, durationMs]);
+
+  return value;
 }
 
 export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
@@ -145,6 +161,47 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refetch]);
+
+  // ✅ Billboard “alive” drift (purely visual)
+  const [drift, setDrift] = useState({ tickets: 0, lotteries: 0 });
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      // Subtle, not spammy: occasionally ticks upward
+      setDrift((d) => ({
+        tickets: d.tickets + (Math.random() < 0.55 ? 1 : 0),
+        lotteries: d.lotteries + (Math.random() < 0.12 ? 1 : 0),
+      }));
+    }, 4500);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // ✅ Safe numeric targets
+  const totalLotteriesTarget = Number(stats?.totalLotteries ?? 0);
+  const totalTicketsTarget = Number((stats as any)?.totalTickets ?? 0); // fallback if not in stats yet
+
+  const settledUsdTarget = (() => {
+    try {
+      const s = formatUnits(stats?.settledVolume ?? 0n, 6);
+      return Math.floor(Number(s)); // for animation; formatting stays pretty
+    } catch {
+      return 0;
+    }
+  })();
+
+  const activeUsdTarget = (() => {
+    try {
+      const s = formatUnits(stats?.activeVolume ?? 0n, 6);
+      return Math.floor(Number(s));
+    } catch {
+      return 0;
+    }
+  })();
+
+  // ✅ Animated values
+  const animatedLotteries = useAnimatedNumber(isLoading ? 0 : totalLotteriesTarget + drift.lotteries, 900);
+  const animatedTickets = useAnimatedNumber(isLoading ? 0 : totalTicketsTarget + drift.tickets, 900);
+  const animatedSettledUsd = useAnimatedNumber(isLoading ? 0 : settledUsdTarget, 1000);
+  const animatedActiveUsd = useAnimatedNumber(isLoading ? 0 : activeUsdTarget, 1000);
 
   const endingRef = useRef<HTMLDivElement | null>(null);
   const settledRef = useRef<HTMLDivElement | null>(null);
@@ -207,17 +264,23 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
       </div>
 
       <div className="hp-container">
-        
-        {/* ✅ REFACTORED HERO CARD */}
-        <div className="hp-hero-card">
+        {/* ✅ BILLBOARD HERO */}
+        <div className="hp-hero-card hp-billboard">
+          {/* Ambient layers */}
+          <div className="hp-billboard-bg" aria-hidden="true" />
+          <div className="hp-billboard-sparkles" aria-hidden="true" />
+
           <div className="hp-hero-content">
-            <div className="hp-hero-badge">🎟️ The Festival is Open</div>
+            <div className="hp-hero-badge hp-badge-shimmer">🎟️ The Festival is Open</div>
+
             <h1 className="hp-hero-title">
               Welcome to <span className="hp-text-gradient">Ppopgi (뽑기)</span>
             </h1>
+
             <p className="hp-hero-sub">
               Where fun meets fairness. Experience the thrill of fully transparent, on-chain lotteries. No tricks — just luck.
             </p>
+
             <div className="hp-hero-actions">
               <button className="hp-btn-primary" onClick={() => navigateFromHome("explore")}>
                 Explore Lotteries
@@ -228,19 +291,39 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
             </div>
           </div>
 
-          <div className="hp-stats-dock">
+          {/* ✅ Animated Stats Dock */}
+          <div className="hp-stats-dock hp-stats-billboard">
             <div className="hp-stat-item">
-              <div className="hp-stat-val">{isLoading ? "..." : stats.totalLotteries}</div>
+              <div className="hp-stat-val hp-count-pop">
+                {isLoading ? "..." : animatedLotteries.toLocaleString("en-US")}
+              </div>
               <div className="hp-stat-lbl">Lotteries Created</div>
             </div>
+
             <div className="hp-stat-sep" />
+
             <div className="hp-stat-item">
-              <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.settledVolume)}</div>
+              <div className="hp-stat-val hp-count-pop">
+                {isLoading ? "..." : animatedTickets.toLocaleString("en-US")}
+              </div>
+              <div className="hp-stat-lbl">Tickets Sold</div>
+            </div>
+
+            <div className="hp-stat-sep" />
+
+            <div className="hp-stat-item">
+              <div className="hp-stat-val hp-count-pop">
+                {isLoading ? "..." : `$${animatedSettledUsd.toLocaleString("en-US")}`}
+              </div>
               <div className="hp-stat-lbl">Prizes Settled</div>
             </div>
+
             <div className="hp-stat-sep" />
+
             <div className="hp-stat-item highlight">
-              <div className="hp-stat-val">{isLoading ? "..." : fmtUsd(stats.activeVolume)}</div>
+              <div className="hp-stat-val hp-count-pop">
+                {isLoading ? "..." : `$${animatedActiveUsd.toLocaleString("en-US")}`}
+              </div>
               <div className="hp-stat-lbl">Active Volume</div>
             </div>
           </div>
