@@ -312,8 +312,8 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
 
                 {/* ✅ Sub-counts */}
                 <div className="hp-stat-sub">
-                  <span className="hp-chip settled">✅ {isLoading ? "..." : animatedSettledCount.toLocaleString("en-US")} settled</span>
-                  <span className="hp-chip canceled">❌ {isLoading ? "..." : animatedCanceledCount.toLocaleString("en-US")} canceled</span>
+                  <span className="hp-chip settled">✅ {isLoading ? "..." : animatedSettledCount.toLocaleString("en-US")} Settled</span>
+                  <span className="hp-chip canceled">❌ {isLoading ? "..." : animatedCanceledCount.toLocaleString("en-US")} Canceled</span>
                 </div>
               </div>
 
