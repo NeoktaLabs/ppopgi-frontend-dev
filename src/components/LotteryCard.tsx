@@ -1,13 +1,15 @@
 // src/components/LotteryCard.tsx
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { LotteryListItem } from "../indexer/subgraph"; // ✅ updated type
 import { useLotteryCard } from "../hooks/useLotteryCard";
+import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import "./LotteryCard.css";
 
-// ✅ NEW: shared UI formatter (removes trailing .0 by default)
+// ✅ shared UI formatter (removes trailing .0 by default)
 import { fmtUsdcUi } from "../lib/format";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
+const EXPLORER_TX_URL = "https://explorer.etherlink.com/tx/";
 
 type HatchUI = {
   show: boolean;
@@ -41,8 +43,8 @@ type Props = {
   finalizer?: FinalizerInfo | null;
 
   /**
-   * ✅ NEW: gate "Buy Ticket" behind sign-in
-   * - If isSignedIn === false, clicking Buy Ticket will open sign-in instead of the lottery modal.
+   * ✅ gate quick buy behind sign-in (same behavior as before)
+   * - If isSignedIn === false, clicking Buy Ticket will open sign-in instead of expanding.
    * - If you don't pass these props, behavior stays exactly the same as before.
    */
   isSignedIn?: boolean;
@@ -65,6 +67,12 @@ function fmtMinSec(sec: number): string {
   return `${m}m ${r}s`;
 }
 
+function clampTicketsUi(v: any) {
+  const n = Math.floor(Number(String(v ?? "").trim()));
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, n);
+}
+
 export function LotteryCard({
   lottery,
   onOpen,
@@ -80,6 +88,12 @@ export function LotteryCard({
   onOpenSignIn,
 }: Props) {
   const { ui, actions } = useLotteryCard(lottery, nowMs);
+
+  // ✅ Quick-buy expand state (local)
+  const [qbOpen, setQbOpen] = useState(false);
+
+  // ✅ Quick-buy engine (same logic as the modal, but only “active” when expanded)
+  const { state: qbState, math: qbMath, flags: qbFlags, actions: qbActions } = useLotteryInteraction(lottery.id, qbOpen);
 
   const statusRaw = String((lottery as any).status || "");
   const isOpenStatus = statusRaw === "OPEN";
@@ -140,7 +154,7 @@ export function LotteryCard({
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
 
-  // ✅ Prefer creator (new data), keep owner fallback only if you still have legacy rows somewhere.
+  // Prefer creator (new data), keep owner fallback only if legacy rows exist
   const hostAddr = (lottery as any).creator || (lottery as any).owner;
 
   const winRateLabel = useMemo(() => {
@@ -178,30 +192,114 @@ export function LotteryCard({
     );
   }, [endMode, maxReached]);
 
-  // ✅ Fix TS: title prop cannot be null
+  // Fix TS: title prop cannot be null
   const titleText = lottery.name ?? undefined;
   const displayName = lottery.name ?? "Lottery";
 
-  // ✅ NEW: remove trailing ".0" (and any decimals) for card display only
+  // Card display numbers (no decimals)
   const potUi = useMemo(() => fmtUsdcUi(ui.formattedPot, { maxDecimals: 0 }), [ui.formattedPot]);
   const priceUi = useMemo(() => fmtUsdcUi(ui.formattedPrice, { maxDecimals: 0 }), [ui.formattedPrice]);
 
-  // ✅ NEW: unified buy click handler (sign-in gate)
-  const handleBuyClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  // -------- Quick buy derived UI --------
+  const blurBuy = qbOpen && !qbState.isConnected;
+  const showSuccess = qbOpen && !!qbState.lastBuy;
 
-    // Only gate if caller explicitly tells us user is NOT signed in
-    // (keeps backward compat if you don't pass isSignedIn)
-    if (isSignedIn === false && onOpenSignIn) {
-      onOpenSignIn();
+  const ticketPriceU = useMemo(() => {
+    try {
+      return BigInt((lottery as any)?.ticketPrice || "0");
+    } catch {
+      return 0n;
+    }
+  }, [lottery]);
+
+  const affordableMaxBuy = useMemo(() => {
+    if (!qbState.usdcBal || ticketPriceU <= 0n) return Number.POSITIVE_INFINITY;
+    const max = qbState.usdcBal / ticketPriceU;
+    const capped = max > 10_000n ? 10_000 : Number(max);
+    return Math.max(0, capped);
+  }, [qbState.usdcBal, ticketPriceU]);
+
+  const remainingCap = Math.max(0, Number(qbMath.maxBuy || 0));
+  const effectiveMaxBuy = Number.isFinite(affordableMaxBuy) ? Math.max(0, Math.min(remainingCap, affordableMaxBuy)) : remainingCap;
+
+  const uiMaxForStepper = Math.max(1, effectiveMaxBuy);
+  const uiTicket = clampTicketsUi(qbState.tickets);
+  const clampedUiTicket = Math.min(uiTicket, uiMaxForStepper);
+
+  useEffect(() => {
+    if (!qbOpen) return;
+    if (String(clampedUiTicket) !== String(qbState.tickets)) qbActions.setTickets(String(clampedUiTicket));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qbOpen, uiMaxForStepper]);
+
+  const balanceUi = useMemo(() => fmtUsdcUi(qbMath.fmtUsdc(qbState.usdcBal?.toString() || "0")), [qbMath, qbState.usdcBal]);
+  const totalUi = useMemo(() => fmtUsdcUi(qbMath.fmtUsdc(qbMath.totalCostU.toString())), [qbMath, qbMath.totalCostU]);
+
+  const soldEffective = useMemo(() => {
+    const base = Number((lottery as any)?.sold || 0);
+    const add = qbState.lastBuy?.count || 0;
+    return Math.max(base, base + add);
+  }, [lottery, qbState.lastBuy?.count]);
+
+  const successOdds = useMemo(() => {
+    if (soldEffective <= 0) return "100%";
+    return clampPct(100 / soldEffective);
+  }, [soldEffective]);
+
+  const successSpentUi = useMemo(() => {
+    if (!qbState.lastBuy) return "0";
+    return fmtUsdcUi(qbMath.fmtUsdc(qbState.lastBuy.totalCostU.toString()));
+  }, [qbMath, qbState.lastBuy]);
+
+  const handleCollapseQuickBuy = useCallback(() => {
+    try {
+      qbActions.clearLastBuy?.();
+    } catch {}
+    setQbOpen(false);
+  }, [qbActions]);
+
+  // If lottery stops being “live”, close quick buy automatically
+  useEffect(() => {
+    if (!qbOpen) return;
+    if (!isLiveForCard) handleCollapseQuickBuy();
+  }, [qbOpen, isLiveForCard, handleCollapseQuickBuy]);
+
+  // Clicking card body opens modal (unless quick-buy is open)
+  const handleCardClick = useCallback(() => {
+    if (qbOpen) {
+      handleCollapseQuickBuy();
       return;
     }
-
     onOpen(lottery.id);
-  };
+  }, [qbOpen, handleCollapseQuickBuy, onOpen, lottery.id]);
+
+  // Click handler for “⚡ Buy Ticket” (expand quick buy)
+  const handleBuyClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!isLiveForCard) return;
+
+      // Gate only if caller explicitly says NOT signed in
+      if (isSignedIn === false && onOpenSignIn) {
+        onOpenSignIn();
+        return;
+      }
+
+      setQbOpen((v) => !v);
+    },
+    [isSignedIn, onOpenSignIn, isLiveForCard]
+  );
+
+  const handleOverlayConnectClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onOpenSignIn?.();
+    },
+    [onOpenSignIn]
+  );
 
   return (
-    <div className={cardClass} onClick={() => onOpen(lottery.id)} role="button" tabIndex={0}>
+    <div className={cardClass} onClick={handleCardClick} role="button" tabIndex={0}>
       <div className="rc-notch left" />
       <div className="rc-notch right" />
       {ui.copyMsg && <div className="rc-toast">{ui.copyMsg}</div>}
@@ -343,31 +441,224 @@ export function LotteryCard({
       <div className="rc-stub-container">
         <div className="rc-perforation-line" />
 
-        <div className="rc-stub-content">
-          {/* Action Button */}
-          {isLiveForCard ? (
-            <button className="rc-quick-buy-btn" onClick={handleBuyClick}>
-              ⚡ Buy Ticket
-            </button>
-          ) : (
-            endInfoBlock
+        <div className="rc-stub-content" onClick={(e) => e.stopPropagation()}>
+          {/* =========================
+              QUICK BUY (collapsed)
+             ========================= */}
+          {!qbOpen && (
+            <>
+              {isLiveForCard ? (
+                <button className="rc-quick-buy-btn" onClick={handleBuyClick}>
+                  ⚡ Buy Ticket
+                </button>
+              ) : (
+                endInfoBlock
+              )}
+
+              <div className="rc-stub-meta">
+                <div className="rc-meta-left">{isLiveForCard ? `Ends: ${ui.timeLeft}` : displayStatus}</div>
+                <div className="rc-meta-right">
+                  <a
+                    href={`${EXPLORER_URL}${lottery.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="rc-id-link"
+                  >
+                    #{lottery.id.slice(2, 8).toUpperCase()}
+                  </a>
+                </div>
+              </div>
+            </>
           )}
 
-          {/* Metadata */}
-          <div className="rc-stub-meta">
-            <div className="rc-meta-left">{isLiveForCard ? `Ends: ${ui.timeLeft}` : displayStatus}</div>
-            <div className="rc-meta-right">
-              <a
-                href={`${EXPLORER_URL}${lottery.id}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="rc-id-link"
-              >
-                #{lottery.id.slice(2, 8).toUpperCase()}
-              </a>
+          {/* =========================
+              QUICK BUY (expanded)
+             ========================= */}
+          {qbOpen && (
+            <div
+              style={{
+                borderRadius: 16,
+                padding: 12,
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: "rgba(255,255,255,0.75)",
+              }}
+            >
+              {showSuccess && qbState.lastBuy ? (
+                // ✅ SUCCESS VIEW
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 6 }}>✓ Tickets Purchased!</div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
+                    You bought <b>{qbState.lastBuy.count}</b> ticket{qbState.lastBuy.count === 1 ? "" : "s"}.
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 8,
+                      marginBottom: 10,
+                      textAlign: "left",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div style={{ padding: 10, borderRadius: 12, background: "rgba(0,0,0,0.03)" }}>
+                      <div style={{ fontSize: 10, opacity: 0.65, fontWeight: 800, marginBottom: 4, textTransform: "uppercase" }}>
+                        Spent
+                      </div>
+                      <div style={{ fontWeight: 900 }}>{successSpentUi} USDC</div>
+                    </div>
+
+                    <div style={{ padding: 10, borderRadius: 12, background: "rgba(0,0,0,0.03)" }}>
+                      <div style={{ fontSize: 10, opacity: 0.65, fontWeight: 800, marginBottom: 4, textTransform: "uppercase" }}>
+                        Current odds
+                      </div>
+                      <div style={{ fontWeight: 900 }}>{successOdds}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {qbState.lastBuy.txHash && (
+                      <a
+                        className="rc-quick-buy-btn"
+                        href={`${EXPLORER_TX_URL}${qbState.lastBuy.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ textDecoration: "none", textAlign: "center" }}
+                      >
+                        View Tx ↗
+                      </a>
+                    )}
+
+                    <button
+                      className="rc-quick-buy-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCollapseQuickBuy();
+                      }}
+                    >
+                      ← Back
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // ✅ COMPACT BUY VIEW (Prepare Wallet / Buy)
+                <div style={{ position: "relative" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 900, opacity: 0.7 }}>
+                    <span>Bal: {balanceUi} USDC</span>
+                    <span>Cap: {uiMaxForStepper}</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, marginBottom: 10 }}>
+                    <button
+                      className="rdm-step-btn"
+                      style={{ width: 46, height: 46, borderRadius: 14 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        qbActions.setTickets(String(Math.max(1, clampedUiTicket - 1)));
+                      }}
+                      disabled={clampedUiTicket <= 1}
+                    >
+                      −
+                    </button>
+
+                    <div style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900 }}>{clampedUiTicket}</div>
+                      <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.7 }}>Total: {totalUi} USDC</div>
+                    </div>
+
+                    <button
+                      className="rdm-step-btn"
+                      style={{ width: 46, height: 46, borderRadius: 14 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        qbActions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)));
+                      }}
+                      disabled={clampedUiTicket >= uiMaxForStepper}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {!qbFlags.hasEnoughAllowance ? (
+                      <button
+                        className="rc-quick-buy-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          qbActions.approve();
+                        }}
+                        disabled={qbState.isPending}
+                      >
+                        {qbState.isPending ? "Preparing..." : "1. Prepare Wallet"}
+                      </button>
+                    ) : (
+                      <button
+                        className="rc-quick-buy-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          qbActions.buy();
+                        }}
+                        disabled={!qbFlags.canBuy || qbState.isPending}
+                      >
+                        {qbState.isPending ? "Processing..." : `Buy ${clampedUiTicket}`}
+                      </button>
+                    )}
+
+                    <button
+                      className="rc-btn-icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCollapseQuickBuy();
+                      }}
+                      title="Close"
+                      style={{
+                        width: "100%",
+                        padding: 10,
+                        borderRadius: 14,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: "rgba(0,0,0,0.03)",
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {/* ✅ Blur + clickable overlay (same idea as the modal) */}
+                  {blurBuy && (
+                    <button
+                      type="button"
+                      onClick={handleOverlayConnectClick}
+                      aria-label="Open sign in"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        border: "none",
+                        background: "transparent",
+                        display: "grid",
+                        placeItems: "center",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        style={{
+                          background: "rgba(0,0,0,0.85)",
+                          color: "white",
+                          padding: "12px 18px",
+                          borderRadius: 999,
+                          fontWeight: 900,
+                          fontSize: 13,
+                        }}
+                      >
+                        Connect Wallet to Buy
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
