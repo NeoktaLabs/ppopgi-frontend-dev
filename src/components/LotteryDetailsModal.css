@@ -234,8 +234,40 @@
   font-size: 13px;
 }
 
-.rdm-buy-inner { position: relative; }
-.rdm-buy-inner.blurred { filter: blur(4px); opacity: 0.5; pointer-events: none; }
+/* ✅ WRAPPER FOR BLUR LOGIC */
+.rdm-buy-wrap {
+  position: relative;
+}
+
+.rdm-buy-inner { 
+  transition: all 0.3s ease;
+}
+
+/* Blur the inner inputs, but not the wrapper */
+.rdm-buy-inner.blurred { 
+  filter: blur(5px); 
+  opacity: 0.4; 
+  pointer-events: none; 
+}
+
+/* Text floating safely above the blur */
+.rdm-overlay-msg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 10; /* Ensures it sits above */
+}
+.rdm-overlay-msg span {
+  background: var(--ink);
+  color: var(--soft-cream);
+  padding: 14px 28px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 14px;
+  box-shadow: 0 10px 30px rgba(43, 43, 51, 0.4);
+}
 
 .rdm-balance-row {
   display: flex;
@@ -351,23 +383,6 @@
 }
 .rdm-cta:active { transform: translateY(1px); }
 .rdm-cta:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.3); }
-
-.rdm-overlay-msg {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-}
-.rdm-overlay-msg span {
-  background: var(--ink);
-  color: var(--soft-cream);
-  padding: 12px 24px;
-  border-radius: 99px;
-  font-weight: 900;
-  font-size: 13px;
-  box-shadow: 0 10px 24px rgba(43, 43, 51, 0.3);
-}
 
 /* Specs */
 .rdm-dist-section {
