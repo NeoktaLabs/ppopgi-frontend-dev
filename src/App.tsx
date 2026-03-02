@@ -89,7 +89,7 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
 
-  // ✅ stable callback to open sign-in (used by layout + details modal)
+  // ✅ stable callback to open sign-in (used by layout + details modal + global events)
   const openSignIn = useCallback(() => setSignInOpen(true), []);
 
   // 5) Disclaimer gate — show by default on first load
@@ -205,6 +205,11 @@ export default function App() {
       else openSignIn();
     };
 
+    // ✅ NEW: global sign-in request (used by LotteryCard fallback)
+    const onOpenSignIn = () => {
+      openSignIn();
+    };
+
     const onNavigate = (e: Event) => {
       const ce = e as CustomEvent<{ page?: Page }>;
       const next = ce?.detail?.page;
@@ -213,10 +218,12 @@ export default function App() {
     };
 
     window.addEventListener("ppopgi:open-cashier", onOpenCashier);
+    window.addEventListener("ppopgi:open-signin", onOpenSignIn);
     window.addEventListener("ppopgi:navigate", onNavigate as EventListener);
 
     return () => {
       window.removeEventListener("ppopgi:open-cashier", onOpenCashier);
+      window.removeEventListener("ppopgi:open-signin", onOpenSignIn);
       window.removeEventListener("ppopgi:navigate", onNavigate as EventListener);
     };
   }, [account, navigateTo, openSignIn]);
