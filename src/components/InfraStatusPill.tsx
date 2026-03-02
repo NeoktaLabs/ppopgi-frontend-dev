@@ -55,6 +55,54 @@ function dotLevel(level: string): string {
   return "unknown";
 }
 
+/**
+ * ✅ NEW: Compact summary (used in TopNav when the panel is collapsed)
+ * Shows:
+ * - overall dot (worst of the 3)
+ * - label (Healthy/Slow/Degraded/Late/Down/Unknown)
+ * - 3 tiny dots (idx/rpc/bot)
+ */
+export function InfraStatusSummary() {
+  const s = useInfraStatus();
+
+  const idxDot = useMemo(() => dotLevel(s.indexer.level), [s.indexer.level]);
+  const rpcDot = useMemo(() => dotLevel(s.rpc.level), [s.rpc.level]);
+  const botDot = useMemo(() => dotLevel(s.bot?.level || "unknown"), [s.bot?.level]);
+
+  const overall = useMemo(() => {
+    const levels = [idxDot, rpcDot, botDot];
+
+    if (levels.includes("down")) return { label: "Down", level: "down" as const };
+    if (levels.includes("late")) return { label: "Late", level: "late" as const };
+    if (levels.includes("degraded")) return { label: "Degraded", level: "degraded" as const };
+    if (levels.includes("slow")) return { label: "Slow", level: "slow" as const };
+    if (levels.every((x) => x === "healthy")) return { label: "Healthy", level: "healthy" as const };
+    return { label: "Unknown", level: "unknown" as const };
+  }, [idxDot, rpcDot, botDot]);
+
+  const updatedAgo = useMemo(() => {
+    if (s.isLoading) return "";
+    const sec = Math.floor((Date.now() - s.tsMs) / 1000);
+    return `Updated ${fmtAgoSec(sec)}`;
+  }, [s.isLoading, s.tsMs]);
+
+  return (
+    <div className="isp-summary" aria-label="Systems status summary">
+      <span className={`isp-dot ${overall.level}`} aria-hidden="true" />
+      <span className="isp-summary-title">Systems</span>
+      <span className="isp-summary-state">{s.isLoading ? "Checking…" : overall.label}</span>
+
+      <span className="isp-summary-dots" aria-hidden="true">
+        <span className={`isp-dot ${idxDot}`} />
+        <span className={`isp-dot ${rpcDot}`} />
+        <span className={`isp-dot ${botDot}`} />
+      </span>
+
+      <span className="isp-summary-updated">{updatedAgo}</span>
+    </div>
+  );
+}
+
 export function InfraStatusPill() {
   const s = useInfraStatus();
 
