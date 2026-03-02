@@ -69,8 +69,8 @@ const QUERY = /* GraphQL */ `
 
 export function useGlobalStatsBillboard(): State {
   // Point this at your CACHE WORKER graphql endpoint, not the raw subgraph
-  // Example: VITE_INDEXER_URL="https://indexer-cache.yourdomain.com/graphql"
-  const gqlUrl = useMemo(() => mustEnv("VITE_INDEXER_URL"), []);
+  // Example: VITE_SUBGRAPH_URL="https://indexer-cache.yourdomain.com/graphql"
+  const gqlUrl = useMemo(() => mustEnv("VITE_SUBGRAPH_URL"), []);
 
   // billboard can be pretty “fresh”, but we still don’t want to hammer from many tabs
   // Worker TTL already caches (e.g. 8s), this is an additional client guard.
