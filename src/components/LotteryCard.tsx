@@ -1,11 +1,10 @@
 // src/components/LotteryCard.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { LotteryListItem } from "../indexer/subgraph"; // ✅ updated type
+import type { LotteryListItem } from "../indexer/subgraph"; 
 import { useLotteryCard } from "../hooks/useLotteryCard";
 import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import "./LotteryCard.css";
 
-// ✅ shared UI formatter (removes trailing .0 by default)
 import { fmtUsdcUi } from "../lib/format";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
@@ -41,12 +40,6 @@ type Props = {
   hatch?: HatchUI | null;
   userEntry?: UserEntryStats;
   finalizer?: FinalizerInfo | null;
-
-  /**
-   * ✅ gate quick buy behind sign-in (same behavior as before)
-   * - If isSignedIn === false, clicking Buy Ticket will open sign-in instead of expanding.
-   * - If you don't pass these props, behavior stays exactly the same as before.
-   */
   isSignedIn?: boolean;
   onOpenSignIn?: () => void;
 };
@@ -82,17 +75,12 @@ export function LotteryCard({
   hatch,
   userEntry,
   finalizer,
-
-  // ✅ NEW
   isSignedIn,
   onOpenSignIn,
 }: Props) {
   const { ui, actions } = useLotteryCard(lottery, nowMs);
-
-  // ✅ Quick-buy expand state (local)
   const [qbOpen, setQbOpen] = useState(false);
 
-  // ✅ Quick-buy engine (same logic as the modal, but only “active” when expanded)
   const { state: qbState, math: qbMath, flags: qbFlags, actions: qbActions } = useLotteryInteraction(lottery.id, qbOpen);
 
   const statusRaw = String((lottery as any).status || "");
@@ -154,7 +142,6 @@ export function LotteryCard({
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
 
-  // Prefer creator (new data), keep owner fallback only if legacy rows exist
   const hostAddr = (lottery as any).creator || (lottery as any).owner;
 
   const winRateLabel = useMemo(() => {
@@ -192,19 +179,13 @@ export function LotteryCard({
     );
   }, [endMode, maxReached]);
 
-  // Fix TS: title prop cannot be null
   const titleText = lottery.name ?? undefined;
   const displayName = lottery.name ?? "Lottery";
 
-  // Card display numbers (no decimals)
   const potUi = useMemo(() => fmtUsdcUi(ui.formattedPot, { maxDecimals: 0 }), [ui.formattedPot]);
   const priceUi = useMemo(() => fmtUsdcUi(ui.formattedPrice, { maxDecimals: 0 }), [ui.formattedPrice]);
 
-  // -------- Quick buy derived UI --------
   const showSuccess = qbOpen && !!qbState.lastBuy;
-
-  // Gate blur behind the prop (so behavior matches your requested gating),
-  // but fall back to wallet connection if the prop isn't provided.
   const shouldGate = isSignedIn === false || (!isSignedIn && !qbState.isConnected);
   const blurBuy = qbOpen && shouldGate;
 
@@ -262,13 +243,11 @@ export function LotteryCard({
     setQbOpen(false);
   }, [qbActions]);
 
-  // If lottery stops being “live”, close quick buy automatically
   useEffect(() => {
     if (!qbOpen) return;
     if (!isLiveForCard) handleCollapseQuickBuy();
   }, [qbOpen, isLiveForCard, handleCollapseQuickBuy]);
 
-  // Clicking card body opens modal (unless quick-buy is open)
   const handleCardClick = useCallback(() => {
     if (qbOpen) {
       handleCollapseQuickBuy();
@@ -277,14 +256,10 @@ export function LotteryCard({
     onOpen(lottery.id);
   }, [qbOpen, handleCollapseQuickBuy, onOpen, lottery.id]);
 
-  // Click handler for “⚡ Buy Ticket” (expand quick buy)
   const handleBuyClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!isLiveForCard) return;
-
-      // ✅ NEW behavior:
-      // Always expand first, then blur + show overlay if not signed in.
       setQbOpen(true);
     },
     [isLiveForCard]
@@ -371,7 +346,7 @@ export function LotteryCard({
         </div>
       </div>
 
-      {/* --- STATS GRID (Moved Up) --- */}
+      {/* --- STATS GRID --- */}
       <div className="rc-grid">
         <div className="rc-stat">
           <div className="rc-stat-lbl">Ticket Price</div>
@@ -385,7 +360,7 @@ export function LotteryCard({
         </div>
       </div>
 
-      {/* --- LIQUID BARS (Moved Up) --- */}
+      {/* --- LIQUID BARS --- */}
       {isLiveForCard && ui.hasMin && (
         <div className="rc-bar-group">
           {!ui.minReached ? (
@@ -476,51 +451,41 @@ export function LotteryCard({
               QUICK BUY (expanded)
              ========================= */}
           {qbOpen && (
-            <div
-              className="rc-qb-wrap"
-              style={{
-                borderRadius: 16,
-                padding: 12,
-                border: "1px solid rgba(0,0,0,0.08)",
-                background: "rgba(255,255,255,0.75)",
-                position: "relative",
-              }}
-            >
+            <div className="rc-qb-wrap">
+              {/* ✅ NEW: Global Close Button (Sits above blur) */}
+              <button
+                className="rc-qb-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCollapseQuickBuy();
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+
               {showSuccess && qbState.lastBuy ? (
                 // ✅ SUCCESS VIEW
-                <div style={{ textAlign: "center" }}>
+                <div style={{ textAlign: "center", padding: "4px 4px 0 4px" }}>
                   <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 6 }}>✓ Tickets Purchased!</div>
                   <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
                     You bought <b>{qbState.lastBuy.count}</b> ticket{qbState.lastBuy.count === 1 ? "" : "s"}.
                   </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 8,
-                      marginBottom: 10,
-                      textAlign: "left",
-                      fontSize: 12,
-                    }}
-                  >
-                    <div style={{ padding: 10, borderRadius: 12, background: "rgba(0,0,0,0.03)" }}>
-                      <div style={{ fontSize: 10, opacity: 0.65, fontWeight: 800, marginBottom: 4, textTransform: "uppercase" }}>
-                        Spent
-                      </div>
-                      <div style={{ fontWeight: 900 }}>{successSpentUi} USDC</div>
+                  <div className="rc-qb-success-grid">
+                    <div className="rc-qb-success-box">
+                      <div className="rc-qb-success-lbl">Spent</div>
+                      <div className="rc-qb-success-val">{successSpentUi} USDC</div>
                     </div>
 
-                    <div style={{ padding: 10, borderRadius: 12, background: "rgba(0,0,0,0.03)" }}>
-                      <div style={{ fontSize: 10, opacity: 0.65, fontWeight: 800, marginBottom: 4, textTransform: "uppercase" }}>
-                        Current odds
-                      </div>
-                      <div style={{ fontWeight: 900 }}>{successOdds}</div>
+                    <div className="rc-qb-success-box">
+                      <div className="rc-qb-success-lbl">Current odds</div>
+                      <div className="rc-qb-success-val">{successOdds}</div>
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {qbState.lastBuy.txHash && (
+                  {qbState.lastBuy.txHash && (
+                    <div style={{ display: "grid", gap: 8, marginTop: 4 }}>
                       <a
                         className="rc-quick-buy-btn"
                         href={`${EXPLORER_TX_URL}${qbState.lastBuy.txHash}`}
@@ -531,31 +496,20 @@ export function LotteryCard({
                       >
                         View Tx ↗
                       </a>
-                    )}
-
-                    <button
-                      className="rc-quick-buy-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCollapseQuickBuy();
-                      }}
-                    >
-                      ← Back
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                // ✅ COMPACT BUY VIEW (Prepare Wallet / Buy)
-                <div className={`rc-qb-inner ${blurBuy ? "blurred" : ""}`} style={{ position: "relative" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 900, opacity: 0.7 }}>
+                // ✅ COMPACT BUY VIEW
+                <div className={`rc-qb-inner ${blurBuy ? "blurred" : ""}`}>
+                  <div className="rc-qb-top">
                     <span>Bal: {balanceUi} USDC</span>
                     <span>Cap: {uiMaxForStepper}</span>
                   </div>
 
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, marginBottom: 10 }}>
+                  <div className="rc-qb-stepper">
                     <button
-                      className="rdm-step-btn"
-                      style={{ width: 46, height: 46, borderRadius: 14 }}
+                      className="rc-step-btn"
                       onClick={(e) => {
                         e.stopPropagation();
                         qbActions.setTickets(String(Math.max(1, clampedUiTicket - 1)));
@@ -565,14 +519,13 @@ export function LotteryCard({
                       −
                     </button>
 
-                    <div style={{ flex: 1, textAlign: "center" }}>
-                      <div style={{ fontSize: 20, fontWeight: 900 }}>{clampedUiTicket}</div>
-                      <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.7 }}>Total: {totalUi} USDC</div>
+                    <div className="rc-qb-mid">
+                      <div className="rc-qb-count">{clampedUiTicket}</div>
+                      <div className="rc-qb-total">Total: {totalUi} USDC</div>
                     </div>
 
                     <button
-                      className="rdm-step-btn"
-                      style={{ width: 46, height: 46, borderRadius: 14 }}
+                      className="rc-step-btn"
                       onClick={(e) => {
                         e.stopPropagation();
                         qbActions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)));
@@ -607,58 +560,19 @@ export function LotteryCard({
                         {qbState.isPending ? "Processing..." : `Buy ${clampedUiTicket}`}
                       </button>
                     )}
-
-                    <button
-                      className="rc-btn-icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCollapseQuickBuy();
-                      }}
-                      title="Close"
-                      style={{
-                        width: "100%",
-                        padding: 10,
-                        borderRadius: 14,
-                        border: "1px solid rgba(0,0,0,0.08)",
-                        background: "rgba(0,0,0,0.03)",
-                      }}
-                    >
-                      Close
-                    </button>
                   </div>
                 </div>
               )}
 
-              {/* ✅ Blur + clickable overlay (same idea as the modal) */}
+              {/* ✅ Overlay to force connection when blurred */}
               {blurBuy && (
                 <button
                   type="button"
+                  className="rc-qb-overlay"
                   onClick={handleOverlayConnectClick}
                   aria-label="Open sign in"
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    border: "none",
-                    background: "transparent",
-                    display: "grid",
-                    placeItems: "center",
-                    cursor: "pointer",
-                    zIndex: 20,
-                  }}
                 >
-                  <span
-                    style={{
-                      background: "rgba(0,0,0,0.85)",
-                      color: "white",
-                      padding: "12px 18px",
-                      borderRadius: 999,
-                      fontWeight: 900,
-                      fontSize: 13,
-                      boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-                    }}
-                  >
-                    Connect Wallet to Buy
-                  </span>
+                  <span>Connect to Buy</span>
                 </button>
               )}
             </div>
