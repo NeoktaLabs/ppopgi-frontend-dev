@@ -69,15 +69,19 @@ export function InfraStatusPill() {
       <div className="isp-notch">
         <button
           type="button"
-          className="isp-summary"
+          className={`isp-summary ${overallHealthy ? "all-good" : "has-issues"}`}
           onClick={() => setExpanded(true)}
           aria-label="Expand system status"
         >
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <span className="isp-summary-title">
-              Ppopgi Systems Status
-            </span>
+          <span className="isp-summary-dots">
+            <span className={`isp-dot ${idxDot}`} />
+            <span className={`isp-dot ${rpcDot}`} />
+            <span className={`isp-dot ${botDot}`} />
+          </span>
 
+          {/* ✅ Professional Side-by-Side text layout */}
+          <div className="isp-summary-text">
+            <span className="isp-summary-title">Ppopgi Systems Status</span>
             <span className="isp-summary-state">
               {s.isLoading
                 ? "Checking..."
@@ -87,20 +91,14 @@ export function InfraStatusPill() {
             </span>
           </div>
 
-          <span className="isp-summary-dots">
-            <span className={`isp-dot ${idxDot}`} />
-            <span className={`isp-dot ${rpcDot}`} />
-            <span className={`isp-dot ${botDot}`} />
-          </span>
-
-          <span className="isp-summary-updated">
-            {s.isLoading
-              ? ""
-              : new Date(s.tsMs).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-          </span>
+          {!s.isLoading && (
+            <span className="isp-summary-updated">
+              {new Date(s.tsMs).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
         </button>
       </div>
     );
@@ -178,7 +176,9 @@ export function InfraStatusPill() {
               fontWeight: 800,
               fontSize: 12,
               cursor: "pointer",
+              color: "var(--ink)",
               opacity: 0.6,
+              padding: "4px 12px",
             }}
           >
             Collapse
