@@ -201,8 +201,12 @@ export function LotteryCard({
   const priceUi = useMemo(() => fmtUsdcUi(ui.formattedPrice, { maxDecimals: 0 }), [ui.formattedPrice]);
 
   // -------- Quick buy derived UI --------
-  const blurBuy = qbOpen && !qbState.isConnected;
   const showSuccess = qbOpen && !!qbState.lastBuy;
+
+  // Gate blur behind the prop (so behavior matches your requested gating),
+  // but fall back to wallet connection if the prop isn't provided.
+  const shouldGate = isSignedIn === false || (!isSignedIn && !qbState.isConnected);
+  const blurBuy = qbOpen && shouldGate;
 
   const ticketPriceU = useMemo(() => {
     try {
@@ -279,15 +283,11 @@ export function LotteryCard({
       e.stopPropagation();
       if (!isLiveForCard) return;
 
-      // Gate only if caller explicitly says NOT signed in
-      if (isSignedIn === false && onOpenSignIn) {
-        onOpenSignIn();
-        return;
-      }
-
-      setQbOpen((v) => !v);
+      // ✅ NEW behavior:
+      // Always expand first, then blur + show overlay if not signed in.
+      setQbOpen(true);
     },
-    [isSignedIn, onOpenSignIn, isLiveForCard]
+    [isLiveForCard]
   );
 
   const handleOverlayConnectClick = useCallback(
@@ -477,11 +477,13 @@ export function LotteryCard({
              ========================= */}
           {qbOpen && (
             <div
+              className="rc-qb-wrap"
               style={{
                 borderRadius: 16,
                 padding: 12,
                 border: "1px solid rgba(0,0,0,0.08)",
                 background: "rgba(255,255,255,0.75)",
+                position: "relative",
               }}
             >
               {showSuccess && qbState.lastBuy ? (
@@ -544,7 +546,7 @@ export function LotteryCard({
                 </div>
               ) : (
                 // ✅ COMPACT BUY VIEW (Prepare Wallet / Buy)
-                <div style={{ position: "relative" }}>
+                <div className={`rc-qb-inner ${blurBuy ? "blurred" : ""}`} style={{ position: "relative" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 900, opacity: 0.7 }}>
                     <span>Bal: {balanceUi} USDC</span>
                     <span>Cap: {uiMaxForStepper}</span>
@@ -624,38 +626,40 @@ export function LotteryCard({
                       Close
                     </button>
                   </div>
-
-                  {/* ✅ Blur + clickable overlay (same idea as the modal) */}
-                  {blurBuy && (
-                    <button
-                      type="button"
-                      onClick={handleOverlayConnectClick}
-                      aria-label="Open sign in"
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        border: "none",
-                        background: "transparent",
-                        display: "grid",
-                        placeItems: "center",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span
-                        style={{
-                          background: "rgba(0,0,0,0.85)",
-                          color: "white",
-                          padding: "12px 18px",
-                          borderRadius: 999,
-                          fontWeight: 900,
-                          fontSize: 13,
-                        }}
-                      >
-                        Connect Wallet to Buy
-                      </span>
-                    </button>
-                  )}
                 </div>
+              )}
+
+              {/* ✅ Blur + clickable overlay (same idea as the modal) */}
+              {blurBuy && (
+                <button
+                  type="button"
+                  onClick={handleOverlayConnectClick}
+                  aria-label="Open sign in"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    border: "none",
+                    background: "transparent",
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    zIndex: 20,
+                  }}
+                >
+                  <span
+                    style={{
+                      background: "rgba(0,0,0,0.85)",
+                      color: "white",
+                      padding: "12px 18px",
+                      borderRadius: 999,
+                      fontWeight: 900,
+                      fontSize: 13,
+                      boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+                    }}
+                  >
+                    Connect Wallet to Buy
+                  </span>
+                </button>
               )}
             </div>
           )}
