@@ -2,7 +2,7 @@
 
 .isp-notch {
   position: relative;
-  margin: 0 auto; /* ✅ Centers the component wrapper */
+  margin: 0 auto; /* Centers the component wrapper */
   display: flex;
   justify-content: center;
   width: 100%;
@@ -11,19 +11,18 @@
 }
 
 /* =========================================
-   ✅ COMPACT / COLLAPSED VIEW
+   ✅ COMPACT / COLLAPSED VIEW (Professional layout)
    ========================================= */
 .isp-summary {
   pointer-events: auto;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 
-  padding: 8px 16px;
+  padding: 8px 16px 8px 14px;
   border-radius: 999px;
 
-  /* Professional "Terminal" / Readout look */
   background: #f8fafc;
   border: 1px solid rgba(43, 43, 51, 0.08);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03), 0 2px 6px rgba(0, 0, 0, 0.02);
@@ -38,19 +37,14 @@
   transform: translateY(-1px);
 }
 
-.isp-summary-title {
-  font-size: 11px;
-  font-weight: 900;
-  color: var(--ink);
-  opacity: 0.5;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+/* Tint the whole pill red if something is failing */
+.isp-summary.has-issues {
+  background: rgba(254, 242, 242, 0.8);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
-.isp-summary-state {
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--ink);
+.isp-summary.has-issues:hover {
+  background: #ffffff;
 }
 
 .isp-summary-dots {
@@ -60,12 +54,43 @@
   opacity: 0.9;
 }
 
+.isp-summary-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.isp-summary-title {
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--ink);
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.isp-summary-state {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.has-issues .isp-summary-state {
+  color: #b91c1c; /* Deep red for issues */
+}
+
 .isp-summary-updated {
   font-size: 10px;
   font-weight: 800;
   color: var(--ink);
-  opacity: 0.5;
+  opacity: 0.4;
   white-space: nowrap;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* =========================================
@@ -76,7 +101,6 @@
   position: relative;
   width: 100%;
 
-  /* Clean, crisp technical card instead of messy glass */
   background: #f8fafc;
   border: 1px solid rgba(43, 43, 51, 0.08);
   border-radius: 20px; 
@@ -178,8 +202,8 @@
 }
 
 @keyframes isp-pulse-err {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
-  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
@@ -193,10 +217,10 @@
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); 
 }
 
-/* ✅ DOWN & LATE now pulse bright red */
+/* ✅ DEFINITIVELY RED PULSE */
 .isp-dot.down, .isp-dot.late { 
   background: #ef4444; 
-  animation: isp-pulse-err 1.5s infinite;
+  animation: isp-pulse-err 1.2s infinite;
 }
 
 .isp-dot.unknown { 
@@ -215,11 +239,11 @@
 
   .isp-summary {
     padding: 8px 12px;
-    gap: 8px;
+    gap: 10px;
   }
 
   .isp-summary-updated {
-    display: none; /* Keep it tight on mobile */
+    display: none; /* Hide timestamp to save horizontal space on mobile */
   }
 
   .isp-notch-inner {
