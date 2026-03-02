@@ -77,11 +77,14 @@ const EMPTY: GlobalStatsBillboard = {
   updatedAt: 0n,
 };
 
+function isAbortLike(e: any): boolean {
+  const msg = String(e?.name || e?.message || e || "").toLowerCase();
+  return msg.includes("abort") || msg.includes("aborted");
+}
+
 export function useGlobalStatsBillboard(): State {
-  // Point this at your CACHE WORKER graphql endpoint, not the raw subgraph
   const gqlUrl = useMemo(() => mustEnv("VITE_SUBGRAPH_URL"), []);
 
-  // Never poll faster than 10s
   const pollMs = useMemo(() => {
     const v = env("VITE_BILLBOARD_POLL_MS");
     const n = v ? Number(v) : 15_000;
@@ -95,17 +98,22 @@ export function useGlobalStatsBillboard(): State {
 
   const aliveRef = useRef(true);
   const fetchingRef = useRef(false);
-  const abortRef = useRef<AbortController | null>(null);
 
-  // ✅ Keep latest data in a ref so callbacks don't depend on state
+  // Keep latest data without making callbacks depend on React state
   const dataRef = useRef<GlobalStatsBillboard | null>(null);
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
 
-  // ✅ Hard throttle safeguard (prevents accidental tight loops)
+  // Abort only on unmount
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Hard throttle (prevents accidental tight loops)
   const lastFetchMsRef = useRef(0);
-  const MIN_SPACING_MS = 1500; // even if something re-triggers, cap at ~0.6 req/s
+  const MIN_SPACING_MS = 1500;
+
+  // Client-side fetch timeout (keeps UI snappy if upstream is slow)
+  const CLIENT_TIMEOUT_MS = 9000;
 
   useEffect(() => {
     aliveRef.current = true;
@@ -127,17 +135,18 @@ export function useGlobalStatsBillboard(): State {
       lastFetchMsRef.current = now;
 
       fetchingRef.current = true;
-
-      // Only show loading spinner if we don't already have data
       setIsLoading((prev) => prev || dataRef.current === null);
 
-      try {
-        try {
-          abortRef.current?.abort();
-        } catch {}
-        const ac = new AbortController();
-        abortRef.current = ac;
+      const ac = new AbortController();
+      abortRef.current = ac;
 
+      const t = setTimeout(() => {
+        try {
+          ac.abort(new Error("timeout"));
+        } catch {}
+      }, CLIENT_TIMEOUT_MS);
+
+      try {
         const headers: Record<string, string> = { "content-type": "application/json" };
         if (opts?.forceFresh) headers["x-force-fresh"] = "1";
 
@@ -154,13 +163,13 @@ export function useGlobalStatsBillboard(): State {
         });
 
         if (!res.ok) throw new Error(`http_${res.status}`);
+
         const json = await res.json().catch(() => null);
         if (!json) throw new Error("bad_json");
         if (json.errors?.length) throw new Error("graphql_error");
 
         const g = json.data?.globalStats;
 
-        // Treat missing entity as zeroed stats (subgraph not initialized yet)
         const next: GlobalStatsBillboard = g
           ? {
               totalLotteriesCreated: toBigInt(g.totalLotteriesCreated),
@@ -183,20 +192,27 @@ export function useGlobalStatsBillboard(): State {
       } catch (e: any) {
         if (!aliveRef.current) return;
 
-        const msg = String(e?.message || e || "fetch_error");
-        // ignore aborts
-        if (!msg.toLowerCase().includes("abort")) {
-          setError(msg);
-          setIsLoading(false);
+        // Ignore aborts/timeouts as "noise" if you already have data
+        if (isAbortLike(e)) {
+          if (dataRef.current === null) {
+            setError("timeout");
+            setIsLoading(false);
+          }
+          return;
         }
+
+        const msg = String(e?.message || e || "fetch_error");
+        setError(msg);
+        setIsLoading(false);
       } finally {
+        clearTimeout(t);
         fetchingRef.current = false;
       }
     },
     [gqlUrl]
   );
 
-  // initial + polling (paused when tab hidden)
+  // initial + polling
   useEffect(() => {
     void fetchOnce();
 
