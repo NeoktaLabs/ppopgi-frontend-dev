@@ -47,14 +47,20 @@
   padding: 8px 16px 8px 20px;
 }
 
-/* Infra row */
+/* ✅ Infra row (Demarcated with border and subtle background) */
 .topnav-infra {
   width: 100%;
   display: flex;
-  justify-content: center; /* ✅ Perfectly centers the Infra pill */
+  justify-content: center;
   align-items: center;
-  padding: 0 12px 14px 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.015); /* Very subtle shading */
+  border-top: 1px solid rgba(0, 0, 0, 0.05); /* Clean demarcation line */
   pointer-events: auto;
+}
+
+.topnav-infra .isp-summary {
+  margin: 0 auto;
 }
 
 /* --- BRAND --- */
@@ -287,7 +293,7 @@
   transform: translateY(-4px) rotate(-45deg);
 }
 
-/* Mobile quick balance */
+/* Mobile quick balance (STACKED: USDC + XTZ) */
 .mobile-quick-bal {
   display: none;
   padding: 8px 12px;
@@ -331,11 +337,15 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* When screen gets small: */
 @media (max-width: 900px) {
+  /* Hide desktop buttons */
   .topnav-desktop-links,
   .desktop-actions {
     display: none;
   }
+
+  /* Show mobile controls */
   .mobile-burger {
     display: flex;
   }
@@ -345,8 +355,9 @@
 }
 
 @media (max-width: 400px) {
+  /* On very small phones, adjust spacing slightly */
   .brand-text {
-    display: none; 
+    display: none; /* Icon only to save space for balance */
   }
   .topnav-right {
     gap: 8px;
@@ -378,7 +389,7 @@
   max-width: 320px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(24px);
-  border: 2px solid rgba(246, 182, 200, 0.6);
+  border: 2px solid rgba(246, 182, 200, 0.6); /* Sakura border */
   border-radius: 28px;
   box-shadow: 0 24px 50px rgba(203, 183, 246, 0.4);
   padding: 16px;
