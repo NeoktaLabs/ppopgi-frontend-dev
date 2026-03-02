@@ -14,8 +14,19 @@
   /* ✅ RESTORED: The beloved textured pastel pink! */
   background-color: #ffeef6;
   background-image:
-    repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px),
-    linear-gradient(180deg, rgba(255,190,215,1), rgba(255,210,230,1) 42%, rgba(255,235,246,1));
+    repeating-linear-gradient(
+      45deg,
+      rgba(0,0,0,0.03) 0px,
+      rgba(0,0,0,0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255,190,215,1),
+      rgba(255,210,230,1) 42%,
+      rgba(255,235,246,1)
+    );
 
   border: 2px solid rgba(255, 255, 255, 0.9);
 
@@ -126,9 +137,13 @@
 .rc-chip.drawing { background: rgba(251, 191, 36, 0.3); color: var(--ink); border-color: rgba(251, 191, 36, 0.6); } /* Pastel Yellow */
 
 .rc-winrate-badge {
-  margin-left: auto; margin-right: auto;
-  padding: 6px 10px; border-radius: 8px;
-  font-size: 10.5px; font-weight: 900; text-transform: uppercase;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  font-weight: 900;
+  text-transform: uppercase;
   background: rgba(255, 255, 255, 0.5);
   color: var(--ink);
   border: 1px solid rgba(255, 255, 255, 0.6);
@@ -137,10 +152,15 @@
 
 .rc-actions { display: flex; gap: 6px; }
 .rc-btn-icon, .rc-shield-btn {
-  width: 30px; height: 30px; border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.8);
-  display: grid; place-items: center; cursor: pointer; transition: 0.2s;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: 0.2s;
   color: var(--ink);
 }
 .rc-btn-icon:hover, .rc-shield-btn:hover {
@@ -151,48 +171,70 @@
 
 /* --- Host & Title --- */
 .rc-host {
-  font-size: 11px; font-weight: 800; text-transform: uppercase; opacity: 0.6;
-  text-align: center; display: flex; justify-content: center; gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  opacity: 0.6;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
   margin-bottom: 4px;
 }
 .rc-host-link { color: inherit; text-decoration: none; border-bottom: 1px dotted rgba(0,0,0,0.3); }
 
 .rc-title {
-  font-size: 20px; font-weight: 900; text-align: center; margin-bottom: 16px;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+  margin-bottom: 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   line-height: 1.2;
   color: var(--ink);
 }
 
 /* --- Holographic Prize --- */
 .rc-prize-section { text-align: center; margin-bottom: 20px; }
-.rc-prize-lbl { font-size: 11px; font-weight: 900; text-transform: uppercase; opacity: 0.5; margin-bottom: 4px; letter-spacing: 0.5px;}
+.rc-prize-lbl {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
 
 .rc-prize-num {
   font-size: 46px;
   font-weight: 900;
   letter-spacing: -2px;
 
-  /* Pops nicely against the pink background */
   background: linear-gradient(135deg, #BE185D 0%, #db2777 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-
   filter: drop-shadow(0 4px 12px rgba(190, 24, 93, 0.2));
 }
 
 .rc-prize-unit {
-  font-size: 18px; font-weight: 900; color: #db2777; margin-left: 6px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #db2777;
+  margin-left: 6px;
 }
 
 /* --- Stats Grid --- */
 .rc-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   margin-bottom: 20px;
 }
 .rc-stat {
   text-align: center;
-  background: rgba(255, 255, 255, 0.5); /* Semi-transparent to let pink peek through */
+  background: rgba(255, 255, 255, 0.5);
   padding: 10px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.6);
@@ -203,7 +245,12 @@
 /* --- Liquid Bars --- */
 .rc-bar-group { margin-bottom: 20px; display: grid; gap: 8px; }
 .rc-bar-row {
-  display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; opacity: 0.7; text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.7;
+  text-transform: uppercase;
 }
 .rc-track {
   height: 8px;
@@ -215,7 +262,8 @@
 }
 
 .rc-fill {
-  height: 100%; border-radius: 99px;
+  height: 100%;
+  border-radius: 99px;
   box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.6);
 }
 
@@ -227,7 +275,7 @@
 /* --- TEAR-OFF STUB (Footer) --- */
 .rc-stub-container {
   margin: auto -20px 0 -20px;
-  background: rgba(255, 255, 255, 0.6); /* Translucent white stub */
+  background: rgba(255, 255, 255, 0.6);
   display: flex;
   flex-direction: column;
 }
@@ -275,42 +323,84 @@
 
 /* End Note (Replaces button) */
 .rc-end-note {
-  text-align: center; font-weight: 900; font-size: 13px; color: var(--ink);
-  padding: 12px; background: rgba(246, 182, 200, 0.2); border-radius: 12px; border: 2px dashed rgba(246, 182, 200, 0.6);
+  text-align: center;
+  font-weight: 900;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 12px;
+  background: rgba(246, 182, 200, 0.2);
+  border-radius: 12px;
+  border: 2px dashed rgba(246, 182, 200, 0.6);
 }
 .rc-end-sub { font-size: 11px; font-weight: 600; opacity: 0.7; margin-top: 4px; }
 
 /* Stub Meta */
 .rc-stub-meta {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  font-size: 11px; font-weight: 900; color: var(--ink); opacity: 0.6; text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--ink);
+  opacity: 0.6;
+  text-transform: uppercase;
 }
 
 .rc-id-link {
-  text-decoration: none; color: inherit; letter-spacing: 1px;
+  text-decoration: none;
+  color: inherit;
+  letter-spacing: 1px;
 }
 .rc-id-link:hover { opacity: 1; text-decoration: underline; }
 
 /* User badge */
 .rc-user-badge {
-  background: var(--warm-lantern); color: var(--ink);
-  font-size: 11px; font-weight: 900; padding: 4px 12px;
-  border-radius: 99px; margin: 0 auto 12px auto; display: table;
-  text-transform: uppercase; box-shadow: 0 4px 10px rgba(255, 216, 154, 0.4);
+  background: var(--warm-lantern);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 12px;
+  border-radius: 99px;
+  margin: 0 auto 12px auto;
+  display: table;
+  text-transform: uppercase;
+  box-shadow: 0 4px 10px rgba(255, 216, 154, 0.4);
 }
 
 /* Hatch */
-.rc-hatch { margin: 12px 0; padding: 12px; background: rgba(255, 255, 255, 0.8); border: 2px dashed rgba(246, 182, 200, 0.6); border-radius: 12px; }
-.rc-hatch-btn { width: 100%; padding: 10px; border-radius: 10px; font-weight: 900; font-size: 12px; margin-top: 8px; cursor: pointer; text-transform: uppercase; border: 1px solid rgba(0,0,0,0.1); background: #f8fafc;}
-.rc-hatch-btn.ready { background: var(--sakura-pink); color: var(--soft-cream); border: none; box-shadow: 0 4px 12px rgba(246, 182, 200, 0.4);}
+.rc-hatch {
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px dashed rgba(246, 182, 200, 0.6);
+  border-radius: 12px;
+}
+.rc-hatch-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  font-weight: 900;
+  font-size: 12px;
+  margin-top: 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: #f8fafc;
+}
+.rc-hatch-btn.ready {
+  background: var(--sakura-pink);
+  color: var(--soft-cream);
+  border: none;
+  box-shadow: 0 4px 12px rgba(246, 182, 200, 0.4);
+}
 
 /* =========================================================
    ✅ QUICK BUY EXPAND (NEW)
    Additive only — won’t break existing cards
    ========================================================= */
 
-/* Wrapper panel when card expands */
-.rc-qb-panel {
+/* ✅ UPDATED: wrapper class matches LotteryCard.tsx (.rc-qb-wrap) */
+.rc-qb-wrap {
   position: relative;
   padding: 14px;
   border-radius: 18px;
