@@ -1,5 +1,5 @@
 // src/hooks/useGlobalStatsBillboard.ts
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type GlobalStatsBillboard = {
   totalLotteriesCreated: bigint;
@@ -82,6 +82,192 @@ function isAbortLike(e: any): boolean {
   return msg.includes("abort") || msg.includes("aborted");
 }
 
+// ==============================
+// ✅ Shared singleton state (module-level)
+// Prevents "N components = N pollers" and avoids request storms.
+// ==============================
+
+type SharedSnapshot = Pick<State, "data" | "isLoading" | "error" | "tsMs">;
+
+type Listener = (s: SharedSnapshot) => void;
+
+const shared = {
+  // config (set once)
+  gqlUrl: null as string | null,
+  pollMs: 15_000,
+
+  // state
+  data: null as GlobalStatsBillboard | null,
+  isLoading: false,
+  error: null as string | null,
+  tsMs: Date.now(),
+
+  // controls
+  inflight: null as Promise<void> | null,
+  pollTimer: null as any,
+  listeners: new Set<Listener>(),
+
+  // throttles
+  lastFetchMs: 0,
+  MIN_SPACING_MS: 1500,
+
+  // fetch timeout
+  CLIENT_TIMEOUT_MS: 9000,
+
+  // event handlers
+  eventsBound: false,
+};
+
+function snapshot(): SharedSnapshot {
+  return {
+    data: shared.data,
+    isLoading: shared.isLoading,
+    error: shared.error,
+    tsMs: shared.tsMs,
+  };
+}
+
+function notify() {
+  const s = snapshot();
+  for (const fn of shared.listeners) {
+    try {
+      fn(s);
+    } catch {
+      // ignore listener errors
+    }
+  }
+}
+
+async function fetchShared(opts?: { forceFresh?: boolean }) {
+  if (!shared.gqlUrl) return;
+
+  // Avoid hammering in background tabs unless explicitly forced
+  if (!opts?.forceFresh && isHidden()) return;
+
+  // Coalesce concurrent requests across the whole app
+  if (shared.inflight) return shared.inflight;
+
+  const now = Date.now();
+  if (!opts?.forceFresh && now - shared.lastFetchMs < shared.MIN_SPACING_MS) return;
+  shared.lastFetchMs = now;
+
+  shared.isLoading = shared.data === null ? true : shared.isLoading; // keep "loading" only when empty
+  notify();
+
+  const p = (async () => {
+    const ac = new AbortController();
+
+    const t = setTimeout(() => {
+      try {
+        ac.abort(new Error("timeout"));
+      } catch {}
+    }, shared.CLIENT_TIMEOUT_MS);
+
+    try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (opts?.forceFresh) headers["x-force-fresh"] = "1";
+
+      const res = await fetch(shared.gqlUrl!, {
+        method: "POST",
+        headers,
+        // ✅ Let the worker + browser do their job; avoid forcing no-store which can defeat reuse
+        // (Your worker already uses edge caching.)
+        cache: "default",
+        signal: ac.signal,
+        body: JSON.stringify({
+          query: QUERY,
+          variables: {},
+          operationName: "GlobalStatsBillboard",
+        }),
+      });
+
+      if (!res.ok) throw new Error(`http_${res.status}`);
+
+      const json = await res.json().catch(() => null);
+      if (!json) throw new Error("bad_json");
+      if (json.errors?.length) throw new Error("graphql_error");
+
+      const g = json.data?.globalStats;
+
+      const next: GlobalStatsBillboard = g
+        ? {
+            totalLotteriesCreated: toBigInt(g.totalLotteriesCreated),
+            totalLotteriesSettled: toBigInt(g.totalLotteriesSettled),
+            totalLotteriesCanceled: toBigInt(g.totalLotteriesCanceled),
+            totalTicketsSold: toBigInt(g.totalTicketsSold),
+            totalTicketRevenueUSDC: toBigInt(g.totalTicketRevenueUSDC),
+            totalPrizesSettledUSDC: toBigInt(g.totalPrizesSettledUSDC),
+            activeVolumeUSDC: toBigInt(g.activeVolumeUSDC),
+            updatedAt: toBigInt(g.updatedAt),
+          }
+        : EMPTY;
+
+      shared.data = next;
+      shared.error = null;
+      shared.tsMs = Date.now();
+      shared.isLoading = false;
+      notify();
+    } catch (e: any) {
+      // Ignore abort/timeout noise if we already have data
+      if (isAbortLike(e)) {
+        if (shared.data === null) {
+          shared.error = "timeout";
+          shared.isLoading = false;
+          shared.tsMs = Date.now();
+          notify();
+        }
+        return;
+      }
+
+      const msg = String(e?.message || e || "fetch_error");
+      shared.error = msg;
+      shared.isLoading = false;
+      shared.tsMs = Date.now();
+      notify();
+    } finally {
+      clearTimeout(t);
+    }
+  })()
+    .finally(() => {
+      shared.inflight = null;
+      // ensure loading flag is consistent after inflight resolves
+      if (shared.data !== null) shared.isLoading = false;
+      notify();
+    });
+
+  shared.inflight = p;
+  return p;
+}
+
+function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
+  if (!shared.gqlUrl) shared.gqlUrl = gqlUrl;
+  // only set pollMs once; if you want dynamic, handle elsewhere
+  if (typeof pollMs === "number" && Number.isFinite(pollMs)) {
+    shared.pollMs = Math.max(10_000, Math.floor(pollMs));
+  }
+
+  if (!shared.pollTimer) {
+    // initial fetch (only once for the whole app)
+    void fetchShared();
+
+    shared.pollTimer = setInterval(() => {
+      void fetchShared();
+    }, shared.pollMs);
+  }
+
+  if (!shared.eventsBound && typeof window !== "undefined") {
+    shared.eventsBound = true;
+
+    // refresh on focus
+    window.addEventListener("focus", () => void fetchShared());
+
+    // refresh when tab becomes visible again
+    document.addEventListener("visibilitychange", () => {
+      if (!isHidden()) void fetchShared();
+    });
+  }
+}
+
 export function useGlobalStatsBillboard(): State {
   const gqlUrl = useMemo(() => mustEnv("VITE_SUBGRAPH_URL"), []);
 
@@ -91,151 +277,31 @@ export function useGlobalStatsBillboard(): State {
     return Number.isFinite(n) ? Math.max(10_000, Math.floor(n)) : 15_000;
   }, []);
 
-  const [data, setData] = useState<GlobalStatsBillboard | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tsMs, setTsMs] = useState(() => Date.now());
-
-  const aliveRef = useRef(true);
-  const fetchingRef = useRef(false);
-
-  // Keep latest data without making callbacks depend on React state
-  const dataRef = useRef<GlobalStatsBillboard | null>(null);
-  useEffect(() => {
-    dataRef.current = data;
-  }, [data]);
-
-  // Abort only on unmount
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Hard throttle (prevents accidental tight loops)
-  const lastFetchMsRef = useRef(0);
-  const MIN_SPACING_MS = 1500;
-
-  // Client-side fetch timeout (keeps UI snappy if upstream is slow)
-  const CLIENT_TIMEOUT_MS = 9000;
+  const [local, setLocal] = useState<SharedSnapshot>(() => snapshot());
 
   useEffect(() => {
-    aliveRef.current = true;
+    ensureSharedInitialized(gqlUrl, pollMs);
+
+    const listener: Listener = (s) => setLocal(s);
+    shared.listeners.add(listener);
+
+    // sync immediately after subscribing (in case init fetched between render/effect)
+    setLocal(snapshot());
+
     return () => {
-      aliveRef.current = false;
-      try {
-        abortRef.current?.abort();
-      } catch {}
+      shared.listeners.delete(listener);
     };
+  }, [gqlUrl, pollMs]);
+
+  const refetch = useCallback((opts?: { forceFresh?: boolean }) => {
+    void fetchShared(opts);
   }, []);
 
-  const fetchOnce = useCallback(
-    async (opts?: { forceFresh?: boolean }) => {
-      if (fetchingRef.current) return;
-      if (isHidden()) return;
-
-      const now = Date.now();
-      if (!opts?.forceFresh && now - lastFetchMsRef.current < MIN_SPACING_MS) return;
-      lastFetchMsRef.current = now;
-
-      fetchingRef.current = true;
-      setIsLoading((prev) => prev || dataRef.current === null);
-
-      const ac = new AbortController();
-      abortRef.current = ac;
-
-      const t = setTimeout(() => {
-        try {
-          ac.abort(new Error("timeout"));
-        } catch {}
-      }, CLIENT_TIMEOUT_MS);
-
-      try {
-        const headers: Record<string, string> = { "content-type": "application/json" };
-        if (opts?.forceFresh) headers["x-force-fresh"] = "1";
-
-        const res = await fetch(gqlUrl, {
-          method: "POST",
-          headers,
-          cache: "no-store",
-          signal: ac.signal,
-          body: JSON.stringify({
-            query: QUERY,
-            variables: {},
-            operationName: "GlobalStatsBillboard",
-          }),
-        });
-
-        if (!res.ok) throw new Error(`http_${res.status}`);
-
-        const json = await res.json().catch(() => null);
-        if (!json) throw new Error("bad_json");
-        if (json.errors?.length) throw new Error("graphql_error");
-
-        const g = json.data?.globalStats;
-
-        const next: GlobalStatsBillboard = g
-          ? {
-              totalLotteriesCreated: toBigInt(g.totalLotteriesCreated),
-              totalLotteriesSettled: toBigInt(g.totalLotteriesSettled),
-              totalLotteriesCanceled: toBigInt(g.totalLotteriesCanceled),
-              totalTicketsSold: toBigInt(g.totalTicketsSold),
-              totalTicketRevenueUSDC: toBigInt(g.totalTicketRevenueUSDC),
-              totalPrizesSettledUSDC: toBigInt(g.totalPrizesSettledUSDC),
-              activeVolumeUSDC: toBigInt(g.activeVolumeUSDC),
-              updatedAt: toBigInt(g.updatedAt),
-            }
-          : EMPTY;
-
-        if (!aliveRef.current) return;
-
-        setData(next);
-        setError(null);
-        setTsMs(Date.now());
-        setIsLoading(false);
-      } catch (e: any) {
-        if (!aliveRef.current) return;
-
-        // Ignore aborts/timeouts as "noise" if you already have data
-        if (isAbortLike(e)) {
-          if (dataRef.current === null) {
-            setError("timeout");
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        const msg = String(e?.message || e || "fetch_error");
-        setError(msg);
-        setIsLoading(false);
-      } finally {
-        clearTimeout(t);
-        fetchingRef.current = false;
-      }
-    },
-    [gqlUrl]
-  );
-
-  // initial + polling
-  useEffect(() => {
-    void fetchOnce();
-
-    const t = setInterval(() => {
-      void fetchOnce();
-    }, pollMs);
-
-    return () => clearInterval(t);
-  }, [fetchOnce, pollMs]);
-
-  // refresh on focus
-  useEffect(() => {
-    const onFocus = () => void fetchOnce();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [fetchOnce]);
-
-  const refetch = useCallback(
-    (opts?: { forceFresh?: boolean }) => {
-      void fetchOnce(opts);
-    },
-    [fetchOnce]
-  );
-
-  return { data, isLoading, error, tsMs, refetch };
+  return {
+    data: local.data,
+    isLoading: local.isLoading,
+    error: local.error,
+    tsMs: local.tsMs,
+    refetch,
+  };
 }
