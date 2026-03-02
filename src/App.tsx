@@ -71,9 +71,6 @@ export default function App() {
   const { disconnect } = useDisconnect();
   const activeWallet = useActiveWallet();
 
-  // ✅ NEW: signed-in flag (for quick buy gating on cards)
-  const isSignedIn = !!account;
-
   // 3) Routing (page + lottery deep-link)
   const [page, setPage] = useState<Page>(() => (typeof window !== "undefined" ? getPageFromUrl() : "home"));
   const { selectedLotteryId, openLottery, closeLottery } = useAppRouting(); // keep name for URL param compatibility
@@ -92,7 +89,7 @@ export default function App() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
 
-  // ✅ stable callback to open sign-in (passed into modals + cards via pages)
+  // ✅ stable callback to open sign-in (used by layout + details modal)
   const openSignIn = useCallback(() => setSignInOpen(true), []);
 
   // 5) Disclaimer gate — show by default on first load
@@ -241,36 +238,12 @@ export default function App() {
         onSignOut={handleSignOut}
         hideChrome={anyModalOpen}
       >
-        {page === "home" && (
-          <HomePage
-            nowMs={nowMs}
-            onOpenLottery={openLottery}
-            onOpenSafety={handleOpenSafety}
-            // ✅ NEW: used by LotteryCard quick-buy gating
-            isSignedIn={isSignedIn}
-            onOpenSignIn={openSignIn}
-          />
-        )}
+        {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
-        {page === "explore" && (
-          <ExplorePage
-            onOpenLottery={openLottery}
-            onOpenSafety={handleOpenSafety}
-            // ✅ NEW: used by LotteryCard quick-buy gating
-            isSignedIn={isSignedIn}
-            onOpenSignIn={openSignIn}
-          />
-        )}
+        {page === "explore" && <ExplorePage onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
         {page === "dashboard" && (
-          <DashboardPage
-            account={account}
-            onOpenLottery={openLottery}
-            onOpenSafety={handleOpenSafety}
-            // ✅ NEW: used by LotteryCard quick-buy gating
-            isSignedIn={isSignedIn}
-            onOpenSignIn={openSignIn}
-          />
+          <DashboardPage account={account} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />
         )}
 
         {page === "about" && <AboutPage />}
