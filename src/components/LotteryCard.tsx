@@ -1,6 +1,6 @@
 // src/components/LotteryCard.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { LotteryListItem } from "../indexer/subgraph"; 
+import type { LotteryListItem } from "../indexer/subgraph";
 import { useLotteryCard } from "../hooks/useLotteryCard";
 import { useLotteryInteraction } from "../hooks/useLotteryInteraction";
 import "./LotteryCard.css";
@@ -82,6 +82,20 @@ export function LotteryCard({
   const [qbOpen, setQbOpen] = useState(false);
 
   const { state: qbState, math: qbMath, flags: qbFlags, actions: qbActions } = useLotteryInteraction(lottery.id, qbOpen);
+
+  // ✅ NEW: unified “open sign-in” with fallback global event
+  const requestSignIn = useCallback(() => {
+    // 1) Prefer direct callback if provided
+    if (onOpenSignIn) {
+      onOpenSignIn();
+      return;
+    }
+
+    // 2) Fallback: global event (no prop drilling required)
+    try {
+      window.dispatchEvent(new CustomEvent("ppopgi:open-signin"));
+    } catch {}
+  }, [onOpenSignIn]);
 
   const statusRaw = String((lottery as any).status || "");
   const isOpenStatus = statusRaw === "OPEN";
@@ -186,6 +200,10 @@ export function LotteryCard({
   const priceUi = useMemo(() => fmtUsdcUi(ui.formattedPrice, { maxDecimals: 0 }), [ui.formattedPrice]);
 
   const showSuccess = qbOpen && !!qbState.lastBuy;
+
+  // ✅ Gate logic:
+  // - if app told us explicitly the user is NOT signed in => gate
+  // - otherwise, fall back to “connected” from interaction hook
   const shouldGate = isSignedIn === false || (!isSignedIn && !qbState.isConnected);
   const blurBuy = qbOpen && shouldGate;
 
@@ -217,7 +235,10 @@ export function LotteryCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qbOpen, uiMaxForStepper]);
 
-  const balanceUi = useMemo(() => fmtUsdcUi(qbMath.fmtUsdc(qbState.usdcBal?.toString() || "0")), [qbMath, qbState.usdcBal]);
+  const balanceUi = useMemo(
+    () => fmtUsdcUi(qbMath.fmtUsdc(qbState.usdcBal?.toString() || "0")),
+    [qbMath, qbState.usdcBal]
+  );
   const totalUi = useMemo(() => fmtUsdcUi(qbMath.fmtUsdc(qbMath.totalCostU.toString())), [qbMath, qbMath.totalCostU]);
 
   const soldEffective = useMemo(() => {
@@ -260,17 +281,24 @@ export function LotteryCard({
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!isLiveForCard) return;
+
+      // ✅ If caller explicitly says "not signed in", open sign-in instead of expanding
+      if (isSignedIn === false) {
+        requestSignIn();
+        return;
+      }
+
       setQbOpen(true);
     },
-    [isLiveForCard]
+    [isLiveForCard, isSignedIn, requestSignIn]
   );
 
   const handleOverlayConnectClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onOpenSignIn?.();
+      requestSignIn();
     },
-    [onOpenSignIn]
+    [requestSignIn]
   );
 
   return (
@@ -452,7 +480,7 @@ export function LotteryCard({
              ========================= */}
           {qbOpen && (
             <div className="rc-qb-wrap">
-              {/* ✅ NEW: Global Close Button (Sits above blur) */}
+              {/* ✅ Global Close Button (Sits above blur) */}
               <button
                 className="rc-qb-close"
                 onClick={(e) => {
