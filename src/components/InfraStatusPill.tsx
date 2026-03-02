@@ -142,7 +142,7 @@ export function InfraStatusPill() {
             </div>
             <div className="isp-item-data">
               <div className="isp-item-val">
-                {s.bot?.running ? "Running" : "Idle"}
+                {s.bot?.running ? "Running" : "Ready"}
               </div>
               <div className="isp-item-sub">
                 Last: {fmtAgoSec(s.bot?.secondsSinceLastRun ?? null)} | Next:{" "}

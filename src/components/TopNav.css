@@ -52,8 +52,13 @@
   width: 100%;
   display: flex;
   justify-content: center;
+  align-items: center;
   padding: 0 12px 12px 12px;
   pointer-events: auto;
+}
+
+.topnav-infra .isp-summary {
+  margin: 0 auto;
 }
 
 /* --- BRAND --- */
