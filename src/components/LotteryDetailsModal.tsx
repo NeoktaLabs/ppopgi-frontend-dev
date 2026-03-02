@@ -242,7 +242,7 @@ type Props = {
   onClose: () => void;
   initialLottery?: LotteryListItem | null;
 
-  // ✅ ADD: parent passes a function that opens your SignIn modal
+  // ✅ Parent should pass a function that opens your SignIn modal
   onOpenSignIn?: () => void;
 };
 
@@ -744,7 +744,11 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery, 
                       <button
                         type="button"
                         className="rdm-overlay-msg"
-                        onClick={() => onOpenSignIn?.()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenSignIn?.();
+                        }}
                         aria-label="Open sign in"
                       >
                         <span>Connect Wallet to Buy</span>
@@ -893,7 +897,6 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery, 
                   <div className="rdm-receipt">
                     <div className="rdm-receipt-line start">--- RANGE POLICY ---</div>
 
-                    {/* ✅ NEW: small note + FAQ link */}
                     <div className="rdm-range-note" style={{ margin: "8px 0 12px", fontSize: 12, opacity: 0.8 }}>
                       Learn more about ranges in the{" "}
                       <a href={FAQ_HREF} className="rdm-info-link" target="_blank" rel="noreferrer">
