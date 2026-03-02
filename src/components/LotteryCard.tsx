@@ -1,10 +1,9 @@
 // src/components/LotteryCard.tsx
 import React, { useMemo } from "react";
-import type { LotteryListItem } from "../indexer/subgraph"; // ✅ updated type
+import type { LotteryListItem } from "../indexer/subgraph";
 import { useLotteryCard } from "../hooks/useLotteryCard";
 import "./LotteryCard.css";
 
-// ✅ NEW: shared UI formatter (removes trailing .0 by default)
 import { fmtUsdcUi } from "../lib/format";
 
 const EXPLORER_URL = "https://explorer.etherlink.com/address/";
@@ -39,6 +38,14 @@ type Props = {
   hatch?: HatchUI | null;
   userEntry?: UserEntryStats;
   finalizer?: FinalizerInfo | null;
+
+  /**
+   * ✅ Auth gating (NEW)
+   * If canBuy === false, the buy section is blurred and clicking it opens sign-in.
+   * Default: true (no behavior change if you don’t pass anything).
+   */
+  canBuy?: boolean;
+  onRequireSignIn?: () => void;
 };
 
 const short = (addr: string) => (addr ? `${addr.slice(0, 5)}...${addr.slice(-4)}` : "Unknown");
@@ -66,6 +73,8 @@ export function LotteryCard({
   hatch,
   userEntry,
   finalizer,
+  canBuy = true,
+  onRequireSignIn,
 }: Props) {
   const { ui, actions } = useLotteryCard(lottery, nowMs);
 
@@ -128,7 +137,6 @@ export function LotteryCard({
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
 
-  // ✅ Prefer creator (new data), keep owner fallback only if you still have legacy rows somewhere.
   const hostAddr = (lottery as any).creator || (lottery as any).owner;
 
   const winRateLabel = useMemo(() => {
@@ -166,13 +174,19 @@ export function LotteryCard({
     );
   }, [endMode, maxReached]);
 
-  // ✅ Fix TS: title prop cannot be null
   const titleText = lottery.name ?? undefined;
   const displayName = lottery.name ?? "Lottery";
 
-  // ✅ NEW: remove trailing ".0" (and any decimals) for card display only
   const potUi = useMemo(() => fmtUsdcUi(ui.formattedPot, { maxDecimals: 0 }), [ui.formattedPot]);
   const priceUi = useMemo(() => fmtUsdcUi(ui.formattedPrice, { maxDecimals: 0 }), [ui.formattedPrice]);
+
+  const buyIsLocked = isLiveForCard && !canBuy;
+
+  function handleRequireSignInClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    onRequireSignIn?.();
+  }
 
   return (
     <div className={cardClass} onClick={() => onOpen(lottery.id)} role="button" tabIndex={0}>
@@ -320,15 +334,32 @@ export function LotteryCard({
         <div className="rc-stub-content">
           {/* Action Button */}
           {isLiveForCard ? (
-            <button
-              className="rc-quick-buy-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpen(lottery.id);
-              }}
-            >
-              ⚡ Buy Ticket
-            </button>
+            <div className={`rc-buy-wrap ${buyIsLocked ? "locked" : ""}`}>
+              <button
+                className="rc-quick-buy-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen(lottery.id);
+                }}
+                disabled={buyIsLocked}
+                aria-disabled={buyIsLocked}
+              >
+                ⚡ Buy Ticket
+              </button>
+
+              {/* ✅ Overlay gate (only when locked) */}
+              {buyIsLocked && (
+                <button
+                  type="button"
+                  className="rc-buy-gate"
+                  onClick={handleRequireSignInClick}
+                  aria-label="Sign in to buy tickets"
+                  title="Sign in to buy tickets"
+                >
+                  Sign in to buy tickets
+                </button>
+              )}
+            </div>
           ) : (
             endInfoBlock
           )}
