@@ -593,7 +593,7 @@ export function LotteryCard({
                         }}
                         disabled={qbState.isPending}
                       >
-                        {qbState.isPending ? "Preparing..." : "1. Prepare Wallet"}
+                        {qbState.isPending ? "Preparing..." : "Prepare Wallet"}
                       </button>
                     ) : (
                       <button
