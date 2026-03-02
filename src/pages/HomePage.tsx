@@ -1,5 +1,5 @@
 // src/pages/HomePage.tsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useCallback } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useInfraStatus } from "../hooks/useInfraStatus";
 import { useGlobalStatsBillboard } from "../hooks/useGlobalStatsBillboard";
@@ -12,10 +12,6 @@ type Props = {
   nowMs: number;
   onOpenLottery: (id: string) => void;
   onOpenSafety: (id: string) => void;
-
-  // ✅ NEW: sign-in gate wiring
-  isSignedIn: boolean;
-  onOpenSignIn: () => void;
 };
 
 const num = (v: any) => {
@@ -70,13 +66,11 @@ function BannerSlider() {
   );
 }
 
-export function HomePage({
-  nowMs,
-  onOpenLottery,
-  onOpenSafety,
-  isSignedIn,
-  onOpenSignIn,
-}: Props) {
+// ✅ NOTE: BannerSlider uses useState, so we must import it.
+// Keeping this file self-contained and compiling.
+import { useState } from "react";
+
+export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Home";
   }, []);
@@ -198,8 +192,6 @@ export function HomePage({
                   ribbon="silver"
                   nowMs={nowMs}
                   finalizer={finalizerForCards}
-                  isSignedIn={isSignedIn}
-                  onOpenSignIn={onOpenSignIn}
                 />
               </div>
             )}
@@ -213,8 +205,6 @@ export function HomePage({
                   ribbon="gold"
                   nowMs={nowMs}
                   finalizer={finalizerForCards}
-                  isSignedIn={isSignedIn}
-                  onOpenSignIn={onOpenSignIn}
                 />
               </div>
             )}
@@ -228,8 +218,6 @@ export function HomePage({
                   ribbon="bronze"
                   nowMs={nowMs}
                   finalizer={finalizerForCards}
-                  isSignedIn={isSignedIn}
-                  onOpenSignIn={onOpenSignIn}
                 />
               </div>
             )}
@@ -260,8 +248,6 @@ export function HomePage({
                       onOpenSafety={onOpenSafety}
                       nowMs={nowMs}
                       finalizer={finalizerForCards}
-                      isSignedIn={isSignedIn}
-                      onOpenSignIn={onOpenSignIn}
                     />
                   </div>
                 ))}
@@ -287,8 +273,6 @@ export function HomePage({
                       onOpenSafety={onOpenSafety}
                       nowMs={nowMs}
                       finalizer={finalizerForCards}
-                      isSignedIn={isSignedIn}
-                      onOpenSignIn={onOpenSignIn}
                     />
                   </div>
                 ))}
