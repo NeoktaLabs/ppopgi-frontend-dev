@@ -50,7 +50,6 @@ function dotLevel(level: string): string {
 export function InfraStatusPill() {
   const s = useInfraStatus();
 
-  // ✅ Collapsed by default
   const [expanded, setExpanded] = useState(false);
 
   const idxDot = useMemo(() => dotLevel(s.indexer.level), [s.indexer.level]);
@@ -74,11 +73,19 @@ export function InfraStatusPill() {
           onClick={() => setExpanded(true)}
           aria-label="Expand system status"
         >
-          <span className="isp-summary-title">System</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <span className="isp-summary-title">
+              Ppopgi Systems Status
+            </span>
 
-          <span className="isp-summary-state">
-            {overallHealthy ? "All Good" : "Issues"}
-          </span>
+            <span className="isp-summary-state">
+              {s.isLoading
+                ? "Checking..."
+                : overallHealthy
+                ? "All Systems Operational"
+                : "Some Systems Degraded"}
+            </span>
+          </div>
 
           <span className="isp-summary-dots">
             <span className={`isp-dot ${idxDot}`} />
@@ -88,7 +95,7 @@ export function InfraStatusPill() {
 
           <span className="isp-summary-updated">
             {s.isLoading
-              ? "Checking..."
+              ? ""
               : new Date(s.tsMs).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
