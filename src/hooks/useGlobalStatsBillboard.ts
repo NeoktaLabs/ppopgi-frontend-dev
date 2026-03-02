@@ -43,7 +43,6 @@ function isHidden() {
 }
 
 function toBigInt(v: any): bigint {
-  // Subgraph BigInt comes back as string
   try {
     if (typeof v === "bigint") return v;
     if (typeof v === "number" && Number.isFinite(v)) return BigInt(Math.trunc(v));
@@ -67,17 +66,25 @@ const QUERY = /* GraphQL */ `
   }
 `;
 
+const EMPTY: GlobalStatsBillboard = {
+  totalLotteriesCreated: 0n,
+  totalLotteriesSettled: 0n,
+  totalLotteriesCanceled: 0n,
+  totalTicketsSold: 0n,
+  totalTicketRevenueUSDC: 0n,
+  totalPrizesSettledUSDC: 0n,
+  activeVolumeUSDC: 0n,
+  updatedAt: 0n,
+};
+
 export function useGlobalStatsBillboard(): State {
   // Point this at your CACHE WORKER graphql endpoint, not the raw subgraph
-  // Example: VITE_SUBGRAPH_URL="https://indexer-cache.yourdomain.com/graphql"
   const gqlUrl = useMemo(() => mustEnv("VITE_SUBGRAPH_URL"), []);
 
-  // billboard can be pretty “fresh”, but we still don’t want to hammer from many tabs
-  // Worker TTL already caches (e.g. 8s), this is an additional client guard.
+  // Never poll faster than 10s
   const pollMs = useMemo(() => {
     const v = env("VITE_BILLBOARD_POLL_MS");
     const n = v ? Number(v) : 15_000;
-    // never poll faster than 10s
     return Number.isFinite(n) ? Math.max(10_000, Math.floor(n)) : 15_000;
   }, []);
 
@@ -89,6 +96,16 @@ export function useGlobalStatsBillboard(): State {
   const aliveRef = useRef(true);
   const fetchingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ✅ Keep latest data in a ref so callbacks don't depend on state
+  const dataRef = useRef<GlobalStatsBillboard | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  // ✅ Hard throttle safeguard (prevents accidental tight loops)
+  const lastFetchMsRef = useRef(0);
+  const MIN_SPACING_MS = 1500; // even if something re-triggers, cap at ~0.6 req/s
 
   useEffect(() => {
     aliveRef.current = true;
@@ -105,8 +122,14 @@ export function useGlobalStatsBillboard(): State {
       if (fetchingRef.current) return;
       if (isHidden()) return;
 
+      const now = Date.now();
+      if (!opts?.forceFresh && now - lastFetchMsRef.current < MIN_SPACING_MS) return;
+      lastFetchMsRef.current = now;
+
       fetchingRef.current = true;
-      setIsLoading((prev) => prev || data === null);
+
+      // Only show loading spinner if we don't already have data
+      setIsLoading((prev) => prev || dataRef.current === null);
 
       try {
         try {
@@ -116,7 +139,7 @@ export function useGlobalStatsBillboard(): State {
         abortRef.current = ac;
 
         const headers: Record<string, string> = { "content-type": "application/json" };
-        if (opts?.forceFresh) headers["x-force-fresh"] = "1"; // your worker supports this
+        if (opts?.forceFresh) headers["x-force-fresh"] = "1";
 
         const res = await fetch(gqlUrl, {
           method: "POST",
@@ -136,47 +159,32 @@ export function useGlobalStatsBillboard(): State {
         if (json.errors?.length) throw new Error("graphql_error");
 
         const g = json.data?.globalStats;
-        if (!g) {
-          // subgraph not initialized yet OR global entity not created
-          // treat as zeroed stats instead of hard error
-          const empty: GlobalStatsBillboard = {
-            totalLotteriesCreated: 0n,
-            totalLotteriesSettled: 0n,
-            totalLotteriesCanceled: 0n,
-            totalTicketsSold: 0n,
-            totalTicketRevenueUSDC: 0n,
-            totalPrizesSettledUSDC: 0n,
-            activeVolumeUSDC: 0n,
-            updatedAt: 0n,
-          };
-          if (!aliveRef.current) return;
-          setData(empty);
-          setError(null);
-          setTsMs(Date.now());
-          setIsLoading(false);
-          return;
-        }
 
-        const next: GlobalStatsBillboard = {
-          totalLotteriesCreated: toBigInt(g.totalLotteriesCreated),
-          totalLotteriesSettled: toBigInt(g.totalLotteriesSettled),
-          totalLotteriesCanceled: toBigInt(g.totalLotteriesCanceled),
-          totalTicketsSold: toBigInt(g.totalTicketsSold),
-          totalTicketRevenueUSDC: toBigInt(g.totalTicketRevenueUSDC),
-          totalPrizesSettledUSDC: toBigInt(g.totalPrizesSettledUSDC),
-          activeVolumeUSDC: toBigInt(g.activeVolumeUSDC),
-          updatedAt: toBigInt(g.updatedAt),
-        };
+        // Treat missing entity as zeroed stats (subgraph not initialized yet)
+        const next: GlobalStatsBillboard = g
+          ? {
+              totalLotteriesCreated: toBigInt(g.totalLotteriesCreated),
+              totalLotteriesSettled: toBigInt(g.totalLotteriesSettled),
+              totalLotteriesCanceled: toBigInt(g.totalLotteriesCanceled),
+              totalTicketsSold: toBigInt(g.totalTicketsSold),
+              totalTicketRevenueUSDC: toBigInt(g.totalTicketRevenueUSDC),
+              totalPrizesSettledUSDC: toBigInt(g.totalPrizesSettledUSDC),
+              activeVolumeUSDC: toBigInt(g.activeVolumeUSDC),
+              updatedAt: toBigInt(g.updatedAt),
+            }
+          : EMPTY;
 
         if (!aliveRef.current) return;
+
         setData(next);
         setError(null);
         setTsMs(Date.now());
         setIsLoading(false);
       } catch (e: any) {
         if (!aliveRef.current) return;
-        // ignore aborts
+
         const msg = String(e?.message || e || "fetch_error");
+        // ignore aborts
         if (!msg.toLowerCase().includes("abort")) {
           setError(msg);
           setIsLoading(false);
@@ -185,7 +193,7 @@ export function useGlobalStatsBillboard(): State {
         fetchingRef.current = false;
       }
     },
-    [gqlUrl, data]
+    [gqlUrl]
   );
 
   // initial + polling (paused when tab hidden)
@@ -199,7 +207,7 @@ export function useGlobalStatsBillboard(): State {
     return () => clearInterval(t);
   }, [fetchOnce, pollMs]);
 
-  // refresh on focus (nice for “come back to tab”)
+  // refresh on focus
   useEffect(() => {
     const onFocus = () => void fetchOnce();
     window.addEventListener("focus", onFocus);
