@@ -572,7 +572,7 @@ export function LotteryCard({
                   onClick={handleOverlayConnectClick}
                   aria-label="Open sign in"
                 >
-                  <span>Connect to Buy</span>
+                  <span>Join PPopgi (뽑기) !</span>
                 </button>
               )}
             </div>
