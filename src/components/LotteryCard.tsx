@@ -66,6 +66,11 @@ function clampTicketsUi(v: any) {
   return Math.max(1, n);
 }
 
+const normAddr = (a: any) => {
+  const s = String(a || "").trim().toLowerCase();
+  return s && s.startsWith("0x") && s.length >= 10 ? s : "";
+};
+
 export function LotteryCard({
   lottery,
   onOpen,
@@ -83,15 +88,12 @@ export function LotteryCard({
 
   const { state: qbState, math: qbMath, flags: qbFlags, actions: qbActions } = useLotteryInteraction(lottery.id, qbOpen);
 
-  // ✅ NEW: unified “open sign-in” with fallback global event
+  // ✅ unified “open sign-in” with fallback global event
   const requestSignIn = useCallback(() => {
-    // 1) Prefer direct callback if provided
     if (onOpenSignIn) {
       onOpenSignIn();
       return;
     }
-
-    // 2) Fallback: global event (no prop drilling required)
     try {
       window.dispatchEvent(new CustomEvent("ppopgi:open-signin"));
     } catch {}
@@ -156,7 +158,13 @@ export function LotteryCard({
   const statusClass = displayStatus.toLowerCase().replace(" ", "-");
   const cardClass = `rc-card ${ribbon || ""}`;
 
+  // Prefer creator (new data), keep owner fallback only if legacy rows exist
   const hostAddr = (lottery as any).creator || (lottery as any).owner;
+
+  // ✅ creator cannot participate (same behavior as details modal)
+  const connectedAddr = normAddr((qbState as any)?.account); // requires hook returning state.account
+  const creatorAddr = normAddr(hostAddr);
+  const isCreatorConnected = !!connectedAddr && !!creatorAddr && connectedAddr === creatorAddr;
 
   const winRateLabel = useMemo(() => {
     const max = Number((lottery as any).maxTickets ?? 0);
@@ -206,6 +214,12 @@ export function LotteryCard({
   // - otherwise, fall back to “connected” from interaction hook
   const shouldGate = isSignedIn === false || (!isSignedIn && !qbState.isConnected);
   const blurBuy = qbOpen && shouldGate;
+
+  // ✅ Overlay priority:
+  // 1) creator block
+  // 2) sign-in / connect gate
+  const showCreatorOverlay = qbOpen && isCreatorConnected && !showSuccess;
+  const showConnectOverlay = qbOpen && !showCreatorOverlay && blurBuy && !showSuccess;
 
   const ticketPriceU = useMemo(() => {
     try {
@@ -300,6 +314,11 @@ export function LotteryCard({
     },
     [requestSignIn]
   );
+
+  const handleCreatorOverlayClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    // no-op: creator cannot participate
+  }, []);
 
   return (
     <div className={cardClass} onClick={handleCardClick} role="button" tabIndex={0}>
@@ -480,7 +499,7 @@ export function LotteryCard({
              ========================= */}
           {qbOpen && (
             <div className="rc-qb-wrap">
-              {/* ✅ Global Close Button (Sits above blur) */}
+              {/* ✅ Global Close Button (Sits above overlays) */}
               <button
                 className="rc-qb-close"
                 onClick={(e) => {
@@ -529,7 +548,7 @@ export function LotteryCard({
                 </div>
               ) : (
                 // ✅ COMPACT BUY VIEW
-                <div className={`rc-qb-inner ${blurBuy ? "blurred" : ""}`}>
+                <div className={`rc-qb-inner ${blurBuy || showCreatorOverlay ? "blurred" : ""}`}>
                   <div className="rc-qb-top">
                     <span>Bal: {balanceUi} USDC</span>
                     <span>Cap: {uiMaxForStepper}</span>
@@ -542,7 +561,7 @@ export function LotteryCard({
                         e.stopPropagation();
                         qbActions.setTickets(String(Math.max(1, clampedUiTicket - 1)));
                       }}
-                      disabled={clampedUiTicket <= 1}
+                      disabled={clampedUiTicket <= 1 || showCreatorOverlay}
                     >
                       −
                     </button>
@@ -558,7 +577,7 @@ export function LotteryCard({
                         e.stopPropagation();
                         qbActions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)));
                       }}
-                      disabled={clampedUiTicket >= uiMaxForStepper}
+                      disabled={clampedUiTicket >= uiMaxForStepper || showCreatorOverlay}
                     >
                       +
                     </button>
@@ -570,9 +589,10 @@ export function LotteryCard({
                         className="rc-quick-buy-btn"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (showCreatorOverlay) return;
                           qbActions.approve();
                         }}
-                        disabled={qbState.isPending}
+                        disabled={qbState.isPending || showCreatorOverlay}
                       >
                         {qbState.isPending ? "Preparing..." : "Prepare Wallet"}
                       </button>
@@ -581,9 +601,10 @@ export function LotteryCard({
                         className="rc-quick-buy-btn"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (showCreatorOverlay) return;
                           qbActions.buy();
                         }}
-                        disabled={!qbFlags.canBuy || qbState.isPending}
+                        disabled={!qbFlags.canBuy || qbState.isPending || showCreatorOverlay}
                       >
                         {qbState.isPending ? "Processing..." : `Buy ${clampedUiTicket}`}
                       </button>
@@ -592,14 +613,21 @@ export function LotteryCard({
                 </div>
               )}
 
-              {/* ✅ Overlay to force connection when blurred */}
-              {blurBuy && (
+              {/* ✅ Creator cannot participate overlay (highest priority) */}
+              {showCreatorOverlay && (
                 <button
                   type="button"
                   className="rc-qb-overlay"
-                  onClick={handleOverlayConnectClick}
-                  aria-label="Open sign in"
+                  onClick={handleCreatorOverlayClick}
+                  aria-label="Creator cannot participate"
                 >
+                  <span>Creator cannot participate</span>
+                </button>
+              )}
+
+              {/* ✅ Connect overlay (only if not creator) */}
+              {showConnectOverlay && (
+                <button type="button" className="rc-qb-overlay" onClick={handleOverlayConnectClick} aria-label="Open sign in">
                   <span>Join PPopgi (뽑기) !</span>
                 </button>
               )}
