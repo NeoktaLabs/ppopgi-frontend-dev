@@ -675,64 +675,68 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                 ) : isCreator ? (
                   <div className="rdm-buy-disabled">Creator cannot participate.</div>
                 ) : (
-                  <div className={`rdm-buy-inner ${blurBuy ? "blurred" : ""}`}>
-                    <div className="rdm-balance-row">
-                      <span>Bal: {balanceUi} USDC</span>
-                      <span>Cap: {uiMaxForStepper}</span>
-                    </div>
-
-                    {showRemainingNote && (
-                      <div className="rdm-warn-text">
-                        Only {(math as any).remainingTickets} ticket{(math as any).remainingTickets === 1 ? "" : "s"} remaining
-                      </div>
-                    )}
-
-                    {minBuyHint && <div className="rdm-warn-text">{minBuyHint}</div>}
-
-                    {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
-
-                    <div className="rdm-stepper">
-                      <button
-                        className="rdm-step-btn"
-                        onClick={() => actions.setTickets(String(Math.max(1, clampedUiTicket - 1)))}
-                        disabled={clampedUiTicket <= 1}
-                      >
-                        −
-                      </button>
-
-                      <div className="rdm-input-wrapper">
-                        <input
-                          className="rdm-amount"
-                          inputMode="numeric"
-                          value={String(clampedUiTicket)}
-                          onChange={(e) => {
-                            const v = clampTicketsUi(e.target.value);
-                            actions.setTickets(String(Math.min(v, uiMaxForStepper)));
-                          }}
-                          placeholder="1"
-                        />
-                        <div className="rdm-cost-preview">Total: {totalUi} USDC</div>
+                  // ✅ WRAPPED everything here in a relative container so the overlay msg escapes the blur
+                  <div className="rdm-buy-wrap">
+                    <div className={`rdm-buy-inner ${blurBuy ? "blurred" : ""}`}>
+                      <div className="rdm-balance-row">
+                        <span>Bal: {balanceUi} USDC</span>
+                        <span>Cap: {uiMaxForStepper}</span>
                       </div>
 
-                      <button
-                        className="rdm-step-btn"
-                        onClick={() => actions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)))}
-                        disabled={clampedUiTicket >= uiMaxForStepper}
-                      >
-                        +
-                      </button>
+                      {showRemainingNote && (
+                        <div className="rdm-warn-text">
+                          Only {(math as any).remainingTickets} ticket{(math as any).remainingTickets === 1 ? "" : "s"} remaining
+                        </div>
+                      )}
+
+                      {minBuyHint && <div className="rdm-warn-text">{minBuyHint}</div>}
+
+                      {showBalanceWarn && <div className="rdm-warn-box">Insufficient balance.</div>}
+
+                      <div className="rdm-stepper">
+                        <button
+                          className="rdm-step-btn"
+                          onClick={() => actions.setTickets(String(Math.max(1, clampedUiTicket - 1)))}
+                          disabled={clampedUiTicket <= 1}
+                        >
+                          −
+                        </button>
+
+                        <div className="rdm-input-wrapper">
+                          <input
+                            className="rdm-amount"
+                            inputMode="numeric"
+                            value={String(clampedUiTicket)}
+                            onChange={(e) => {
+                              const v = clampTicketsUi(e.target.value);
+                              actions.setTickets(String(Math.min(v, uiMaxForStepper)));
+                            }}
+                            placeholder="1"
+                          />
+                          <div className="rdm-cost-preview">Total: {totalUi} USDC</div>
+                        </div>
+
+                        <button
+                          className="rdm-step-btn"
+                          onClick={() => actions.setTickets(String(Math.min(uiMaxForStepper, clampedUiTicket + 1)))}
+                          disabled={clampedUiTicket >= uiMaxForStepper}
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {!flags.hasEnoughAllowance ? (
+                        <button className="rdm-cta primary" onClick={actions.approve} disabled={state.isPending}>
+                          {state.isPending ? "Preparing..." : "1. Prepare Wallet"}
+                        </button>
+                      ) : (
+                        <button className="rdm-cta primary" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
+                          {state.isPending ? "Processing..." : `Buy ${clampedUiTicket} Ticket${clampedUiTicket !== 1 ? "s" : ""}`}
+                        </button>
+                      )}
                     </div>
 
-                    {!flags.hasEnoughAllowance ? (
-                      <button className="rdm-cta primary" onClick={actions.approve} disabled={state.isPending}>
-                        {state.isPending ? "Preparing..." : "1. Prepare Wallet"}
-                      </button>
-                    ) : (
-                      <button className="rdm-cta primary" onClick={actions.buy} disabled={!flags.canBuy || state.isPending}>
-                        {state.isPending ? "Processing..." : `Buy ${clampedUiTicket} Ticket${clampedUiTicket !== 1 ? "s" : ""}`}
-                      </button>
-                    )}
-
+                    {/* ✅ Sibling overlay message that won't get blurred! */}
                     {blurBuy && (
                       <div className="rdm-overlay-msg">
                         <span>Connect Wallet to Buy</span>
