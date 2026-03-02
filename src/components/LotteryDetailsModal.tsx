@@ -241,6 +241,9 @@ type Props = {
   lotteryId: string | null;
   onClose: () => void;
   initialLottery?: LotteryListItem | null;
+
+  // ✅ ADD: parent passes a function that opens your SignIn modal
+  onOpenSignIn?: () => void;
 };
 
 function clampPct(p: number) {
@@ -276,7 +279,7 @@ function participantAddr(p: any): string {
   return String(p?.buyer || p?.user || p?.address || p?.account || "").toLowerCase();
 }
 
-export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }: Props) {
+export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery, onOpenSignIn }: Props) {
   const { state, math, flags, actions } = useLotteryInteraction(lotteryId, open);
   const account = useActiveAccount();
 
@@ -736,11 +739,16 @@ export function LotteryDetailsModal({ open, lotteryId, onClose, initialLottery }
                       )}
                     </div>
 
-                    {/* ✅ Sibling overlay message that won't get blurred! */}
+                    {/* ✅ CLICKABLE overlay that opens your sign-in modal */}
                     {blurBuy && (
-                      <div className="rdm-overlay-msg">
+                      <button
+                        type="button"
+                        className="rdm-overlay-msg"
+                        onClick={() => onOpenSignIn?.()}
+                        aria-label="Open sign in"
+                      >
                         <span>Connect Wallet to Buy</span>
-                      </div>
+                      </button>
                     )}
                   </div>
                 )}
