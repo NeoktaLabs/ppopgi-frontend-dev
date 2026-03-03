@@ -7,7 +7,6 @@
   pointer-events: none;
   display: flex;
   justify-content: center;
-  /* Transitions handled on children */
 }
 
 /* 1. TOAST POSITIONING (Top Center) */
@@ -15,18 +14,18 @@
   top: 24px;
   left: 0;
   right: 0;
-  height: 0; /* Don't block clicks below */
+  height: 0;
   overflow: visible;
 }
 
 /* 2. MODAL POSITIONING (Centered Overlay) */
 .pp-toast-wrap.is-modal {
   inset: 0;
-  background: rgba(43, 43, 51, 0.45); /* Dark ink overlay */
+  background: rgba(43, 43, 51, 0.45);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   align-items: center;
-  pointer-events: auto; /* Catch clicks on background */
+  pointer-events: auto;
   animation: ppModalFadeIn 0.3s ease-out;
 }
 
@@ -35,18 +34,13 @@
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  
-  /* ✅ UPDATED: Subtle Sakura Pink border for that premium Ppopgi feel */
   border: 1px solid rgba(246, 182, 200, 0.4);
-  
   box-shadow: 
     0 10px 40px -10px rgba(0, 0, 0, 0.2),
     0 4px 12px -2px rgba(0, 0, 0, 0.1);
   border-radius: 20px;
   pointer-events: auto;
   color: var(--ink);
-  
-  /* Reset */
   margin: 0;
   width: auto;
 }
@@ -60,15 +54,11 @@
   min-width: 320px;
   max-width: 420px;
   cursor: pointer;
-  
-  /* Animation: Slide Down In, Fade Out */
   opacity: 0;
   transform: translateY(-20px) scale(0.95);
-  animation: ppSlideDown 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards, ppFadeOut 0.4s ease-in 2.6s forwards; 
-  /* Total 3s: 0.4s in + 2.2s wait + 0.4s out */
+  animation: ppSlideDown 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards, ppFadeOut 0.4s ease-in 2.6s forwards;
 }
 
-/* Toast Variants */
 .pp-toast.pp-success { border-left: 4px solid #22c55e; }
 .pp-toast.pp-danger { border-left: 4px solid #ef4444; }
 .pp-toast.pp-info { border-left: 4px solid #3b82f6; }
@@ -81,7 +71,7 @@
 /* --- MODAL SPECIFIC STYLES --- */
 .pp-toast.pp-modal {
   width: 90%;
-  max-width: 440px;
+  max-width: 500px; /* Wider to accommodate time */
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -111,23 +101,61 @@
 }
 .pp-modal-close:hover { opacity: 1; }
 
+/* ✅ SUMMARY LIST (Updated for Time Alignment) */
 .pp-summary-list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .pp-summary-list li {
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.4;
-  padding: 10px;
+  padding: 10px 14px;
   background: rgba(0,0,0,0.03);
   border-radius: 12px;
-  font-weight: 600;
   color: var(--ink);
+  
+  display: flex;
+  justify-content: space-between; /* Pushes time to the right */
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.pp-sl-left {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.pp-sl-icon {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.pp-sl-text {
+  font-weight: 600;
+}
+
+/* ✅ Date/Time Column */
+.pp-sl-time {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.5;
+  white-space: nowrap; /* Forces single line */
+  text-align: right;
+  margin-top: 2px; /* Visual alignment with text */
+}
+
+.pp-sl-more {
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 4px !important;
+  background: transparent !important;
 }
 
 .pp-modal-actions {
@@ -161,24 +189,19 @@
 }
 
 /* --- ANIMATIONS --- */
-
-/* Toast Entrance */
 @keyframes ppSlideDown {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Toast Exit (Delayed by animation-delay in CSS class) */
 @keyframes ppFadeOut {
   to { opacity: 0; transform: translateY(-10px) scale(0.95); }
 }
 
-/* Modal Backdrop Fade */
 @keyframes ppModalFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-/* Modal Scale Up */
 @keyframes ppScaleUp {
   from { transform: scale(0.95) translateY(10px); opacity: 0; }
   to { transform: scale(1) translateY(0); opacity: 1; }
