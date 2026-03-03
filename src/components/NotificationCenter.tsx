@@ -13,9 +13,9 @@ type ActivityItem = {
   type: "BUY" | "CREATE" | "WIN" | "CANCEL";
   lotteryId: string;
   lotteryName: string;
-  subject: string; // buyer/creator/winner (depending on type)
-  value: string; // BUY: ticket count | WIN: prize pot (u6) | CANCEL: "0" | CREATE maybe pot (u6)
-  timestamp: string; // seconds
+  subject: string;
+  value: string;
+  timestamp: string;
   txHash: string;
   pending?: boolean;
 };
@@ -38,7 +38,7 @@ type SummaryModal = {
 
 const TOAST_MS = 2000;
 
-// TopNav’s key / event (keep consistent)
+// TopNav keys/events
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
 const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled"; // legacy fallback
 
@@ -139,10 +139,10 @@ export function NotificationCenter() {
 
   const { fireConfetti } = useConfetti();
 
-  // Live feed store (kept for general app freshness; not used to build “while away”)
+  // Live feed store (for freshness; not used as "away" history source)
   const activity = useActivityStore();
 
-  // Cached lottery list so we can infer creator quickly without extra RPC calls
+  // Cached lotteries so we can infer creator
   const lotteryStore = useLotteryStore("notif-center", 60_000);
 
   // toast toggle (real-time only)
@@ -154,9 +154,6 @@ export function NotificationCenter() {
 
   // persistent summary modal state
   const [summary, setSummary] = useState<SummaryModal | null>(null);
-
-  // ✅ Prevent “same click” from instantly closing the summary
-  const summaryOpenedAtMsRef = useRef<number>(0);
 
   const clearToast = useCallback(() => {
     setToast(null);
@@ -200,7 +197,6 @@ export function NotificationCenter() {
       else setToastsEnabled(readToastsEnabled());
     };
 
-    // accept both in case you used older event names earlier
     const onSettingB = () => setToastsEnabled(readToastsEnabled());
 
     window.addEventListener("ppopgi:toast-pref", onSettingA as any);
@@ -236,8 +232,8 @@ export function NotificationCenter() {
     if (!me) return;
 
     const onActivity = (ev: Event) => {
-      if (!toastsEnabled) return; // toggle affects ONLY real-time
-      if (summary) return; // don’t distract while summary modal is open
+      if (!toastsEnabled) return;
+      if (summary) return; // don't distract while summary modal open
 
       const d = (ev as CustomEvent<ActivityItem>).detail;
       if (!d?.lotteryId || !d?.type) return;
@@ -249,7 +245,7 @@ export function NotificationCenter() {
       const subj = lc(d.subject);
       const value = String(d.value || "0");
 
-      // Track participation on BUY by me (for future “away” relevance)
+      // Track participation on BUY by me (for future relevance)
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         return;
@@ -357,20 +353,17 @@ export function NotificationCenter() {
         const amCreator = creator && creator === meLc;
         const amParticipant = participated.has(lotId);
 
-        // creator: buys by others (don’t cumulate; one line per event)
         if (type === "BUY" && amCreator && subj !== meLc) {
           lines.push(`🎟️ ${it.value} tickets on “${name}” by ${shortAddr(subj)}`);
           continue;
         }
 
-        // cancel
         if (type === "CANCEL") {
           if (amParticipant) lines.push(`⛔ “${name}” canceled — reclaim in Dashboard`);
           else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled`);
           continue;
         }
 
-        // win
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
 
@@ -401,20 +394,33 @@ export function NotificationCenter() {
     try {
       const lastSeen = getLastSeen(me);
 
-      // ✅ First time on this device: set baseline to latest on-chain activity timestamp (no modal)
+      // ✅ First time device/cache: we STILL show summary if relevant events exist.
+      // Strategy: fetch latest N events (not "since") and build relevant lines.
       if (!lastSeen) {
-        const latest = await fetchGlobalActivity({ first: 10, forceFresh: true });
-        const newestTs = Math.max(0, ...(latest || []).map((it: any) => parseSec(String(it?.timestamp || "0"))));
-        setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
+        const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
+        const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
+
+        const newestTs = Math.max(0, ...items.map((it) => parseSec(String(it?.timestamp || "0"))));
+        if (newestTs > 0) setLastSeen(me, newestTs);
+        else setLastSeen(me, nowSec());
+
+        const lines = buildSummaryLines(items);
+        if (lines.length === 0) return; // ✅ nothing relevant => show nothing
+
+        setSummary({
+          id: `summary:first:${newestTs || Date.now()}`,
+          title: "While you were away",
+          lines,
+        });
         return;
       }
 
-      // ✅ Pull only since lastSeen (your subgraph fetch must support this)
+      // Normal: fetch only since lastSeen (server-side timestamp_gt)
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
-        sinceSec: lastSeen, // requires fetchGlobalActivity to accept & apply timestamp_gt
+        sinceSec: lastSeen,
         forceFresh: true,
-      } as any);
+      });
 
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
       if (sinceItems.length === 0) return;
@@ -423,10 +429,7 @@ export function NotificationCenter() {
       if (newestTs > 0) setLastSeen(me, newestTs);
 
       const lines = buildSummaryLines(sinceItems);
-      if (lines.length === 0) return; // ✅ “if nothing happened” => no modal
-
-      // ✅ record open time to ignore immediate outside click
-      summaryOpenedAtMsRef.current = Date.now();
+      if (lines.length === 0) return;
 
       setSummary({
         id: `summary:${newestTs || Date.now()}`,
@@ -465,31 +468,20 @@ export function NotificationCenter() {
   // Summary modal (persistent)
   if (summary) {
     return (
-      <div
-        className="pp-toast-wrap show"
-        onClick={() => {
-          // ✅ ignore the click that triggered this modal (or any immediate click)
-          if (Date.now() - summaryOpenedAtMsRef.current < 600) return;
-          clearSummary();
-        }}
-        role="presentation"
-      >
-        <div className="pp-toast pp-info" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className="pp-toast-wrap show" onMouseDown={clearSummary} role="presentation">
+        <div
+          className="pp-toast pp-info pp-modal"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div className="pp-toast-title">{summary.title}</div>
             <button
               type="button"
               onClick={clearSummary}
               aria-label="Close"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                border: "1px solid rgba(0,0,0,.08)",
-                background: "rgba(255,255,255,.7)",
-                cursor: "pointer",
-                fontWeight: 900,
-              }}
+              className="pp-modal-x"
             >
               ✕
             </button>
@@ -505,34 +497,11 @@ export function NotificationCenter() {
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={openDashboard}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.08)",
-                  background: "rgba(255,255,255,.75)",
-                  cursor: "pointer",
-                  fontWeight: 900,
-                }}
-              >
+              <button type="button" onClick={openDashboard} className="pp-modal-btn">
                 Go to Dashboard ↗
               </button>
 
-              <button
-                type="button"
-                onClick={clearSummary}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.08)",
-                  background: "transparent",
-                  cursor: "pointer",
-                  fontWeight: 800,
-                  opacity: 0.85,
-                }}
-              >
+              <button type="button" onClick={clearSummary} className="pp-modal-btn secondary">
                 Dismiss
               </button>
             </div>
@@ -546,7 +515,7 @@ export function NotificationCenter() {
   return (
     <div className={`pp-toast-wrap ${toast ? "show" : ""}`} onMouseDown={clearToast} role="presentation">
       <div
-        className={`pp-toast pp-${toast!.kind}`}
+        className={`pp-toast pp-${toast!.kind} pp-ephemeral`}
         role="status"
         aria-live="polite"
         onMouseDown={(e) => e.stopPropagation()}
