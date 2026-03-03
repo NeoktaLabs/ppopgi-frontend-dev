@@ -21,7 +21,7 @@
 /* 2. MODAL POSITIONING (Centered Overlay) */
 .pp-toast-wrap.is-modal {
   inset: 0;
-  background: rgba(43, 43, 51, 0.45);
+  background: rgba(43, 43, 51, 0.45); /* Dark ink overlay */
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   align-items: center;
@@ -34,13 +34,18 @@
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  
+  /* Subtle Sakura Pink border */
   border: 1px solid rgba(246, 182, 200, 0.4);
+  
   box-shadow: 
     0 10px 40px -10px rgba(0, 0, 0, 0.2),
     0 4px 12px -2px rgba(0, 0, 0, 0.1);
   border-radius: 20px;
   pointer-events: auto;
   color: var(--ink);
+  
+  /* Reset */
   margin: 0;
   width: auto;
 }
@@ -71,7 +76,8 @@
 /* --- MODAL SPECIFIC STYLES --- */
 .pp-toast.pp-modal {
   width: 90%;
-  max-width: 500px; /* Wider to accommodate time */
+  max-width: 500px;
+  max-height: 90vh; /* ✅ Safety limit for mobile */
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -83,6 +89,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0; /* Keep header from shrinking */
 }
 
 .pp-toast-header .pp-toast-title {
@@ -101,7 +108,7 @@
 }
 .pp-modal-close:hover { opacity: 1; }
 
-/* ✅ SUMMARY LIST (Updated for Time Alignment) */
+/* ✅ SUMMARY LIST - SCROLLABLE LOGIC */
 .pp-summary-list {
   list-style: none;
   padding: 0;
@@ -109,6 +116,28 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  /* ✅ Restrict height & enable scroll */
+  max-height: 320px; 
+  overflow-y: auto;
+  overscroll-behavior: contain; /* Prevents background page scrolling */
+  padding-right: 4px; /* Space for scrollbar */
+}
+
+/* ✅ Custom Scrollbar (Ppopgi Theme) */
+.pp-summary-list::-webkit-scrollbar {
+  width: 6px;
+}
+.pp-summary-list::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.03);
+  border-radius: 4px;
+}
+.pp-summary-list::-webkit-scrollbar-thumb {
+  background: rgba(43, 43, 51, 0.2); /* Soft ink color */
+  border-radius: 4px;
+}
+.pp-summary-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(43, 43, 51, 0.4);
 }
 
 .pp-summary-list li {
@@ -120,48 +149,47 @@
   color: var(--ink);
   
   display: flex;
-  justify-content: space-between; /* Pushes time to the right */
+  justify-content: space-between; 
   align-items: flex-start;
   gap: 16px;
+  
+  flex-shrink: 0; /* Prevents items from squishing */
 }
 
 .pp-sl-left {
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  flex: 1;
 }
 
 .pp-sl-icon {
   font-size: 16px;
   line-height: 1.3;
+  flex-shrink: 0;
 }
 
 .pp-sl-text {
   font-weight: 600;
 }
 
-/* ✅ Date/Time Column */
+/* Date/Time Column */
 .pp-sl-time {
   font-size: 11px;
   font-weight: 700;
   opacity: 0.5;
-  white-space: nowrap; /* Forces single line */
+  white-space: nowrap; 
   text-align: right;
-  margin-top: 2px; /* Visual alignment with text */
-}
-
-.pp-sl-more {
-  text-align: center;
-  font-size: 12px;
-  opacity: 0.6;
-  padding: 4px !important;
-  background: transparent !important;
+  margin-top: 2px;
+  min-width: 90px; 
+  font-variant-numeric: tabular-nums; 
 }
 
 .pp-modal-actions {
   display: flex;
   gap: 10px;
   margin-top: 8px;
+  flex-shrink: 0; /* Keep footer from shrinking */
 }
 
 .pp-btn {
