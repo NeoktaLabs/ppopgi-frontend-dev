@@ -25,7 +25,7 @@ type ToastKind = "info" | "success" | "danger";
 type Toast = {
   id: string;
   kind: ToastKind;
-  title: string;
+  title: string; // ✅ one-line announcement
   body?: string;
   showConfetti?: boolean;
 };
@@ -171,12 +171,18 @@ export function NotificationCenter() {
   // ✅ Toast dedupe for activity-store driven announcements
   const seenTxRef = useRef<Set<string>>(new Set());
 
+  // ✅ CRITICAL: seed dedupe with the first activity batch so refresh NEVER triggers announcements
+  const seededFromInitialActivityRef = useRef(false);
+
   // Reset dedupe + summary gate on wallet change
   useEffect(() => {
     seenTxRef.current = new Set();
+    seededFromInitialActivityRef.current = false;
+
     summaryCheckedThisSessionRef.current = false;
     setSummary(null);
     setSummaryExpanded(false);
+    setToast(null);
   }, [meLc]);
 
   const clearToast = useCallback(() => {
@@ -252,24 +258,41 @@ export function NotificationCenter() {
     [me]
   );
 
+  // ✅ Seed seenTxRef from the first ActivityStore batch (prevents toast on refresh / first load)
+  useEffect(() => {
+    if (!me) return;
+    if (seededFromInitialActivityRef.current) return;
+
+    const items = (activity.items || []) as ActivityItem[];
+    if (!items.length) return;
+
+    for (const it of items) {
+      if ((it as any)?.pending) continue;
+      const tx = String((it as any)?.txHash || "");
+      if (tx) seenTxRef.current.add(tx);
+    }
+
+    seededFromInitialActivityRef.current = true;
+  }, [me, activity.items]);
+
   // ✅ Real-time popups driven by ActivityStore (NOT window events)
   useEffect(() => {
     if (!me) return;
     if (!toastsEnabled) return;
 
-    // If you want the summary modal to "own the screen", keep this guard.
-    // If you'd rather allow live toasts while summary is open, remove it.
+    // ✅ If summary is visible, don't show toast.
     if (summary) return;
 
-    const items = (activity.items || []) as any[];
+    // ✅ Don't announce anything until we've seeded from initial activity batch.
+    if (!seededFromInitialActivityRef.current) return;
+
+    const items = (activity.items || []) as ActivityItem[];
     if (!items.length) return;
 
-    // Oldest -> newest so latest relevant is shown last
+    // Oldest -> newest so the latest relevant event wins
     const windowItems = items.slice(0, 25).reverse();
 
-    for (const raw of windowItems) {
-      const d = raw as ActivityItem;
-
+    for (const d of windowItems) {
       const txHash = String((d as any)?.txHash || "");
       if (!txHash) continue;
 
@@ -278,6 +301,7 @@ export function NotificationCenter() {
       // Only real activity
       if ((d as any)?.pending) continue;
 
+      // Mark seen first to prevent double-toasts if React re-renders mid-loop
       seenTxRef.current.add(txHash);
 
       const type = d.type;
@@ -445,7 +469,6 @@ export function NotificationCenter() {
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
-
         summaryCheckedThisSessionRef.current = true;
 
         if (lines.length === 0) return;
@@ -475,7 +498,6 @@ export function NotificationCenter() {
       if (newestTs > 0) setLastSeen(me, newestTs);
 
       const lines = buildSummaryLines(sinceItems);
-
       summaryCheckedThisSessionRef.current = true;
 
       if (lines.length === 0) return;
@@ -491,7 +513,7 @@ export function NotificationCenter() {
     } finally {
       inFlightSummaryRef.current = false;
     }
-  }, [me, summary, buildSummaryLines, buildSummaryLines]);
+  }, [me, summary, buildSummaryLines]);
 
   // Summary runs only on mount (per wallet)
   useEffect(() => {
