@@ -246,7 +246,7 @@ export const TopNav = memo(function TopNav({
   const usdcText = fmtBal(usdcBal.data?.displayValue, 2);
   const usdcSym = usdcBal.data?.symbol || "USDC";
 
-  const walletLabel = account ? `Wallet · ${short(account)}` : "Join Ppopgi (뽑기)";
+  const walletLabel = account ? `Player · ${short(account)}` : "Join Ppopgi (뽑기)";
 
   return (
     <div className="topnav-wrapper">
@@ -287,7 +287,7 @@ export const TopNav = memo(function TopNav({
                   aria-expanded={walletOpen}
                   title={account ? "Wallet menu" : "Wallet menu (sign in for balances)"}
                 >
-                  <span className="wallet-btn-ic">👛</span>
+                  <span className="wallet-btn-ic">🎡</span>
                   <span className="wallet-btn-txt">{walletLabel}</span>
                   <span className="wallet-btn-caret" aria-hidden>
                     ▾
