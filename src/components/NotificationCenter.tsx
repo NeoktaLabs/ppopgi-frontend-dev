@@ -539,7 +539,7 @@ export function NotificationCenter() {
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
         {/* Horizontal flex layout for single line */}
         <div className="pp-toast-row">
-          <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : ""}</div>
+          <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "📢"}</div>
           <div className="pp-toast-text">
             <span className="pp-toast-title-inline">{toast!.title}</span>
             {toast!.body && <span className="pp-toast-body-inline"> — {toast!.body}</span>}
