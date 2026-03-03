@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// src/components/NotificationCenter.tsx
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useActivityStore } from "../hooks/useActivityStore";
 import { useLotteryStore } from "../hooks/useLotteryStore";
@@ -39,7 +40,7 @@ const TOAST_MS = 2000;
 
 // TopNav’s key / event (keep consistent)
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
-const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled"; // legacy fallback if you had it earlier
+const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled"; // legacy fallback
 
 const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_"; // per account
 const LS_PARTICIPATED_PREFIX = "ppopgi_participated_"; // per account (set of lotteryIds)
@@ -138,7 +139,7 @@ export function NotificationCenter() {
 
   const { fireConfetti } = useConfetti();
 
-  // Live feed store (kept for general app freshness; we won’t use it for “while away” anymore)
+  // Live feed store (kept for general app freshness; not used to build “while away”)
   const activity = useActivityStore();
 
   // Cached lottery list so we can infer creator quickly without extra RPC calls
@@ -255,7 +256,6 @@ export function NotificationCenter() {
       const amCreator = creator && creator === meLc;
       const amParticipant = isParticipant(lotId);
 
-      // CREATOR: someone bought tickets on my lottery
       if (type === "BUY" && amCreator && subj !== meLc) {
         showToast({
           id: `t:${d.txHash}`,
@@ -266,7 +266,6 @@ export function NotificationCenter() {
         return;
       }
 
-      // PARTICIPANT: lottery canceled
       if (type === "CANCEL" && amParticipant) {
         showToast({
           id: `t:${d.txHash}`,
@@ -277,7 +276,6 @@ export function NotificationCenter() {
         return;
       }
 
-      // CREATOR: lottery canceled
       if (type === "CANCEL" && amCreator) {
         showToast({
           id: `t:${d.txHash}`,
@@ -288,7 +286,6 @@ export function NotificationCenter() {
         return;
       }
 
-      // WIN: participant win/lose + creator winner info
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
@@ -336,7 +333,6 @@ export function NotificationCenter() {
     try {
       window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page: "dashboard" } }));
     } catch {
-      // hard fallback
       window.location.href = "/?page=dashboard";
     }
   }, [clearSummary]);
@@ -358,20 +354,20 @@ export function NotificationCenter() {
         const amCreator = creator && creator === meLc;
         const amParticipant = participated.has(lotId);
 
-        // creator: buys by others
+        // creator: buys by others (don’t cumulate; one line per event)
         if (type === "BUY" && amCreator && subj !== meLc) {
           lines.push(`🎟️ ${it.value} tickets on “${name}” by ${shortAddr(subj)}`);
           continue;
         }
 
-        // participant/creator: cancel
+        // cancel
         if (type === "CANCEL") {
-          if (amParticipant) lines.push(`⛔ “${name}” canceled (min tickets not reached) — reclaim in Dashboard`);
-          else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled (min tickets not reached)`);
+          if (amParticipant) lines.push(`⛔ “${name}” canceled — reclaim in Dashboard`);
+          else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled`);
           continue;
         }
 
-        // participant/creator: win
+        // win
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
 
@@ -402,16 +398,18 @@ export function NotificationCenter() {
     try {
       const lastSeen = getLastSeen(me);
 
-      // first time on this device: set baseline, don’t spam
+      // ✅ First time on this device: set baseline to latest on-chain activity timestamp (no modal)
       if (!lastSeen) {
-        setLastSeen(me, nowSec());
+        const latest = await fetchGlobalActivity({ first: 10, forceFresh: true });
+        const newestTs = Math.max(0, ...(latest || []).map((it: any) => parseSec(String(it?.timestamp || "0"))));
+        setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
         return;
       }
 
-      // pull only since lastSeen (bigger than the live feed window)
+      // ✅ Pull only since lastSeen (server-side: timestamp_gt)
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
-        sinceTs: lastSeen,
+        sinceSec: lastSeen, // ✅ FIX (was sinceTs)
         forceFresh: true,
       });
 
@@ -430,7 +428,7 @@ export function NotificationCenter() {
         lines,
       });
     } catch {
-      // no-op (don’t annoy user)
+      // no-op
     } finally {
       inFlightSummaryRef.current = false;
     }
@@ -439,7 +437,6 @@ export function NotificationCenter() {
   useEffect(() => {
     if (!me) return;
 
-    // also run after activity store updates (helps keep lastSeen reasonable)
     void maybeShowSummary();
 
     const onFocus = () => void maybeShowSummary();
@@ -459,16 +456,11 @@ export function NotificationCenter() {
   // ---- render ----
   if (!toast && !summary) return null;
 
-  // If summary is open, render it (persistent).
+  // Summary modal (persistent)
   if (summary) {
     return (
       <div className={`pp-toast-wrap show`} onMouseDown={clearSummary} role="presentation">
-        <div
-          className={`pp-toast pp-info`}
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
+        <div className={`pp-toast pp-info`} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div className="pp-toast-title">{summary.title}</div>
             <button
@@ -536,15 +528,10 @@ export function NotificationCenter() {
     );
   }
 
-  // Otherwise render ephemeral toast (2s).
+  // Ephemeral toast (2s)
   return (
     <div className={`pp-toast-wrap ${toast ? "show" : ""}`} onMouseDown={clearToast} role="presentation">
-      <div
-        className={`pp-toast pp-${toast!.kind}`}
-        role="status"
-        aria-live="polite"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={`pp-toast pp-${toast!.kind}`} role="status" aria-live="polite" onMouseDown={(e) => e.stopPropagation()}>
         <div className="pp-toast-title">{toast!.title}</div>
         {toast!.body && <div className="pp-toast-body">{toast!.body}</div>}
       </div>
