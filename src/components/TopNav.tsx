@@ -58,7 +58,6 @@ function writeToastPref(enabled: boolean) {
   try {
     localStorage.setItem(TOAST_PREF_KEY, enabled ? "true" : "false");
   } catch {}
-  // Let the app react instantly (NotificationCenter can listen to this)
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:toast-pref", { detail: { enabled } }));
   } catch {}
@@ -80,6 +79,11 @@ export const TopNav = memo(function TopNav({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const burgerRef = useRef<HTMLButtonElement | null>(null);
 
+  // ✅ Dropdown (desktop wallet)
+  const [walletOpen, setWalletOpen] = useState(false);
+  const walletBtnRef = useRef<HTMLButtonElement | null>(null);
+  const walletMenuRef = useRef<HTMLDivElement | null>(null);
+
   // ✅ toast announcements toggle (persisted)
   const [toastEnabled, setToastEnabled] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -99,8 +103,10 @@ export const TopNav = memo(function TopNav({
 
   useEffect(() => {
     setMenuOpen(false);
+    setWalletOpen(false);
   }, [page]);
 
+  // Close mobile menu on outside click / esc
   useEffect(() => {
     if (!menuOpen) return;
 
@@ -129,6 +135,33 @@ export const TopNav = memo(function TopNav({
     };
   }, [menuOpen]);
 
+  // Close wallet dropdown on outside click / esc
+  useEffect(() => {
+    if (!walletOpen) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      const insideMenu = !!walletMenuRef.current?.contains(target);
+      const insideBtn = !!walletBtnRef.current?.contains(target);
+
+      if (!insideMenu && !insideBtn) setWalletOpen(false);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWalletOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, { capture: true });
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, { capture: true } as any);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [walletOpen]);
+
   // keep polling off in background tabs
   useEffect(() => {
     const onVis = () => {
@@ -144,9 +177,12 @@ export const TopNav = memo(function TopNav({
     };
   }, []);
 
-  // close mobile menu when tab loses focus
+  // close menus when tab loses focus
   useEffect(() => {
-    const onBlur = () => setMenuOpen(false);
+    const onBlur = () => {
+      setMenuOpen(false);
+      setWalletOpen(false);
+    };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   }, []);
@@ -205,6 +241,8 @@ export const TopNav = memo(function TopNav({
   const usdcText = fmtBal(usdcBal.data?.displayValue, 2);
   const usdcSym = usdcBal.data?.symbol || "USDC";
 
+  const walletLabel = account ? `Wallet · ${short(account)}` : "Wallet";
+
   return (
     <div className="topnav-wrapper">
       <div className="topnav-shell">
@@ -222,15 +260,6 @@ export const TopNav = memo(function TopNav({
               Explore
             </button>
 
-            {account && (
-              <button
-                className={`nav-link ${page === "dashboard" ? "active" : ""}`}
-                onClick={() => handleNav(onOpenDashboard, "dashboard")}
-              >
-                Dashboard
-              </button>
-            )}
-
             <button className="nav-link create-btn" onClick={() => handleNav(onOpenCreate)}>
               Create
             </button>
@@ -238,80 +267,140 @@ export const TopNav = memo(function TopNav({
 
           <div className="topnav-right">
             <div className="desktop-actions">
-              {account ? (
-                <>
-                  <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
-                    🏦 Cashier
-                  </button>
-
-                  {/* ✅ Toast announcements toggle */}
-                  <button
-                    type="button"
-                    className="nav-link cashier-btn"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleToasts();
-                    }}
-                    title={toastEnabled ? "Turn off announcement popups" : "Turn on announcement popups"}
-                    aria-pressed={toastEnabled}
-                  >
-                    {toastEnabled ? "🔔 Alerts" : "🔕 Alerts"}
-                  </button>
-
-                  <div className="balances-pill" title="Wallet balances">
-                    <div className="balances-rows">
-                      <div className="bal-row">
-                        <span className="bal-sym">{xtzSym}</span>
-                        <span className="bal-val">{xtzText}</span>
-                      </div>
-                      <div className="bal-row">
-                        <span className="bal-sym">{usdcSym}</span>
-                        <span className="bal-val">{usdcText}</span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
-                    🏦 Cashier
-                  </button>
-
-                  {/* ✅ Toast announcements toggle (even when signed out) */}
-                  <button
-                    type="button"
-                    className="nav-link cashier-btn"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleToasts();
-                    }}
-                    title={toastEnabled ? "Turn off announcement popups" : "Turn on announcement popups"}
-                    aria-pressed={toastEnabled}
-                  >
-                    {toastEnabled ? "🔔 Alerts" : "🔕 Alerts"}
-                  </button>
-                </>
-              )}
-
-              {!account ? (
-                <button className="nav-link primary-pill-btn" onClick={() => handleNav(onOpenSignIn)}>
-                  Sign In
-                </button>
-              ) : (
+              {/* ✅ Single obvious dropdown entry-point */}
+              <div className="wallet-dd">
                 <button
+                  ref={walletBtnRef}
                   type="button"
-                  className="nav-link primary-pill-btn"
-                  onClick={() => handleNav(onSignOut)}
-                  title="Log Off"
+                  className={`wallet-btn ${walletOpen ? "open" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setWalletOpen((v) => !v);
+                  }}
+                  aria-haspopup="menu"
+                  aria-expanded={walletOpen}
+                  title={account ? "Wallet menu" : "Wallet menu (sign in for balances)"}
                 >
-                  <div className="acct-stack">
-                    <div className="acct-top">Log Off</div>
-                    <div className="acct-bottom">{short(account)}</div>
-                  </div>
+                  <span className="wallet-btn-ic">👛</span>
+                  <span className="wallet-btn-txt">{walletLabel}</span>
+                  <span className="wallet-btn-caret" aria-hidden>
+                    ▾
+                  </span>
                 </button>
-              )}
+
+                {walletOpen && (
+                  <div ref={walletMenuRef} className="wallet-menu" role="menu">
+                    {account ? (
+                      <>
+                        <div className="wallet-section">
+                          <div className="wallet-sec-title">Balances</div>
+                          <div className="wallet-bal">
+                            <div className="wallet-bal-row">
+                              <span>{usdcSym}</span>
+                              <b>{usdcText}</b>
+                            </div>
+                            <div className="wallet-bal-row">
+                              <span>{xtzSym}</span>
+                              <b>{xtzText}</b>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="wallet-divider" />
+
+                        <button
+                          className="wallet-item"
+                          onClick={() => {
+                            setWalletOpen(false);
+                            onOpenCashier();
+                          }}
+                          role="menuitem"
+                        >
+                          🏦 Cashier
+                        </button>
+
+                        <button
+                          className="wallet-item"
+                          onClick={() => toggleToasts()}
+                          role="menuitem"
+                          aria-pressed={toastEnabled}
+                          title={toastEnabled ? "Turn off announcement popups" : "Turn on announcement popups"}
+                        >
+                          {toastEnabled ? "🔔 Alerts: ON" : "🔕 Alerts: OFF"}
+                        </button>
+
+                        <button
+                          className="wallet-item"
+                          onClick={() => {
+                            setWalletOpen(false);
+                            onNavigate("dashboard");
+                            onOpenDashboard();
+                          }}
+                          role="menuitem"
+                        >
+                          👤 Dashboard
+                        </button>
+
+                        <div className="wallet-divider" />
+
+                        <button
+                          className="wallet-item danger"
+                          onClick={() => {
+                            setWalletOpen(false);
+                            onSignOut();
+                          }}
+                          role="menuitem"
+                        >
+                          Log Off ({short(account)})
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="wallet-section">
+                          <div className="wallet-sec-title">Quick actions</div>
+                          <div className="wallet-hint">Sign in to see balances & dashboard.</div>
+                        </div>
+
+                        <div className="wallet-divider" />
+
+                        <button
+                          className="wallet-item"
+                          onClick={() => {
+                            setWalletOpen(false);
+                            onOpenCashier();
+                          }}
+                          role="menuitem"
+                        >
+                          🏦 Cashier
+                        </button>
+
+                        <button
+                          className="wallet-item"
+                          onClick={() => toggleToasts()}
+                          role="menuitem"
+                          aria-pressed={toastEnabled}
+                        >
+                          {toastEnabled ? "🔔 Alerts: ON" : "🔕 Alerts: OFF"}
+                        </button>
+
+                        <div className="wallet-divider" />
+
+                        <button
+                          className="wallet-item primary"
+                          onClick={() => {
+                            setWalletOpen(false);
+                            onOpenSignIn();
+                          }}
+                          role="menuitem"
+                        >
+                          Sign In
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ✅ Mini Quick-Balance for Mobile (USDC + XTZ) */}
@@ -343,12 +432,13 @@ export const TopNav = memo(function TopNav({
           </div>
         </div>
 
-        {/* ✅ Collapsible systems status (collapsed by default, state lives in InfraStatusPill) */}
+        {/* Infra row (kept as-is) */}
         <div className="topnav-infra">
           <InfraStatusPill />
         </div>
       </div>
 
+      {/* ✅ Mobile menu includes the same wallet actions (Cashier / Alerts / Dashboard / Sign in-out) */}
       <div ref={menuRef} className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
         <div className="mobile-menu-inner">
           {account && (
@@ -356,18 +446,19 @@ export const TopNav = memo(function TopNav({
               <div className="mobile-balances-title">Balances</div>
               <div className="mobile-balances-rows">
                 <div className="mobile-bal-row">
-                  <span>{xtzSym}</span>
-                  <b>{xtzText}</b>
-                </div>
-                <div className="mobile-bal-row">
                   <span>{usdcSym}</span>
                   <b>{usdcText}</b>
+                </div>
+                <div className="mobile-bal-row">
+                  <span>{xtzSym}</span>
+                  <b>{xtzText}</b>
                 </div>
               </div>
             </div>
           )}
 
           <button onClick={() => handleNav(onOpenExplore, "explore")}>🌍 Explore</button>
+
           {account && <button onClick={() => handleNav(onOpenDashboard, "dashboard")}>👤 Dashboard</button>}
 
           <button className="highlight" onClick={() => handleNav(onOpenCreate)}>
@@ -378,7 +469,6 @@ export const TopNav = memo(function TopNav({
 
           <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
 
-          {/* ✅ Toast announcements toggle in mobile menu */}
           <button
             onClick={() => {
               toggleToasts();
