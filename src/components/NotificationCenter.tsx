@@ -161,9 +161,10 @@ export function NotificationCenter() {
   const toastTimerRef = useRef<number | null>(null);
 
   const [summary, setSummary] = useState<SummaryModal | null>(null);
-
-  // toggle “Show more / Show less” inside summary modal
   const [summaryExpanded, setSummaryExpanded] = useState(false);
+
+  // ✅ NEW: summary shows ONLY once per page load (prevents hijacking live announcements)
+  const summaryCheckedThisSessionRef = useRef(false);
 
   const clearToast = useCallback(() => {
     setToast(null);
@@ -244,6 +245,10 @@ export function NotificationCenter() {
 
     const onActivity = (ev: Event) => {
       if (!toastsEnabled) return;
+
+      // ✅ important: live announcements should still work even if summary is open,
+      // but you *currently* want the summary to be the "one nice modal" experience.
+      // Keeping this guard: if summary is visible, don't show the toast.
       if (summary) return;
 
       const d = (ev as CustomEvent<ActivityItem>).detail;
@@ -396,6 +401,10 @@ export function NotificationCenter() {
 
   const maybeShowSummary = useCallback(async () => {
     if (!me) return;
+
+    // ✅ hard stop: only once per page load
+    if (summaryCheckedThisSessionRef.current) return;
+
     if (summary) return;
     if (inFlightSummaryRef.current) return;
     inFlightSummaryRef.current = true;
@@ -411,6 +420,10 @@ export function NotificationCenter() {
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
+
+        // ✅ mark checked even if no lines, so it won't keep trying during session
+        summaryCheckedThisSessionRef.current = true;
+
         if (lines.length === 0) return;
 
         setSummaryExpanded(false);
@@ -429,12 +442,19 @@ export function NotificationCenter() {
       });
 
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
-      if (sinceItems.length === 0) return;
+      if (sinceItems.length === 0) {
+        summaryCheckedThisSessionRef.current = true;
+        return;
+      }
 
       const newestTs = Math.max(...sinceItems.map((it) => parseSec(it.timestamp)));
       if (newestTs > 0) setLastSeen(me, newestTs);
 
       const lines = buildSummaryLines(sinceItems);
+
+      // ✅ mark checked so it can’t pop again this session
+      summaryCheckedThisSessionRef.current = true;
+
       if (lines.length === 0) return;
 
       setSummaryExpanded(false);
@@ -445,70 +465,19 @@ export function NotificationCenter() {
       });
     } catch {
       // no-op
+      summaryCheckedThisSessionRef.current = true;
     } finally {
       inFlightSummaryRef.current = false;
     }
   }, [me, summary, buildSummaryLines]);
 
-  /**
-   * ✅ FIX (real fix):
-   * Only show summary if the user actually went away.
-   * Some interactions fire focus/visibility events without being “away”.
-   */
-  const wentAwayRef = useRef(false);
-  const hiddenAtMsRef = useRef<number | null>(null);
-  const MIN_AWAY_MS = 3000; // 3s threshold to count as “away”
-
+  // ✅ Summary runs only on mount (per wallet), NEVER on focus/visibility events
   useEffect(() => {
-    // reset per wallet
-    wentAwayRef.current = false;
-    hiddenAtMsRef.current = null;
+    summaryCheckedThisSessionRef.current = false;
     setSummary(null);
     setSummaryExpanded(false);
-  }, [me]);
-
-  useEffect(() => {
     if (!me) return;
-
-    // initial mount: we can show once (optional). keep it.
     void maybeShowSummary();
-
-    const markAway = () => {
-      wentAwayRef.current = true;
-      hiddenAtMsRef.current = Date.now();
-    };
-
-    const maybeReturn = () => {
-      if (!wentAwayRef.current) return;
-
-      const hiddenAt = hiddenAtMsRef.current;
-      const awayMs = hiddenAt ? Date.now() - hiddenAt : MIN_AWAY_MS;
-
-      // only treat it as “away” if it was long enough
-      if (awayMs >= MIN_AWAY_MS) void maybeShowSummary();
-
-      // reset so normal clicks/focus won’t re-trigger
-      wentAwayRef.current = false;
-      hiddenAtMsRef.current = null;
-    };
-
-    const onVis = () => {
-      if (document.visibilityState === "hidden") markAway();
-      if (document.visibilityState === "visible") maybeReturn();
-    };
-
-    const onBlur = () => markAway();
-    const onFocus = () => maybeReturn();
-
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
-    };
   }, [me, maybeShowSummary]);
 
   // ---- RENDER ----
@@ -518,6 +487,7 @@ export function NotificationCenter() {
   if (summary) {
     const collapsedCount = 8;
     const canExpand = summary.lines.length > collapsedCount;
+
     const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
 
     return (
@@ -574,9 +544,7 @@ export function NotificationCenter() {
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
-        <div className="pp-toast-icon">
-          {toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}
-        </div>
+        <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}</div>
         <div className="pp-toast-content">
           <div className="pp-toast-title">{toast!.title}</div>
           {toast!.body && <div className="pp-toast-message">{toast!.body}</div>}
