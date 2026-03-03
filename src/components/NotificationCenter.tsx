@@ -25,12 +25,11 @@ type ToastKind = "info" | "success" | "danger";
 type Toast = {
   id: string;
   kind: ToastKind;
-  title: string; // ✅ one-line announcement
+  title: string;
   body?: string;
   showConfetti?: boolean;
 };
 
-// Structured line item for perfect alignment
 type SummaryLine = {
   icon: string;
   text: string;
@@ -43,16 +42,13 @@ type SummaryModal = {
   lines: SummaryLine[];
 };
 
+// 5 seconds total duration
 const TOAST_MS = 5000;
 
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
 const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
-
 const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_";
 const LS_PARTICIPATED_PREFIX = "ppopgi_participated_";
-
-// ✅ Session gating: “While you were away” should be shown at most once per session per wallet.
-// This prevents it from re-appearing on refresh (same tab session), but it WILL appear on a new device/tab.
 const SS_SESSION_PREFIX = "ppopgi_notif_session_";
 
 function lc(a: string | null | undefined) {
@@ -77,7 +73,6 @@ function fmtUsdcFromU6(u6: string) {
   }
 }
 
-// Short format for list alignment (e.g. "Mar 3, 14:07")
 function fmtWhen(tsSecStr: string) {
   const sec = parseSec(tsSecStr);
   if (!sec) return "";
@@ -183,20 +178,13 @@ export function NotificationCenter() {
   const [summary, setSummary] = useState<SummaryModal | null>(null);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  // ✅ Summary should be session-based (per wallet)
   const shouldRunSummaryThisSessionRef = useRef(false);
-
-  // ✅ Toast dedupe for activity-store driven announcements
   const seenTxRef = useRef<Set<string>>(new Set());
-
-  // ✅ CRITICAL: seed dedupe with the first activity batch so refresh NEVER triggers announcements
   const seededFromInitialActivityRef = useRef(false);
 
-  // Reset dedupe + summary gate on wallet change
   useEffect(() => {
     seenTxRef.current = new Set();
     seededFromInitialActivityRef.current = false;
-
     setSummary(null);
     setSummaryExpanded(false);
     setToast(null);
@@ -206,15 +194,12 @@ export function NotificationCenter() {
       return;
     }
 
-    // ✅ Decide if summary is allowed for this session (per wallet)
     const ssKey = `${SS_SESSION_PREFIX}${meLc}`;
     const alreadyStarted = readSessionFlag(ssKey);
     if (!alreadyStarted) {
-      // first time in this tab session for this wallet
       writeSessionFlag(ssKey, true);
       shouldRunSummaryThisSessionRef.current = true;
     } else {
-      // same session (including refresh): do NOT show summary again
       shouldRunSummaryThisSessionRef.current = false;
     }
   }, [meLc]);
@@ -256,7 +241,6 @@ export function NotificationCenter() {
     };
   }, []);
 
-  // Listen for TopNav toggle changes instantly
   useEffect(() => {
     const onSettingA = (ev: Event) => {
       const d = (ev as CustomEvent<{ enabled?: boolean }>).detail;
@@ -292,7 +276,6 @@ export function NotificationCenter() {
     [me]
   );
 
-  // ✅ Seed seenTxRef from the first ActivityStore batch (prevents toast on refresh / first load)
   useEffect(() => {
     if (!me) return;
     if (seededFromInitialActivityRef.current) return;
@@ -309,21 +292,15 @@ export function NotificationCenter() {
     seededFromInitialActivityRef.current = true;
   }, [me, activity.items]);
 
-  // ✅ Real-time popups driven by ActivityStore (NOT window events)
   useEffect(() => {
     if (!me) return;
     if (!toastsEnabled) return;
-
-    // If summary is visible, let summary own the screen
     if (summary) return;
-
-    // Don't announce anything until we've seeded from initial activity batch.
     if (!seededFromInitialActivityRef.current) return;
 
     const items = (activity.items || []) as ActivityItem[];
     if (!items.length) return;
 
-    // Oldest -> newest so latest relevant event wins
     const windowItems = items.slice(0, 25).reverse();
 
     for (const d of windowItems) {
@@ -333,7 +310,6 @@ export function NotificationCenter() {
       if (seenTxRef.current.has(txHash)) continue;
       if ((d as any)?.pending) continue;
 
-      // Mark seen first (prevents double-toasts if React re-renders mid-loop)
       seenTxRef.current.add(txHash);
 
       const type = d.type;
@@ -344,7 +320,6 @@ export function NotificationCenter() {
 
       if (!lotId || !type) continue;
 
-      // If I bought tickets, track participation but don't toast
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         continue;
@@ -354,13 +329,16 @@ export function NotificationCenter() {
       const amCreator = !!creator && creator === meLc;
       const amParticipant = isParticipant(lotId);
 
+      // --- TEXT FORMATTING FOR ONE-LINE ANNOUNCEMENT ---
+      // We put the key info in 'title' so it shows up bold/prominent
+
       if (type === "BUY" && amCreator && subj !== meLc) {
-        showToast({ id: `t:${txHash}`, kind: "info", title: `🎟️ ${value} tickets bought on “${name}”` });
+        showToast({ id: `t:${txHash}`, kind: "info", title: `🎟️ ${value} tickets sold on “${name}”` });
         continue;
       }
 
       if (type === "CANCEL" && amParticipant) {
-        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ “${name}” canceled — refund available` });
+        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ “${name}” canceled (refund available)` });
         continue;
       }
 
@@ -376,19 +354,19 @@ export function NotificationCenter() {
           showToast({
             id: `t:${txHash}`,
             kind: "success",
-            title: `🏆 You won ${potUi} USDC on “${name}”`,
+            title: `🏆 YOU WON ${potUi} USDC on “${name}”!`,
             showConfetti: true,
           });
           continue;
         }
 
         if (amParticipant) {
-          showToast({ id: `t:${txHash}`, kind: "info", title: `✅ “${name}” finalized — winner ${shortAddr(subj)}` });
+          showToast({ id: `t:${txHash}`, kind: "info", title: `✅ “${name}” ended — Winner: ${shortAddr(subj)}` });
           continue;
         }
 
         if (amCreator) {
-          showToast({ id: `t:${txHash}`, kind: "success", title: `🏁 “${name}” finished — ticket revenue ready` });
+          showToast({ id: `t:${txHash}`, kind: "success", title: `🏁 “${name}” finished — Revenue ready` });
           continue;
         }
       }
@@ -409,7 +387,6 @@ export function NotificationCenter() {
   const buildSummaryLines = useCallback(
     (items: ActivityItem[]): SummaryLine[] => {
       if (!me) return [];
-
       const participated = getParticipatedSet(me);
       const lines: SummaryLine[] = [];
 
@@ -419,7 +396,6 @@ export function NotificationCenter() {
         const name = String(it.lotteryName || "Lottery");
         const subj = lc(it.subject);
         const when = fmtWhen(it.timestamp);
-
         const creator = creatorOf(lotId);
         const amCreator = creator && creator === meLc;
         const amParticipant = participated.has(lotId);
@@ -428,33 +404,27 @@ export function NotificationCenter() {
           lines.push({ icon: "🎟️", text: `${it.value} tickets sold on “${name}”`, time: when });
           continue;
         }
-
         if (type === "CANCEL") {
           if (amParticipant) lines.push({ icon: "⛔", text: `“${name}” canceled (refund available)`, time: when });
           else if (amCreator) lines.push({ icon: "⛔", text: `Your lottery “${name}” canceled`, time: when });
           continue;
         }
-
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
-
           if (subj === meLc) {
             lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
             continue;
           }
-
           if (amParticipant) {
             lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
             continue;
           }
-
           if (amCreator) {
             lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
             continue;
           }
         }
       }
-
       return lines;
     },
     [me, meLc, creatorOf]
@@ -462,11 +432,7 @@ export function NotificationCenter() {
 
   const maybeShowSummary = useCallback(async () => {
     if (!me) return;
-
-    // ✅ session-based gating (prevents “While you were away” on refresh)
     if (!shouldRunSummaryThisSessionRef.current) return;
-
-    // lock to avoid re-entry
     shouldRunSummaryThisSessionRef.current = false;
 
     if (summary) return;
@@ -475,17 +441,13 @@ export function NotificationCenter() {
 
     try {
       const lastSeen = getLastSeen(me);
-
       if (!lastSeen) {
         const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
         const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
-
         const newestTs = Math.max(0, ...items.map((it) => parseSec(String(it?.timestamp || "0"))));
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
-
         const lines = buildSummaryLines(items);
         if (lines.length === 0) return;
-
         setSummaryExpanded(false);
         setSummary({
           id: `summary:first:${newestTs || Date.now()}`,
@@ -495,12 +457,7 @@ export function NotificationCenter() {
         return;
       }
 
-      const sinceItemsRaw = await fetchGlobalActivity({
-        first: 50,
-        sinceSec: lastSeen,
-        forceFresh: true,
-      });
-
+      const sinceItemsRaw = await fetchGlobalActivity({ first: 50, sinceSec: lastSeen, forceFresh: true });
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
       if (sinceItems.length === 0) return;
 
@@ -517,26 +474,22 @@ export function NotificationCenter() {
         lines,
       });
     } catch {
-      // no-op
     } finally {
       inFlightSummaryRef.current = false;
     }
   }, [me, summary, buildSummaryLines]);
 
-  // Summary runs only once per SESSION (per wallet)
   useEffect(() => {
     if (!me) return;
     void maybeShowSummary();
   }, [me, maybeShowSummary]);
 
-  // ---- RENDER ----
   if (!toast && !summary) return null;
 
-  // 1) SUMMARY MODAL
+  // 1. SUMMARY MODAL
   if (summary) {
     const collapsedCount = 8;
     const canExpand = summary.lines.length > collapsedCount;
-
     const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
 
     return (
@@ -544,11 +497,8 @@ export function NotificationCenter() {
         <div className="pp-toast pp-modal" onMouseDown={(e) => e.stopPropagation()}>
           <div className="pp-toast-header">
             <div className="pp-toast-title">👋 {summary.title}</div>
-            <button className="pp-modal-close" onClick={clearSummary}>
-              ✕
-            </button>
+            <button className="pp-modal-close" onClick={clearSummary}>✕</button>
           </div>
-
           <div className="pp-toast-body">
             <ul className="pp-summary-list">
               {visibleLines.map((line, idx) => (
@@ -561,7 +511,6 @@ export function NotificationCenter() {
                 </li>
               ))}
             </ul>
-
             {canExpand && (
               <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
                 <button
@@ -574,14 +523,9 @@ export function NotificationCenter() {
                 </button>
               </div>
             )}
-
             <div className="pp-modal-actions">
-              <button onClick={openDashboard} className="pp-btn primary">
-                Go to Dashboard
-              </button>
-              <button onClick={clearSummary} className="pp-btn secondary">
-                Dismiss
-              </button>
+              <button onClick={openDashboard} className="pp-btn primary">Go to Dashboard</button>
+              <button onClick={clearSummary} className="pp-btn secondary">Dismiss</button>
             </div>
           </div>
         </div>
@@ -589,14 +533,17 @@ export function NotificationCenter() {
     );
   }
 
-  // 2) EPHEMERAL TOAST
+  // 2. WIDE BANNER TOAST (Left -> Right)
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
-        <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}</div>
-        <div className="pp-toast-content">
-          <div className="pp-toast-title">{toast!.title}</div>
-          {toast!.body && <div className="pp-toast-message">{toast!.body}</div>}
+        {/* Horizontal flex layout for single line */}
+        <div className="pp-toast-row">
+          <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}</div>
+          <div className="pp-toast-text">
+            <span className="pp-toast-title-inline">{toast!.title}</span>
+            {toast!.body && <span className="pp-toast-body-inline"> — {toast!.body}</span>}
+          </div>
         </div>
       </div>
     </div>
