@@ -54,12 +54,17 @@ function readToastPref(): boolean {
     return true;
   }
 }
+
 function writeToastPref(enabled: boolean) {
   try {
     localStorage.setItem(TOAST_PREF_KEY, enabled ? "true" : "false");
   } catch {}
+
+  // ✅ IMPORTANT: defer so we don't setState in NotificationCenter during TopNav render
   try {
-    window.dispatchEvent(new CustomEvent("ppopgi:toast-pref", { detail: { enabled } }));
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("ppopgi:toast-pref", { detail: { enabled } }));
+    }, 0);
   } catch {}
 }
 
@@ -90,13 +95,12 @@ export const TopNav = memo(function TopNav({
     return readToastPref();
   });
 
+  // ✅ Toggle without dispatching inside setState callback
   const toggleToasts = useCallback(() => {
-    setToastEnabled((prev) => {
-      const next = !prev;
-      writeToastPref(next);
-      return next;
-    });
-  }, []);
+    const next = !toastEnabled;
+    setToastEnabled(next);
+    writeToastPref(next);
+  }, [toastEnabled]);
 
   // pause balance polling when tab hidden
   const [pollEnabled, setPollEnabled] = useState(() => !isHidden());
@@ -325,7 +329,7 @@ export const TopNav = memo(function TopNav({
                           🏦 Cashier
                         </button>
 
-                        {/* ✅ Hide notifications toggle when NOT signed in */}
+                        {/* ✅ Alerts toggle only when signed in */}
                         <button
                           className="wallet-item"
                           onClick={() => toggleToasts()}
@@ -468,7 +472,7 @@ export const TopNav = memo(function TopNav({
 
           <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
 
-          {/* ✅ Hide alerts toggle when signed out */}
+          {/* ✅ Alerts toggle only when signed in */}
           {account && (
             <button
               onClick={() => {
