@@ -1,5 +1,5 @@
 // src/pages/HomePage.tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useInfraStatus } from "../hooks/useInfraStatus";
 import { useGlobalStatsBillboard } from "../hooks/useGlobalStatsBillboard";
