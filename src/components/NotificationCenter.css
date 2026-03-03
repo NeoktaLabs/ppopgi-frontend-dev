@@ -31,79 +31,142 @@
   animation: ppModalFadeIn 0.3s ease-out;
 }
 
-/* --- THE CARD STYLE (Shared Base) --- */
+/* --- THE CARD STYLE (Ppopgi Glass) --- */
 .pp-toast {
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(246, 182, 200, 0.4);
+  /* ActivityBoard Glass Style */
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  
+  /* Soft borders & Shadows */
+  border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 
-    0 24px 60px -10px rgba(0, 0, 0, 0.3),
-    0 8px 24px -2px rgba(0, 0, 0, 0.15);
+    0 10px 30px -10px rgba(203, 183, 246, 0.3), /* Lavender glow */
+    0 4px 12px -2px rgba(246, 182, 200, 0.15);
+
   border-radius: 24px;
   pointer-events: auto;
   color: var(--ink);
+  
+  /* Reset */
   margin: 0;
   width: auto;
+  position: relative;
+  overflow: hidden; /* For the shimmer effect */
 }
 
-/* --- TOAST SPECIFIC STYLES (BIG ANNOUNCEMENT) --- */
+/* --- TOAST SPECIFIC STYLES --- */
 .pp-toast-wrap.is-toast .pp-toast {
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* Icon left, text right */
   align-items: center;
-  text-align: center;
-  gap: 16px;
-  padding: 32px 40px;
+  gap: 20px;
+  padding: 24px 32px;
 
-  /* Full screen width on mobile, big card on desktop */
-  width: 90%;
-  max-width: 600px; 
+  /* Big & Wide */
+  min-width: 320px;
+  max-width: min(600px, calc(100vw - 32px));
 
   cursor: pointer;
   
   opacity: 0;
-  transform: scale(0.95);
+  transform: scale(0.92);
 
-  /* 5s Total: 0.4s In + 4.2s Wait + 0.4s Out */
+  /* Animation: Pop In + Wait + Fade Out */
   animation: 
-    ppBigToastIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards,
-    ppBigToastOut 0.4s ease-in 4.6s forwards;
+    ppToastPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+    ppToastFadeOut 0.4s ease-in 4.6s forwards;
 }
 
-/* Toast Variants (Thick borders for emphasis) */
-.pp-toast.pp-success { border: 2px solid #22c55e; }
-.pp-toast.pp-danger { border: 2px solid #ef4444; }
-.pp-toast.pp-info { border: 2px solid #3b82f6; }
-
-.pp-toast-icon { 
-  font-size: 48px; /* Huge icon */
-  margin-bottom: 8px;
-  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.1));
+/* ✅ THE "SHINY" SHIMMER EFFECT (From ActivityBoard) */
+.pp-toast-wrap.is-toast .pp-toast::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.8) 30%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+  animation: ppShimmer 2s ease-in-out forwards;
+  opacity: 0.8;
 }
 
+/* --- ICON BOX STYLES (Matching ActivityBoard) --- */
+.pp-toast-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  flex-shrink: 0;
+  
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+/* --- COLOR VARIANTS (Matching ActivityBoard Palettes) --- */
+
+/* Success -> Win Style (Peach/Warm) */
+.pp-toast.pp-success .pp-toast-icon {
+  background: rgba(250, 209, 184, 0.3);
+  border-color: rgba(250, 209, 184, 0.8);
+}
+.pp-toast.pp-success {
+  border-left: 6px solid var(--warm-lantern);
+}
+
+/* Danger -> Cancel Style (Lavender/Red) */
+.pp-toast.pp-danger .pp-toast-icon {
+  background: rgba(203, 183, 246, 0.3);
+  border-color: rgba(203, 183, 246, 0.6);
+}
+.pp-toast.pp-danger {
+  border-left: 6px solid var(--lavender-mist);
+}
+
+/* Info -> Buy Style (Sky Blue) */
+.pp-toast.pp-info .pp-toast-icon {
+  background: rgba(169, 212, 255, 0.3);
+  border-color: rgba(169, 212, 255, 0.6);
+}
+.pp-toast.pp-info {
+  border-left: 6px solid var(--sky-pastel);
+}
+
+/* --- CONTENT STYLES --- */
 .pp-toast-content { 
-  width: 100%;
+  flex: 1; 
+  min-width: 0;
+  text-align: left;
 }
 
 .pp-toast-title { 
   font-weight: 900; 
-  font-size: 24px; /* Big headline */
-  line-height: 1.1; 
-  margin-bottom: 8px; 
+  font-size: 18px; /* Big Headline */
+  line-height: 1.2; 
+  margin-bottom: 4px;
+  color: var(--ink);
+  letter-spacing: -0.5px;
 }
 
 .pp-toast-message { 
-  font-size: 16px; /* Highly readable body text */
-  opacity: 0.85; 
-  line-height: 1.5; 
+  font-size: 15px; 
+  opacity: 0.8; 
+  line-height: 1.4;
+  font-weight: 500;
 }
 
-/* --- MODAL SPECIFIC STYLES --- */
+/* --- MODAL SPECIFIC STYLES (Summary) --- */
 .pp-toast.pp-modal {
   width: 90%;
   max-width: 500px;
-  max-height: 90vh; /* Safety limit for mobile */
+  max-height: 90vh; 
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -134,7 +197,6 @@
 }
 .pp-modal-close:hover { opacity: 1; }
 
-/* Summary List */
 .pp-summary-list {
   list-style: none;
   padding: 0;
@@ -214,14 +276,19 @@
 
 /* --- ANIMATIONS --- */
 
-@keyframes ppBigToastIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes ppToastPopIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes ppBigToastOut {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(1.05); } /* fades out getting slightly bigger */
+@keyframes ppToastFadeOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-8px) scale(0.98); }
+}
+
+@keyframes ppShimmer {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
 }
 
 @keyframes ppModalFadeIn {
