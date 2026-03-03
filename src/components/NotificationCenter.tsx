@@ -1,6 +1,7 @@
 // src/components/NotificationCenter.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
+import { useActivityStore } from "../hooks/useActivityStore";
 import { useLotteryStore } from "../hooks/useLotteryStore";
 import { useConfetti } from "../hooks/useConfetti";
 import { fmtUsdcUi } from "../lib/format";
@@ -29,6 +30,7 @@ type Toast = {
   showConfetti?: boolean;
 };
 
+// Structured line item for perfect alignment
 type SummaryLine = {
   icon: string;
   text: string;
@@ -71,6 +73,7 @@ function fmtUsdcFromU6(u6: string) {
   }
 }
 
+// Short format for list alignment (e.g. "Mar 3, 14:07")
 function fmtWhen(tsSecStr: string) {
   const sec = parseSec(tsSecStr);
   if (!sec) return "";
@@ -153,6 +156,7 @@ export function NotificationCenter() {
 
   const { fireConfetti } = useConfetti();
   const lotteryStore = useLotteryStore("notif-center", 60_000);
+  const activity = useActivityStore();
 
   const [toastsEnabled, setToastsEnabled] = useState<boolean>(() => readToastsEnabled());
   const [toast, setToast] = useState<Toast | null>(null);
@@ -161,11 +165,19 @@ export function NotificationCenter() {
   const [summary, setSummary] = useState<SummaryModal | null>(null);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  // ✅ If a live event happens while summary is open, we queue the toast and show it after dismiss.
-  const queuedToastRef = useRef<Toast | null>(null);
-
-  // ✅ Summary shows only once per wallet per page load
+  // ✅ Summary shows ONLY once per page load (per wallet)
   const summaryCheckedThisSessionRef = useRef(false);
+
+  // ✅ Toast dedupe for activity-store driven announcements
+  const seenTxRef = useRef<Set<string>>(new Set());
+
+  // Reset dedupe + summary gate on wallet change
+  useEffect(() => {
+    seenTxRef.current = new Set();
+    summaryCheckedThisSessionRef.current = false;
+    setSummary(null);
+    setSummaryExpanded(false);
+  }, [meLc]);
 
   const clearToast = useCallback(() => {
     setToast(null);
@@ -173,6 +185,11 @@ export function NotificationCenter() {
       window.clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
     }
+  }, []);
+
+  const clearSummary = useCallback(() => {
+    setSummary(null);
+    setSummaryExpanded(false);
   }, []);
 
   const showToast = useCallback(
@@ -192,20 +209,6 @@ export function NotificationCenter() {
     },
     [fireConfetti]
   );
-
-  const clearSummary = useCallback(() => {
-    setSummary(null);
-    setSummaryExpanded(false);
-
-    // ✅ if a live event happened while modal was open, show it now
-    if (toastsEnabled && queuedToastRef.current) {
-      const t = queuedToastRef.current;
-      queuedToastRef.current = null;
-      showToast(t);
-    } else {
-      queuedToastRef.current = null;
-    }
-  }, [showToast, toastsEnabled]);
 
   useEffect(() => {
     return () => {
@@ -249,16 +252,33 @@ export function NotificationCenter() {
     [me]
   );
 
-  // ✅ Real-time popups (one-line centered announcement)
+  // ✅ Real-time popups driven by ActivityStore (NOT window events)
   useEffect(() => {
     if (!me) return;
+    if (!toastsEnabled) return;
 
-    const onActivity = (ev: Event) => {
-      if (!toastsEnabled) return;
+    // If you want the summary modal to "own the screen", keep this guard.
+    // If you'd rather allow live toasts while summary is open, remove it.
+    if (summary) return;
 
-      const d = (ev as CustomEvent<ActivityItem>).detail;
-      if (!d?.lotteryId || !d?.type) return;
-      if (d.pending) return;
+    const items = (activity.items || []) as any[];
+    if (!items.length) return;
+
+    // Oldest -> newest so latest relevant is shown last
+    const windowItems = items.slice(0, 25).reverse();
+
+    for (const raw of windowItems) {
+      const d = raw as ActivityItem;
+
+      const txHash = String((d as any)?.txHash || "");
+      if (!txHash) continue;
+
+      if (seenTxRef.current.has(txHash)) continue;
+
+      // Only real activity
+      if ((d as any)?.pending) continue;
+
+      seenTxRef.current.add(txHash);
 
       const type = d.type;
       const lotId = lc(d.lotteryId);
@@ -266,75 +286,78 @@ export function NotificationCenter() {
       const subj = lc(d.subject);
       const value = String(d.value || "0");
 
+      if (!lotId || !type) continue;
+
+      // If I bought tickets, track participation but don't toast
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
-        return;
+        continue;
       }
 
       const creator = creatorOf(lotId);
-      const amCreator = creator && creator === meLc;
+      const amCreator = !!creator && creator === meLc;
       const amParticipant = isParticipant(lotId);
 
-      // Build the toast *first*
-      let nextToast: Toast | null = null;
-
       if (type === "BUY" && amCreator && subj !== meLc) {
-        nextToast = {
-          id: `t:${d.txHash}`,
+        showToast({
+          id: `t:${txHash}`,
           kind: "info",
           title: `🎟️ ${value} tickets bought on “${name}”`,
-        };
-      } else if (type === "CANCEL" && amParticipant) {
-        nextToast = {
-          id: `t:${d.txHash}`,
+        });
+        continue;
+      }
+
+      if (type === "CANCEL" && amParticipant) {
+        showToast({
+          id: `t:${txHash}`,
           kind: "danger",
           title: `⛔ “${name}” canceled — refund available`,
-        };
-      } else if (type === "CANCEL" && amCreator) {
-        nextToast = {
-          id: `t:${d.txHash}`,
+        });
+        continue;
+      }
+
+      if (type === "CANCEL" && amCreator) {
+        showToast({
+          id: `t:${txHash}`,
           kind: "danger",
           title: `⛔ Your lottery “${name}” was canceled`,
-        };
-      } else if (type === "WIN") {
+        });
+        continue;
+      }
+
+      if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
         if (subj === meLc) {
-          nextToast = {
-            id: `t:${d.txHash}`,
+          showToast({
+            id: `t:${txHash}`,
             kind: "success",
             title: `🏆 You won ${potUi} USDC on “${name}”`,
             showConfetti: true,
-          };
-        } else if (amParticipant) {
-          nextToast = {
-            id: `t:${d.txHash}`,
+          });
+          continue;
+        }
+
+        if (amParticipant) {
+          showToast({
+            id: `t:${txHash}`,
             kind: "info",
             title: `✅ “${name}” finalized — winner ${shortAddr(subj)}`,
-          };
-        } else if (amCreator) {
-          nextToast = {
-            id: `t:${d.txHash}`,
+          });
+          continue;
+        }
+
+        if (amCreator) {
+          showToast({
+            id: `t:${txHash}`,
             kind: "success",
             title: `🏁 “${name}” finished — ticket revenue ready`,
-          };
+          });
+          continue;
         }
       }
-
-      if (!nextToast) return;
-
-      // ✅ If summary modal is open, queue the toast instead of losing it.
-      if (summary) {
-        queuedToastRef.current = nextToast;
-        return;
-      }
-
-      showToast(nextToast);
-    };
-
-    window.addEventListener("ppopgi:activity", onActivity as any);
-    return () => window.removeEventListener("ppopgi:activity", onActivity as any);
-  }, [me, meLc, toastsEnabled, creatorOf, isParticipant, showToast, summary]);
+    }
+  }, [me, meLc, toastsEnabled, summary, activity.items, creatorOf, isParticipant, showToast]);
 
   const inFlightSummaryRef = useRef(false);
 
@@ -350,6 +373,7 @@ export function NotificationCenter() {
   const buildSummaryLines = useCallback(
     (items: ActivityItem[]): SummaryLine[] => {
       if (!me) return [];
+
       const participated = getParticipatedSet(me);
       const lines: SummaryLine[] = [];
 
@@ -377,9 +401,21 @@ export function NotificationCenter() {
 
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
-          if (subj === meLc) lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
-          else if (amParticipant) lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
-          else if (amCreator) lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
+
+          if (subj === meLc) {
+            lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
+            continue;
+          }
+
+          if (amParticipant) {
+            lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
+            continue;
+          }
+
+          if (amCreator) {
+            lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
+            continue;
+          }
         }
       }
 
@@ -390,7 +426,10 @@ export function NotificationCenter() {
 
   const maybeShowSummary = useCallback(async () => {
     if (!me) return;
+
+    // hard stop: only once per page load (per wallet)
     if (summaryCheckedThisSessionRef.current) return;
+
     if (summary) return;
     if (inFlightSummaryRef.current) return;
     inFlightSummaryRef.current = true;
@@ -406,6 +445,7 @@ export function NotificationCenter() {
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
+
         summaryCheckedThisSessionRef.current = true;
 
         if (lines.length === 0) return;
@@ -419,17 +459,25 @@ export function NotificationCenter() {
         return;
       }
 
-      const sinceItemsRaw = await fetchGlobalActivity({ first: 50, sinceSec: lastSeen, forceFresh: true });
+      const sinceItemsRaw = await fetchGlobalActivity({
+        first: 50,
+        sinceSec: lastSeen,
+        forceFresh: true,
+      });
+
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
-
-      summaryCheckedThisSessionRef.current = true;
-
-      if (sinceItems.length === 0) return;
+      if (sinceItems.length === 0) {
+        summaryCheckedThisSessionRef.current = true;
+        return;
+      }
 
       const newestTs = Math.max(...sinceItems.map((it) => parseSec(it.timestamp)));
       if (newestTs > 0) setLastSeen(me, newestTs);
 
       const lines = buildSummaryLines(sinceItems);
+
+      summaryCheckedThisSessionRef.current = true;
+
       if (lines.length === 0) return;
 
       setSummaryExpanded(false);
@@ -443,23 +491,22 @@ export function NotificationCenter() {
     } finally {
       inFlightSummaryRef.current = false;
     }
-  }, [me, summary, buildSummaryLines]);
+  }, [me, summary, buildSummaryLines, buildSummaryLines]);
 
+  // Summary runs only on mount (per wallet)
   useEffect(() => {
-    summaryCheckedThisSessionRef.current = false;
-    queuedToastRef.current = null;
-    setSummary(null);
-    setSummaryExpanded(false);
     if (!me) return;
     void maybeShowSummary();
   }, [me, maybeShowSummary]);
 
+  // ---- RENDER ----
   if (!toast && !summary) return null;
 
-  // 1) SUMMARY MODAL (unchanged)
+  // 1) SUMMARY MODAL
   if (summary) {
     const collapsedCount = 8;
     const canExpand = summary.lines.length > collapsedCount;
+
     const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
 
     return (
