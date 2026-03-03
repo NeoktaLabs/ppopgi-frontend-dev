@@ -9,6 +9,10 @@
   pointer-events: none;
 }
 
+/* -----------------------------
+   DEFAULT TOAST (2s auto fade)
+------------------------------ */
+
 .pp-toast {
   pointer-events: auto;
   min-width: min(520px, calc(100vw - 28px));
@@ -18,10 +22,23 @@
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
   transform: translateY(10px) scale(0.98);
   opacity: 0;
-  animation: ppToastIn 140ms ease-out forwards, ppToastOut 240ms ease-in forwards;
+  animation: ppToastIn 140ms ease-out forwards,
+             ppToastOut 240ms ease-in forwards;
   animation-delay: 0ms, 1760ms; /* ~2s total */
   backdrop-filter: blur(10px);
 }
+
+/* -----------------------------
+   PERSISTENT SUMMARY MODAL
+   (no auto fade-out)
+------------------------------ */
+
+.pp-toast.pp-persistent {
+  animation: ppToastIn 140ms ease-out forwards;
+  opacity: 0;
+}
+
+/* ----------------------------- */
 
 @keyframes ppToastIn {
   to {
@@ -48,6 +65,8 @@
   opacity: 0.9;
   line-height: 1.35;
 }
+
+/* ----------------------------- */
 
 .pp-info {
   background: rgba(255, 255, 255, 0.92);
