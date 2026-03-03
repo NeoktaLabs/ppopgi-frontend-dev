@@ -155,6 +155,9 @@ export function NotificationCenter() {
   // persistent summary modal state
   const [summary, setSummary] = useState<SummaryModal | null>(null);
 
+  // ✅ Prevent “same click” from instantly closing the summary
+  const summaryOpenedAtMsRef = useRef<number>(0);
+
   const clearToast = useCallback(() => {
     setToast(null);
     if (toastTimerRef.current != null) {
@@ -406,12 +409,12 @@ export function NotificationCenter() {
         return;
       }
 
-      // ✅ Pull only since lastSeen (server-side: timestamp_gt)
+      // ✅ Pull only since lastSeen (your subgraph fetch must support this)
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
-        sinceSec: lastSeen, // ✅ FIX (was sinceTs)
+        sinceSec: lastSeen, // requires fetchGlobalActivity to accept & apply timestamp_gt
         forceFresh: true,
-      });
+      } as any);
 
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
       if (sinceItems.length === 0) return;
@@ -421,6 +424,9 @@ export function NotificationCenter() {
 
       const lines = buildSummaryLines(sinceItems);
       if (lines.length === 0) return; // ✅ “if nothing happened” => no modal
+
+      // ✅ record open time to ignore immediate outside click
+      summaryOpenedAtMsRef.current = Date.now();
 
       setSummary({
         id: `summary:${newestTs || Date.now()}`,
@@ -459,8 +465,16 @@ export function NotificationCenter() {
   // Summary modal (persistent)
   if (summary) {
     return (
-      <div className={`pp-toast-wrap show`} onMouseDown={clearSummary} role="presentation">
-        <div className={`pp-toast pp-info`} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="pp-toast-wrap show"
+        onClick={() => {
+          // ✅ ignore the click that triggered this modal (or any immediate click)
+          if (Date.now() - summaryOpenedAtMsRef.current < 600) return;
+          clearSummary();
+        }}
+        role="presentation"
+      >
+        <div className="pp-toast pp-info" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div className="pp-toast-title">{summary.title}</div>
             <button
@@ -531,7 +545,12 @@ export function NotificationCenter() {
   // Ephemeral toast (2s)
   return (
     <div className={`pp-toast-wrap ${toast ? "show" : ""}`} onMouseDown={clearToast} role="presentation">
-      <div className={`pp-toast pp-${toast!.kind}`} role="status" aria-live="polite" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={`pp-toast pp-${toast!.kind}`}
+        role="status"
+        aria-live="polite"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="pp-toast-title">{toast!.title}</div>
         {toast!.body && <div className="pp-toast-body">{toast!.body}</div>}
       </div>
