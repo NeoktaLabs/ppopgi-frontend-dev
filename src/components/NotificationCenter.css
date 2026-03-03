@@ -1,85 +1,182 @@
 /* src/components/NotificationCenter.css */
 
+/* --- Wrapper Base --- */
 .pp-toast-wrap {
   position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  z-index: 999999;
+  z-index: 10000;
   pointer-events: none;
+  display: flex;
+  justify-content: center;
+  /* Transitions handled on children */
 }
 
-/* ✅ enable clicks when something is visible (so outside click closes) */
-.pp-toast-wrap.show {
-  pointer-events: auto;
+/* 1. TOAST POSITIONING (Top Center) */
+.pp-toast-wrap.is-toast {
+  top: 24px;
+  left: 0;
+  right: 0;
+  height: 0; /* Don't block clicks below */
+  overflow: visible;
 }
 
-/* -----------------------------
-   DEFAULT TOAST (2s auto fade)
------------------------------- */
+/* 2. MODAL POSITIONING (Centered Overlay) */
+.pp-toast-wrap.is-modal {
+  inset: 0;
+  background: rgba(43, 43, 51, 0.45); /* Dark ink overlay */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  align-items: center;
+  pointer-events: auto; /* Catch clicks on background */
+  animation: ppModalFadeIn 0.3s ease-out;
+}
 
+/* --- THE CARD STYLE (Shared Base) --- */
 .pp-toast {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    0 10px 40px -10px rgba(0, 0, 0, 0.2),
+    0 4px 12px -2px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
   pointer-events: auto;
-  min-width: min(520px, calc(100vw - 28px));
-  max-width: min(720px, calc(100vw - 28px));
-  border-radius: 18px;
-  padding: 14px 16px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
-  transform: translateY(10px) scale(0.98);
+  color: var(--ink);
+  
+  /* Reset */
+  margin: 0;
+  width: auto;
+}
+
+/* --- TOAST SPECIFIC STYLES --- */
+.pp-toast-wrap.is-toast .pp-toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  min-width: 320px;
+  max-width: 420px;
+  cursor: pointer;
+  
+  /* Animation: Slide Down In, Fade Out */
   opacity: 0;
-  animation: ppToastIn 140ms ease-out forwards, ppToastOut 240ms ease-in forwards;
-  animation-delay: 0ms, 1760ms;
-  backdrop-filter: blur(10px);
+  transform: translateY(-20px) scale(0.95);
+  animation: ppSlideDown 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards, ppFadeOut 0.4s ease-in 2.6s forwards; 
+  /* Total 3s: 0.4s in + 2.2s wait + 0.4s out */
 }
 
-/* -----------------------------
-   PERSISTENT SUMMARY MODAL
------------------------------- */
+/* Toast Variants */
+.pp-toast.pp-success { border-left: 4px solid #22c55e; }
+.pp-toast.pp-danger { border-left: 4px solid #ef4444; }
+.pp-toast.pp-info { border-left: 4px solid #3b82f6; }
 
-.pp-toast.pp-persistent {
-  animation: ppToastIn 140ms ease-out forwards; /* ✅ overrides auto-out */
-  animation-delay: 0ms;
+.pp-toast-icon { font-size: 20px; }
+.pp-toast-content { flex: 1; }
+.pp-toast-title { font-weight: 900; font-size: 14px; line-height: 1.2; margin-bottom: 2px; }
+.pp-toast-message { font-size: 13px; opacity: 0.8; line-height: 1.4; }
+
+/* --- MODAL SPECIFIC STYLES --- */
+.pp-toast.pp-modal {
+  width: 90%;
+  max-width: 440px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: ppScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ----------------------------- */
-
-@keyframes ppToastIn {
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.pp-toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-@keyframes ppToastOut {
-  to {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.99);
-  }
+.pp-toast-header .pp-toast-title {
+  font-size: 18px;
+  margin: 0;
 }
 
-.pp-toast-title {
+.pp-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  font-weight: 800;
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 4px;
+}
+.pp-modal-close:hover { opacity: 1; }
+
+.pp-summary-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pp-summary-list li {
+  font-size: 13.5px;
+  line-height: 1.4;
+  padding: 10px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pp-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.pp-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 14px;
   font-weight: 900;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.pp-toast-body {
   font-size: 13px;
-  opacity: 0.9;
-  line-height: 1.35;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.2s;
+}
+.pp-btn:hover { transform: translateY(-1px); }
+
+.pp-btn.primary {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(43, 43, 51, 0.2);
 }
 
-.pp-info {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(2, 132, 199, 0.18);
+.pp-btn.secondary {
+  background: transparent;
+  border: 2px solid rgba(0,0,0,0.1);
+  color: var(--ink);
 }
 
-.pp-success {
-  background: rgba(236, 253, 245, 0.92);
-  border: 1px solid rgba(22, 101, 52, 0.22);
+/* --- ANIMATIONS --- */
+
+/* Toast Entrance */
+@keyframes ppSlideDown {
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.pp-danger {
-  background: rgba(254, 242, 242, 0.92);
-  border: 1px solid rgba(153, 27, 27, 0.22);
+/* Toast Exit (Delayed by animation-delay in CSS class) */
+@keyframes ppFadeOut {
+  to { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}
+
+/* Modal Backdrop Fade */
+@keyframes ppModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal Scale Up */
+@keyframes ppScaleUp {
+  from { transform: scale(0.95) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
