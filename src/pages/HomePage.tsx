@@ -1,5 +1,5 @@
 // src/pages/HomePage.tsx
-import { useEffect, useMemo, useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useInfraStatus } from "../hooks/useInfraStatus";
 import { useGlobalStatsBillboard } from "../hooks/useGlobalStatsBillboard";
@@ -45,10 +45,10 @@ function BannerSlider() {
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setIdx((prev) => (prev + 1) % BANNER_MESSAGES.length);
     }, 3000);
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, []);
 
   return (
@@ -66,10 +66,6 @@ function BannerSlider() {
   );
 }
 
-// ✅ NOTE: BannerSlider uses useState, so we must import it.
-// Keeping this file self-contained and compiling.
-import { useState } from "react";
-
 export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
   useEffect(() => {
     document.title = "Ppopgi 뽑기 — Home";
@@ -78,8 +74,7 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
   const infra = useInfraStatus();
   const { bigPrizes, endingSoon, recentlyFinalized, isLoading, refetch } = useHomeLotteries();
 
-  // ✅ Billboard uses subgraph GlobalStats singleton (via your cache worker)
-  // Keeping this hook call is fine even if you aren’t rendering the numbers yet.
+  // Billboard uses subgraph GlobalStats singleton (via your cache worker)
   const gs = useGlobalStatsBillboard();
 
   const finalizerForCards = useMemo(
@@ -127,11 +122,11 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
   const settledRef = useRef<HTMLDivElement | null>(null);
 
   const updateEndingEdges = useCallback(() => {
-    // kept for future arrow UI; avoid unused state warnings by not storing edges yet
+    // kept for future arrow UI
   }, []);
 
   const updateSettledEdges = useCallback(() => {
-    // kept for future arrow UI; avoid unused state warnings by not storing edges yet
+    // kept for future arrow UI
   }, []);
 
   useEffect(() => {
@@ -150,6 +145,36 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
 
   return (
     <>
+      {/* ✅ HERO (restored) */}
+      <div className="hp-hero">
+        <div className="hp-hero-inner">
+          <div className="hp-hero-title">Welcome to Ppopgi (뽑기)</div>
+          <div className="hp-hero-subtitle">Where fun meets on-chain fairness — spin in, pick tickets, and win big.</div>
+
+          <div className="hp-hero-actions">
+            <button className="hp-hero-btn primary" onClick={() => navigateFromHome("explore")}>
+              Explore lotteries
+            </button>
+            <button className="hp-hero-btn" onClick={openCashierFromHome}>
+              Open Cashier
+            </button>
+          </div>
+
+          {/* Optional: tiny status line */}
+          <div className="hp-hero-meta">
+            {gs.error ? (
+              <span>Stats temporarily unavailable.</span>
+            ) : gs.data ? (
+              <span>
+                {Number(gs.data.totalTicketsSold)} tickets sold • {Number(gs.data.totalLotteriesCreated)} lotteries created
+              </span>
+            ) : (
+              <span />
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="hp-announcement-bar">
         <BannerSlider />
       </div>
@@ -159,8 +184,6 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
       </div>
 
       <div className="hp-container">
-        {/* ... billboard unchanged ... */}
-
         {/* PODIUM */}
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 50 }}>
