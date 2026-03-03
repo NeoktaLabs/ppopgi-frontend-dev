@@ -29,7 +29,6 @@ type Toast = {
   showConfetti?: boolean;
 };
 
-// Structured line item for perfect alignment
 type SummaryLine = {
   icon: string;
   text: string;
@@ -72,7 +71,6 @@ function fmtUsdcFromU6(u6: string) {
   }
 }
 
-// Short format for list alignment (e.g. "Mar 3, 14:07")
 function fmtWhen(tsSecStr: string) {
   const sec = parseSec(tsSecStr);
   if (!sec) return "";
@@ -163,7 +161,10 @@ export function NotificationCenter() {
   const [summary, setSummary] = useState<SummaryModal | null>(null);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  // ✅ NEW: summary shows ONLY once per page load (prevents hijacking live announcements)
+  // ✅ If a live event happens while summary is open, we queue the toast and show it after dismiss.
+  const queuedToastRef = useRef<Toast | null>(null);
+
+  // ✅ Summary shows only once per wallet per page load
   const summaryCheckedThisSessionRef = useRef(false);
 
   const clearToast = useCallback(() => {
@@ -172,11 +173,6 @@ export function NotificationCenter() {
       window.clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
     }
-  }, []);
-
-  const clearSummary = useCallback(() => {
-    setSummary(null);
-    setSummaryExpanded(false);
   }, []);
 
   const showToast = useCallback(
@@ -196,6 +192,20 @@ export function NotificationCenter() {
     },
     [fireConfetti]
   );
+
+  const clearSummary = useCallback(() => {
+    setSummary(null);
+    setSummaryExpanded(false);
+
+    // ✅ if a live event happened while modal was open, show it now
+    if (toastsEnabled && queuedToastRef.current) {
+      const t = queuedToastRef.current;
+      queuedToastRef.current = null;
+      showToast(t);
+    } else {
+      queuedToastRef.current = null;
+    }
+  }, [showToast, toastsEnabled]);
 
   useEffect(() => {
     return () => {
@@ -239,17 +249,12 @@ export function NotificationCenter() {
     [me]
   );
 
-  // Real-time popups (single-line announcement banner)
+  // ✅ Real-time popups (one-line centered announcement)
   useEffect(() => {
     if (!me) return;
 
     const onActivity = (ev: Event) => {
       if (!toastsEnabled) return;
-
-      // ✅ important: live announcements should still work even if summary is open,
-      // but you *currently* want the summary to be the "one nice modal" experience.
-      // Keeping this guard: if summary is visible, don't show the toast.
-      if (summary) return;
 
       const d = (ev as CustomEvent<ActivityItem>).detail;
       if (!d?.lotteryId || !d?.type) return;
@@ -270,64 +275,61 @@ export function NotificationCenter() {
       const amCreator = creator && creator === meLc;
       const amParticipant = isParticipant(lotId);
 
+      // Build the toast *first*
+      let nextToast: Toast | null = null;
+
       if (type === "BUY" && amCreator && subj !== meLc) {
-        showToast({
+        nextToast = {
           id: `t:${d.txHash}`,
           kind: "info",
           title: `🎟️ ${value} tickets bought on “${name}”`,
-        });
-        return;
-      }
-
-      if (type === "CANCEL" && amParticipant) {
-        showToast({
+        };
+      } else if (type === "CANCEL" && amParticipant) {
+        nextToast = {
           id: `t:${d.txHash}`,
           kind: "danger",
           title: `⛔ “${name}” canceled — refund available`,
-        });
-        return;
-      }
-
-      if (type === "CANCEL" && amCreator) {
-        showToast({
+        };
+      } else if (type === "CANCEL" && amCreator) {
+        nextToast = {
           id: `t:${d.txHash}`,
           kind: "danger",
           title: `⛔ Your lottery “${name}” was canceled`,
-        });
-        return;
-      }
-
-      if (type === "WIN") {
+        };
+      } else if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
         if (subj === meLc) {
-          showToast({
+          nextToast = {
             id: `t:${d.txHash}`,
             kind: "success",
             title: `🏆 You won ${potUi} USDC on “${name}”`,
             showConfetti: true,
-          });
-          return;
-        }
-
-        if (amParticipant) {
-          showToast({
+          };
+        } else if (amParticipant) {
+          nextToast = {
             id: `t:${d.txHash}`,
             kind: "info",
             title: `✅ “${name}” finalized — winner ${shortAddr(subj)}`,
-          });
-          return;
-        }
-
-        if (amCreator) {
-          showToast({
+          };
+        } else if (amCreator) {
+          nextToast = {
             id: `t:${d.txHash}`,
             kind: "success",
             title: `🏁 “${name}” finished — ticket revenue ready`,
-          });
-          return;
+          };
         }
       }
+
+      if (!nextToast) return;
+
+      // ✅ If summary modal is open, queue the toast instead of losing it.
+      if (summary) {
+        queuedToastRef.current = nextToast;
+        return;
+      }
+
+      showToast(nextToast);
     };
 
     window.addEventListener("ppopgi:activity", onActivity as any);
@@ -348,7 +350,6 @@ export function NotificationCenter() {
   const buildSummaryLines = useCallback(
     (items: ActivityItem[]): SummaryLine[] => {
       if (!me) return [];
-
       const participated = getParticipatedSet(me);
       const lines: SummaryLine[] = [];
 
@@ -376,21 +377,9 @@ export function NotificationCenter() {
 
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
-
-          if (subj === meLc) {
-            lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
-            continue;
-          }
-
-          if (amParticipant) {
-            lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
-            continue;
-          }
-
-          if (amCreator) {
-            lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
-            continue;
-          }
+          if (subj === meLc) lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
+          else if (amParticipant) lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
+          else if (amCreator) lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
         }
       }
 
@@ -401,10 +390,7 @@ export function NotificationCenter() {
 
   const maybeShowSummary = useCallback(async () => {
     if (!me) return;
-
-    // ✅ hard stop: only once per page load
     if (summaryCheckedThisSessionRef.current) return;
-
     if (summary) return;
     if (inFlightSummaryRef.current) return;
     inFlightSummaryRef.current = true;
@@ -420,8 +406,6 @@ export function NotificationCenter() {
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
-
-        // ✅ mark checked even if no lines, so it won't keep trying during session
         summaryCheckedThisSessionRef.current = true;
 
         if (lines.length === 0) return;
@@ -435,26 +419,17 @@ export function NotificationCenter() {
         return;
       }
 
-      const sinceItemsRaw = await fetchGlobalActivity({
-        first: 50,
-        sinceSec: lastSeen,
-        forceFresh: true,
-      });
-
+      const sinceItemsRaw = await fetchGlobalActivity({ first: 50, sinceSec: lastSeen, forceFresh: true });
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
-      if (sinceItems.length === 0) {
-        summaryCheckedThisSessionRef.current = true;
-        return;
-      }
+
+      summaryCheckedThisSessionRef.current = true;
+
+      if (sinceItems.length === 0) return;
 
       const newestTs = Math.max(...sinceItems.map((it) => parseSec(it.timestamp)));
       if (newestTs > 0) setLastSeen(me, newestTs);
 
       const lines = buildSummaryLines(sinceItems);
-
-      // ✅ mark checked so it can’t pop again this session
-      summaryCheckedThisSessionRef.current = true;
-
       if (lines.length === 0) return;
 
       setSummaryExpanded(false);
@@ -464,30 +439,27 @@ export function NotificationCenter() {
         lines,
       });
     } catch {
-      // no-op
       summaryCheckedThisSessionRef.current = true;
     } finally {
       inFlightSummaryRef.current = false;
     }
   }, [me, summary, buildSummaryLines]);
 
-  // ✅ Summary runs only on mount (per wallet), NEVER on focus/visibility events
   useEffect(() => {
     summaryCheckedThisSessionRef.current = false;
+    queuedToastRef.current = null;
     setSummary(null);
     setSummaryExpanded(false);
     if (!me) return;
     void maybeShowSummary();
   }, [me, maybeShowSummary]);
 
-  // ---- RENDER ----
   if (!toast && !summary) return null;
 
-  // 1) SUMMARY MODAL
+  // 1) SUMMARY MODAL (unchanged)
   if (summary) {
     const collapsedCount = 8;
     const canExpand = summary.lines.length > collapsedCount;
-
     const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
 
     return (
