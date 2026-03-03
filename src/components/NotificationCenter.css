@@ -1,0 +1,65 @@
+/* src/components/NotificationCenter.css */
+
+.pp-toast-wrap {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 999999;
+  pointer-events: none;
+}
+
+.pp-toast {
+  pointer-events: auto;
+  min-width: min(520px, calc(100vw - 28px));
+  max-width: min(720px, calc(100vw - 28px));
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+  transform: translateY(10px) scale(0.98);
+  opacity: 0;
+  animation: ppToastIn 140ms ease-out forwards, ppToastOut 240ms ease-in forwards;
+  animation-delay: 0ms, 1760ms; /* ~2s total */
+  backdrop-filter: blur(10px);
+}
+
+@keyframes ppToastIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ppToastOut {
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+
+.pp-toast-title {
+  font-weight: 900;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.pp-toast-body {
+  font-size: 13px;
+  opacity: 0.9;
+  line-height: 1.35;
+}
+
+.pp-info {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(2, 132, 199, 0.18);
+}
+
+.pp-success {
+  background: rgba(236, 253, 245, 0.92);
+  border: 1px solid rgba(22, 101, 52, 0.22);
+}
+
+.pp-danger {
+  background: rgba(254, 242, 242, 0.92);
+  border: 1px solid rgba(153, 27, 27, 0.22);
+}
