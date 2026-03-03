@@ -43,7 +43,7 @@ type SummaryModal = {
 };
 
 // 5 seconds total duration
-const TOAST_MS = 5000;
+const TOAST_MS = 6000;
 
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
 const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
@@ -338,12 +338,12 @@ export function NotificationCenter() {
       }
 
       if (type === "CANCEL" && amParticipant) {
-        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ “${name}” canceled (refund available)` });
+        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ “${name}” canceled! Head to your dashboard to reclaim your ticket(s)!` });
         continue;
       }
 
       if (type === "CANCEL" && amCreator) {
-        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ Your lottery “${name}” was canceled` });
+        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ Your lottery “${name}” was canceled. Minimum tickets not reached.` });
         continue;
       }
 
@@ -354,7 +354,7 @@ export function NotificationCenter() {
           showToast({
             id: `t:${txHash}`,
             kind: "success",
-            title: `🏆 YOU WON ${potUi} USDC on “${name}”!`,
+            title: `🏆 CONGRATULATIONS! YOU WON ${potUi} USDC on “${name}”!`,
             showConfetti: true,
           });
           continue;
@@ -416,11 +416,11 @@ export function NotificationCenter() {
             continue;
           }
           if (amParticipant) {
-            lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
+            lines.push({ icon: "✅", text: `“${name}” finalized and someone won! Better luck next time!`, time: when });
             continue;
           }
           if (amCreator) {
-            lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
+            lines.push({ icon: "🏁", text: `“${name}” finished successfully. Head to the dashboard to reclaim your tickets revenue!`, time: when });
             continue;
           }
         }
@@ -539,7 +539,7 @@ export function NotificationCenter() {
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
         {/* Horizontal flex layout for single line */}
         <div className="pp-toast-row">
-          <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}</div>
+          <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : ""}</div>
           <div className="pp-toast-text">
             <span className="pp-toast-title-inline">{toast!.title}</span>
             {toast!.body && <span className="pp-toast-body-inline"> — {toast!.body}</span>}
