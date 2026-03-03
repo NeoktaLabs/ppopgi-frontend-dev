@@ -13,9 +13,9 @@ type ActivityItem = {
   type: "BUY" | "CREATE" | "WIN" | "CANCEL";
   lotteryId: string;
   lotteryName: string;
-  subject: string;
-  value: string;
-  timestamp: string;
+  subject: string; // buyer/creator/winner (winner address for WIN)
+  value: string; // BUY: ticket count | WIN: prize pot (u6) | CANCEL: "0" | CREATE maybe pot (u6)
+  timestamp: string; // seconds
   txHash: string;
   pending?: boolean;
 };
@@ -43,8 +43,8 @@ const TOAST_MS = 3000;
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
 const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
 
-const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_";
-const LS_PARTICIPATED_PREFIX = "ppopgi_participated_";
+const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_"; // per account
+const LS_PARTICIPATED_PREFIX = "ppopgi_participated_"; // per account (set of lotteryIds)
 
 function lc(a: string | null | undefined) {
   return String(a || "").toLowerCase();
@@ -66,6 +66,21 @@ function fmtUsdcFromU6(u6: string) {
   } catch {
     return "0";
   }
+}
+
+// ✅ NEW: format timestamp (seconds) -> local date/time
+function fmtWhen(tsSecStr: string) {
+  const sec = parseSec(tsSecStr);
+  if (!sec) return "";
+  const d = new Date(sec * 1000);
+  // Example: "Mar 3, 2026, 14:07"
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function loadJson<T>(key: string, fallback: T): T {
@@ -159,10 +174,7 @@ export function NotificationCenter() {
 
   const showToast = useCallback(
     (t: Toast) => {
-      // Clear existing timer if any
-      if (toastTimerRef.current != null) {
-        window.clearTimeout(toastTimerRef.current);
-      }
+      if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
 
       setToast(t);
 
@@ -172,7 +184,6 @@ export function NotificationCenter() {
         } catch {}
       }
 
-      // Auto-dismiss
       toastTimerRef.current = window.setTimeout(() => {
         setToast(null);
       }, TOAST_MS);
@@ -186,6 +197,7 @@ export function NotificationCenter() {
     };
   }, []);
 
+  // Listen for TopNav toggle changes instantly
   useEffect(() => {
     const onSettingA = (ev: Event) => {
       const d = (ev as CustomEvent<{ enabled?: boolean }>).detail;
@@ -203,6 +215,7 @@ export function NotificationCenter() {
     };
   }, []);
 
+  // helper: lookup creator quickly from cached lottery list items
   const creatorOf = useCallback(
     (lotteryId: string) => {
       const id = lc(lotteryId);
@@ -239,6 +252,7 @@ export function NotificationCenter() {
       const subj = lc(d.subject);
       const value = String(d.value || "0");
 
+      // Track participation on BUY by me (for future relevance)
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         return;
@@ -281,23 +295,25 @@ export function NotificationCenter() {
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
+        // ✅ CRITICAL FIX: if *you* are the winner, show it even if localStorage participation is empty
+        if (subj === meLc) {
+          showToast({
+            id: `t:${d.txHash}`,
+            kind: "success",
+            title: `🏆 You Won!`,
+            body: `Congratulations! You won ${potUi} USDC on “${name}”.`,
+            showConfetti: true,
+          });
+          return;
+        }
+
         if (amParticipant) {
-          if (subj === meLc) {
-            showToast({
-              id: `t:${d.txHash}`,
-              kind: "success",
-              title: `🏆 You Won!`,
-              body: `Congratulations! You won ${potUi} USDC on “${name}”.`,
-              showConfetti: true,
-            });
-          } else {
-            showToast({
-              id: `t:${d.txHash}`,
-              kind: "info",
-              title: `✅ Round Ended`,
-              body: `“${name}” finalized. Winner: ${shortAddr(subj)}.`,
-            });
-          }
+          showToast({
+            id: `t:${d.txHash}`,
+            kind: "info",
+            title: `✅ Round Ended`,
+            body: `“${name}” finalized. Winner: ${shortAddr(subj)}.`,
+          });
           return;
         }
 
@@ -329,46 +345,55 @@ export function NotificationCenter() {
   }, [clearSummary]);
 
   const buildSummaryLines = useCallback(
-    (sinceItems: ActivityItem[]) => {
+    (items: ActivityItem[]) => {
       if (!me) return [];
 
       const participated = getParticipatedSet(me);
       const lines: string[] = [];
 
-      for (const it of sinceItems) {
+      for (const it of items) {
         const type = it.type;
         const lotId = lc(it.lotteryId);
         const name = String(it.lotteryName || "Lottery");
         const subj = lc(it.subject);
+        const when = fmtWhen(it.timestamp);
 
         const creator = creatorOf(lotId);
         const amCreator = creator && creator === meLc;
         const amParticipant = participated.has(lotId);
 
         if (type === "BUY" && amCreator && subj !== meLc) {
-          lines.push(`🎟️ ${it.value} tickets sold on “${name}”`);
+          lines.push(`🎟️ ${it.value} tickets sold on “${name}” • ${when}`);
           continue;
         }
 
         if (type === "CANCEL") {
-          if (amParticipant) lines.push(`⛔ “${name}” canceled (refund available)`);
-          else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled`);
+          if (amParticipant) lines.push(`⛔ “${name}” canceled (refund available) • ${when}`);
+          else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled • ${when}`);
           continue;
         }
 
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
-          if (amParticipant) {
-            if (subj === meLc) lines.push(`🏆 YOU WON ${potUi} USDC on “${name}”!`);
-            else lines.push(`✅ “${name}” finalized`);
+
+          // ✅ CRITICAL FIX: show your win even on new device / cleared cache
+          if (subj === meLc) {
+            lines.push(`🏆 YOU WON ${potUi} USDC on “${name}”! • ${when}`);
             continue;
           }
+
+          if (amParticipant) {
+            lines.push(`✅ “${name}” finalized — you didn’t win this time • ${when}`);
+            continue;
+          }
+
           if (amCreator) {
-            lines.push(`🏁 “${name}” finished successfully`);
+            lines.push(`🏁 “${name}” picked a winner — reclaim ticket sales pot in Dashboard • ${when}`);
             continue;
           }
         }
       }
+
       return lines;
     },
     [me, meLc, creatorOf]
@@ -384,7 +409,6 @@ export function NotificationCenter() {
       const lastSeen = getLastSeen(me);
 
       // ✅ First time device/cache: STILL show summary if relevant events exist
-      // Strategy: fetch latest N events (not "since") and build relevant lines.
       if (!lastSeen) {
         const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
         const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
@@ -393,7 +417,7 @@ export function NotificationCenter() {
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
-        if (lines.length === 0) return; // ✅ nothing relevant => show nothing
+        if (lines.length === 0) return;
 
         setSummary({
           id: `summary:first:${newestTs || Date.now()}`,
@@ -403,6 +427,7 @@ export function NotificationCenter() {
         return;
       }
 
+      // Normal: fetch only since lastSeen (server-side timestamp_gt)
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
         sinceSec: lastSeen,
@@ -433,12 +458,15 @@ export function NotificationCenter() {
   useEffect(() => {
     if (!me) return;
     void maybeShowSummary();
+
     const onFocus = () => void maybeShowSummary();
     const onVis = () => {
       if (document.visibilityState === "visible") void maybeShowSummary();
     };
+
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVis);
+
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
@@ -448,7 +476,7 @@ export function NotificationCenter() {
   // ---- RENDER ----
   if (!toast && !summary) return null;
 
-  // 1. SUMMARY MODAL (Centered, Backdrop)
+  // 1. SUMMARY MODAL
   if (summary) {
     return (
       <div className="pp-toast-wrap is-modal show" onMouseDown={clearSummary}>
@@ -482,7 +510,7 @@ export function NotificationCenter() {
     );
   }
 
-  // 2. EPHEMERAL TOAST (Floating Top, No Backdrop)
+  // 2. EPHEMERAL TOAST
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
