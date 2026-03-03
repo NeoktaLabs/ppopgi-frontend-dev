@@ -1,7 +1,6 @@
 // src/components/NotificationCenter.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { useActivityStore } from "../hooks/useActivityStore";
 import { useLotteryStore } from "../hooks/useLotteryStore";
 import { useConfetti } from "../hooks/useConfetti";
 import { fmtUsdcUi } from "../lib/format";
@@ -155,7 +154,6 @@ export function NotificationCenter() {
   const meLc = lc(me);
 
   const { fireConfetti } = useConfetti();
-  const activity = useActivityStore();
   const lotteryStore = useLotteryStore("notif-center", 60_000);
 
   const [toastsEnabled, setToastsEnabled] = useState<boolean>(() => readToastsEnabled());
@@ -297,7 +295,6 @@ export function NotificationCenter() {
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
-        // winner
         if (subj === meLc) {
           showToast({
             id: `t:${d.txHash}`,
@@ -406,7 +403,6 @@ export function NotificationCenter() {
     try {
       const lastSeen = getLastSeen(me);
 
-      // First time device/cache: show summary if relevant exists
       if (!lastSeen) {
         const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
         const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
@@ -426,7 +422,6 @@ export function NotificationCenter() {
         return;
       }
 
-      // Normal: fetch only since lastSeen
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
         sinceSec: lastSeen,
@@ -455,6 +450,11 @@ export function NotificationCenter() {
     }
   }, [me, summary, buildSummaryLines]);
 
+  /**
+   * ✅ CRITICAL FIX:
+   * Do NOT depend on live activity updates here.
+   * Summary should only appear on mount + when user returns (focus / visibilitychange).
+   */
   useEffect(() => {
     if (!me) return;
     void maybeShowSummary();
@@ -471,7 +471,7 @@ export function NotificationCenter() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [me, maybeShowSummary, activity.lastUpdatedMs]);
+  }, [me, maybeShowSummary]);
 
   // ---- RENDER ----
   if (!toast && !summary) return null;
@@ -506,7 +506,6 @@ export function NotificationCenter() {
               ))}
             </ul>
 
-            {/* Show more / Show less */}
             {canExpand && (
               <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
                 <button
