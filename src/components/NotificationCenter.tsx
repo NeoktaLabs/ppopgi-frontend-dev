@@ -36,14 +36,15 @@ type SummaryModal = {
   lines: string[];
 };
 
-const TOAST_MS = 2000;
+// ✅ Updated to 3 seconds
+const TOAST_MS = 3000;
 
 // TopNav keys/events
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
-const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled"; // legacy fallback
+const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
 
-const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_"; // per account
-const LS_PARTICIPATED_PREFIX = "ppopgi_participated_"; // per account (set of lotteryIds)
+const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_";
+const LS_PARTICIPATED_PREFIX = "ppopgi_participated_";
 
 function lc(a: string | null | undefined) {
   return String(a || "").toLowerCase();
@@ -87,11 +88,9 @@ function readToastsEnabled(): boolean {
   try {
     const vA = localStorage.getItem(LS_TOASTS_ENABLED_A);
     if (vA != null) return vA === "true";
-
     const vB = localStorage.getItem(LS_TOASTS_ENABLED_B);
     if (vB != null) return vB === "true";
-
-    return true; // default ON
+    return true;
   } catch {
     return true;
   }
@@ -138,21 +137,12 @@ export function NotificationCenter() {
   const meLc = lc(me);
 
   const { fireConfetti } = useConfetti();
-
-  // Live feed store (for freshness; not used as "away" history source)
   const activity = useActivityStore();
-
-  // Cached lotteries so we can infer creator
   const lotteryStore = useLotteryStore("notif-center", 60_000);
 
-  // toast toggle (real-time only)
   const [toastsEnabled, setToastsEnabled] = useState<boolean>(() => readToastsEnabled());
-
-  // ephemeral toast state
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
-
-  // persistent summary modal state
   const [summary, setSummary] = useState<SummaryModal | null>(null);
 
   const clearToast = useCallback(() => {
@@ -169,6 +159,11 @@ export function NotificationCenter() {
 
   const showToast = useCallback(
     (t: Toast) => {
+      // Clear existing timer if any
+      if (toastTimerRef.current != null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+
       setToast(t);
 
       if (t.showConfetti) {
@@ -177,8 +172,10 @@ export function NotificationCenter() {
         } catch {}
       }
 
-      if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = window.setTimeout(() => setToast(null), TOAST_MS);
+      // Auto-dismiss
+      toastTimerRef.current = window.setTimeout(() => {
+        setToast(null);
+      }, TOAST_MS);
     },
     [fireConfetti]
   );
@@ -189,14 +186,12 @@ export function NotificationCenter() {
     };
   }, []);
 
-  // Listen for TopNav toggle changes instantly
   useEffect(() => {
     const onSettingA = (ev: Event) => {
       const d = (ev as CustomEvent<{ enabled?: boolean }>).detail;
       if (typeof d?.enabled === "boolean") setToastsEnabled(d.enabled);
       else setToastsEnabled(readToastsEnabled());
     };
-
     const onSettingB = () => setToastsEnabled(readToastsEnabled());
 
     window.addEventListener("ppopgi:toast-pref", onSettingA as any);
@@ -208,7 +203,6 @@ export function NotificationCenter() {
     };
   }, []);
 
-  // helper: lookup creator quickly from cached lottery list items
   const creatorOf = useCallback(
     (lotteryId: string) => {
       const id = lc(lotteryId);
@@ -227,13 +221,13 @@ export function NotificationCenter() {
     [me]
   );
 
-  // Real-time popups: listen to ppopgi:activity
+  // Real-time popups
   useEffect(() => {
     if (!me) return;
 
     const onActivity = (ev: Event) => {
       if (!toastsEnabled) return;
-      if (summary) return; // don't distract while summary modal open
+      if (summary) return;
 
       const d = (ev as CustomEvent<ActivityItem>).detail;
       if (!d?.lotteryId || !d?.type) return;
@@ -245,7 +239,6 @@ export function NotificationCenter() {
       const subj = lc(d.subject);
       const value = String(d.value || "0");
 
-      // Track participation on BUY by me (for future relevance)
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         return;
@@ -259,8 +252,8 @@ export function NotificationCenter() {
         showToast({
           id: `t:${d.txHash}`,
           kind: "info",
-          title: `🎟️ New tickets sold`,
-          body: `${value} tix bought by ${shortAddr(subj)} in “${name}”.`,
+          title: `🎟️ Ticket Sale`,
+          body: `${value} tickets sold on “${name}” to ${shortAddr(subj)}.`,
         });
         return;
       }
@@ -269,8 +262,8 @@ export function NotificationCenter() {
         showToast({
           id: `t:${d.txHash}`,
           kind: "danger",
-          title: `⛔ Lottery canceled`,
-          body: `“${name}” was canceled (min tickets not reached). Go to Dashboard to reclaim.`,
+          title: `⛔ Lottery Canceled`,
+          body: `“${name}” did not reach min tickets. Refund available.`,
         });
         return;
       }
@@ -279,7 +272,7 @@ export function NotificationCenter() {
         showToast({
           id: `t:${d.txHash}`,
           kind: "danger",
-          title: `⛔ Your lottery was canceled`,
+          title: `⛔ Lottery Canceled`,
           body: `“${name}” was canceled (min tickets not reached).`,
         });
         return;
@@ -293,16 +286,16 @@ export function NotificationCenter() {
             showToast({
               id: `t:${d.txHash}`,
               kind: "success",
-              title: `🏆 Congratulations!`,
-              body: `You won ${potUi} USDC on “${name}”. Go to Dashboard to reclaim your prize!`,
+              title: `🏆 You Won!`,
+              body: `Congratulations! You won ${potUi} USDC on “${name}”.`,
               showConfetti: true,
             });
           } else {
             showToast({
               id: `t:${d.txHash}`,
               kind: "info",
-              title: `✅ Lottery finalized`,
-              body: `“${name}” finalized and you didn’t win this time.`,
+              title: `✅ Round Ended`,
+              body: `“${name}” finalized. Winner: ${shortAddr(subj)}.`,
             });
           }
           return;
@@ -312,8 +305,8 @@ export function NotificationCenter() {
           showToast({
             id: `t:${d.txHash}`,
             kind: "success",
-            title: `🏁 Your lottery has a winner`,
-            body: `“${name}” picked a winner. Go to Dashboard to reclaim the ticket sales pot!`,
+            title: `🏁 Winner Picked`,
+            body: `“${name}” is complete. Ticket revenue is ready.`,
           });
           return;
         }
@@ -324,7 +317,6 @@ export function NotificationCenter() {
     return () => window.removeEventListener("ppopgi:activity", onActivity as any);
   }, [me, meLc, toastsEnabled, creatorOf, isParticipant, showToast, summary]);
 
-  // “While you were away” (ALWAYS ON; NOT controlled by toggle)
   const inFlightSummaryRef = useRef(false);
 
   const openDashboard = useCallback(() => {
@@ -354,32 +346,29 @@ export function NotificationCenter() {
         const amParticipant = participated.has(lotId);
 
         if (type === "BUY" && amCreator && subj !== meLc) {
-          lines.push(`🎟️ ${it.value} tickets on “${name}” by ${shortAddr(subj)}`);
+          lines.push(`🎟️ ${it.value} tickets sold on “${name}”`);
           continue;
         }
 
         if (type === "CANCEL") {
-          if (amParticipant) lines.push(`⛔ “${name}” canceled — reclaim in Dashboard`);
+          if (amParticipant) lines.push(`⛔ “${name}” canceled (refund available)`);
           else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled`);
           continue;
         }
 
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
-
           if (amParticipant) {
-            if (subj === meLc) lines.push(`🏆 You won ${potUi} USDC on “${name}” — reclaim in Dashboard`);
-            else lines.push(`✅ “${name}” finalized — you didn’t win this time`);
+            if (subj === meLc) lines.push(`🏆 YOU WON ${potUi} USDC on “${name}”!`);
+            else lines.push(`✅ “${name}” finalized`);
             continue;
           }
-
           if (amCreator) {
-            lines.push(`🏁 “${name}” picked a winner — reclaim ticket sales pot in Dashboard`);
+            lines.push(`🏁 “${name}” finished successfully`);
             continue;
           }
         }
       }
-
       return lines;
     },
     [me, meLc, creatorOf]
@@ -394,15 +383,14 @@ export function NotificationCenter() {
     try {
       const lastSeen = getLastSeen(me);
 
-      // ✅ First time device/cache: we STILL show summary if relevant events exist.
+      // ✅ First time device/cache: STILL show summary if relevant events exist
       // Strategy: fetch latest N events (not "since") and build relevant lines.
       if (!lastSeen) {
         const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
         const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
 
         const newestTs = Math.max(0, ...items.map((it) => parseSec(String(it?.timestamp || "0"))));
-        if (newestTs > 0) setLastSeen(me, newestTs);
-        else setLastSeen(me, nowSec());
+        setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
         if (lines.length === 0) return; // ✅ nothing relevant => show nothing
@@ -415,7 +403,6 @@ export function NotificationCenter() {
         return;
       }
 
-      // Normal: fetch only since lastSeen (server-side timestamp_gt)
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
         sinceSec: lastSeen,
@@ -445,63 +432,47 @@ export function NotificationCenter() {
 
   useEffect(() => {
     if (!me) return;
-
     void maybeShowSummary();
-
     const onFocus = () => void maybeShowSummary();
     const onVis = () => {
       if (document.visibilityState === "visible") void maybeShowSummary();
     };
-
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVis);
-
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [me, maybeShowSummary, activity.lastUpdatedMs]);
 
-  // ---- render ----
+  // ---- RENDER ----
   if (!toast && !summary) return null;
 
-  // Summary modal (persistent)
+  // 1. SUMMARY MODAL (Centered, Backdrop)
   if (summary) {
     return (
-      <div className="pp-toast-wrap show" onMouseDown={clearSummary} role="presentation">
-        <div
-          className="pp-toast pp-info pp-modal"
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div className="pp-toast-title">{summary.title}</div>
-            <button
-              type="button"
-              onClick={clearSummary}
-              aria-label="Close"
-              className="pp-modal-x"
-            >
+      <div className="pp-toast-wrap is-modal show" onMouseDown={clearSummary}>
+        <div className="pp-toast pp-modal" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="pp-toast-header">
+            <div className="pp-toast-title">👋 {summary.title}</div>
+            <button className="pp-modal-close" onClick={clearSummary}>
               ✕
             </button>
           </div>
 
-          <div className="pp-toast-body" style={{ marginTop: 10 }}>
-            <div style={{ display: "grid", gap: 8 }}>
-              {summary.lines.slice(0, 10).map((line, idx) => (
-                <div key={`${summary.id}:${idx}`} style={{ opacity: 0.95 }}>
-                  • {line}
-                </div>
+          <div className="pp-toast-body">
+            <ul className="pp-summary-list">
+              {summary.lines.slice(0, 8).map((line, idx) => (
+                <li key={`${summary.id}:${idx}`}>{line}</li>
               ))}
-            </div>
+              {summary.lines.length > 8 && <li>...and {summary.lines.length - 8} more</li>}
+            </ul>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-              <button type="button" onClick={openDashboard} className="pp-modal-btn">
-                Go to Dashboard ↗
+            <div className="pp-modal-actions">
+              <button onClick={openDashboard} className="pp-btn primary">
+                Go to Dashboard
               </button>
-
-              <button type="button" onClick={clearSummary} className="pp-modal-btn secondary">
+              <button onClick={clearSummary} className="pp-btn secondary">
                 Dismiss
               </button>
             </div>
@@ -511,17 +482,17 @@ export function NotificationCenter() {
     );
   }
 
-  // Ephemeral toast (2s)
+  // 2. EPHEMERAL TOAST (Floating Top, No Backdrop)
   return (
-    <div className={`pp-toast-wrap ${toast ? "show" : ""}`} onMouseDown={clearToast} role="presentation">
-      <div
-        className={`pp-toast pp-${toast!.kind} pp-ephemeral`}
-        role="status"
-        aria-live="polite"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="pp-toast-title">{toast!.title}</div>
-        {toast!.body && <div className="pp-toast-body">{toast!.body}</div>}
+    <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
+      <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
+        <div className="pp-toast-icon">
+          {toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}
+        </div>
+        <div className="pp-toast-content">
+          <div className="pp-toast-title">{toast!.title}</div>
+          {toast!.body && <div className="pp-toast-message">{toast!.body}</div>}
+        </div>
       </div>
     </div>
   );
