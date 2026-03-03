@@ -1,9 +1,10 @@
 /* src/pages/HomePage.css */
 
+/* --- Base Layout --- */
 .hp-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 0 40px 0;
+  padding: 0 0 60px 0;
   color: var(--ink);
   overflow-x: hidden;
 }
@@ -19,7 +20,7 @@
   margin-left: -50vw;
   margin-right: -50vw;
   
-  /* ✅ ADDED: Breathing room from the TopNav */
+  /* Spacing from TopNav */
   margin-top: 20px; 
   margin-bottom: 24px;
 
@@ -31,16 +32,17 @@
     #ffe4e6 100%
   );
   background-size: 200% auto;
-  animation: hp-ribbon-flow 15s linear infinite;
+  animation: hp-ribbon-flow 20s linear infinite;
 
-  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  border-top: 1px solid rgba(255,255,255,0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 4px 12px rgba(246, 182, 200, 0.15);
   
-  height: 40px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 90;
 }
 
 @keyframes hp-ribbon-flow {
@@ -59,7 +61,7 @@
   display: flex;
   width: 100%;
   height: 100%;
-  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .hp-banner-slide {
@@ -76,10 +78,9 @@
   background: transparent;
   padding: 0 16px;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -89,7 +90,7 @@
 
 .hp-banner-btn:hover {
   text-decoration: underline;
-  text-decoration-color: #db2777; /* Pink 600 */
+  text-decoration-color: #db2777;
 }
 
 /* =========================================================
@@ -98,15 +99,16 @@
 .hp-hero-card {
   position: relative;
   max-width: 1040px;
-  margin: 10px auto 0 auto;
+  margin: 0 auto;
   
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   
   border-radius: 48px;
   border: 2px solid rgba(255, 255, 255, 0.9);
   
+  /* Deep, soft shadow to make it float */
   box-shadow: 
     0 24px 60px -12px rgba(203, 183, 246, 0.25),
     0 0 0 1px rgba(255, 255, 255, 0.5) inset;
@@ -116,18 +118,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  z-index: 5;
 }
 
 /* --- Animated Background Blobs --- */
 .hp-billboard-bg {
   position: absolute;
-  inset: -50px;
+  inset: -60px;
   z-index: -1;
   background: 
-    radial-gradient(circle at 15% 15%, rgba(254, 205, 211, 0.4), transparent 50%), 
-    radial-gradient(circle at 85% 85%, rgba(186, 230, 253, 0.4), transparent 50%), 
-    radial-gradient(circle at 50% 50%, rgba(221, 214, 254, 0.3), transparent 60%);
-  filter: blur(40px);
+    radial-gradient(circle at 15% 15%, rgba(254, 205, 211, 0.45), transparent 50%), 
+    radial-gradient(circle at 85% 85%, rgba(186, 230, 253, 0.45), transparent 50%), 
+    radial-gradient(circle at 50% 50%, rgba(221, 214, 254, 0.35), transparent 60%);
+  filter: blur(50px);
   animation: hp-breathe 8s ease-in-out infinite alternate;
 }
 
@@ -146,16 +149,17 @@
     radial-gradient(circle at 90% 80%, white 1px, transparent 2px),
     radial-gradient(circle at 50% 10%, white 1.5px, transparent 2.5px);
   background-size: 100% 100%;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 /* --- Content Layout --- */
 .hp-hero-content {
-  padding: 64px 24px 48px 24px;
+  padding: 64px 24px 52px 24px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
   z-index: 2;
 }
 
@@ -168,8 +172,8 @@
 }
 
 .hp-hero-badge {
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(244, 114, 182, 0.3);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(244, 114, 182, 0.35);
   color: #be185d; 
   font-size: 12px;
   font-weight: 800;
@@ -177,16 +181,16 @@
   letter-spacing: 1px;
   padding: 8px 18px;
   border-radius: 999px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
 }
 
 .hp-hero-title {
-  font-size: 56px;
+  font-size: 60px;
   font-weight: 900;
   line-height: 1.05;
   color: var(--ink);
   letter-spacing: -2px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .hp-text-gradient {
@@ -197,76 +201,79 @@
 }
 
 .hp-hero-sub {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 500;
   color: var(--ink);
-  opacity: 0.7;
-  max-width: 580px;
-  line-height: 1.6;
-  margin-bottom: 36px;
+  opacity: 0.75;
+  max-width: 600px;
+  line-height: 1.5;
+  margin-bottom: 40px;
 }
 
 .hp-hero-actions {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .hp-btn-primary {
   background: var(--ink);
   color: #fff;
   border: none;
-  padding: 16px 32px;
+  padding: 16px 36px;
   border-radius: 99px;
   font-weight: 900;
-  font-size: 15px;
+  font-size: 15.5px;
   cursor: pointer;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-  transition: transform 0.2s;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 .hp-btn-primary:hover {
   transform: translateY(-2px);
   background: #3f3f46;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.22);
 }
 
 .hp-btn-secondary {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0,0,0,0.08);
   color: var(--ink);
-  padding: 16px 32px;
+  padding: 16px 36px;
   border-radius: 999px;
   font-weight: 900;
-  font-size: 15px;
+  font-size: 15.5px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.2s;
 }
 .hp-btn-secondary:hover {
-  background: #fff;
+  background: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
 /* =========================================================
-   3. STATS DOCK (The Dashboard Pill)
+   3. STATS DOCK
    ========================================================= */
 .hp-stats-dock {
   width: 100%;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.45);
   border-top: 1px solid rgba(255, 255, 255, 0.6);
-  padding: 20px 0 32px 0;
+  padding: 24px 0 36px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .hp-stats-title-wrap {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .hp-stats-title {
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   color: var(--ink);
-  opacity: 0.5;
+  opacity: 0.6;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -293,9 +300,8 @@
 .hp-stats-row {
   display: flex;
   align-items: flex-start;
-  gap: 60px;
-  /* ✅ ADDED: Ensure perfect center alignment on desktop */
   justify-content: center;
+  gap: 40px; 
 }
 
 .hp-stat-item {
@@ -303,14 +309,15 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  min-width: 120px;
 }
 
 .hp-stat-val {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 900;
   line-height: 1;
   color: var(--ink);
-  letter-spacing: -1.5px;
+  letter-spacing: -1px;
 }
 
 .hp-stat-item.highlight .hp-stat-val {
@@ -320,18 +327,20 @@
 }
 
 .hp-stat-lbl {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--ink);
   opacity: 0.6;
-  margin-top: 6px;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .hp-stat-sep {
   width: 1px;
-  height: 50px;
+  height: 40px;
   background: rgba(0,0,0,0.1);
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .hp-stat-sub {
@@ -347,15 +356,8 @@
   border-radius: 12px;
   text-transform: uppercase;
 }
-
-.hp-chip.settled {
-  background: rgba(16, 185, 129, 0.1);
-  color: #047857;
-}
-.hp-chip.canceled {
-  background: rgba(239, 68, 68, 0.1);
-  color: #b91c1c;
-}
+.hp-chip.settled { background: rgba(16, 185, 129, 0.1); color: #047857; }
+.hp-chip.canceled { background: rgba(239, 68, 68, 0.1); color: #b91c1c; }
 
 /* =========================================================
    4. ATTACHED ACTIVITY BOARD (The Connector)
@@ -363,8 +365,11 @@
 .hp-hero-attach {
   position: relative;
   z-index: 10;
-  margin-top: -40px; 
+  
+  /* ✅ FIXED: Positive margin creates physical separation */
+  margin-top: 24px; 
   margin-bottom: 60px;
+  
   display: flex;
   justify-content: center;
   pointer-events: none; 
@@ -373,21 +378,32 @@
 .hp-hero-attach-card {
   pointer-events: auto;
   position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-/* VISUAL CHAIN CONNECTOR */
+/* ✅ FIXED: Absolute Connector reaches up to bridge the gap */
 .hp-hero-attach-card::before {
   content: "";
-  display: block;
-  width: 4px;
-  height: 40px;
-  background: rgba(255,255,255,0.8);
-  margin: 0 auto;
+  position: absolute;
+  top: -34px; /* Reach up 24px gap + 10px overlap */
+  left: 50%;
+  transform: translateX(-50%);
+  
+  width: 8px;
+  height: 50px; /* Long enough to connect */
+  
+  /* Glowing Chain Visual */
+  background: linear-gradient(to bottom, rgba(255,255,255,0.4), #ffffff, #ffffff, rgba(255,255,255,0.4));
   border-radius: 4px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  box-shadow: 0 0 10px rgba(255,255,255,0.8), 0 2px 4px rgba(0,0,0,0.05);
+  
+  z-index: -1;
 }
 
-/* OVERRIDE: ActivityBoard margin adjustment */
+/* Override ActivityBoard margin to sit flush in container */
 .hp-hero-attach-card .ab-board {
   margin-top: 0 !important;
   margin-bottom: 0 !important;
@@ -414,6 +430,7 @@
   border-radius: 999px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   border: 1px solid rgba(0,0,0,0.05);
+  white-space: nowrap;
 }
 
 .hp-section-line {
@@ -483,7 +500,7 @@
 }
 
 /* =========================================================
-   6. HORIZONTAL STRIPS
+   6. HORIZONTAL STRIPS (Horizontal Scroll)
    ========================================================= */
 .hp-strip-wrap {
   position: relative;
@@ -496,6 +513,7 @@
   padding: 20px 40px 60px 40px; /* Bottom padding for hover room */
   scroll-snap-type: x mandatory;
   scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
 }
 .hp-strip::-webkit-scrollbar { display: none; }
 
@@ -503,7 +521,9 @@
   scroll-snap-align: start;
   flex: 0 0 auto;
   width: 300px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.hp-strip-item:hover { transform: translateY(-8px); }
 
 /* =========================================================
    MOBILE
@@ -516,25 +536,29 @@
   
   .hp-hero-title { font-size: 40px; }
   
-  /* ✅ UPDATED: Stats alignment fix */
-  .hp-stats-row {
+  .hp-hero-actions {
     flex-direction: column;
-    gap: 24px;
-    align-items: center; /* Forces center alignment */
-    text-align: center;
-  }
-  
-  .hp-stat-item {
-    min-width: 0;
     width: 100%;
   }
   
-  /* ✅ UPDATED: Separator becomes a nice horizontal line */
+  /* Stack stats cleanly in center */
+  .hp-stats-row {
+    flex-direction: column;
+    gap: 32px;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .hp-stat-item {
+    width: 100%;
+  }
+  
+  /* Turn vertical separator into horizontal divider */
   .hp-stat-sep {
-    width: 80px;
-    height: 2px;
-    background: rgba(0,0,0,0.06);
-    margin: 0; 
+    width: 60px;
+    height: 1px;
+    background: rgba(0,0,0,0.08);
+    margin: 0;
   }
   
   .hp-podium {
