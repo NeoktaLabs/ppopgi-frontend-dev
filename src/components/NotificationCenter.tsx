@@ -1,5 +1,5 @@
 // src/components/NotificationCenter.tsx
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useActivityStore } from "../hooks/useActivityStore";
 import { useLotteryStore } from "../hooks/useLotteryStore";
@@ -30,7 +30,7 @@ type Toast = {
   showConfetti?: boolean;
 };
 
-// ✅ UPDATED: Structured line item for perfect alignment
+// Structured line item for perfect alignment
 type SummaryLine = {
   icon: string;
   text: string;
@@ -73,7 +73,7 @@ function fmtUsdcFromU6(u6: string) {
   }
 }
 
-// ✅ Short format for list alignment (e.g. "Mar 3, 14:07")
+// Short format for list alignment (e.g. "Mar 3, 14:07")
 function fmtWhen(tsSecStr: string) {
   const sec = parseSec(tsSecStr);
   if (!sec) return "";
@@ -161,7 +161,11 @@ export function NotificationCenter() {
   const [toastsEnabled, setToastsEnabled] = useState<boolean>(() => readToastsEnabled());
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+
   const [summary, setSummary] = useState<SummaryModal | null>(null);
+
+  // ✅ NEW: toggle “Show more / Show less” inside summary modal
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   const clearToast = useCallback(() => {
     setToast(null);
@@ -173,17 +177,20 @@ export function NotificationCenter() {
 
   const clearSummary = useCallback(() => {
     setSummary(null);
+    setSummaryExpanded(false);
   }, []);
 
   const showToast = useCallback(
     (t: Toast) => {
       if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
       setToast(t);
+
       if (t.showConfetti) {
         try {
           fireConfetti();
         } catch {}
       }
+
       toastTimerRef.current = window.setTimeout(() => {
         setToast(null);
       }, TOAST_MS);
@@ -197,6 +204,7 @@ export function NotificationCenter() {
     };
   }, []);
 
+  // Listen for TopNav toggle changes instantly
   useEffect(() => {
     const onSettingA = (ev: Event) => {
       const d = (ev as CustomEvent<{ enabled?: boolean }>).detail;
@@ -232,6 +240,7 @@ export function NotificationCenter() {
     [me]
   );
 
+  // Real-time popups
   useEffect(() => {
     if (!me) return;
 
@@ -291,6 +300,7 @@ export function NotificationCenter() {
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
+        // winner
         if (subj === meLc) {
           showToast({
             id: `t:${d.txHash}`,
@@ -358,28 +368,13 @@ export function NotificationCenter() {
         const amParticipant = participated.has(lotId);
 
         if (type === "BUY" && amCreator && subj !== meLc) {
-          lines.push({
-            icon: "🎟️",
-            text: `${it.value} tickets sold on “${name}”`,
-            time: when,
-          });
+          lines.push({ icon: "🎟️", text: `${it.value} tickets sold on “${name}”`, time: when });
           continue;
         }
 
         if (type === "CANCEL") {
-          if (amParticipant) {
-            lines.push({
-              icon: "⛔",
-              text: `“${name}” canceled (refund available)`,
-              time: when,
-            });
-          } else if (amCreator) {
-            lines.push({
-              icon: "⛔",
-              text: `Your lottery “${name}” canceled`,
-              time: when,
-            });
-          }
+          if (amParticipant) lines.push({ icon: "⛔", text: `“${name}” canceled (refund available)`, time: when });
+          else if (amCreator) lines.push({ icon: "⛔", text: `Your lottery “${name}” canceled`, time: when });
           continue;
         }
 
@@ -387,29 +382,17 @@ export function NotificationCenter() {
           const potUi = fmtUsdcFromU6(it.value);
 
           if (subj === meLc) {
-            lines.push({
-              icon: "🏆",
-              text: `YOU WON ${potUi} USDC on “${name}”!`,
-              time: when,
-            });
+            lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
             continue;
           }
 
           if (amParticipant) {
-            lines.push({
-              icon: "✅",
-              text: `“${name}” finalized`,
-              time: when,
-            });
+            lines.push({ icon: "✅", text: `“${name}” finalized`, time: when });
             continue;
           }
 
           if (amCreator) {
-            lines.push({
-              icon: "🏁",
-              text: `“${name}” finished successfully`,
-              time: when,
-            });
+            lines.push({ icon: "🏁", text: `“${name}” finished successfully`, time: when });
             continue;
           }
         }
@@ -429,6 +412,7 @@ export function NotificationCenter() {
     try {
       const lastSeen = getLastSeen(me);
 
+      // First time device/cache: show summary if relevant exists
       if (!lastSeen) {
         const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
         const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
@@ -439,6 +423,7 @@ export function NotificationCenter() {
         const lines = buildSummaryLines(items);
         if (lines.length === 0) return;
 
+        setSummaryExpanded(false);
         setSummary({
           id: `summary:first:${newestTs || Date.now()}`,
           title: "While you were away",
@@ -447,6 +432,7 @@ export function NotificationCenter() {
         return;
       }
 
+      // Normal: fetch only since lastSeen
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
         sinceSec: lastSeen,
@@ -462,6 +448,7 @@ export function NotificationCenter() {
       const lines = buildSummaryLines(sinceItems);
       if (lines.length === 0) return;
 
+      setSummaryExpanded(false);
       setSummary({
         id: `summary:${newestTs || Date.now()}`,
         title: "While you were away",
@@ -495,8 +482,13 @@ export function NotificationCenter() {
   // ---- RENDER ----
   if (!toast && !summary) return null;
 
-  // 1. SUMMARY MODAL
+  // 1) SUMMARY MODAL
   if (summary) {
+    const collapsedCount = 8;
+    const canExpand = summary.lines.length > collapsedCount;
+
+    const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
+
     return (
       <div className="pp-toast-wrap is-modal show" onMouseDown={clearSummary}>
         <div className="pp-toast pp-modal" onMouseDown={(e) => e.stopPropagation()}>
@@ -509,7 +501,7 @@ export function NotificationCenter() {
 
           <div className="pp-toast-body">
             <ul className="pp-summary-list">
-              {summary.lines.slice(0, 8).map((line, idx) => (
+              {visibleLines.map((line, idx) => (
                 <li key={`${summary.id}:${idx}`}>
                   <div className="pp-sl-left">
                     <span className="pp-sl-icon">{line.icon}</span>
@@ -518,10 +510,23 @@ export function NotificationCenter() {
                   <div className="pp-sl-time">{line.time}</div>
                 </li>
               ))}
-              {summary.lines.length > 8 && (
-                <li className="pp-sl-more">...and {summary.lines.length - 8} more</li>
-              )}
             </ul>
+
+            {/* ✅ NEW: Show more / Show less */}
+            {canExpand && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="pp-btn secondary"
+                  onClick={() => setSummaryExpanded((v) => !v)}
+                  style={{ maxWidth: 220 }}
+                >
+                  {summaryExpanded
+                    ? "Show less"
+                    : `Show more (${summary.lines.length - collapsedCount})`}
+                </button>
+              </div>
+            )}
 
             <div className="pp-modal-actions">
               <button onClick={openDashboard} className="pp-btn primary">
@@ -537,7 +542,7 @@ export function NotificationCenter() {
     );
   }
 
-  // 2. EPHEMERAL TOAST
+  // 2) EPHEMERAL TOAST
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
