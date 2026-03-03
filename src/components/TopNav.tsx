@@ -241,7 +241,7 @@ export const TopNav = memo(function TopNav({
   const usdcText = fmtBal(usdcBal.data?.displayValue, 2);
   const usdcSym = usdcBal.data?.symbol || "USDC";
 
-  const walletLabel = account ? `Wallet · ${short(account)}` : "Wallet";
+  const walletLabel = account ? `Wallet · ${short(account)}` : "Join Ppopgi (뽑기)";
 
   return (
     <div className="topnav-wrapper">
