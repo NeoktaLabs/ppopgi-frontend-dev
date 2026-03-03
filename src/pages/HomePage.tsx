@@ -8,6 +8,18 @@ import { LotteryCardSkeleton } from "../components/LotteryCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard";
 import "./HomePage.css";
 
+// ✅ UI Helper: prettify large numbers (supports bigint safely)
+function fmtInt(n: bigint | number | string) {
+  try {
+    if (typeof n === "bigint") return n.toLocaleString("en-US");
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "0";
+    return v.toLocaleString("en-US");
+  } catch {
+    return "0";
+  }
+}
+
 type Props = {
   nowMs: number;
   onOpenLottery: (id: string) => void;
@@ -19,7 +31,6 @@ const num = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// Global dispatchers
 function openCashierFromHome() {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:open-cashier"));
@@ -36,7 +47,11 @@ function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "fa
 const BANNER_MESSAGES = [
   { id: "cashier", text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC", action: openCashierFromHome },
   { id: "explore", text: "🔎 Discover all lotteries from the Explore page", action: () => navigateFromHome("explore") },
-  { id: "dashboard", text: "🎁 Visit your dashboard to reclaim prizes or tickets", action: () => navigateFromHome("dashboard") },
+  {
+    id: "dashboard",
+    text: "🎁 Visit your dashboard to reclaim prizes or tickets",
+    action: () => navigateFromHome("dashboard"),
+  },
   { id: "about", text: "📖 Read the story behind Ppopgi (뽑기)", action: () => navigateFromHome("about") },
   { id: "faq", text: "❓ Learn how Ppopgi (뽑기) works (FAQ)", action: () => navigateFromHome("faq") },
 ];
@@ -73,8 +88,6 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
 
   const infra = useInfraStatus();
   const { bigPrizes, endingSoon, recentlyFinalized, isLoading, refetch } = useHomeLotteries();
-
-  // Billboard uses subgraph GlobalStats singleton (via your cache worker)
   const gs = useGlobalStatsBillboard();
 
   const finalizerForCards = useMemo(
@@ -121,57 +134,77 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
   const endingRef = useRef<HTMLDivElement | null>(null);
   const settledRef = useRef<HTMLDivElement | null>(null);
 
-  const updateEndingEdges = useCallback(() => {
-    // kept for future arrow UI
-  }, []);
-
-  const updateSettledEdges = useCallback(() => {
-    // kept for future arrow UI
-  }, []);
-
-  useEffect(() => {
-    const tick = () => {
-      updateEndingEdges();
-      updateSettledEdges();
+  // Stats data
+  const stats = useMemo(() => {
+    if (!gs.data) return null;
+    return {
+      tix: fmtInt(gs.data.totalTicketsSold),
+      lots: fmtInt(gs.data.totalLotteriesCreated),
+      fin: fmtInt(gs.data.totalLotteriesSettled), // ✅ FIX (was totalLotteriesFinalized)
+      canc: fmtInt(gs.data.totalLotteriesCanceled),
     };
-    const t = window.setTimeout(tick, 0);
-    const onResize = () => tick();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.clearTimeout(t);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [isLoading, endingSoonSorted.length, recentlySettledSorted.length, updateEndingEdges, updateSettledEdges]);
+  }, [gs.data]);
 
   return (
     <>
-      {/* ✅ HERO (restored) */}
-      <div className="hp-hero">
-        <div className="hp-hero-inner">
-          <div className="hp-hero-title">Welcome to Ppopgi (뽑기)</div>
-          <div className="hp-hero-subtitle">Where fun meets on-chain fairness — spin in, pick tickets, and win big.</div>
+      {/* ✅ NEW: Hero "Glass Billboard" */}
+      <div className="hp-hero-card hp-billboard">
+        {/* Animated Background Layers */}
+        <div className="hp-billboard-bg" />
+        <div className="hp-billboard-sparkles" />
+
+        <div className="hp-hero-content">
+          <div className="hp-badge-shimmer">
+            <div className="hp-hero-badge">✨ The Fair On-Chain Lottery</div>
+          </div>
+          <div className="hp-hero-title">
+            Welcome to <br />
+            <span className="hp-text-gradient">Ppopgi (뽑기)</span>
+          </div>
+          <div className="hp-hero-sub">
+            A decentralized playground where every spin is fair, transparent, and verified on-chain.
+          </div>
 
           <div className="hp-hero-actions">
-            <button className="hp-hero-btn primary" onClick={() => navigateFromHome("explore")}>
-              Explore lotteries
+            <button className="hp-btn-primary" onClick={() => navigateFromHome("explore")}>
+              Explore Lotteries
             </button>
-            <button className="hp-hero-btn" onClick={openCashierFromHome}>
+            <button className="hp-btn-secondary" onClick={openCashierFromHome}>
               Open Cashier
             </button>
           </div>
+        </div>
 
-          {/* Optional: tiny status line */}
-          <div className="hp-hero-meta">
-            {gs.error ? (
-              <span>Stats temporarily unavailable.</span>
-            ) : gs.data ? (
-              <span>
-                {Number(gs.data.totalTicketsSold)} tickets sold • {Number(gs.data.totalLotteriesCreated)} lotteries created
-              </span>
-            ) : (
-              <span />
-            )}
+        {/* ✅ DOCKED STATS BAR */}
+        <div className="hp-stats-dock">
+          <div className="hp-stats-title-wrap">
+            <div className="hp-stats-title">Live Network Stats</div>
           </div>
+
+          {gs.error ? (
+            <div style={{ opacity: 0.5, fontSize: 13, fontWeight: 700 }}>Stats currently unavailable</div>
+          ) : !stats ? (
+            <div style={{ opacity: 0.5, fontSize: 13, fontWeight: 700 }}>Loading stats...</div>
+          ) : (
+            <div className="hp-stats-row">
+              <div className="hp-stat-item highlight">
+                <div className="hp-stat-val hp-count-pop">{stats.tix}</div>
+                <div className="hp-stat-lbl">Tickets Sold</div>
+              </div>
+
+              <div className="hp-stat-sep" />
+
+              <div className="hp-stat-item">
+                <div className="hp-stat-val hp-count-pop">{stats.lots}</div>
+                <div className="hp-stat-lbl">Lotteries Created</div>
+
+                <div className="hp-stat-sub">
+                  <span className="hp-chip settled">✅ {stats.fin} Settled</span>
+                  <span className="hp-chip canceled">⛔ {stats.canc} Canceled</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -261,7 +294,7 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-strip-wrap">
-            <div className="hp-strip" ref={endingRef} onScroll={updateEndingEdges}>
+            <div className="hp-strip" ref={endingRef}>
               {!isLoading &&
                 endingSoonSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
@@ -286,7 +319,7 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-strip-wrap">
-            <div className="hp-strip" ref={settledRef} onScroll={updateSettledEdges}>
+            <div className="hp-strip" ref={settledRef}>
               {!isLoading &&
                 recentlySettledSorted.map((r) => (
                   <div key={r.id} className="hp-strip-item">
