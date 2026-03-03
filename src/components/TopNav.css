@@ -31,7 +31,9 @@
     0 4px 12px -2px rgba(246, 182, 200, 0.15),
     inset 0 0 0 1px rgba(255, 255, 255, 0.6);
 
-  overflow: hidden;
+  /* ✅ FIX: allow dropdowns (wallet) to render outside the shell */
+  overflow: visible;
+
   position: relative;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -45,6 +47,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px 8px 20px;
+
+  /* (Optional, nice) keep top corners visually consistent */
+  border-top-left-radius: 32px;
+  border-top-right-radius: 32px;
 }
 
 /* ✅ Infra row */
@@ -57,6 +63,11 @@
   background: rgba(0, 0, 0, 0.015);
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   pointer-events: auto;
+
+  /* ✅ keep infra visually clipped to the rounded container */
+  border-bottom-left-radius: 32px;
+  border-bottom-right-radius: 32px;
+  overflow: hidden;
 }
 
 .topnav-infra .isp-summary {
