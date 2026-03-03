@@ -43,7 +43,7 @@ type SummaryModal = {
   lines: SummaryLine[];
 };
 
-const TOAST_MS = 3000;
+const TOAST_MS = 5000;
 
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
 const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
