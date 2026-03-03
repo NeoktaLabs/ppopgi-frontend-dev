@@ -106,6 +106,11 @@ export const TopNav = memo(function TopNav({
     setWalletOpen(false);
   }, [page]);
 
+  // If user signs out while wallet dropdown open, close it (avoid stale menu)
+  useEffect(() => {
+    if (!account) setWalletOpen(false);
+  }, [account]);
+
   // Close mobile menu on outside click / esc
   useEffect(() => {
     if (!menuOpen) return;
@@ -320,6 +325,7 @@ export const TopNav = memo(function TopNav({
                           🏦 Cashier
                         </button>
 
+                        {/* ✅ Hide notifications toggle when NOT signed in */}
                         <button
                           className="wallet-item"
                           onClick={() => toggleToasts()}
@@ -375,14 +381,7 @@ export const TopNav = memo(function TopNav({
                           🏦 Cashier
                         </button>
 
-                        <button
-                          className="wallet-item"
-                          onClick={() => toggleToasts()}
-                          role="menuitem"
-                          aria-pressed={toastEnabled}
-                        >
-                          {toastEnabled ? "🔔 Alerts: ON" : "🔕 Alerts: OFF"}
-                        </button>
+                        {/* ✅ REMOVED: Alerts toggle when signed out */}
 
                         <div className="wallet-divider" />
 
@@ -438,7 +437,7 @@ export const TopNav = memo(function TopNav({
         </div>
       </div>
 
-      {/* ✅ Mobile menu includes the same wallet actions (Cashier / Alerts / Dashboard / Sign in-out) */}
+      {/* ✅ Mobile menu */}
       <div ref={menuRef} className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
         <div className="mobile-menu-inner">
           {account && (
@@ -469,14 +468,17 @@ export const TopNav = memo(function TopNav({
 
           <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
 
-          <button
-            onClick={() => {
-              toggleToasts();
-              closeMenu();
-            }}
-          >
-            {toastEnabled ? "🔔 Alerts: ON" : "🔕 Alerts: OFF"}
-          </button>
+          {/* ✅ Hide alerts toggle when signed out */}
+          {account && (
+            <button
+              onClick={() => {
+                toggleToasts();
+                closeMenu();
+              }}
+            >
+              {toastEnabled ? "🔔 Alerts: ON" : "🔕 Alerts: OFF"}
+            </button>
+          )}
 
           {!account ? (
             <button className="primary" onClick={() => handleNav(onOpenSignIn)}>
