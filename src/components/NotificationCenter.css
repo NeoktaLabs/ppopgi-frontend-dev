@@ -9,6 +9,11 @@
   pointer-events: none;
 }
 
+/* ✅ enable clicks when something is visible (so outside click closes) */
+.pp-toast-wrap.show {
+  pointer-events: auto;
+}
+
 /* -----------------------------
    DEFAULT TOAST (2s auto fade)
 ------------------------------ */
@@ -22,20 +27,18 @@
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
   transform: translateY(10px) scale(0.98);
   opacity: 0;
-  animation: ppToastIn 140ms ease-out forwards,
-             ppToastOut 240ms ease-in forwards;
-  animation-delay: 0ms, 1760ms; /* ~2s total */
+  animation: ppToastIn 140ms ease-out forwards, ppToastOut 240ms ease-in forwards;
+  animation-delay: 0ms, 1760ms;
   backdrop-filter: blur(10px);
 }
 
 /* -----------------------------
    PERSISTENT SUMMARY MODAL
-   (no auto fade-out)
 ------------------------------ */
 
 .pp-toast.pp-persistent {
-  animation: ppToastIn 140ms ease-out forwards;
-  opacity: 0;
+  animation: ppToastIn 140ms ease-out forwards; /* ✅ overrides auto-out */
+  animation-delay: 0ms;
 }
 
 /* ----------------------------- */
@@ -65,8 +68,6 @@
   opacity: 0.9;
   line-height: 1.35;
 }
-
-/* ----------------------------- */
 
 .pp-info {
   background: rgba(255, 255, 255, 0.92);
