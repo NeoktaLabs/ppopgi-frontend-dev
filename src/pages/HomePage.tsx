@@ -20,6 +20,33 @@ function fmtInt(n: bigint | number | string) {
   }
 }
 
+// ✅ UI Helper: format USDC bigint (6 decimals) as "$X,XXX"
+function fmtUSDC(v: bigint | number | string, opts?: { decimals?: number; maxFrac?: number }) {
+  const decimals = opts?.decimals ?? 6;
+  const maxFrac = opts?.maxFrac ?? 0;
+
+  try {
+    const x =
+      typeof v === "bigint" ? v : BigInt(typeof v === "number" ? Math.trunc(v) : String(v || "0").trim() || "0");
+
+    const sign = x < 0n ? "-" : "";
+    const a = x < 0n ? -x : x;
+
+    const base = 10n ** BigInt(decimals);
+    const whole = a / base;
+    const frac = a % base;
+
+    const wholeStr = whole.toLocaleString("en-US");
+    if (maxFrac <= 0) return `${sign}$${wholeStr}`;
+
+    const fracStrFull = frac.toString().padStart(decimals, "0");
+    const fracStr = fracStrFull.slice(0, maxFrac).replace(/0+$/, "");
+    return fracStr ? `${sign}$${wholeStr}.${fracStr}` : `${sign}$${wholeStr}`;
+  } catch {
+    return "$0";
+  }
+}
+
 type Props = {
   nowMs: number;
   onOpenLottery: (id: string) => void;
@@ -140,8 +167,10 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
     return {
       tix: fmtInt(gs.data.totalTicketsSold),
       lots: fmtInt(gs.data.totalLotteriesCreated),
-      fin: fmtInt(gs.data.totalLotteriesSettled),
-      canc: fmtInt(gs.data.totalLotteriesCanceled),
+
+      // ✅ NEW: dollars (USDC is 6 decimals)
+      activeUsd: fmtUSDC(gs.data.activeVolumeUSDC, { maxFrac: 0 }),
+      settledUsd: fmtUSDC(gs.data.totalPrizesSettledUSDC, { maxFrac: 0 }),
     };
   }, [gs.data]);
 
@@ -200,11 +229,21 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
               <div className="hp-stat-item">
                 <div className="hp-stat-val hp-count-pop">{stats.lots}</div>
                 <div className="hp-stat-lbl">Lotteries Created</div>
+              </div>
 
-                <div className="hp-stat-sub">
-                  <span className="hp-chip settled">✅ {stats.fin} Settled</span>
-                  <span className="hp-chip canceled">⛔ {stats.canc} Canceled</span>
-                </div>
+              <div className="hp-stat-sep" />
+
+              {/* ✅ NEW: $ volumes (replaces settled/canceled counters) */}
+              <div className="hp-stat-item">
+                <div className="hp-stat-val hp-count-pop">{stats.activeUsd}</div>
+                <div className="hp-stat-lbl">Active Volume</div>
+              </div>
+
+              <div className="hp-stat-sep" />
+
+              <div className="hp-stat-item">
+                <div className="hp-stat-val hp-count-pop">{stats.settledUsd}</div>
+                <div className="hp-stat-lbl">Prizes Settled</div>
               </div>
             </div>
           )}
