@@ -1,5 +1,5 @@
 // src/components/TopNav.tsx
-import { useState, useEffect, memo, useRef } from "react";
+import { useState, useEffect, memo, useRef, useCallback } from "react";
 import { useWalletBalance } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
@@ -43,6 +43,27 @@ function isHidden() {
   }
 }
 
+// ✅ Toast preference (only controls pop-up announcements)
+const TOAST_PREF_KEY = "ppopgi:toastEnabled";
+function readToastPref(): boolean {
+  try {
+    const v = localStorage.getItem(TOAST_PREF_KEY);
+    if (v === null) return true; // default ON
+    return v === "true";
+  } catch {
+    return true;
+  }
+}
+function writeToastPref(enabled: boolean) {
+  try {
+    localStorage.setItem(TOAST_PREF_KEY, enabled ? "true" : "false");
+  } catch {}
+  // Let the app react instantly (NotificationCenter can listen to this)
+  try {
+    window.dispatchEvent(new CustomEvent("ppopgi:toast-pref", { detail: { enabled } }));
+  } catch {}
+}
+
 export const TopNav = memo(function TopNav({
   page,
   account,
@@ -58,6 +79,20 @@ export const TopNav = memo(function TopNav({
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const burgerRef = useRef<HTMLButtonElement | null>(null);
+
+  // ✅ toast announcements toggle (persisted)
+  const [toastEnabled, setToastEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return readToastPref();
+  });
+
+  const toggleToasts = useCallback(() => {
+    setToastEnabled((prev) => {
+      const next = !prev;
+      writeToastPref(next);
+      return next;
+    });
+  }, []);
 
   // pause balance polling when tab hidden
   const [pollEnabled, setPollEnabled] = useState(() => !isHidden());
@@ -209,6 +244,21 @@ export const TopNav = memo(function TopNav({
                     🏦 Cashier
                   </button>
 
+                  {/* ✅ Toast announcements toggle */}
+                  <button
+                    type="button"
+                    className="nav-link cashier-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleToasts();
+                    }}
+                    title={toastEnabled ? "Turn off announcement popups" : "Turn on announcement popups"}
+                    aria-pressed={toastEnabled}
+                  >
+                    {toastEnabled ? "🔔 Alerts" : "🔕 Alerts"}
+                  </button>
+
                   <div className="balances-pill" title="Wallet balances">
                     <div className="balances-rows">
                       <div className="bal-row">
@@ -223,9 +273,26 @@ export const TopNav = memo(function TopNav({
                   </div>
                 </>
               ) : (
-                <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
-                  🏦 Cashier
-                </button>
+                <>
+                  <button className="nav-link cashier-btn" onClick={() => handleNav(onOpenCashier)} title="Open Cashier">
+                    🏦 Cashier
+                  </button>
+
+                  {/* ✅ Toast announcements toggle (even when signed out) */}
+                  <button
+                    type="button"
+                    className="nav-link cashier-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleToasts();
+                    }}
+                    title={toastEnabled ? "Turn off announcement popups" : "Turn on announcement popups"}
+                    aria-pressed={toastEnabled}
+                  >
+                    {toastEnabled ? "🔔 Alerts" : "🔕 Alerts"}
+                  </button>
+                </>
               )}
 
               {!account ? (
@@ -310,6 +377,16 @@ export const TopNav = memo(function TopNav({
           <div className="mobile-divider" />
 
           <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
+
+          {/* ✅ Toast announcements toggle in mobile menu */}
+          <button
+            onClick={() => {
+              toggleToasts();
+              closeMenu();
+            }}
+          >
+            {toastEnabled ? "🔔 Alerts: ON" : "🔕 Alerts: OFF"}
+          </button>
 
           {!account ? (
             <button className="primary" onClick={() => handleNav(onOpenSignIn)}>
