@@ -164,7 +164,7 @@ export function NotificationCenter() {
 
   const [summary, setSummary] = useState<SummaryModal | null>(null);
 
-  // ✅ NEW: toggle “Show more / Show less” inside summary modal
+  // toggle “Show more / Show less” inside summary modal
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   const clearToast = useCallback(() => {
@@ -240,7 +240,7 @@ export function NotificationCenter() {
     [me]
   );
 
-  // Real-time popups
+  // Real-time popups (single-line announcement banner)
   useEffect(() => {
     if (!me) return;
 
@@ -271,8 +271,7 @@ export function NotificationCenter() {
         showToast({
           id: `t:${d.txHash}`,
           kind: "info",
-          title: `🎟️ Ticket Sale`,
-          body: `${value} tickets sold on “${name}” to ${shortAddr(subj)}.`,
+          title: `🎟️ ${value} tickets bought on “${name}”`,
         });
         return;
       }
@@ -281,8 +280,7 @@ export function NotificationCenter() {
         showToast({
           id: `t:${d.txHash}`,
           kind: "danger",
-          title: `⛔ Lottery Canceled`,
-          body: `“${name}” did not reach min tickets. Refund available.`,
+          title: `⛔ “${name}” canceled — refund available`,
         });
         return;
       }
@@ -291,8 +289,7 @@ export function NotificationCenter() {
         showToast({
           id: `t:${d.txHash}`,
           kind: "danger",
-          title: `⛔ Lottery Canceled`,
-          body: `“${name}” was canceled (min tickets not reached).`,
+          title: `⛔ Your lottery “${name}” was canceled`,
         });
         return;
       }
@@ -305,8 +302,7 @@ export function NotificationCenter() {
           showToast({
             id: `t:${d.txHash}`,
             kind: "success",
-            title: `🏆 You Won!`,
-            body: `Congratulations! You won ${potUi} USDC on “${name}”.`,
+            title: `🏆 You won ${potUi} USDC on “${name}”`,
             showConfetti: true,
           });
           return;
@@ -316,8 +312,7 @@ export function NotificationCenter() {
           showToast({
             id: `t:${d.txHash}`,
             kind: "info",
-            title: `✅ Round Ended`,
-            body: `“${name}” finalized. Winner: ${shortAddr(subj)}.`,
+            title: `✅ “${name}” finalized — winner ${shortAddr(subj)}`,
           });
           return;
         }
@@ -326,8 +321,7 @@ export function NotificationCenter() {
           showToast({
             id: `t:${d.txHash}`,
             kind: "success",
-            title: `🏁 Winner Picked`,
-            body: `“${name}” is complete. Ticket revenue is ready.`,
+            title: `🏁 “${name}” finished — ticket revenue ready`,
           });
           return;
         }
@@ -512,7 +506,7 @@ export function NotificationCenter() {
               ))}
             </ul>
 
-            {/* ✅ NEW: Show more / Show less */}
+            {/* Show more / Show less */}
             {canExpand && (
               <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
                 <button
@@ -521,9 +515,7 @@ export function NotificationCenter() {
                   onClick={() => setSummaryExpanded((v) => !v)}
                   style={{ maxWidth: 220 }}
                 >
-                  {summaryExpanded
-                    ? "Show less"
-                    : `Show more (${summary.lines.length - collapsedCount})`}
+                  {summaryExpanded ? "Show less" : `Show more (${summary.lines.length - collapsedCount})`}
                 </button>
               </div>
             )}
@@ -546,9 +538,7 @@ export function NotificationCenter() {
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
-        <div className="pp-toast-icon">
-          {toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}
-        </div>
+        <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}</div>
         <div className="pp-toast-content">
           <div className="pp-toast-title">{toast!.title}</div>
           {toast!.body && <div className="pp-toast-message">{toast!.body}</div>}
