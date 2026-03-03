@@ -13,9 +13,9 @@ type ActivityItem = {
   type: "BUY" | "CREATE" | "WIN" | "CANCEL";
   lotteryId: string;
   lotteryName: string;
-  subject: string; // buyer/creator/winner (winner address for WIN)
-  value: string; // BUY: ticket count | WIN: prize pot (u6) | CANCEL: "0" | CREATE maybe pot (u6)
-  timestamp: string; // seconds
+  subject: string;
+  value: string;
+  timestamp: string;
   txHash: string;
   pending?: boolean;
 };
@@ -30,21 +30,26 @@ type Toast = {
   showConfetti?: boolean;
 };
 
+// ✅ UPDATED: Structured line item for perfect alignment
+type SummaryLine = {
+  icon: string;
+  text: string;
+  time: string;
+};
+
 type SummaryModal = {
   id: string;
   title: string;
-  lines: string[];
+  lines: SummaryLine[];
 };
 
-// ✅ Updated to 3 seconds
 const TOAST_MS = 3000;
 
-// TopNav keys/events
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
 const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
 
-const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_"; // per account
-const LS_PARTICIPATED_PREFIX = "ppopgi_participated_"; // per account (set of lotteryIds)
+const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_";
+const LS_PARTICIPATED_PREFIX = "ppopgi_participated_";
 
 function lc(a: string | null | undefined) {
   return String(a || "").toLowerCase();
@@ -68,16 +73,14 @@ function fmtUsdcFromU6(u6: string) {
   }
 }
 
-// ✅ NEW: format timestamp (seconds) -> local date/time
+// ✅ Short format for list alignment (e.g. "Mar 3, 14:07")
 function fmtWhen(tsSecStr: string) {
   const sec = parseSec(tsSecStr);
   if (!sec) return "";
   const d = new Date(sec * 1000);
-  // Example: "Mar 3, 2026, 14:07"
   return d.toLocaleString(undefined, {
-    year: "numeric",
     month: "short",
-    day: "2-digit",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -175,15 +178,12 @@ export function NotificationCenter() {
   const showToast = useCallback(
     (t: Toast) => {
       if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current);
-
       setToast(t);
-
       if (t.showConfetti) {
         try {
           fireConfetti();
         } catch {}
       }
-
       toastTimerRef.current = window.setTimeout(() => {
         setToast(null);
       }, TOAST_MS);
@@ -197,7 +197,6 @@ export function NotificationCenter() {
     };
   }, []);
 
-  // Listen for TopNav toggle changes instantly
   useEffect(() => {
     const onSettingA = (ev: Event) => {
       const d = (ev as CustomEvent<{ enabled?: boolean }>).detail;
@@ -215,7 +214,6 @@ export function NotificationCenter() {
     };
   }, []);
 
-  // helper: lookup creator quickly from cached lottery list items
   const creatorOf = useCallback(
     (lotteryId: string) => {
       const id = lc(lotteryId);
@@ -234,7 +232,6 @@ export function NotificationCenter() {
     [me]
   );
 
-  // Real-time popups
   useEffect(() => {
     if (!me) return;
 
@@ -252,7 +249,6 @@ export function NotificationCenter() {
       const subj = lc(d.subject);
       const value = String(d.value || "0");
 
-      // Track participation on BUY by me (for future relevance)
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         return;
@@ -295,7 +291,6 @@ export function NotificationCenter() {
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
-        // ✅ CRITICAL FIX: if *you* are the winner, show it even if localStorage participation is empty
         if (subj === meLc) {
           showToast({
             id: `t:${d.txHash}`,
@@ -345,11 +340,11 @@ export function NotificationCenter() {
   }, [clearSummary]);
 
   const buildSummaryLines = useCallback(
-    (items: ActivityItem[]) => {
+    (items: ActivityItem[]): SummaryLine[] => {
       if (!me) return [];
 
       const participated = getParticipatedSet(me);
-      const lines: string[] = [];
+      const lines: SummaryLine[] = [];
 
       for (const it of items) {
         const type = it.type;
@@ -363,32 +358,58 @@ export function NotificationCenter() {
         const amParticipant = participated.has(lotId);
 
         if (type === "BUY" && amCreator && subj !== meLc) {
-          lines.push(`🎟️ ${it.value} tickets sold on “${name}” • ${when}`);
+          lines.push({
+            icon: "🎟️",
+            text: `${it.value} tickets sold on “${name}”`,
+            time: when,
+          });
           continue;
         }
 
         if (type === "CANCEL") {
-          if (amParticipant) lines.push(`⛔ “${name}” canceled (refund available) • ${when}`);
-          else if (amCreator) lines.push(`⛔ Your lottery “${name}” canceled • ${when}`);
+          if (amParticipant) {
+            lines.push({
+              icon: "⛔",
+              text: `“${name}” canceled (refund available)`,
+              time: when,
+            });
+          } else if (amCreator) {
+            lines.push({
+              icon: "⛔",
+              text: `Your lottery “${name}” canceled`,
+              time: when,
+            });
+          }
           continue;
         }
 
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
 
-          // ✅ CRITICAL FIX: show your win even on new device / cleared cache
           if (subj === meLc) {
-            lines.push(`🏆 YOU WON ${potUi} USDC on “${name}”! • ${when}`);
+            lines.push({
+              icon: "🏆",
+              text: `YOU WON ${potUi} USDC on “${name}”!`,
+              time: when,
+            });
             continue;
           }
 
           if (amParticipant) {
-            lines.push(`✅ “${name}” finalized — you didn’t win this time • ${when}`);
+            lines.push({
+              icon: "✅",
+              text: `“${name}” finalized`,
+              time: when,
+            });
             continue;
           }
 
           if (amCreator) {
-            lines.push(`🏁 “${name}” picked a winner — reclaim ticket sales pot in Dashboard • ${when}`);
+            lines.push({
+              icon: "🏁",
+              text: `“${name}” finished successfully`,
+              time: when,
+            });
             continue;
           }
         }
@@ -408,7 +429,6 @@ export function NotificationCenter() {
     try {
       const lastSeen = getLastSeen(me);
 
-      // ✅ First time device/cache: STILL show summary if relevant events exist
       if (!lastSeen) {
         const latest = await fetchGlobalActivity({ first: 50, forceFresh: true });
         const items = (latest || []).filter((x: any) => !x?.pending) as ActivityItem[];
@@ -427,7 +447,6 @@ export function NotificationCenter() {
         return;
       }
 
-      // Normal: fetch only since lastSeen (server-side timestamp_gt)
       const sinceItemsRaw = await fetchGlobalActivity({
         first: 50,
         sinceSec: lastSeen,
@@ -491,9 +510,17 @@ export function NotificationCenter() {
           <div className="pp-toast-body">
             <ul className="pp-summary-list">
               {summary.lines.slice(0, 8).map((line, idx) => (
-                <li key={`${summary.id}:${idx}`}>{line}</li>
+                <li key={`${summary.id}:${idx}`}>
+                  <div className="pp-sl-left">
+                    <span className="pp-sl-icon">{line.icon}</span>
+                    <span className="pp-sl-text">{line.text}</span>
+                  </div>
+                  <div className="pp-sl-time">{line.time}</div>
+                </li>
               ))}
-              {summary.lines.length > 8 && <li>...and {summary.lines.length - 8} more</li>}
+              {summary.lines.length > 8 && (
+                <li className="pp-sl-more">...and {summary.lines.length - 8} more</li>
+              )}
             </ul>
 
             <div className="pp-modal-actions">
