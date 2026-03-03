@@ -202,15 +202,15 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
             <button className="hp-btn-primary" onClick={() => navigateFromHome("explore")}>
               Explore Lotteries
             </button>
-            <button className="hp-btn-secondary" onClick={openCashierFromHome}>
-              Open Cashier
+            <button className="hp-btn-secondary" onClick={() => navigateFromHome("faq")}>
+              Learn More
             </button>
           </div>
         </div>
 
         <div className="hp-stats-dock">
           <div className="hp-stats-title-wrap">
-            <div className="hp-stats-title">Live Network Stats</div>
+            <div className="hp-stats-title">Live Ppopgi (뽑기) Stats</div>
           </div>
 
           {gs.error ? (
