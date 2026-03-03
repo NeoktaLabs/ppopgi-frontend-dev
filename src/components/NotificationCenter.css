@@ -35,7 +35,10 @@
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  
+  /* ✅ UPDATED: Subtle Sakura Pink border for that premium Ppopgi feel */
+  border: 1px solid rgba(246, 182, 200, 0.4);
+  
   box-shadow: 
     0 10px 40px -10px rgba(0, 0, 0, 0.2),
     0 4px 12px -2px rgba(0, 0, 0, 0.1);
