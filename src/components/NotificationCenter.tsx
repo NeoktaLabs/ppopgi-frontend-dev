@@ -451,25 +451,63 @@ export function NotificationCenter() {
   }, [me, summary, buildSummaryLines]);
 
   /**
-   * ✅ CRITICAL FIX:
-   * Do NOT depend on live activity updates here.
-   * Summary should only appear on mount + when user returns (focus / visibilitychange).
+   * ✅ FIX (real fix):
+   * Only show summary if the user actually went away.
+   * Some interactions fire focus/visibility events without being “away”.
    */
+  const wentAwayRef = useRef(false);
+  const hiddenAtMsRef = useRef<number | null>(null);
+  const MIN_AWAY_MS = 3000; // 3s threshold to count as “away”
+
+  useEffect(() => {
+    // reset per wallet
+    wentAwayRef.current = false;
+    hiddenAtMsRef.current = null;
+    setSummary(null);
+    setSummaryExpanded(false);
+  }, [me]);
+
   useEffect(() => {
     if (!me) return;
+
+    // initial mount: we can show once (optional). keep it.
     void maybeShowSummary();
 
-    const onFocus = () => void maybeShowSummary();
-    const onVis = () => {
-      if (document.visibilityState === "visible") void maybeShowSummary();
+    const markAway = () => {
+      wentAwayRef.current = true;
+      hiddenAtMsRef.current = Date.now();
     };
 
-    window.addEventListener("focus", onFocus);
+    const maybeReturn = () => {
+      if (!wentAwayRef.current) return;
+
+      const hiddenAt = hiddenAtMsRef.current;
+      const awayMs = hiddenAt ? Date.now() - hiddenAt : MIN_AWAY_MS;
+
+      // only treat it as “away” if it was long enough
+      if (awayMs >= MIN_AWAY_MS) void maybeShowSummary();
+
+      // reset so normal clicks/focus won’t re-trigger
+      wentAwayRef.current = false;
+      hiddenAtMsRef.current = null;
+    };
+
+    const onVis = () => {
+      if (document.visibilityState === "hidden") markAway();
+      if (document.visibilityState === "visible") maybeReturn();
+    };
+
+    const onBlur = () => markAway();
+    const onFocus = () => maybeReturn();
+
     document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
 
     return () => {
-      window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
     };
   }, [me, maybeShowSummary]);
 
@@ -480,7 +518,6 @@ export function NotificationCenter() {
   if (summary) {
     const collapsedCount = 8;
     const canExpand = summary.lines.length > collapsedCount;
-
     const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
 
     return (
@@ -537,7 +574,9 @@ export function NotificationCenter() {
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
-        <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}</div>
+        <div className="pp-toast-icon">
+          {toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "🔔"}
+        </div>
         <div className="pp-toast-content">
           <div className="pp-toast-title">{toast!.title}</div>
           {toast!.body && <div className="pp-toast-message">{toast!.body}</div>}
