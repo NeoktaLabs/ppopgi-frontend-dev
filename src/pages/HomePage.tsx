@@ -140,16 +140,20 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
     return {
       tix: fmtInt(gs.data.totalTicketsSold),
       lots: fmtInt(gs.data.totalLotteriesCreated),
-      fin: fmtInt(gs.data.totalLotteriesSettled), // ✅ FIX (was totalLotteriesFinalized)
+      fin: fmtInt(gs.data.totalLotteriesSettled),
       canc: fmtInt(gs.data.totalLotteriesCanceled),
     };
   }, [gs.data]);
 
   return (
     <>
-      {/* ✅ NEW: Hero "Glass Billboard" */}
+      {/* ✅ TOP: Banner slider sits directly below TopNav (first content) */}
+      <div className="hp-announcement-bar hp-announcement-top">
+        <BannerSlider />
+      </div>
+
+      {/* ✅ HERO */}
       <div className="hp-hero-card hp-billboard">
-        {/* Animated Background Layers */}
         <div className="hp-billboard-bg" />
         <div className="hp-billboard-sparkles" />
 
@@ -175,7 +179,6 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
           </div>
         </div>
 
-        {/* ✅ DOCKED STATS BAR */}
         <div className="hp-stats-dock">
           <div className="hp-stats-title-wrap">
             <div className="hp-stats-title">Live Network Stats</div>
@@ -208,12 +211,11 @@ export function HomePage({ nowMs, onOpenLottery, onOpenSafety }: Props) {
         </div>
       </div>
 
-      <div className="hp-announcement-bar">
-        <BannerSlider />
-      </div>
-
-      <div className="hp-board-section">
-        <ActivityBoard />
+      {/* ✅ ATTACHED: ActivityBoard visually “wired” to hero */}
+      <div className="hp-hero-attach">
+        <div className="hp-hero-attach-card">
+          <ActivityBoard />
+        </div>
       </div>
 
       <div className="hp-container">
