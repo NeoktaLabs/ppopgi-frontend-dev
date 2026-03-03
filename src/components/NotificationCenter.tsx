@@ -1,5 +1,5 @@
 // src/components/NotificationCenter.tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import { useActivityStore } from "../hooks/useActivityStore";
 import { useLotteryStore } from "../hooks/useLotteryStore";
@@ -29,18 +29,19 @@ type Toast = {
   showConfetti?: boolean;
 };
 
+// Real-time popups only
 const TOAST_MS = 2000;
 
-const LS_TOASTS_ENABLED = "ppopgi_toasts_enabled"; // real-time popups only
+// --- Storage keys ---
+// NOTE: You have two variants in your codebase (older + newer). We support BOTH.
+const LS_TOASTS_ENABLED_OLD = "ppopgi_toasts_enabled";
+const LS_TOASTS_ENABLED_NEW = "ppopgi:toastEnabled"; // from TopNav
+
 const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_"; // per account
 const LS_PARTICIPATED_PREFIX = "ppopgi_participated_"; // per account (set of lotteryIds)
 
 function lc(a: string | null | undefined) {
   return String(a || "").toLowerCase();
-}
-
-function nowSec() {
-  return Math.floor(Date.now() / 1000);
 }
 
 function parseSec(s: string) {
@@ -75,9 +76,14 @@ function saveJson(key: string, v: any) {
 
 function readToastsEnabled(): boolean {
   try {
-    const v = localStorage.getItem(LS_TOASTS_ENABLED);
-    if (v == null) return true; // ✅ default ON
-    return v === "true";
+    // Prefer the newer key if present
+    const vNew = localStorage.getItem(LS_TOASTS_ENABLED_NEW);
+    if (vNew != null) return vNew === "true";
+
+    // Fallback old key
+    const vOld = localStorage.getItem(LS_TOASTS_ENABLED_OLD);
+    if (vOld == null) return true; // default ON
+    return vOld === "true";
   } catch {
     return true;
   }
@@ -112,6 +118,12 @@ function addParticipated(account: string, lotteryId: string) {
   saveJson(key, Array.from(set));
 }
 
+type AwaySummary = {
+  id: string;
+  title: string;
+  bodyLines: string[];
+};
+
 export function NotificationCenter() {
   const acct = useActiveAccount();
   const me = acct?.address ?? null;
@@ -119,19 +131,21 @@ export function NotificationCenter() {
 
   const { fireConfetti } = useConfetti();
 
-  // ✅ read global activity (singleton store; does NOT add extra polling)
+  // ✅ singleton store; does NOT add extra fast polling
   const activity = useActivityStore();
 
-  // ✅ read global lottery list cache so we can know creator without extra RPC calls
-  // (your hook already has backoff + no fast polling)
+  // ✅ cached list used to infer creator (no extra RPC)
   const lotteryStore = useLotteryStore("notif-center", 60_000);
 
-  // toast toggle (real-time only)
+  // real-time toast toggle (ONLY for popups)
   const [toastsEnabled, setToastsEnabled] = useState<boolean>(() => readToastsEnabled());
 
   // live toast state
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+
+  // "While you were away" modal state (NOT affected by toggle)
+  const [away, setAway] = useState<AwaySummary | null>(null);
 
   const clearToast = useCallback(() => {
     setToast(null);
@@ -143,7 +157,6 @@ export function NotificationCenter() {
 
   const showToast = useCallback(
     (t: Toast) => {
-      // hard replace (avoid stacking spam)
       setToast(t);
 
       if (t.showConfetti) {
@@ -166,16 +179,23 @@ export function NotificationCenter() {
 
   // Listen for TopNav toggle changes instantly
   useEffect(() => {
-    const onSetting = (ev: Event) => {
+    const onPref = (ev: Event) => {
       const d = (ev as CustomEvent<{ enabled?: boolean }>).detail;
       if (typeof d?.enabled === "boolean") setToastsEnabled(d.enabled);
       else setToastsEnabled(readToastsEnabled());
     };
-    window.addEventListener("ppopgi:toast-setting", onSetting as any);
-    return () => window.removeEventListener("ppopgi:toast-setting", onSetting as any);
+
+    // support both event names just in case
+    window.addEventListener("ppopgi:toast-pref", onPref as any);
+    window.addEventListener("ppopgi:toast-setting", onPref as any);
+
+    return () => {
+      window.removeEventListener("ppopgi:toast-pref", onPref as any);
+      window.removeEventListener("ppopgi:toast-setting", onPref as any);
+    };
   }, []);
 
-  // helper: lookup creator quickly from your cached list items
+  // helper: lookup creator from cached list items
   const creatorOf = useCallback(
     (lotteryId: string) => {
       const id = lc(lotteryId);
@@ -186,9 +206,6 @@ export function NotificationCenter() {
     [lotteryStore.items]
   );
 
-  // ✅ route “relevance” using only what we already have:
-  // - participant is tracked locally when user buys (BUY subject===me)
-  // - creator is inferred from lotteryStore.items
   const isParticipant = useCallback(
     (lotteryId: string) => {
       if (!me) return false;
@@ -198,7 +215,7 @@ export function NotificationCenter() {
     [me]
   );
 
-  // 2) Real-time popups: listen to ppopgi:activity
+  // 1) Real-time popups: listen to ppopgi:activity
   useEffect(() => {
     if (!me) return;
 
@@ -207,7 +224,7 @@ export function NotificationCenter() {
 
       const d = (ev as CustomEvent<ActivityItem>).detail;
       if (!d?.lotteryId || !d?.type) return;
-      if (d.pending) return; // don't pop "Indexing…" stuff
+      if (d.pending) return;
 
       const type = d.type;
       const lotId = lc(d.lotteryId);
@@ -215,10 +232,10 @@ export function NotificationCenter() {
       const subj = lc(d.subject);
       const value = String(d.value || "0");
 
-      // track participation on BUY by me
+      // Track participation on BUY by me
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
-        return; // no need to toast your own buy here (optional)
+        return;
       }
 
       const creator = creatorOf(lotId);
@@ -300,11 +317,11 @@ export function NotificationCenter() {
     return () => window.removeEventListener("ppopgi:activity", onActivity as any);
   }, [me, meLc, toastsEnabled, creatorOf, isParticipant, showToast]);
 
-  // 3) “While you were away” summary (ALWAYS ON; not controlled by toggle)
-  // Uses global activity store + lastSeen in localStorage
+  // 2) “While you were away” summary (ALWAYS ON; NOT controlled by toggle)
+  // ✅ Must NOT show if nothing relevant happened since lastSeen.
   const lastSummaryAtRef = useRef<number>(0);
 
-  const buildSummary = useCallback((): Toast | null => {
+  const buildAwaySummary = useCallback((): AwaySummary | null => {
     if (!me) return null;
 
     const items = (activity.items || []).filter((x: any) => !x?.pending) as ActivityItem[];
@@ -314,20 +331,17 @@ export function NotificationCenter() {
     const newestTs = Math.max(...items.map((it) => parseSec(it.timestamp)));
     if (newestTs <= 0) return null;
 
-    // no spam: only once per focus burst
-    const now = Date.now();
-    if (now - lastSummaryAtRef.current < 3000) return null;
-
     const since = items.filter((it) => parseSec(it.timestamp) > lastSeen);
     if (since.length === 0) {
-      // still update lastSeen forward so returning later doesn't re-summarize ancient items
+      // nothing happened at all since lastSeen => don't show anything
+      // still advance lastSeen to newestTs (prevents old items re-processing)
       setLastSeen(me, newestTs);
       return null;
     }
 
-    // relevance:
-    // - participant: WIN/CANCEL where lottery is in participated set
-    // - creator: BUY/WIN/CANCEL where creator==me
+    const now = Date.now();
+    if (now - lastSummaryAtRef.current < 3000) return null;
+
     const participated = getParticipatedSet(me);
 
     let pWins = 0;
@@ -341,13 +355,17 @@ export function NotificationCenter() {
       const type = it.type;
       const lotId = lc(it.lotteryId);
       const subj = lc(it.subject);
+
       const creator = creatorOf(lotId);
       const amCreator = creator && creator === meLc;
       const amParticipant = participated.has(lotId);
 
       if (type === "BUY" && amCreator && subj !== meLc) cBuys += 1;
-      if (type === "CANCEL" && amCreator) cCancels += 1;
-      if (type === "CANCEL" && amParticipant) pCancels += 1;
+
+      if (type === "CANCEL") {
+        if (amCreator) cCancels += 1;
+        if (amParticipant) pCancels += 1;
+      }
 
       if (type === "WIN") {
         if (amCreator) cWins += 1;
@@ -358,43 +376,50 @@ export function NotificationCenter() {
       }
     }
 
-    // Move lastSeen forward (acknowledged by summary)
+    // Always advance lastSeen so we don't re-show the same period
     setLastSeen(me, newestTs);
     lastSummaryAtRef.current = now;
 
-    const total = pWins + pLosses + pCancels + cBuys + cWins + cCancels;
-    if (total === 0) return null;
+    const totalRelevant = pWins + pLosses + pCancels + cBuys + cWins + cCancels;
 
-    const parts: string[] = [];
-    if (pWins) parts.push(`🏆 ${pWins} win${pWins === 1 ? "" : "s"}`);
-    if (pLosses) parts.push(`✅ ${pLosses} finalized (no win)`);
-    if (pCancels) parts.push(`⛔ ${pCancels} canceled`);
-    if (cBuys) parts.push(`🎟️ ${cBuys} purchase${cBuys === 1 ? "" : "s"} on your lotteries`);
-    if (cWins) parts.push(`🏁 ${cWins} of your lotteries got a winner`);
-    if (cCancels) parts.push(`⛔ ${cCancels} of your lotteries canceled`);
+    // ✅ If nothing relevant happened, do NOT show the window.
+    if (totalRelevant === 0) return null;
+
+    const lines: string[] = [];
+    if (pWins) lines.push(`🏆 You won ${pWins} time${pWins === 1 ? "" : "s"}.`);
+    if (pLosses) lines.push(`✅ ${pLosses} lottery${pLosses === 1 ? "" : "ies"} finalized (no win).`);
+    if (pCancels) lines.push(`⛔ ${pCancels} lottery${pCancels === 1 ? "" : "ies"} you joined got canceled.`);
+    if (cBuys) lines.push(`🎟️ ${cBuys} ticket purchase${cBuys === 1 ? "" : "s"} on your lotteries.`);
+    if (cWins) lines.push(`🏁 ${cWins} of your lotteries got a winner.`);
+    if (cCancels) lines.push(`⛔ ${cCancels} of your lotteries got canceled.`);
 
     return {
-      id: `summary:${newestTs}`,
-      kind: "info",
+      id: `away:${newestTs}`,
       title: "While you were away",
-      body: parts.join(" • "),
+      bodyLines: lines,
     };
   }, [activity.items, me, meLc, creatorOf]);
+
+  const maybeShowAway = useCallback(() => {
+    if (!me) return;
+    // Don't reopen if already open
+    if (away) return;
+
+    const summary = buildAwaySummary();
+    if (!summary) return;
+
+    setAway(summary);
+  }, [me, away, buildAwaySummary]);
 
   useEffect(() => {
     if (!me) return;
 
-    const maybeShow = () => {
-      const t = buildSummary();
-      if (t) showToast(t);
-    };
+    // on mount + focus/visible
+    maybeShowAway();
 
-    // on mount + on visible/focus
-    maybeShow();
-
-    const onFocus = () => maybeShow();
+    const onFocus = () => maybeShowAway();
     const onVis = () => {
-      if (document.visibilityState === "visible") maybeShow();
+      if (document.visibilityState === "visible") maybeShowAway();
     };
 
     window.addEventListener("focus", onFocus);
@@ -404,16 +429,64 @@ export function NotificationCenter() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [me, buildSummary, showToast]);
+  }, [me, maybeShowAway]);
 
-  if (!toast) return null;
+  const closeAway = useCallback(() => setAway(null), []);
 
   return (
-    <div className={`pp-toast-wrap ${toast ? "show" : ""}`} onMouseDown={clearToast} role="presentation">
-      <div className={`pp-toast pp-${toast.kind}`} role="status" aria-live="polite" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="pp-toast-title">{toast.title}</div>
-        {toast.body && <div className="pp-toast-body">{toast.body}</div>}
-      </div>
-    </div>
+    <>
+      {/* =========================
+          "While you were away" MODAL (persistent)
+          ========================= */}
+      {away && (
+        <div
+          className="pp-away-overlay"
+          onMouseDown={closeAway} // click outside closes
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="pp-away-card"
+            onMouseDown={(e) => e.stopPropagation()} // keep clicks inside
+          >
+            <div className="pp-away-header">
+              <div className="pp-away-title">{away.title}</div>
+              <button className="pp-away-close" onClick={closeAway} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <div className="pp-away-body">
+              {away.bodyLines.map((line, i) => (
+                <div key={`${away.id}:${i}`} className="pp-away-line">
+                  {line}
+                </div>
+              ))}
+
+              <div className="pp-away-hint">
+                Tip: check your <b>Dashboard</b> to reclaim prizes, ticket refunds, or creator pots.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================
+          REAL-TIME TOAST (2s fade)
+          ========================= */}
+      {toast && (
+        <div className={`pp-toast-wrap ${toast ? "show" : ""}`} onMouseDown={clearToast} role="presentation">
+          <div
+            className={`pp-toast pp-${toast.kind}`}
+            role="status"
+            aria-live="polite"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="pp-toast-title">{toast.title}</div>
+            {toast.body && <div className="pp-toast-body">{toast.body}</div>}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
