@@ -51,6 +51,10 @@ const LS_TOASTS_ENABLED_B = "ppopgi_toasts_enabled";
 const LS_LAST_SEEN_PREFIX = "ppopgi_last_seen_";
 const LS_PARTICIPATED_PREFIX = "ppopgi_participated_";
 
+// ✅ Session gating: “While you were away” should be shown at most once per session per wallet.
+// This prevents it from re-appearing on refresh (same tab session), but it WILL appear on a new device/tab.
+const SS_SESSION_PREFIX = "ppopgi_notif_session_";
+
 function lc(a: string | null | undefined) {
   return String(a || "").toLowerCase();
 }
@@ -149,6 +153,20 @@ function shortAddr(a: string) {
   return `${s.slice(0, 6)}…${s.slice(-4)}`;
 }
 
+function readSessionFlag(key: string): boolean {
+  try {
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionFlag(key: string, on: boolean) {
+  try {
+    sessionStorage.setItem(key, on ? "1" : "0");
+  } catch {}
+}
+
 export function NotificationCenter() {
   const acct = useActiveAccount();
   const me = acct?.address ?? null;
@@ -165,8 +183,8 @@ export function NotificationCenter() {
   const [summary, setSummary] = useState<SummaryModal | null>(null);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  // ✅ Summary shows ONLY once per page load (per wallet)
-  const summaryCheckedThisSessionRef = useRef(false);
+  // ✅ Summary should be session-based (per wallet)
+  const shouldRunSummaryThisSessionRef = useRef(false);
 
   // ✅ Toast dedupe for activity-store driven announcements
   const seenTxRef = useRef<Set<string>>(new Set());
@@ -179,10 +197,26 @@ export function NotificationCenter() {
     seenTxRef.current = new Set();
     seededFromInitialActivityRef.current = false;
 
-    summaryCheckedThisSessionRef.current = false;
     setSummary(null);
     setSummaryExpanded(false);
     setToast(null);
+
+    if (!meLc) {
+      shouldRunSummaryThisSessionRef.current = false;
+      return;
+    }
+
+    // ✅ Decide if summary is allowed for this session (per wallet)
+    const ssKey = `${SS_SESSION_PREFIX}${meLc}`;
+    const alreadyStarted = readSessionFlag(ssKey);
+    if (!alreadyStarted) {
+      // first time in this tab session for this wallet
+      writeSessionFlag(ssKey, true);
+      shouldRunSummaryThisSessionRef.current = true;
+    } else {
+      // same session (including refresh): do NOT show summary again
+      shouldRunSummaryThisSessionRef.current = false;
+    }
   }, [meLc]);
 
   const clearToast = useCallback(() => {
@@ -280,16 +314,16 @@ export function NotificationCenter() {
     if (!me) return;
     if (!toastsEnabled) return;
 
-    // ✅ If summary is visible, don't show toast.
+    // If summary is visible, let summary own the screen
     if (summary) return;
 
-    // ✅ Don't announce anything until we've seeded from initial activity batch.
+    // Don't announce anything until we've seeded from initial activity batch.
     if (!seededFromInitialActivityRef.current) return;
 
     const items = (activity.items || []) as ActivityItem[];
     if (!items.length) return;
 
-    // Oldest -> newest so the latest relevant event wins
+    // Oldest -> newest so latest relevant event wins
     const windowItems = items.slice(0, 25).reverse();
 
     for (const d of windowItems) {
@@ -297,11 +331,9 @@ export function NotificationCenter() {
       if (!txHash) continue;
 
       if (seenTxRef.current.has(txHash)) continue;
-
-      // Only real activity
       if ((d as any)?.pending) continue;
 
-      // Mark seen first to prevent double-toasts if React re-renders mid-loop
+      // Mark seen first (prevents double-toasts if React re-renders mid-loop)
       seenTxRef.current.add(txHash);
 
       const type = d.type;
@@ -323,29 +355,17 @@ export function NotificationCenter() {
       const amParticipant = isParticipant(lotId);
 
       if (type === "BUY" && amCreator && subj !== meLc) {
-        showToast({
-          id: `t:${txHash}`,
-          kind: "info",
-          title: `🎟️ ${value} tickets bought on “${name}”`,
-        });
+        showToast({ id: `t:${txHash}`, kind: "info", title: `🎟️ ${value} tickets bought on “${name}”` });
         continue;
       }
 
       if (type === "CANCEL" && amParticipant) {
-        showToast({
-          id: `t:${txHash}`,
-          kind: "danger",
-          title: `⛔ “${name}” canceled — refund available`,
-        });
+        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ “${name}” canceled — refund available` });
         continue;
       }
 
       if (type === "CANCEL" && amCreator) {
-        showToast({
-          id: `t:${txHash}`,
-          kind: "danger",
-          title: `⛔ Your lottery “${name}” was canceled`,
-        });
+        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ Your lottery “${name}” was canceled` });
         continue;
       }
 
@@ -363,20 +383,12 @@ export function NotificationCenter() {
         }
 
         if (amParticipant) {
-          showToast({
-            id: `t:${txHash}`,
-            kind: "info",
-            title: `✅ “${name}” finalized — winner ${shortAddr(subj)}`,
-          });
+          showToast({ id: `t:${txHash}`, kind: "info", title: `✅ “${name}” finalized — winner ${shortAddr(subj)}` });
           continue;
         }
 
         if (amCreator) {
-          showToast({
-            id: `t:${txHash}`,
-            kind: "success",
-            title: `🏁 “${name}” finished — ticket revenue ready`,
-          });
+          showToast({ id: `t:${txHash}`, kind: "success", title: `🏁 “${name}” finished — ticket revenue ready` });
           continue;
         }
       }
@@ -451,8 +463,11 @@ export function NotificationCenter() {
   const maybeShowSummary = useCallback(async () => {
     if (!me) return;
 
-    // hard stop: only once per page load (per wallet)
-    if (summaryCheckedThisSessionRef.current) return;
+    // ✅ session-based gating (prevents “While you were away” on refresh)
+    if (!shouldRunSummaryThisSessionRef.current) return;
+
+    // lock to avoid re-entry
+    shouldRunSummaryThisSessionRef.current = false;
 
     if (summary) return;
     if (inFlightSummaryRef.current) return;
@@ -469,8 +484,6 @@ export function NotificationCenter() {
         setLastSeen(me, newestTs > 0 ? newestTs : nowSec());
 
         const lines = buildSummaryLines(items);
-        summaryCheckedThisSessionRef.current = true;
-
         if (lines.length === 0) return;
 
         setSummaryExpanded(false);
@@ -489,17 +502,12 @@ export function NotificationCenter() {
       });
 
       const sinceItems = (sinceItemsRaw || []).filter((x: any) => !x?.pending) as ActivityItem[];
-      if (sinceItems.length === 0) {
-        summaryCheckedThisSessionRef.current = true;
-        return;
-      }
+      if (sinceItems.length === 0) return;
 
       const newestTs = Math.max(...sinceItems.map((it) => parseSec(it.timestamp)));
       if (newestTs > 0) setLastSeen(me, newestTs);
 
       const lines = buildSummaryLines(sinceItems);
-      summaryCheckedThisSessionRef.current = true;
-
       if (lines.length === 0) return;
 
       setSummaryExpanded(false);
@@ -509,13 +517,13 @@ export function NotificationCenter() {
         lines,
       });
     } catch {
-      summaryCheckedThisSessionRef.current = true;
+      // no-op
     } finally {
       inFlightSummaryRef.current = false;
     }
   }, [me, summary, buildSummaryLines]);
 
-  // Summary runs only on mount (per wallet)
+  // Summary runs only once per SESSION (per wallet)
   useEffect(() => {
     if (!me) return;
     void maybeShowSummary();
