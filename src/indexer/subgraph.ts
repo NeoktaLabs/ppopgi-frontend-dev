@@ -570,14 +570,87 @@ export async function fetchUserLotteriesByUser(
  * Note: CREATE name may be unknown depending on which source is used:
  * - DeployerEvent includes name
  * - RegistryEvent does not include name
+ *
+ * ✅ NEW: supports sinceTs (seconds) via timestamp_gt filter.
  */
 export async function fetchGlobalActivity(
-  opts: { first?: number } & FetchOpts = {}
+  opts: { first?: number; sinceTs?: number } & FetchOpts = {}
 ): Promise<GlobalActivityItem[]> {
   const url = mustEnv("VITE_SUBGRAPH_URL");
   const first = Math.min(Math.max(opts.first ?? 10, 1), 50);
 
-  const query = `
+  const since = Number(opts.sinceTs ?? 0);
+  const useSince = Number.isFinite(since) && since > 0;
+
+  const query = useSince
+    ? `
+    query GlobalFeed($first: Int!, $since: BigInt!) {
+      buys: ticketPurchaseEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { timestamp_gt: $since }
+      ) {
+        lottery { id name }
+        buyer
+        count
+        timestamp
+        txHash
+      }
+
+      wins: winnerPickedEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { timestamp_gt: $since }
+      ) {
+        lottery { id name winningPot }
+        winner
+        timestamp
+        txHash
+      }
+
+      cancels: lotteryCanceledEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { timestamp_gt: $since }
+      ) {
+        lottery { id name creator }
+        timestamp
+        txHash
+      }
+
+      # Preferred creation source (if you emit these)
+      createsDeployer: deployerEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { kind: "LotteryDeployed", timestamp_gt: $since }
+      ) {
+        lottery
+        creator
+        name
+        winningPot
+        timestamp
+        txHash
+      }
+
+      # Fallback creation source
+      createsRegistry: registryEvents(
+        first: $first
+        orderBy: timestamp
+        orderDirection: desc
+        where: { kind: "LotteryRegistered", timestamp_gt: $since }
+      ) {
+        lottery
+        creator
+        timestamp
+        txHash
+      }
+    }
+  `
+    : `
     query GlobalFeed($first: Int!) {
       buys: ticketPurchaseEvents(
         first: $first
@@ -650,7 +723,8 @@ export async function fetchGlobalActivity(
     createsRegistry: any[];
   };
 
-  const data = await gqlFetch<Resp>(url, query, { first }, opts);
+  const variables = useSince ? { first, since: String(Math.floor(since)) } : { first };
+  const data = await gqlFetch<Resp>(url, query, variables, opts);
 
   const buys = (data.buys ?? []).map((e) => ({
     type: "BUY" as const,
