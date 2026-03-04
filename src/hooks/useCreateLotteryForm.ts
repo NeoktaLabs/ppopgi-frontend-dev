@@ -10,6 +10,24 @@ import { ADDRESSES } from "../config/contracts";
 // ✅ IMPORTANT: use the FULL deployer ABI so custom errors can be decoded
 import DEPLOYER_ABI from "../config/abis/SingleWinnerDeployer.json";
 
+/* -------------------- Phase 0: perf helpers -------------------- */
+
+function perfMark(name: string) {
+  try {
+    if (typeof performance === "undefined" || !performance.mark) return;
+    performance.mark(name);
+  } catch {}
+}
+
+function perfMeasure(name: string, startMark: string, endMark: string) {
+  try {
+    if (typeof performance === "undefined" || !performance.measure) return;
+    if (performance.getEntriesByName(startMark).length === 0) return;
+    if (performance.getEntriesByName(endMark).length === 0) return;
+    performance.measure(name, startMark, endMark);
+  } catch {}
+}
+
 /* -------------------- utils -------------------- */
 
 function sanitizeInt(raw: string) {
@@ -188,6 +206,15 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
   const me = account?.address ?? null;
   const { mutateAsync: sendAndConfirm, isPending } = useSendAndConfirmTransaction();
 
+  // Phase 0: track current action marks for CREATE / APPROVE
+  const actionRef = useRef<{
+    kind: "CREATE" | "APPROVE" | null;
+    startMark?: string;
+    confirmedMark?: string;
+    optimisticMark?: string;
+    revalidatedMark?: string;
+  }>({ kind: null });
+
   /* ---------- form state ---------- */
 
   const [name, setName] = useState("");
@@ -316,16 +343,13 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       // Try common method names. One of these should exist in your deployer ABI.
       const feeRes = await tryRead<any>(deployerContract, [
         "protocolFeePercent", // your UI expects percent
-        "protocolFee",        // sometimes named like this
-        "feePercent",         // alt
-        "protocolFeeBps",     // bps variants
+        "protocolFee", // sometimes named like this
+        "feePercent", // alt
+        "protocolFeeBps", // bps variants
         "feeBps",
       ]);
 
-      const recRes = await tryRead<any>(deployerContract, [
-        "feeRecipient",
-        "protocolFeeRecipient",
-      ]);
+      const recRes = await tryRead<any>(deployerContract, ["feeRecipient", "protocolFeeRecipient"]);
 
       if (reqId !== feeReqIdRef.current) return;
 
@@ -355,6 +379,11 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     setMsg(null);
     if (!me) return;
 
+    // Phase 0: start marks for APPROVE (create flow)
+    const approveStart = `ppopgi:CREATE_APPROVE:start:${Date.now()}`;
+    actionRef.current = { kind: "APPROVE", startMark: approveStart };
+    perfMark(approveStart);
+
     try {
       setMsg("Confirm approval in wallet...");
 
@@ -364,7 +393,13 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         params: [ADDRESSES.SingleWinnerDeployer, MaxUint256],
       });
 
-      await sendAndConfirm(tx);
+      const receipt = await sendAndConfirm(tx);
+
+      const approveConfirmed = `ppopgi:CREATE_APPROVE:confirmed:${Date.now()}`;
+      actionRef.current.confirmedMark = approveConfirmed;
+      perfMark(approveConfirmed);
+      perfMeasure("ppopgi:CREATE_APPROVE:start_to_confirmed", approveStart, approveConfirmed);
+
       setMsg("Approval successful!");
       await refreshAllowance({ force: true });
       emitRevalidate(false);
@@ -395,6 +430,11 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       return;
     }
 
+    // Phase 0: start marks for CREATE
+    const createStart = `ppopgi:CREATE:start:${Date.now()}`;
+    actionRef.current = { kind: "CREATE", startMark: createStart };
+    perfMark(createStart);
+
     try {
       setMsg("Confirm creation in wallet...");
 
@@ -405,6 +445,11 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       });
 
       const receipt = await sendAndConfirm(tx);
+
+      const createConfirmed = `ppopgi:CREATE:confirmed:${Date.now()}`;
+      actionRef.current.confirmedMark = createConfirmed;
+      perfMark(createConfirmed);
+      perfMeasure("ppopgi:CREATE:start_to_confirmed", createStart, createConfirmed);
 
       let newAddr = "";
       const logs: any[] = (receipt as any)?.logs ?? [];
@@ -442,6 +487,12 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
           usdcToken: ADDRESSES.USDC.toLowerCase(),
         },
       });
+
+      // Phase 0: optimistic mark for CREATE (local list bump)
+      const createOptimistic = `ppopgi:CREATE:optimistic:${Date.now()}`;
+      actionRef.current.optimisticMark = createOptimistic;
+      perfMark(createOptimistic);
+      perfMeasure("ppopgi:CREATE:confirmed_to_optimistic", createConfirmed, createOptimistic);
 
       emitActivity({
         type: "CREATE",
@@ -525,8 +576,8 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       minT,
       maxT,
       me,
-      protocolFeePercent,     // ✅ for UI
-      protocolFeeRecipient,   // ✅ for UI
+      protocolFeePercent, // ✅ for UI
+      protocolFeeRecipient, // ✅ for UI
     },
     status: { msg, isPending, allowLoading, usdcBal, approve, create, refresh: refreshAllowance },
     helpers: { sanitizeInt },
