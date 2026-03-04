@@ -60,6 +60,19 @@ function setPageInUrl(next: Page) {
 }
 
 export default function App() {
+  // --- Phase 0: baseline perf marks (app mounted) ---
+  useEffect(() => {
+    try {
+      performance.mark("ppopgi:app_mounted");
+      // This pairs with "ppopgi:boot_start" in src/main.tsx
+      if (performance.getEntriesByName("ppopgi:boot_start").length > 0) {
+        performance.measure("ppopgi:boot_to_app_mounted", "ppopgi:boot_start", "ppopgi:app_mounted");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // 1) Thirdweb
   useAutoConnect({
     client: thirdwebClient,
