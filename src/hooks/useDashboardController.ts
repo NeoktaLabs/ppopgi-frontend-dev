@@ -176,6 +176,7 @@ export function useDashboardController() {
   const account = accountObj?.address ?? null;
   const { mutateAsync: sendAndConfirm } = useSendAndConfirmTransaction();
 
+  // ✅ KEEP polling as-is per your request
   const store = useLotteryStore("dashboard", 15_000);
   const allLotteries = useMemo(() => (store.items ?? []) as LotteryListItem[], [store.items]);
 
@@ -705,9 +706,11 @@ export function useDashboardController() {
       feeLotsCacheRef.current = null;
       feeLotsBackoffMsRef.current = 0;
 
-      // ✅ After tx: force refresh is OK (this is the action burst window)
-      await refreshLotteryStore(true, true);
+      // ✅ FIX #1: avoid double forcing.
+      // Forced revalidate already triggers the burst refresh in other stores.
+      // We only recompute local derived state.
       await recompute(true);
+
       return true;
     } catch (e) {
       console.error("Claim failed", e);
@@ -728,8 +731,9 @@ export function useDashboardController() {
     feeLotsCacheRef.current = null;
     feeLotsBackoffMsRef.current = 0;
 
-    // ✅ Manual refresh is NOT an on-chain action => cached refresh
-    await refreshLotteryStore(false, false);
+    // ✅ FIX #2: manual refresh should fetch the latest (user intent).
+    emitRevalidate(true);
+    await refreshLotteryStore(false, true);
     await recompute(false);
   };
 
