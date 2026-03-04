@@ -1,5 +1,5 @@
 // src/hooks/useExploreController.ts
-import { useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useActiveAccount } from "thirdweb/react";
 import type { LotteryListItem, LotteryStatus } from "../indexer/subgraph";
 
@@ -87,10 +87,51 @@ export function useExploreController() {
     setMyLotteriesOnly(false);
   };
 
+  /**
+   * ✅ Phase 3 behavior:
+   * - Normal refresh button => force store fetch (still uses edge cache; store handles revalidate throttles)
+   * - After user actions (ppopgi:revalidate) => do a short "freshness burst" by forcing store fetch
+   *   (your worker will bypass edge cache only when fetchers set x-force-fresh; the store itself is list data,
+   *    and already uses periodic polling + revalidate throttling, so here we just ensure it runs immediately).
+   */
   const refresh = useCallback(() => {
-    // ✅ force the store to refetch (store dedupes across the whole app)
     void refreshLotteryStore(false, true);
   }, []);
+
+  // ✅ Listen to app-wide revalidate so Explore reflects actions quickly (even if user stays on Explore)
+  const burstUntilRef = useRef(0);
+  const burstTimerRef = useRef<number | null>(null);
+
+  const triggerBurst = useCallback(() => {
+    burstUntilRef.current = Date.now() + 12_000;
+
+    // immediate fetch
+    void refreshLotteryStore(true, true);
+
+    // one delayed fetch to catch subgraph ingest lag (pairs with your delayed revalidate pings)
+    if (burstTimerRef.current != null) window.clearTimeout(burstTimerRef.current);
+    burstTimerRef.current = window.setTimeout(() => {
+      if (Date.now() <= burstUntilRef.current) {
+        void refreshLotteryStore(true, true);
+      }
+      burstTimerRef.current = null;
+    }, 6_000);
+  }, []);
+
+  useEffect(() => {
+    const onReval = (_e: Event) => {
+      triggerBurst();
+    };
+
+    window.addEventListener("ppopgi:revalidate", onReval as any);
+    return () => {
+      window.removeEventListener("ppopgi:revalidate", onReval as any);
+      if (burstTimerRef.current != null) {
+        window.clearTimeout(burstTimerRef.current);
+        burstTimerRef.current = null;
+      }
+    };
+  }, [triggerBurst]);
 
   return {
     state: { items, list, note, q, status, sort, openOnly, myLotteriesOnly, me },
