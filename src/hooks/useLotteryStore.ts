@@ -48,6 +48,11 @@ let nextAllowedFetchMs = 0;
 const appliedPatchIds = new Set<string>();
 let patchGcTimer: number | null = null;
 
+// ✅ Phase 3: client SWR + force-fresh burst (pairs with your CF worker)
+const CLIENT_SWR_TTL_MS = 4_000; // small, because edge already caches (keeps UI snappy, reduces churn)
+const FORCE_FRESH_BURST_MS = 15_000; // after actions, bypass edge cache for a short window
+let forceFreshUntilMs = 0;
+
 // Revalidate throttling
 const SOFT_REVALIDATE_MIN_GAP_MS = 20_000; // ignore frequent ticks
 const HARD_REVALIDATE_MIN_GAP_MS = 2_500; // allow quick refresh after user actions
@@ -105,7 +110,7 @@ function clearTimer() {
 function computePollMs() {
   const minRequested = requestedPolls.size > 0 ? Math.min(...requestedPolls.values()) : 20_000;
 
-  // Foreground minimum is 12s (protect indexer)
+  // Foreground minimum is 12s (protect indexer). Worker already caches, but keep this safe.
   const fg = Math.max(12_000, minRequested);
 
   // Background minimum is 90s (protect indexer even more)
@@ -118,18 +123,14 @@ function scheduleNext() {
   clearTimer();
   if (subscribers <= 0) return;
 
-  // If hidden, don’t keep polling aggressively. We'll refresh on visibility/focus.
   const pollMs = computePollMs();
   const now = Date.now();
   const waitForBackoff = Math.max(0, backoffUntilMs - now);
-
-  // Also respect global throttle (nextAllowedFetchMs).
   const waitForThrottle = Math.max(0, nextAllowedFetchMs - now);
 
   const delay = Math.max(waitForBackoff, waitForThrottle, pollMs);
 
   timer = window.setTimeout(() => {
-    // background poll
     void refresh(true, false);
   }, delay);
 }
@@ -166,7 +167,6 @@ function applyBackoff(err: any) {
   const delay = Math.min(max, base * Math.pow(2, backoffStep));
   backoffUntilMs = Date.now() + delay;
 
-  // also throttle general fetch start
   nextAllowedFetchMs = Math.max(nextAllowedFetchMs, backoffUntilMs);
 
   setState({
@@ -180,16 +180,16 @@ function resetBackoff() {
   backoffUntilMs = 0;
 }
 
-// -----------------------------
-// Optimistic patch helpers
-// -----------------------------
+/* -----------------------------
+   Optimistic patch helpers
+----------------------------- */
 type OptimisticEvent =
   | {
       kind: "BUY";
       patchId?: string;
       lotteryId: string;
       deltaSold: number;
-      deltaRevenue?: string | number; // optional
+      deltaRevenue?: string | number;
       tsMs?: number;
     }
   | {
@@ -331,22 +331,36 @@ function handleOptimisticEvent(ev: OptimisticEvent) {
   if (ev.kind === "CREATE") applyOptimisticCreate(ev);
 }
 
-// -----------------------------
-// Fetching
-// -----------------------------
+/* -----------------------------
+   Fetching
+----------------------------- */
+
 function clampFirstForContext() {
   // 200 is fine on modern indexers, but if hidden we can fetch less.
   return isHidden() ? 120 : 200;
 }
 
 /**
+ * Phase 3: should we send X-Force-Fresh right now?
+ * (Worker will bypass cache + meta-guard any write-through.)
+ */
+function shouldForceFreshNow(force: boolean) {
+  if (force) return true;
+  return Date.now() < forceFreshUntilMs;
+}
+
+/**
  * Centralized “should we start a fetch now?”
- * Applies: backoff + global throttle + inFlight queueing.
+ * Applies: client SWR + backoff + global throttle + inFlight queueing.
  */
 function canStartFetch(force: boolean) {
   if (subscribers <= 0) return { ok: false, reason: "no-subs" as const };
 
   const now = Date.now();
+
+  // ✅ Phase 3: client SWR (skip redundant fetches) unless we're forcing fresh
+  const swrFresh = state.lastUpdatedMs > 0 && now - state.lastUpdatedMs < CLIENT_SWR_TTL_MS;
+  if (!shouldForceFreshNow(force) && swrFresh) return { ok: false, reason: "swr-fresh" as const };
 
   if (!force && now < backoffUntilMs) return { ok: false, reason: "backoff" as const };
   if (!force && now < nextAllowedFetchMs) return { ok: false, reason: "throttle" as const };
@@ -356,8 +370,10 @@ function canStartFetch(force: boolean) {
   return { ok: true, reason: "ok" as const };
 }
 
-async function doFetch(isBackground: boolean) {
+async function doFetch(isBackground: boolean, force: boolean) {
   if (inFlight) return inFlight;
+
+  const forceFresh = shouldForceFreshNow(force);
 
   inFlight = (async () => {
     if (!isBackground) setState({ isLoading: true });
@@ -371,6 +387,10 @@ async function doFetch(isBackground: boolean) {
       const data = await fetchLotteriesFromSubgraph({
         first: clampFirstForContext(),
         signal: aborter.signal,
+
+        // ✅ Phase 3: tell CF worker to bypass edge cache when needed
+        forceFresh,
+        headers: forceFresh ? { "X-Force-Fresh": "1" } : undefined,
       } as any);
 
       const nextSig = signature(data);
@@ -385,6 +405,7 @@ async function doFetch(isBackground: boolean) {
           lastUpdatedMs: Date.now(),
         });
       } else {
+        // keep lastUpdatedMs as-is; unchanged data shouldn't thrash timestamps
         setState({ note: null, isLoading: false });
       }
 
@@ -407,7 +428,6 @@ async function doFetch(isBackground: boolean) {
 
       if (pendingRefreshAfterFlight) {
         pendingRefreshAfterFlight = false;
-        // do not bypass throttles; requestRevalidate will handle timing
         requestRevalidate(true);
       } else {
         scheduleNext();
@@ -439,7 +459,7 @@ export async function refresh(isBackground = false, force = false) {
     return;
   }
 
-  await doFetch(isBackground);
+  await doFetch(isBackground, force);
 }
 
 export function getSnapshot(): StoreState {
@@ -455,9 +475,10 @@ export function subscribe(listener: Listener) {
   return () => listeners.delete(listener);
 }
 
-// -----------------------------
-// Store lifecycle
-// -----------------------------
+/* -----------------------------
+   Store lifecycle
+----------------------------- */
+
 function clearRevalidateDebounce() {
   if (revalidateDebounceTimer != null) {
     window.clearTimeout(revalidateDebounceTimer);
@@ -467,6 +488,7 @@ function clearRevalidateDebounce() {
 
 /**
  * When UI emits "ppopgi:revalidate", we:
+ * - start/extend a force-fresh burst window (Phase 3)
  * - don’t spam (min gap)
  * - don’t overlap (if inFlight => queue one refresh)
  * - respect backoff + global throttle
@@ -476,6 +498,12 @@ function requestRevalidate(force = false) {
   if (isHidden()) return;
 
   const now = Date.now();
+
+  // ✅ Phase 3: if caller says "force", enter force-fresh burst window
+  if (force) {
+    forceFreshUntilMs = Math.max(forceFreshUntilMs, now + FORCE_FRESH_BURST_MS);
+  }
+
   const minGap = force ? HARD_REVALIDATE_MIN_GAP_MS : SOFT_REVALIDATE_MIN_GAP_MS;
 
   if (inFlight) {
@@ -483,7 +511,6 @@ function requestRevalidate(force = false) {
     return;
   }
 
-  // also consider global throttle (e.g. multiple events)
   const earliest = Math.max(lastFetchStartedMs + minGap, nextAllowedFetchMs);
   const wait = Math.max(0, earliest - now);
 
@@ -558,6 +585,9 @@ export function startLotteryStore(consumerKey: string, pollMs: number) {
       pendingRefreshAfterFlight = false;
       clearRevalidateDebounce();
       (startLotteryStore as any)._cleanup?.();
+
+      // reset burst window
+      forceFreshUntilMs = 0;
     } else {
       scheduleNext();
     }
