@@ -114,9 +114,12 @@ const shared = {
   // fetch timeout
   CLIENT_TIMEOUT_MS: 9000,
 
-  // "force-fresh burst" window after user actions (ONLY when explicitly forced)
+  // ✅ 5s burst window after explicit forced revalidate only
   forceFreshUntilMs: 0,
-  FORCE_FRESH_BURST_MS: 12_000,
+  FORCE_FRESH_BURST_MS: 5_000,
+
+  // ✅ retry timings (kept inside 5s)
+  BURST_RETRY_MS: [0, 1500, 3000, 4500] as number[],
 
   // event handlers
   eventsBound: false,
@@ -197,7 +200,6 @@ async function fetchShared(opts?: { forceFresh?: boolean }) {
       const res = await fetch(shared.gqlUrl!, {
         method: "POST",
         headers,
-        // Let worker/browser cache normally; forceFresh only affects the worker edge cache path.
         cache: "default",
         signal: ac.signal,
         body: JSON.stringify({
@@ -263,6 +265,17 @@ async function fetchShared(opts?: { forceFresh?: boolean }) {
   return p;
 }
 
+/**
+ * ✅ Burst runner: retries forceFresh a few times within 5s.
+ * This is what makes Billboard reflect actions quickly even with indexer lag.
+ */
+function triggerForceFreshBurst() {
+  setForceFreshBurst();
+  for (const ms of shared.BURST_RETRY_MS) {
+    window.setTimeout(() => void fetchShared({ forceFresh: true }), ms);
+  }
+}
+
 function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
   if (!shared.gqlUrl) shared.gqlUrl = gqlUrl;
 
@@ -271,7 +284,6 @@ function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
   }
 
   if (!shared.pollTimer) {
-    // initial fetch (only once for the whole app)
     void fetchShared();
 
     shared.pollTimer = setInterval(() => {
@@ -292,21 +304,19 @@ function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
     });
 
     /**
-     * ✅ IMPORTANT FIX (prevents hammering):
-     * - Only `detail.force === true` should trigger forceFresh + burst.
-     * - Normal revalidate events should do cached fetch.
+     * ✅ IMPORTANT:
+     * - Only `detail.force === true` triggers a 5s forceFresh burst
+     * - Normal revalidate does cached fetch only
      */
     window.addEventListener("ppopgi:revalidate", (e: Event) => {
       const ce = e as CustomEvent<{ force?: boolean }>;
       const forced = !!ce?.detail?.force;
 
       if (forced) {
-        setForceFreshBurst();
-        void fetchShared({ forceFresh: true });
+        triggerForceFreshBurst();
         return;
       }
 
-      // Normal revalidate = cached fetch (do NOT bypass edge cache)
       void fetchShared({ forceFresh: false });
     });
   }
@@ -329,7 +339,6 @@ export function useGlobalStatsBillboard(): State {
     const listener: Listener = (s) => setLocal(s);
     shared.listeners.add(listener);
 
-    // sync immediately after subscribing (in case init fetched between render/effect)
     setLocal(snapshot());
 
     return () => {
