@@ -14,7 +14,6 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
   const runningRef = useRef(false);
   const lastLotteryRefreshAtRef = useRef(0);
   const lastActivityRefreshAtRef = useRef(0);
-  const lastSoftRevalidateAtRef = useRef(0);
 
   const tick = async (background = false) => {
     if (runningRef.current) return;
@@ -27,8 +26,7 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
 
       // Keep these aligned with your cache TTLs + store throttles
       const ACTIVITY_MIN_GAP_MS = 15_000; // activity is cheap, but don’t spam
-      const LOTTERY_REFRESH_MIN_GAP_MS = 30_000; // heavier; safer than 20s once stores are burst-driven
-      const SOFT_REVALIDATE_MIN_GAP_MS = 5_000; // avoid spamming listeners
+      const LOTTERY_REFRESH_MIN_GAP_MS = 30_000; // heavier
 
       const shouldRefreshActivity = !background || now - lastActivityRefreshAtRef.current >= ACTIVITY_MIN_GAP_MS;
       const shouldRefreshLotteries = !background || now - lastLotteryRefreshAtRef.current >= LOTTERY_REFRESH_MIN_GAP_MS;
@@ -45,14 +43,9 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
 
       await Promise.allSettled(tasks);
 
-      // ✅ Soft revalidate only (never "force" from the refresher)
-      // This lets stores/hooks recompute derived UI without entering burst mode.
-      if (now - lastSoftRevalidateAtRef.current >= SOFT_REVALIDATE_MIN_GAP_MS) {
-        lastSoftRevalidateAtRef.current = now;
-        try {
-          window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force: false } }));
-        } catch {}
-      }
+      // ✅ NO revalidate dispatch here.
+      // Forced bursts should come ONLY from real user actions:
+      // window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force: true } }))
     } finally {
       runningRef.current = false;
     }
@@ -65,8 +58,7 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
     // Interval ticks are "background" (respect min gaps)
     const id = window.setInterval(() => void tick(true), intervalMs);
 
-    // ✅ Focus/visibility should also behave like "background" ticks,
-    // so min-gap protections still apply and we don’t create spikes.
+    // Focus/visibility behave like background ticks (no spikes)
     const onFocus = () => void tick(true);
     const onVis = () => {
       try {
