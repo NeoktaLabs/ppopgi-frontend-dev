@@ -79,7 +79,7 @@ const EMPTY: GlobalStatsBillboard = {
 
 function isAbortLike(e: any): boolean {
   const msg = String(e?.name || e?.message || e || "").toLowerCase();
-  return msg.includes("abort") || msg.includes("aborted");
+  return msg.includes("abort") || msg.includes("aborted") || msg.includes("timeout");
 }
 
 // ==============================
@@ -114,6 +114,10 @@ const shared = {
   // fetch timeout
   CLIENT_TIMEOUT_MS: 9000,
 
+  // "force-fresh burst" window after user actions
+  forceFreshUntilMs: 0,
+  FORCE_FRESH_BURST_MS: 12_000,
+
   // event handlers
   eventsBound: false,
 };
@@ -138,20 +142,40 @@ function notify() {
   }
 }
 
+function inForceFreshBurst(): boolean {
+  return Date.now() < shared.forceFreshUntilMs;
+}
+
+function setForceFreshBurst() {
+  shared.forceFreshUntilMs = Date.now() + shared.FORCE_FRESH_BURST_MS;
+}
+
+/**
+ * opts.forceFresh:
+ * - true  => bypass worker edge cache (x-force-fresh=1)
+ * - false => normal cached reads
+ * If undefined, we auto-promote to forceFresh during burst window.
+ */
 async function fetchShared(opts?: { forceFresh?: boolean }) {
   if (!shared.gqlUrl) return;
 
+  const forceFresh = opts?.forceFresh ?? inForceFreshBurst();
+
   // Avoid hammering in background tabs unless explicitly forced
-  if (!opts?.forceFresh && isHidden()) return;
+  if (!forceFresh && isHidden()) return;
 
   // Coalesce concurrent requests across the whole app
   if (shared.inflight) return shared.inflight;
 
   const now = Date.now();
-  if (!opts?.forceFresh && now - shared.lastFetchMs < shared.MIN_SPACING_MS) return;
+
+  // For normal cached reads, respect min spacing.
+  // For forceFresh reads, allow "immediate" (still coalesced by inflight).
+  if (!forceFresh && now - shared.lastFetchMs < shared.MIN_SPACING_MS) return;
   shared.lastFetchMs = now;
 
-  shared.isLoading = shared.data === null ? true : shared.isLoading; // keep "loading" only when empty
+  // Only show loading spinner when empty (keeps UI stable)
+  shared.isLoading = shared.data === null ? true : shared.isLoading;
   notify();
 
   const p = (async () => {
@@ -165,13 +189,12 @@ async function fetchShared(opts?: { forceFresh?: boolean }) {
 
     try {
       const headers: Record<string, string> = { "content-type": "application/json" };
-      if (opts?.forceFresh) headers["x-force-fresh"] = "1";
+      if (forceFresh) headers["x-force-fresh"] = "1";
 
       const res = await fetch(shared.gqlUrl!, {
         method: "POST",
         headers,
-        // ✅ Let the worker + browser do their job; avoid forcing no-store which can defeat reuse
-        // (Your worker already uses edge caching.)
+        // Let worker/browser cache normally; forceFresh only affects the worker edge cache path.
         cache: "default",
         signal: ac.signal,
         body: JSON.stringify({
@@ -227,13 +250,11 @@ async function fetchShared(opts?: { forceFresh?: boolean }) {
     } finally {
       clearTimeout(t);
     }
-  })()
-    .finally(() => {
-      shared.inflight = null;
-      // ensure loading flag is consistent after inflight resolves
-      if (shared.data !== null) shared.isLoading = false;
-      notify();
-    });
+  })().finally(() => {
+    shared.inflight = null;
+    if (shared.data !== null) shared.isLoading = false;
+    notify();
+  });
 
   shared.inflight = p;
   return p;
@@ -241,7 +262,7 @@ async function fetchShared(opts?: { forceFresh?: boolean }) {
 
 function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
   if (!shared.gqlUrl) shared.gqlUrl = gqlUrl;
-  // only set pollMs once; if you want dynamic, handle elsewhere
+
   if (typeof pollMs === "number" && Number.isFinite(pollMs)) {
     shared.pollMs = Math.max(10_000, Math.floor(pollMs));
   }
@@ -251,6 +272,7 @@ function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
     void fetchShared();
 
     shared.pollTimer = setInterval(() => {
+      // cached poll unless we're in burst window
       void fetchShared();
     }, shared.pollMs);
   }
@@ -258,12 +280,29 @@ function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
   if (!shared.eventsBound && typeof window !== "undefined") {
     shared.eventsBound = true;
 
-    // refresh on focus
+    // refresh on focus (cached unless in burst)
     window.addEventListener("focus", () => void fetchShared());
 
-    // refresh when tab becomes visible again
+    // refresh when tab becomes visible again (cached unless in burst)
     document.addEventListener("visibilitychange", () => {
       if (!isHidden()) void fetchShared();
+    });
+
+    // ✅ After user actions: enter force-fresh burst window + fetch immediately
+    window.addEventListener("ppopgi:revalidate", (e: Event) => {
+      const ce = e as CustomEvent<{ force?: boolean }>;
+      const forced = !!ce?.detail?.force;
+
+      // If explicitly forced, always do a forceFresh fetch.
+      if (forced) {
+        setForceFreshBurst();
+        void fetchShared({ forceFresh: true });
+        return;
+      }
+
+      // Otherwise: do a short "freshness burst" so UI reflects actions quickly.
+      setForceFreshBurst();
+      void fetchShared({ forceFresh: true });
     });
   }
 }
