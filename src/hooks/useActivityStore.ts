@@ -19,9 +19,6 @@ const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
 // Backoff when rate-limited
 const RATE_LIMIT_BACKOFF_MS = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
 
-// Additionally: short force-fresh window for generic revalidate events
-const REVALIDATE_FORCE_FRESH_WINDOW_MS = 12_000;
-
 function isHidden() {
   try {
     return typeof document !== "undefined" && document.hidden;
@@ -95,22 +92,29 @@ function schedule(ms: number, forceFresh: boolean) {
   timer = window.setTimeout(() => void load(true, forceFresh), ms);
 }
 
+/**
+ * ✅ Revalidate dispatcher:
+ * - soft: derived UI recompute, cached store refresh
+ * - forced: user action -> burst force-fresh in other stores
+ */
 function dispatchRevalidateThrottledFactory() {
   let lastAt = 0;
-  return () => {
+  return (force = false) => {
     const now = Date.now();
     if (now - lastAt < 1_000) return;
     lastAt = now;
     try {
-      window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+      window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
     } catch {}
   };
 }
 const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
-// ✅ Force-fresh window after any action/revalidate
+// ✅ Force-fresh window ONLY after user actions (burst)
 let forceFreshUntilMs = 0;
-function enterForceFreshWindow(ms = REVALIDATE_FORCE_FRESH_WINDOW_MS) {
+const FORCE_FRESH_WINDOW_MS = 12_000;
+
+function enterForceFreshWindow(ms = FORCE_FRESH_WINDOW_MS) {
   forceFreshUntilMs = Math.max(forceFreshUntilMs, Date.now() + ms);
 }
 function inForceFreshWindow() {
@@ -137,12 +141,17 @@ async function load(isBackground: boolean, forceFresh = false) {
     // Only show spinner if we truly have nothing
     if (state.items.length === 0) setState({ isLoading: true });
 
-    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh: effectiveForceFresh });
+    const data = await fetchGlobalActivity({
+      first: MAX_ITEMS,
+      signal: ac.signal,
+      forceFresh: effectiveForceFresh,
+    });
+
     if (ac.signal.aborted) return;
 
     const real = (data ?? []) as LocalActivityItem[];
 
-    // detect "new real item" to poke other stores
+    // detect "new real item" to poke other stores (soft)
     const prevRealHashes = new Set(state.items.filter((x) => !x.pending).map((x) => x.txHash));
     const nextRealHashes = new Set(real.map((x) => x.txHash));
 
@@ -169,15 +178,15 @@ async function load(isBackground: boolean, forceFresh = false) {
     schedule(SAFETY_POLL_MS, false);
 
     if (hasNew) {
-      dispatchRevalidate();
-      void refreshLotteryStore(true, true);
+      // ✅ NOT a user action. Indexer just caught up -> soft refresh only.
+      dispatchRevalidate(false);
+      void refreshLotteryStore(true, false);
     }
   } catch (e: any) {
     if (isAbortError(e)) return;
 
     console.error("[useActivityStore] load failed", e);
 
-    // surface note
     const rateLimited = isRateLimitError(e);
     setState({
       isLoading: false,
@@ -188,7 +197,6 @@ async function load(isBackground: boolean, forceFresh = false) {
       backoffStep = Math.min(backoffStep + 1, RATE_LIMIT_BACKOFF_MS.length - 1);
       schedule(RATE_LIMIT_BACKOFF_MS[backoffStep], false);
     } else {
-      // retry sooner if user initiated; otherwise wait a bit
       schedule(isBackground ? 15_000 : 10_000, false);
     }
   } finally {
@@ -196,6 +204,10 @@ async function load(isBackground: boolean, forceFresh = false) {
   }
 }
 
+/**
+ * ✅ Burst only after a user action (optimistic event).
+ * This allows activity to become "real" quickly without permanent hammering.
+ */
 function triggerForceFreshBurst() {
   enterForceFreshWindow();
   for (const ms of FORCE_FRESH_BURST_MS) {
@@ -231,25 +243,30 @@ function start() {
       items: [item, ...state.items.filter((x) => x.txHash !== item.txHash)].slice(0, MAX_ITEMS),
     });
 
-    // poke the rest of the app + run a small force-fresh burst
-    dispatchRevalidate();
+    // ✅ This IS a user action -> forced revalidate + force-fresh burst
+    dispatchRevalidate(true);
     void refreshLotteryStore(true, true);
     triggerForceFreshBurst();
   };
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
 
-  // ✅ Also treat generic revalidate as a short force-fresh window for Activity feed
+  /**
+   * ✅ Revalidate listener:
+   * - If {force:true} (user action), do ONE force-fresh load (+ window)
+   * - Otherwise (soft tick), do cached load (no force)
+   */
   const onRevalidate = (e: Event) => {
     const ce = e as CustomEvent<{ force?: boolean }>;
-    if (ce?.detail?.force) {
+    const forced = !!ce?.detail?.force;
+
+    if (forced) {
       enterForceFreshWindow();
       void load(true, true);
       return;
     }
-    // normal revalidate => short freshness window + one fetch
-    enterForceFreshWindow();
-    void load(true, true);
+
+    void load(true, false);
   };
   window.addEventListener("ppopgi:revalidate", onRevalidate as any);
 
@@ -261,7 +278,7 @@ function start() {
   window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVis);
 
-  // NOTE: This store is a singleton for the app lifetime, so we don't bother cleaning up these listeners.
+  // NOTE: singleton lifetime; no cleanup needed.
 }
 
 export function useActivityStore() {
@@ -272,7 +289,6 @@ export function useActivityStore() {
     const sub = () => force((x) => x + 1);
     subs.add(sub);
 
-    // ✅ cleanup must return void
     return () => {
       subs.delete(sub);
     };
