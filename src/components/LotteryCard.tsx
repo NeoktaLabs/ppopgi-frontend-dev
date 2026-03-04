@@ -333,7 +333,7 @@ export function LotteryCard({
     // no-op
   }, []);
 
-  const handleShieldWarm = useCallback((e: React.SyntheticEvent) => {
+  const handleShieldWarm = useCallback(() => {
     // don't stop propagation here; only warm
     try {
       void preload.safety();

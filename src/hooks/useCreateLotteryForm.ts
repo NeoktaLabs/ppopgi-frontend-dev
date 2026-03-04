@@ -393,7 +393,7 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         params: [ADDRESSES.SingleWinnerDeployer, MaxUint256],
       });
 
-      const receipt = await sendAndConfirm(tx);
+      await sendAndConfirm(tx);
 
       const approveConfirmed = `ppopgi:CREATE_APPROVE:confirmed:${Date.now()}`;
       actionRef.current.confirmedMark = approveConfirmed;
