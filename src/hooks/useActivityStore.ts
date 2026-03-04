@@ -13,8 +13,12 @@ const MAX_ITEMS = 10;
 // Safety poll only (store does NOT do fast polling itself)
 const SAFETY_POLL_MS = 60_000;
 
-// After a user action, do a small "force-fresh" burst (catches indexer lag)
-const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
+/**
+ * ✅ Burst schedule after a user action.
+ * We retry a few times inside the 5s window to catch indexer lag quickly
+ * without hammering long-term.
+ */
+const FORCE_FRESH_BURST_MS = [0, 1500, 3000, 4500];
 
 // Backoff when rate-limited
 const RATE_LIMIT_BACKOFF_MS = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
@@ -112,7 +116,9 @@ const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
 // ✅ Force-fresh window ONLY after user actions (burst)
 let forceFreshUntilMs = 0;
-const FORCE_FRESH_WINDOW_MS = 12_000;
+
+// ✅ Your target: 5s burst window
+const FORCE_FRESH_WINDOW_MS = 5_000;
 
 function enterForceFreshWindow(ms = FORCE_FRESH_WINDOW_MS) {
   forceFreshUntilMs = Math.max(forceFreshUntilMs, Date.now() + ms);
@@ -124,10 +130,13 @@ function inForceFreshWindow() {
 async function load(isBackground: boolean, forceFresh = false) {
   const effectiveForceFresh = forceFresh || inForceFreshWindow();
 
+  // Background tab protection (unless it was a forced call, which still gets blocked here
+  // to avoid invisible hammering; it will catch up on focus/visible + next burst tick)
   if (isBackground && isHidden()) {
     schedule(SAFETY_POLL_MS, false);
     return;
   }
+
   if (inFlight) return;
   inFlight = true;
 
@@ -209,7 +218,7 @@ async function load(isBackground: boolean, forceFresh = false) {
  * This allows activity to become "real" quickly without permanent hammering.
  */
 function triggerForceFreshBurst() {
-  enterForceFreshWindow();
+  enterForceFreshWindow(FORCE_FRESH_WINDOW_MS);
   for (const ms of FORCE_FRESH_BURST_MS) {
     window.setTimeout(() => void load(true, true), ms);
   }
@@ -253,7 +262,7 @@ function start() {
 
   /**
    * ✅ Revalidate listener:
-   * - If {force:true} (user action), do ONE force-fresh load (+ window)
+   * - If {force:true} (user action), do ONE force-fresh load (+ 5s window)
    * - Otherwise (soft tick), do cached load (no force)
    */
   const onRevalidate = (e: Event) => {
@@ -261,7 +270,7 @@ function start() {
     const forced = !!ce?.detail?.force;
 
     if (forced) {
-      enterForceFreshWindow();
+      enterForceFreshWindow(FORCE_FRESH_WINDOW_MS);
       void load(true, true);
       return;
     }
