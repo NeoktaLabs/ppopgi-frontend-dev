@@ -19,6 +19,9 @@ const FORCE_FRESH_BURST_MS = [1_000, 2_000, 3_000];
 // Backoff when rate-limited
 const RATE_LIMIT_BACKOFF_MS = [10_000, 15_000, 30_000, 60_000, 120_000, 120_000];
 
+// Additionally: short force-fresh window for generic revalidate events
+const REVALIDATE_FORCE_FRESH_WINDOW_MS = 12_000;
+
 function isHidden() {
   try {
     return typeof document !== "undefined" && document.hidden;
@@ -105,7 +108,18 @@ function dispatchRevalidateThrottledFactory() {
 }
 const dispatchRevalidate = dispatchRevalidateThrottledFactory();
 
+// ✅ Force-fresh window after any action/revalidate
+let forceFreshUntilMs = 0;
+function enterForceFreshWindow(ms = REVALIDATE_FORCE_FRESH_WINDOW_MS) {
+  forceFreshUntilMs = Math.max(forceFreshUntilMs, Date.now() + ms);
+}
+function inForceFreshWindow() {
+  return Date.now() < forceFreshUntilMs;
+}
+
 async function load(isBackground: boolean, forceFresh = false) {
+  const effectiveForceFresh = forceFresh || inForceFreshWindow();
+
   if (isBackground && isHidden()) {
     schedule(SAFETY_POLL_MS, false);
     return;
@@ -123,7 +137,7 @@ async function load(isBackground: boolean, forceFresh = false) {
     // Only show spinner if we truly have nothing
     if (state.items.length === 0) setState({ isLoading: true });
 
-    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh });
+    const data = await fetchGlobalActivity({ first: MAX_ITEMS, signal: ac.signal, forceFresh: effectiveForceFresh });
     if (ac.signal.aborted) return;
 
     const real = (data ?? []) as LocalActivityItem[];
@@ -183,6 +197,7 @@ async function load(isBackground: boolean, forceFresh = false) {
 }
 
 function triggerForceFreshBurst() {
+  enterForceFreshWindow();
   for (const ms of FORCE_FRESH_BURST_MS) {
     window.setTimeout(() => void load(true, true), ms);
   }
@@ -224,6 +239,20 @@ function start() {
 
   window.addEventListener("ppopgi:activity", onOptimistic as any);
 
+  // ✅ Also treat generic revalidate as a short force-fresh window for Activity feed
+  const onRevalidate = (e: Event) => {
+    const ce = e as CustomEvent<{ force?: boolean }>;
+    if (ce?.detail?.force) {
+      enterForceFreshWindow();
+      void load(true, true);
+      return;
+    }
+    // normal revalidate => short freshness window + one fetch
+    enterForceFreshWindow();
+    void load(true, true);
+  };
+  window.addEventListener("ppopgi:revalidate", onRevalidate as any);
+
   const onFocus = () => void load(true, false);
   const onVis = () => {
     if (!isHidden()) void load(true, false);
@@ -231,6 +260,8 @@ function start() {
 
   window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVis);
+
+  // NOTE: This store is a singleton for the app lifetime, so we don't bother cleaning up these listeners.
 }
 
 export function useActivityStore() {
@@ -241,7 +272,7 @@ export function useActivityStore() {
     const sub = () => force((x) => x + 1);
     subs.add(sub);
 
-    // ✅ FIX: cleanup must return void (not boolean)
+    // ✅ cleanup must return void
     return () => {
       subs.delete(sub);
     };
