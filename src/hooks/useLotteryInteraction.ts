@@ -179,40 +179,47 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
     revalidatedMark?: string;
   }>({ kind: null });
 
-  const emitRevalidate = useCallback((withDelayedPing = true) => {
-    try {
-      if (typeof window === "undefined") return;
-      window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-    } catch {}
+  /**
+   * ✅ IMPORTANT:
+   * - Only user actions should use force=true (BUY/CREATE/CANCEL/WIN).
+   * - Approve is NOT a global state change => force=false.
+   */
+  const emitRevalidate = useCallback(
+    (opts?: { force?: boolean; withDelayedPing?: boolean }) => {
+      const force = !!opts?.force;
+      const withDelayedPing = opts?.withDelayedPing ?? true;
 
-    // Phase 0: first revalidate mark (per action)
-    try {
-      const a = actionRef.current;
-      if (a?.startMark && !a.revalidatedMark) {
-        const m = `ppopgi:${a.kind || "ACTION"}:${lotteryId || "unknown"}:revalidated:${Date.now()}`;
-        a.revalidatedMark = m;
-        perfMark(m);
-        perfMeasure(
-          `ppopgi:${a.kind || "ACTION"}:start_to_revalidated`,
-          a.startMark,
-          a.revalidatedMark
-        );
-      }
-    } catch {}
+      try {
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
+      } catch {}
 
-    if (!withDelayedPing) return;
+      // Phase 0: first revalidate mark (per action)
+      try {
+        const a = actionRef.current;
+        if (a?.startMark && !a.revalidatedMark) {
+          const m = `ppopgi:${a.kind || "ACTION"}:${lotteryId || "unknown"}:revalidated:${Date.now()}`;
+          a.revalidatedMark = m;
+          perfMark(m);
+          perfMeasure(`ppopgi:${a.kind || "ACTION"}:start_to_revalidated`, a.startMark, a.revalidatedMark);
+        }
+      } catch {}
 
-    // delayed ping to catch subgraph ingest lag
-    try {
-      if (typeof window === "undefined") return;
-      if (delayedRevalRef.current != null) window.clearTimeout(delayedRevalRef.current);
-      delayedRevalRef.current = window.setTimeout(() => {
-        try {
-          window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-        } catch {}
-      }, 6000);
-    } catch {}
-  }, [lotteryId]);
+      if (!withDelayedPing) return;
+
+      // delayed ping to catch subgraph ingest lag
+      try {
+        if (typeof window === "undefined") return;
+        if (delayedRevalRef.current != null) window.clearTimeout(delayedRevalRef.current);
+        delayedRevalRef.current = window.setTimeout(() => {
+          try {
+            window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
+          } catch {}
+        }, 6000);
+      } catch {}
+    },
+    [lotteryId]
+  );
 
   // ✅ optimistic store patch (instant list bump)
   const emitOptimisticBuy = useCallback(
@@ -644,17 +651,15 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
 
       void refreshAllowance("postTx");
 
-      try {
-        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-      } catch {}
+      // ✅ Approve is NOT a global “activity” action => soft revalidate only.
+      emitRevalidate({ force: false, withDelayedPing: false });
 
-      // (optional) attach tx hash to the current action for debugging
       void receipt;
     } catch (e: any) {
       const { label } = parseTxError(e);
       setBuyMsg(label === "Purchase failed." ? "Prepare wallet failed." : label);
     }
-  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance, paymentTokenAddr]);
+  }, [account?.address, usdcContract, lotteryId, sendAndConfirm, refreshAllowance, paymentTokenAddr, emitRevalidate]);
 
   const buy = useCallback(async () => {
     setBuyMsg(null);
@@ -750,7 +755,9 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       } catch {}
 
       void refreshAllowance("postTx");
-      emitRevalidate(true);
+
+      // ✅ BUY is a true user action => forced burst + delayed ping
+      emitRevalidate({ force: true, withDelayedPing: true });
     } catch (e: any) {
       const { label } = parseTxError(e);
       setBuyMsg(label);
