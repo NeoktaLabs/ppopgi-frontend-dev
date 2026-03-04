@@ -10,9 +10,10 @@ function isVisible() {
   }
 }
 
-export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number }) {
+export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: number }) {
   const runningRef = useRef(false);
   const lastLotteryRefreshAtRef = useRef(0);
+  const lastActivityRefreshAtRef = useRef(0);
 
   const tick = async (background = false) => {
     if (runningRef.current) return;
@@ -22,27 +23,27 @@ export function GlobalDataRefresher({ intervalMs = 5000 }: { intervalMs?: number
 
     try {
       const now = Date.now();
-      const RAFFLE_REFRESH_MIN_GAP_MS = 20_000;
 
-      const shouldRefreshLotteries = !background || now - lastLotteryRefreshAtRef.current >= RAFFLE_REFRESH_MIN_GAP_MS;
+      // Keep these aligned with your cache TTLs + store throttles
+      const ACTIVITY_MIN_GAP_MS = 15_000; // activity is cheap, but don’t spam
+      const LOTTERY_REFRESH_MIN_GAP_MS = 20_000; // heavier
 
+      const shouldRefreshActivity = !background || now - lastActivityRefreshAtRef.current >= ACTIVITY_MIN_GAP_MS;
+      const shouldRefreshLotteries = !background || now - lastLotteryRefreshAtRef.current >= LOTTERY_REFRESH_MIN_GAP_MS;
+
+      if (shouldRefreshActivity) lastActivityRefreshAtRef.current = now;
       if (shouldRefreshLotteries) lastLotteryRefreshAtRef.current = now;
 
-      // ✅ Run in parallel; don't let Activity block everything else.
       const tasks: Promise<any>[] = [];
 
-      // Activity: light + frequent
-      tasks.push(refreshActivityStore(true, true));
+      // ✅ IMPORTANT: do NOT force-fresh on polling.
+      // Let worker cache + store logic do their job.
+      if (shouldRefreshActivity) tasks.push(refreshActivityStore(true, false));
+      if (shouldRefreshLotteries) tasks.push(refreshLotteryStore(true, false));
 
-      // Lotteries: heavier + throttled
-      if (shouldRefreshLotteries) {
-        tasks.push(refreshLotteryStore(true, true));
-      }
-
-      // Never throw from refresher (stores already handle their own errors/backoff)
       await Promise.allSettled(tasks);
 
-      // Notify listeners to recompute derived UI state
+      // Derived UI recompute tick (fine)
       try {
         window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
       } catch {}
