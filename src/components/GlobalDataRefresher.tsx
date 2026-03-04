@@ -14,6 +14,7 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
   const runningRef = useRef(false);
   const lastLotteryRefreshAtRef = useRef(0);
   const lastActivityRefreshAtRef = useRef(0);
+  const lastSoftRevalidateAtRef = useRef(0);
 
   const tick = async (background = false) => {
     if (runningRef.current) return;
@@ -26,7 +27,8 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
 
       // Keep these aligned with your cache TTLs + store throttles
       const ACTIVITY_MIN_GAP_MS = 15_000; // activity is cheap, but don’t spam
-      const LOTTERY_REFRESH_MIN_GAP_MS = 20_000; // heavier
+      const LOTTERY_REFRESH_MIN_GAP_MS = 30_000; // heavier; safer than 20s once stores are burst-driven
+      const SOFT_REVALIDATE_MIN_GAP_MS = 5_000; // avoid spamming listeners
 
       const shouldRefreshActivity = !background || now - lastActivityRefreshAtRef.current >= ACTIVITY_MIN_GAP_MS;
       const shouldRefreshLotteries = !background || now - lastLotteryRefreshAtRef.current >= LOTTERY_REFRESH_MIN_GAP_MS;
@@ -43,10 +45,14 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
 
       await Promise.allSettled(tasks);
 
-      // Derived UI recompute tick (fine)
-      try {
-        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
-      } catch {}
+      // ✅ Soft revalidate only (never "force" from the refresher)
+      // This lets stores/hooks recompute derived UI without entering burst mode.
+      if (now - lastSoftRevalidateAtRef.current >= SOFT_REVALIDATE_MIN_GAP_MS) {
+        lastSoftRevalidateAtRef.current = now;
+        try {
+          window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force: false } }));
+        } catch {}
+      }
     } finally {
       runningRef.current = false;
     }
