@@ -142,10 +142,19 @@ function emitActivity(detail: ActivityDetail) {
   } catch {}
 }
 
-function emitRevalidate(withDelayedPing = true) {
+/**
+ * ✅ IMPORTANT:
+ * - Only USER ACTIONS should use force=true (CREATE).
+ * - Approve is NOT a global state change => force=false.
+ * - Delayed ping must keep the same force flag.
+ */
+function emitRevalidate(opts?: { force?: boolean; withDelayedPing?: boolean }) {
+  const force = !!opts?.force;
+  const withDelayedPing = opts?.withDelayedPing ?? true;
+
   try {
     if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+    window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
   } catch {}
 
   if (!withDelayedPing) return;
@@ -153,7 +162,7 @@ function emitRevalidate(withDelayedPing = true) {
   try {
     window.setTimeout(() => {
       try {
-        window.dispatchEvent(new CustomEvent("ppopgi:revalidate"));
+        window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
       } catch {}
     }, 7000);
   } catch {}
@@ -342,10 +351,10 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     try {
       // Try common method names. One of these should exist in your deployer ABI.
       const feeRes = await tryRead<any>(deployerContract, [
-        "protocolFeePercent", // your UI expects percent
-        "protocolFee", // sometimes named like this
-        "feePercent", // alt
-        "protocolFeeBps", // bps variants
+        "protocolFeePercent",
+        "protocolFee",
+        "feePercent",
+        "protocolFeeBps",
         "feeBps",
       ]);
 
@@ -379,7 +388,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
     setMsg(null);
     if (!me) return;
 
-    // Phase 0: start marks for APPROVE (create flow)
     const approveStart = `ppopgi:CREATE_APPROVE:start:${Date.now()}`;
     actionRef.current = { kind: "APPROVE", startMark: approveStart };
     perfMark(approveStart);
@@ -402,7 +410,9 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
       setMsg("Approval successful!");
       await refreshAllowance({ force: true });
-      emitRevalidate(false);
+
+      // ✅ Soft revalidate only (NOT a user-global action)
+      emitRevalidate({ force: false, withDelayedPing: false });
     } catch (e: any) {
       if (isAbortError(e)) return;
       console.error("APPROVE_FAILED full error:", e);
@@ -430,7 +440,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       return;
     }
 
-    // Phase 0: start marks for CREATE
     const createStart = `ppopgi:CREATE:start:${Date.now()}`;
     actionRef.current = { kind: "CREATE", startMark: createStart };
     perfMark(createStart);
@@ -488,7 +497,6 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
         },
       });
 
-      // Phase 0: optimistic mark for CREATE (local list bump)
       const createOptimistic = `ppopgi:CREATE:optimistic:${Date.now()}`;
       actionRef.current.optimisticMark = createOptimistic;
       perfMark(createOptimistic);
@@ -507,7 +515,10 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
 
       setMsg("🎉 Success!");
       await refreshAllowance({ force: true });
-      emitRevalidate(true);
+
+      // ✅ CREATE is a real user action => forced burst + delayed ping
+      emitRevalidate({ force: true, withDelayedPing: true });
+
       onCreated?.(newAddr || undefined);
     } catch (e: any) {
       if (isAbortError(e)) return;
@@ -576,8 +587,8 @@ export function useCreateLotteryForm(isOpen: boolean, onCreated?: (addr?: string
       minT,
       maxT,
       me,
-      protocolFeePercent, // ✅ for UI
-      protocolFeeRecipient, // ✅ for UI
+      protocolFeePercent,
+      protocolFeeRecipient,
     },
     status: { msg, isPending, allowLoading, usdcBal, approve, create, refresh: refreshAllowance },
     helpers: { sanitizeInt },
