@@ -59,14 +59,18 @@ export function GlobalDataRefresher({ intervalMs = 15_000 }: { intervalMs?: numb
   };
 
   useEffect(() => {
+    // Initial warm-up (foreground)
     void tick(false);
 
+    // Interval ticks are "background" (respect min gaps)
     const id = window.setInterval(() => void tick(true), intervalMs);
 
-    const onFocus = () => void tick(false);
+    // ✅ Focus/visibility should also behave like "background" ticks,
+    // so min-gap protections still apply and we don’t create spikes.
+    const onFocus = () => void tick(true);
     const onVis = () => {
       try {
-        if (document.visibilityState === "visible") void tick(false);
+        if (document.visibilityState === "visible") void tick(true);
       } catch {}
     };
 
