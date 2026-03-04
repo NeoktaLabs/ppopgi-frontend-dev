@@ -114,7 +114,7 @@ const shared = {
   // fetch timeout
   CLIENT_TIMEOUT_MS: 9000,
 
-  // "force-fresh burst" window after user actions
+  // "force-fresh burst" window after user actions (ONLY when explicitly forced)
   forceFreshUntilMs: 0,
   FORCE_FRESH_BURST_MS: 12_000,
 
@@ -154,7 +154,10 @@ function setForceFreshBurst() {
  * opts.forceFresh:
  * - true  => bypass worker edge cache (x-force-fresh=1)
  * - false => normal cached reads
- * If undefined, we auto-promote to forceFresh during burst window.
+ *
+ * ✅ IMPORTANT:
+ * We only auto-promote to forceFresh during a burst window that is entered
+ * ONLY by explicit forced revalidations (ppopgi:revalidate with { force: true }).
  */
 async function fetchShared(opts?: { forceFresh?: boolean }) {
   if (!shared.gqlUrl) return;
@@ -172,7 +175,7 @@ async function fetchShared(opts?: { forceFresh?: boolean }) {
   // For normal cached reads, respect min spacing.
   // For forceFresh reads, allow "immediate" (still coalesced by inflight).
   if (!forceFresh && now - shared.lastFetchMs < shared.MIN_SPACING_MS) return;
-  shared.lastFetchMs = now;
+  if (!forceFresh) shared.lastFetchMs = now;
 
   // Only show loading spinner when empty (keeps UI stable)
   shared.isLoading = shared.data === null ? true : shared.isLoading;
@@ -272,7 +275,7 @@ function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
     void fetchShared();
 
     shared.pollTimer = setInterval(() => {
-      // cached poll unless we're in burst window
+      // cached poll unless we're in an explicit forceFresh burst window
       void fetchShared();
     }, shared.pollMs);
   }
@@ -288,21 +291,23 @@ function ensureSharedInitialized(gqlUrl: string, pollMs: number) {
       if (!isHidden()) void fetchShared();
     });
 
-    // ✅ After user actions: enter force-fresh burst window + fetch immediately
+    /**
+     * ✅ IMPORTANT FIX (prevents hammering):
+     * - Only `detail.force === true` should trigger forceFresh + burst.
+     * - Normal revalidate events should do cached fetch.
+     */
     window.addEventListener("ppopgi:revalidate", (e: Event) => {
       const ce = e as CustomEvent<{ force?: boolean }>;
       const forced = !!ce?.detail?.force;
 
-      // If explicitly forced, always do a forceFresh fetch.
       if (forced) {
         setForceFreshBurst();
         void fetchShared({ forceFresh: true });
         return;
       }
 
-      // Otherwise: do a short "freshness burst" so UI reflects actions quickly.
-      setForceFreshBurst();
-      void fetchShared({ forceFresh: true });
+      // Normal revalidate = cached fetch (do NOT bypass edge cache)
+      void fetchShared({ forceFresh: false });
     });
   }
 }
