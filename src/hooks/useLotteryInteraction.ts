@@ -211,11 +211,12 @@ export function useLotteryInteraction(lotteryId: string | null, isOpen: boolean)
       try {
         if (typeof window === "undefined") return;
         if (delayedRevalRef.current != null) window.clearTimeout(delayedRevalRef.current);
+        // Keep delayed ping within the short post-action burst window (~5s)
         delayedRevalRef.current = window.setTimeout(() => {
           try {
             window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
           } catch {}
-        }, 6000);
+        }, 4_500);
       } catch {}
     },
     [lotteryId]

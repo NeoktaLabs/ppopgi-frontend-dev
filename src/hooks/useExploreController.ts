@@ -103,24 +103,29 @@ export function useExploreController() {
   const burstTimerRef = useRef<number | null>(null);
 
   const triggerBurst = useCallback(() => {
-    burstUntilRef.current = Date.now() + 12_000;
+    // Only bypass edge cache briefly after a user action.
+    burstUntilRef.current = Date.now() + 5_000;
 
-    // immediate fetch
+    // immediate force-fresh fetch
     void refreshLotteryStore(true, true);
 
-    // one delayed fetch to catch subgraph ingest lag (pairs with your delayed revalidate pings)
+    // one delayed fetch (still within 5s) to catch subgraph ingest lag
     if (burstTimerRef.current != null) window.clearTimeout(burstTimerRef.current);
     burstTimerRef.current = window.setTimeout(() => {
       if (Date.now() <= burstUntilRef.current) {
         void refreshLotteryStore(true, true);
       }
       burstTimerRef.current = null;
-    }, 6_000);
+    }, 3_000);
   }, []);
 
   useEffect(() => {
-    const onReval = (_e: Event) => {
-      triggerBurst();
+    const onReval = (e: Event) => {
+      const ce = e as CustomEvent<{ force?: boolean }>;
+      const forced = !!ce?.detail?.force;
+
+      if (forced) triggerBurst();
+      else void refreshLotteryStore(true, false);
     };
 
     window.addEventListener("ppopgi:revalidate", onReval as any);

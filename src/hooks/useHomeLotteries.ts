@@ -69,19 +69,20 @@ export function useHomeLotteries() {
   const burstTimerRef = useRef<number | null>(null);
 
   const triggerBurst = useCallback(() => {
-    burstUntilRef.current = Date.now() + 12_000;
+    // Only bypass edge cache for a short window after a user action.
+    burstUntilRef.current = Date.now() + 5_000;
 
-    // immediate refresh (store handles dedupe/throttle/backoff)
+    // immediate force-fresh refresh (store handles dedupe/throttle/backoff)
     void refreshLotteryStore(true, true);
 
-    // delayed refresh to catch indexer ingest lag
+    // delayed refresh (still within the 5s window) to catch indexer ingest lag
     if (burstTimerRef.current != null) window.clearTimeout(burstTimerRef.current);
     burstTimerRef.current = window.setTimeout(() => {
       if (Date.now() <= burstUntilRef.current) {
         void refreshLotteryStore(true, true);
       }
       burstTimerRef.current = null;
-    }, 6_000);
+    }, 3_000);
   }, []);
 
   useEffect(() => {
@@ -104,7 +105,8 @@ export function useHomeLotteries() {
    * - does NOT reset mode/live/note (prevents UI "snapping")
    */
   const softRefetch = useCallback(() => {
-    void refreshLotteryStore(true, true);
+    // Soft refresh MUST be cached (do NOT force-fresh).
+    void refreshLotteryStore(true, false);
   }, []);
 
   /**
@@ -130,13 +132,17 @@ export function useHomeLotteries() {
     softRefetch();
   }, [rvTick, softRefetch]);
 
-  // ✅ Also listen directly to app-wide revalidate events and do a burst
-  // (This is what makes "buy/create" reflect within seconds on the Home strips/podium.)
+  // ✅ Listen to app-wide revalidate events.
+  // Only user actions should dispatch { detail: { force: true } }.
   useEffect(() => {
-    const onReval = () => triggerBurst();
+    const onReval = (e: Event) => {
+      const ce = e as CustomEvent<{ force?: boolean }>;
+      if (ce?.detail?.force) triggerBurst();
+      else softRefetch();
+    };
     window.addEventListener("ppopgi:revalidate", onReval as any);
     return () => window.removeEventListener("ppopgi:revalidate", onReval as any);
-  }, [triggerBurst]);
+  }, [triggerBurst, softRefetch]);
 
   // If we have indexer data, always prefer it and exit live mode
   useEffect(() => {

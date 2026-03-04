@@ -164,7 +164,7 @@ function emitRevalidate(opts?: { force?: boolean; withDelayedPing?: boolean }) {
       try {
         window.dispatchEvent(new CustomEvent("ppopgi:revalidate", { detail: { force } }));
       } catch {}
-    }, 7000);
+    }, 4_500);
   } catch {}
 }
 
