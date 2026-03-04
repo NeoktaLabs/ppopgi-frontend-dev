@@ -51,18 +51,20 @@ const appliedPatchIds = new Set<string>();
 let patchGcTimer: number | null = null;
 
 /**
- * ✅ Phase 3 model:
+ * ✅ Model:
  * - Edge cache (worker) does most of the work
  * - Client does short SWR to avoid redundant fetches
  * - Only burst force-fresh AFTER a user action (force revalidate)
  */
 const CLIENT_SWR_TTL_MS = 4_000;
-const FORCE_FRESH_BURST_MS = 12_000;
+
+// ✅ Your target: only ~5s “freshness burst” after action
+const FORCE_FRESH_BURST_MS = 5_000;
 let forceFreshUntilMs = 0;
 
 // Revalidate throttling
 const SOFT_REVALIDATE_MIN_GAP_MS = 20_000; // ignore frequent soft ticks
-const HARD_REVALIDATE_MIN_GAP_MS = 2_500; // allow quick refresh after user actions
+const HARD_REVALIDATE_MIN_GAP_MS = 1_000; // allow quick refresh after user actions
 
 // Avoid replacing items array when nothing actually changed (prevents flicker)
 let lastItemsSig = "";
@@ -390,7 +392,7 @@ async function doFetch(isBackground: boolean, force: boolean) {
       const data = await fetchLotteriesFromSubgraph({
         first: clampFirstForContext(),
         signal: aborter.signal,
-        forceFresh, // ✅ this is the only thing needed; subgraph.ts sets x-force-fresh internally
+        forceFresh,
       });
 
       const nextSig = signature(data);
@@ -490,9 +492,10 @@ function clearRevalidateDebounce() {
 function requestRevalidate(force = false) {
   if (subscribers <= 0) return;
 
-  // If hidden: ignore soft revalidates; allow forced (user action) if you want,
-  // but we still keep it conservative by skipping forced too when hidden.
-  if (isHidden()) return;
+  // ✅ If hidden:
+  // - ignore soft revalidates
+  // - allow forced revalidates (action happened) so next foreground is fresh sooner
+  if (isHidden() && !force) return;
 
   const now = Date.now();
 
@@ -514,12 +517,12 @@ function requestRevalidate(force = false) {
     clearRevalidateDebounce();
     revalidateDebounceTimer = window.setTimeout(() => {
       revalidateDebounceTimer = null;
-      void refresh(true, force); // ✅ respect force flag
+      void refresh(true, force);
     }, wait);
     return;
   }
 
-  void refresh(true, force); // ✅ respect force flag
+  void refresh(true, force);
 }
 
 /* -----------------------------
@@ -571,7 +574,6 @@ export function startLotteryStore(consumerKey: string, pollMs: number) {
     };
 
     // Initial load should be cached (worker will serve fast).
-    // If you truly want “fresh on first mount”, change second arg to true.
     void refresh(false, false);
   } else {
     if (!state.items) void refresh(false, false);
