@@ -120,13 +120,6 @@ export default function App() {
     setShowGate(false);
   };
 
-  // 6) Clock
-  const [nowMs, setNowMs] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
   // Actions
   const handleSignOut = () => {
     if (activeWallet) disconnect(activeWallet);
@@ -264,7 +257,7 @@ export default function App() {
         onSignOut={handleSignOut}
         hideChrome={anyModalOpen}
       >
-        {page === "home" && <HomePage nowMs={nowMs} onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
+        {page === "home" && <HomePage onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
         {page === "explore" && <ExplorePage onOpenLottery={openLottery} onOpenSafety={handleOpenSafety} />}
 
