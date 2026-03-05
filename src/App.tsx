@@ -264,7 +264,7 @@ export default function App() {
 
   return (
     <>
-      <GlobalDataRefresher intervalMs={5000} />
+      <GlobalDataRefresher intervalMs={15000} />
       <NotificationCenter />
       <DisclaimerGate open={showGate} onAccept={handleAcceptGate} />
 
