@@ -546,58 +546,66 @@ export function NotificationCenter() {
     const visibleLines = summaryExpanded ? summary.lines : summary.lines.slice(0, collapsedCount);
 
     return (
-      <div className="pp-toast-wrap is-modal show" onMouseDown={clearSummary}>
-        <div className="pp-toast pp-modal" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="pp-toast-header">
-            <div className="pp-toast-title">👋 {summary.title}</div>
-            <button className="pp-modal-close" onClick={clearSummary}>
-              ✕
-            </button>
-          </div>
-          <div className="pp-toast-body">
-            <ul className="pp-summary-list">
-              {visibleLines.map((line, idx) => (
-                <li key={`${summary.id}:${idx}`}>
-                  <div className="pp-sl-left">
-                    <span className="pp-sl-icon">{line.icon}</span>
-                    <span className="pp-sl-text">{line.text}</span>
-                  </div>
-                  <div className="pp-sl-time">{line.time}</div>
-                </li>
-              ))}
-            </ul>
+      <>
+        {/* ✅ Share the same magical light blur backdrop as the toast */}
+        <div className="pp-toast-blur-backdrop show" onMouseDown={clearSummary} />
+        
+        <div className="pp-toast-wrap is-modal show" onMouseDown={clearSummary}>
+          <div className="pp-toast pp-modal" onMouseDown={(e) => e.stopPropagation()}>
+            
+            {/* Cute Header */}
+            <div className="pp-toast-header">
+              <div className="pp-th-left">
+                <div className="pp-th-icon">✨</div>
+                <h2 className="pp-toast-title">{summary.title}</h2>
+              </div>
+              <button className="pp-modal-close" onClick={clearSummary}>✕</button>
+            </div>
 
-            {canExpand && (
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
-                <button
-                  type="button"
-                  className="pp-btn secondary"
-                  onClick={() => setSummaryExpanded((v) => !v)}
-                  style={{ maxWidth: 220 }}
-                >
-                  {summaryExpanded ? "Show less" : `Show more (${summary.lines.length - collapsedCount})`}
+            <div className="pp-toast-body">
+              <ul className="pp-summary-list">
+                {visibleLines.map((line, idx) => (
+                  <li key={`${summary.id}:${idx}`}>
+                    <div className="pp-sl-left">
+                      <span className="pp-sl-icon">{line.icon}</span>
+                      <span className="pp-sl-text">{line.text}</span>
+                    </div>
+                    <div className="pp-sl-time">{line.time}</div>
+                  </li>
+                ))}
+              </ul>
+
+              {canExpand && (
+                <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="pp-btn secondary"
+                    onClick={() => setSummaryExpanded((v) => !v)}
+                    style={{ maxWidth: 220 }}
+                  >
+                    {summaryExpanded ? "Show less" : `Show more (${summary.lines.length - collapsedCount})`}
+                  </button>
+                </div>
+              )}
+
+              <div className="pp-modal-actions">
+                <button onClick={openDashboard} className="pp-btn primary">
+                  Go to Dashboard
+                </button>
+                <button onClick={clearSummary} className="pp-btn secondary">
+                  Dismiss
                 </button>
               </div>
-            )}
-
-            <div className="pp-modal-actions">
-              <button onClick={openDashboard} className="pp-btn primary">
-                Go to Dashboard
-              </button>
-              <button onClick={clearSummary} className="pp-btn secondary">
-                Dismiss
-              </button>
             </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // 2) ANNOUNCEMENT TOAST (Centered, Big, Blurred Background)
   return (
     <>
-      {/* ✅ NEW: Full screen blur backdrop specifically for toasts */}
       <div className={`pp-toast-blur-backdrop ${toast ? "show" : ""}`} />
       
       <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
