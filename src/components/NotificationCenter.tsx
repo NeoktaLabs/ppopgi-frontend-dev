@@ -25,8 +25,8 @@ type ToastKind = "info" | "success" | "danger" | "neutral";
 type Toast = {
   id: string;
   kind: ToastKind;
-  title: string; // keep as the main prominent line
-  body?: string; // optional secondary text (wraps nicely)
+  title: string; 
+  body?: string; 
   showConfetti?: boolean;
 };
 
@@ -320,7 +320,6 @@ export function NotificationCenter() {
 
       if (!lotId || !type) continue;
 
-      // Mark participation (no toast)
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         continue;
@@ -330,22 +329,22 @@ export function NotificationCenter() {
       const amCreator = !!creator && creator === meLc;
       const amParticipant = isParticipant(lotId);
 
-      // -------------------- BUY (blue) --------------------
+      // BUY (blue)
       if (type === "BUY" && amCreator && subj !== meLc) {
         showToast({
           id: `t:${txHash}`,
-          kind: "info", // blue
+          kind: "info",
           title: `Nice! ${value} ticket${value === "1" ? "" : "s"} sold on “${name}”.`,
         });
         continue;
       }
 
-      // -------------------- CANCEL (red) --------------------
+      // CANCEL (red)
       if (type === "CANCEL" && amParticipant) {
         showToast({
           id: `t:${txHash}`,
-          kind: "danger", // red
-          title: `Unfortunately “${name}” was canceled — not enough tickets were sold.`,
+          kind: "danger",
+          title: `“${name}” was canceled (not enough tickets).`,
           body: `Head to your dashboard to reclaim your ticket(s).`,
         });
         continue;
@@ -354,46 +353,43 @@ export function NotificationCenter() {
       if (type === "CANCEL" && amCreator) {
         showToast({
           id: `t:${txHash}`,
-          kind: "danger", // red
-          title: `Unfortunately your lottery “${name}” was canceled — not enough tickets were sold.`,
-          body: `Head to your dashboard to handle refunds.`,
+          kind: "danger",
+          title: `Your lottery “${name}” was canceled.`,
+          body: `Not enough tickets sold. Head to your dashboard.`,
         });
         continue;
       }
 
-      // -------------------- WIN (gold / grey) --------------------
+      // WIN (gold / grey)
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
-        // Participant won (gold)
         if (subj === meLc) {
           showToast({
             id: `t:${txHash}`,
-            kind: "success", // gold
-            title: `You won ${potUi} USDC on “${name}” — congratulations!`,
+            kind: "success",
+            title: `You won ${potUi} USDC on “${name}”!`,
             body: `Head to your dashboard to claim your prize.`,
             showConfetti: true,
           });
           continue;
         }
 
-        // Participant lost (grey)
         if (amParticipant) {
           showToast({
             id: `t:${txHash}`,
-            kind: "neutral", // grey
+            kind: "neutral",
             title: `Unfortunately, you didn’t win “${name}”.`,
-            body: `Winner: ${shortAddr(subj)} — better luck next time.`,
+            body: `Winner: ${shortAddr(subj)} — better luck next time!`,
           });
           continue;
         }
 
-        // Creator revenue ready (gold)
         if (amCreator) {
           showToast({
             id: `t:${txHash}`,
-            kind: "success", // gold
-            title: `Great news — “${name}” finished successfully.`,
+            kind: "success",
+            title: `“${name}” finished successfully.`,
             body: `Head to your dashboard to claim your ticket sales.`,
           });
           continue;
@@ -438,13 +434,13 @@ export function NotificationCenter() {
           if (amParticipant) {
             lines.push({
               icon: "⛔",
-              text: `Unfortunately “${name}” was canceled — not enough tickets were sold. Head to the dashboard to reclaim your ticket(s).`,
+              text: `“${name}” was canceled. Head to the dashboard to reclaim your ticket(s).`,
               time: when,
             });
           } else if (amCreator) {
             lines.push({
               icon: "⛔",
-              text: `Unfortunately your lottery “${name}” was canceled — not enough tickets were sold. Head to the dashboard to handle refunds.`,
+              text: `Your lottery “${name}” was canceled. Head to the dashboard to handle refunds.`,
               time: when,
             });
           }
@@ -457,7 +453,7 @@ export function NotificationCenter() {
           if (subj === meLc) {
             lines.push({
               icon: "🏆",
-              text: `You won ${potUi} USDC on “${name}”! Head to the dashboard to claim your prize.`,
+              text: `You won ${potUi} USDC on “${name}”! Claim in dashboard.`,
               time: when,
             });
             continue;
@@ -466,7 +462,7 @@ export function NotificationCenter() {
           if (amParticipant) {
             lines.push({
               icon: "🩶",
-              text: `Unfortunately, you didn’t win “${name}”. Winner: ${shortAddr(subj)} — better luck next time.`,
+              text: `Didn’t win “${name}”. Winner: ${shortAddr(subj)}.`,
               time: when,
             });
             continue;
@@ -475,7 +471,7 @@ export function NotificationCenter() {
           if (amCreator) {
             lines.push({
               icon: "💰",
-              text: `Great news — “${name}” finished successfully. Head to the dashboard to claim your ticket sales.`,
+              text: `“${name}” finished successfully. Claim ticket sales in dashboard.`,
               time: when,
             });
             continue;
@@ -598,15 +594,19 @@ export function NotificationCenter() {
     );
   }
 
-  // 2) ANNOUNCEMENT TOAST (center, big, impossible to miss)
+  // 2) ANNOUNCEMENT TOAST (Cute Floating Pill)
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
         <div className="pp-toast-row">
-          {/* ✅ removed big icon */}
+          {/* ✅ Re-added the cute circular icon bubble */}
+          <div className="pp-toast-icon-wrap">
+            {toast!.kind === "success" ? "🏆" : toast!.kind === "danger" ? "⛔" : toast!.kind === "neutral" ? "🩶" : "🎟️"}
+          </div>
+          
           <div className="pp-toast-text">
-            <span className="pp-toast-title-inline">{toast!.title}</span>
-            {toast!.body && <span className="pp-toast-body-inline"> {toast!.body}</span>}
+            <div className="pp-toast-title-inline">{toast!.title}</div>
+            {toast!.body && <div className="pp-toast-body-inline">{toast!.body}</div>}
           </div>
         </div>
       </div>
