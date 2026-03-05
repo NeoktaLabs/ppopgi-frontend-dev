@@ -594,22 +594,26 @@ export function NotificationCenter() {
     );
   }
 
-  // 2) ANNOUNCEMENT TOAST (Cute Floating Pill)
+  // 2) ANNOUNCEMENT TOAST (Centered, Big, Blurred Background)
   return (
-    <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
-      <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
-        <div className="pp-toast-row">
-          {/* ✅ Re-added the cute circular icon bubble */}
-          <div className="pp-toast-icon-wrap">
-            {toast!.kind === "success" ? "🏆" : toast!.kind === "danger" ? "⛔" : toast!.kind === "neutral" ? "🩶" : "🎟️"}
-          </div>
-          
-          <div className="pp-toast-text">
-            <div className="pp-toast-title-inline">{toast!.title}</div>
-            {toast!.body && <div className="pp-toast-body-inline">{toast!.body}</div>}
+    <>
+      {/* ✅ NEW: Full screen blur backdrop specifically for toasts */}
+      <div className={`pp-toast-blur-backdrop ${toast ? "show" : ""}`} />
+      
+      <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
+        <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
+          <div className="pp-toast-row">
+            <div className="pp-toast-icon-wrap">
+              {toast!.kind === "success" ? "🏆" : toast!.kind === "danger" ? "⛔" : toast!.kind === "neutral" ? "🩶" : "🎟️"}
+            </div>
+            
+            <div className="pp-toast-text">
+              <div className="pp-toast-title-inline">{toast!.title}</div>
+              {toast!.body && <div className="pp-toast-body-inline">{toast!.body}</div>}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
