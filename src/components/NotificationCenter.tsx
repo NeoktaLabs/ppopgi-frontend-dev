@@ -20,13 +20,13 @@ type ActivityItem = {
   pending?: boolean;
 };
 
-type ToastKind = "info" | "success" | "danger";
+type ToastKind = "info" | "success" | "danger" | "neutral";
 
 type Toast = {
   id: string;
   kind: ToastKind;
-  title: string;
-  body?: string;
+  title: string; // keep as the main prominent line
+  body?: string; // optional secondary text (wraps nicely)
   showConfetti?: boolean;
 };
 
@@ -42,7 +42,7 @@ type SummaryModal = {
   lines: SummaryLine[];
 };
 
-// 5 seconds total duration
+// 6 seconds total duration
 const TOAST_MS = 6000;
 
 const LS_TOASTS_ENABLED_A = "ppopgi:toastEnabled";
@@ -320,6 +320,7 @@ export function NotificationCenter() {
 
       if (!lotId || !type) continue;
 
+      // Mark participation (no toast)
       if (type === "BUY" && subj === meLc) {
         addParticipated(me, lotId);
         continue;
@@ -329,44 +330,72 @@ export function NotificationCenter() {
       const amCreator = !!creator && creator === meLc;
       const amParticipant = isParticipant(lotId);
 
-      // --- TEXT FORMATTING FOR ONE-LINE ANNOUNCEMENT ---
-      // We put the key info in 'title' so it shows up bold/prominent
-
+      // -------------------- BUY (blue) --------------------
       if (type === "BUY" && amCreator && subj !== meLc) {
-        showToast({ id: `t:${txHash}`, kind: "info", title: `🎟️ ${value} tickets sold on “${name}”` });
+        showToast({
+          id: `t:${txHash}`,
+          kind: "info", // blue
+          title: `Nice! ${value} ticket${value === "1" ? "" : "s"} sold on “${name}”.`,
+        });
         continue;
       }
 
+      // -------------------- CANCEL (red) --------------------
       if (type === "CANCEL" && amParticipant) {
-        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ “${name}” canceled! Head to your dashboard to reclaim your ticket(s)!` });
+        showToast({
+          id: `t:${txHash}`,
+          kind: "danger", // red
+          title: `Unfortunately “${name}” was canceled — not enough tickets were sold.`,
+          body: `Head to your dashboard to reclaim your ticket(s).`,
+        });
         continue;
       }
 
       if (type === "CANCEL" && amCreator) {
-        showToast({ id: `t:${txHash}`, kind: "danger", title: `⛔ Your lottery “${name}” was canceled. Minimum tickets not reached.` });
+        showToast({
+          id: `t:${txHash}`,
+          kind: "danger", // red
+          title: `Unfortunately your lottery “${name}” was canceled — not enough tickets were sold.`,
+          body: `Head to your dashboard to handle refunds.`,
+        });
         continue;
       }
 
+      // -------------------- WIN (gold / grey) --------------------
       if (type === "WIN") {
         const potUi = fmtUsdcFromU6(value);
 
+        // Participant won (gold)
         if (subj === meLc) {
           showToast({
             id: `t:${txHash}`,
-            kind: "success",
-            title: `🏆 CONGRATULATIONS! YOU WON ${potUi} USDC on “${name}”!`,
+            kind: "success", // gold
+            title: `You won ${potUi} USDC on “${name}” — congratulations!`,
+            body: `Head to your dashboard to claim your prize.`,
             showConfetti: true,
           });
           continue;
         }
 
+        // Participant lost (grey)
         if (amParticipant) {
-          showToast({ id: `t:${txHash}`, kind: "info", title: `✅ “${name}” ended — Winner: ${shortAddr(subj)}` });
+          showToast({
+            id: `t:${txHash}`,
+            kind: "neutral", // grey
+            title: `Unfortunately, you didn’t win “${name}”.`,
+            body: `Winner: ${shortAddr(subj)} — better luck next time.`,
+          });
           continue;
         }
 
+        // Creator revenue ready (gold)
         if (amCreator) {
-          showToast({ id: `t:${txHash}`, kind: "success", title: `🏁 “${name}” finished — Revenue ready` });
+          showToast({
+            id: `t:${txHash}`,
+            kind: "success", // gold
+            title: `Great news — “${name}” finished successfully.`,
+            body: `Head to your dashboard to claim your ticket sales.`,
+          });
           continue;
         }
       }
@@ -401,26 +430,54 @@ export function NotificationCenter() {
         const amParticipant = participated.has(lotId);
 
         if (type === "BUY" && amCreator && subj !== meLc) {
-          lines.push({ icon: "🎟️", text: `${it.value} tickets sold on “${name}”`, time: when });
+          lines.push({ icon: "🎟️", text: `Nice! ${it.value} ticket(s) sold on “${name}”.`, time: when });
           continue;
         }
+
         if (type === "CANCEL") {
-          if (amParticipant) lines.push({ icon: "⛔", text: `“${name}” canceled (refund available)`, time: when });
-          else if (amCreator) lines.push({ icon: "⛔", text: `Your lottery “${name}” canceled`, time: when });
+          if (amParticipant) {
+            lines.push({
+              icon: "⛔",
+              text: `Unfortunately “${name}” was canceled — not enough tickets were sold. Head to the dashboard to reclaim your ticket(s).`,
+              time: when,
+            });
+          } else if (amCreator) {
+            lines.push({
+              icon: "⛔",
+              text: `Unfortunately your lottery “${name}” was canceled — not enough tickets were sold. Head to the dashboard to handle refunds.`,
+              time: when,
+            });
+          }
           continue;
         }
+
         if (type === "WIN") {
           const potUi = fmtUsdcFromU6(it.value);
+
           if (subj === meLc) {
-            lines.push({ icon: "🏆", text: `YOU WON ${potUi} USDC on “${name}”!`, time: when });
+            lines.push({
+              icon: "🏆",
+              text: `You won ${potUi} USDC on “${name}”! Head to the dashboard to claim your prize.`,
+              time: when,
+            });
             continue;
           }
+
           if (amParticipant) {
-            lines.push({ icon: "✅", text: `“${name}” finalized and someone won! Better luck next time!`, time: when });
+            lines.push({
+              icon: "🩶",
+              text: `Unfortunately, you didn’t win “${name}”. Winner: ${shortAddr(subj)} — better luck next time.`,
+              time: when,
+            });
             continue;
           }
+
           if (amCreator) {
-            lines.push({ icon: "🏁", text: `“${name}” finished successfully. Head to the dashboard to reclaim your tickets revenue!`, time: when });
+            lines.push({
+              icon: "💰",
+              text: `Great news — “${name}” finished successfully. Head to the dashboard to claim your ticket sales.`,
+              time: when,
+            });
             continue;
           }
         }
@@ -486,7 +543,7 @@ export function NotificationCenter() {
 
   if (!toast && !summary) return null;
 
-  // 1. SUMMARY MODAL
+  // 1) SUMMARY MODAL
   if (summary) {
     const collapsedCount = 8;
     const canExpand = summary.lines.length > collapsedCount;
@@ -497,7 +554,9 @@ export function NotificationCenter() {
         <div className="pp-toast pp-modal" onMouseDown={(e) => e.stopPropagation()}>
           <div className="pp-toast-header">
             <div className="pp-toast-title">👋 {summary.title}</div>
-            <button className="pp-modal-close" onClick={clearSummary}>✕</button>
+            <button className="pp-modal-close" onClick={clearSummary}>
+              ✕
+            </button>
           </div>
           <div className="pp-toast-body">
             <ul className="pp-summary-list">
@@ -511,6 +570,7 @@ export function NotificationCenter() {
                 </li>
               ))}
             </ul>
+
             {canExpand && (
               <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
                 <button
@@ -523,9 +583,14 @@ export function NotificationCenter() {
                 </button>
               </div>
             )}
+
             <div className="pp-modal-actions">
-              <button onClick={openDashboard} className="pp-btn primary">Go to Dashboard</button>
-              <button onClick={clearSummary} className="pp-btn secondary">Dismiss</button>
+              <button onClick={openDashboard} className="pp-btn primary">
+                Go to Dashboard
+              </button>
+              <button onClick={clearSummary} className="pp-btn secondary">
+                Dismiss
+              </button>
             </div>
           </div>
         </div>
@@ -533,16 +598,15 @@ export function NotificationCenter() {
     );
   }
 
-  // 2. WIDE BANNER TOAST (Left -> Right)
+  // 2) ANNOUNCEMENT TOAST (center, big, impossible to miss)
   return (
     <div className={`pp-toast-wrap is-toast ${toast ? "show" : ""}`}>
       <div className={`pp-toast pp-${toast!.kind}`} onClick={clearToast}>
-        {/* Horizontal flex layout for single line */}
         <div className="pp-toast-row">
-          <div className="pp-toast-icon">{toast!.kind === "success" ? "🎉" : toast!.kind === "danger" ? "⚠️" : "📢"}</div>
+          {/* ✅ removed big icon */}
           <div className="pp-toast-text">
             <span className="pp-toast-title-inline">{toast!.title}</span>
-            {toast!.body && <span className="pp-toast-body-inline"> — {toast!.body}</span>}
+            {toast!.body && <span className="pp-toast-body-inline"> {toast!.body}</span>}
           </div>
         </div>
       </div>
