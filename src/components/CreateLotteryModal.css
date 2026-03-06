@@ -1,5 +1,10 @@
 /* src/components/CreateLotteryModal.css */
 
+/* ✅ Global Box Sizing for Modal to prevent padding from causing horizontal overflow */
+.crm-modal, .crm-modal * {
+  box-sizing: border-box;
+}
+
 /* --- 1. Overlay --- */
 .crm-overlay {
   position: fixed;
@@ -41,7 +46,7 @@
   flex-direction: column;
   animation: crm-scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: top center;
-  overflow: hidden; /* Essential: keeps scrollbars inside the borders */
+  overflow: hidden; 
 }
 
 @keyframes crm-scale-in {
@@ -58,7 +63,7 @@
   border-bottom: 2px dashed rgba(246, 182, 200, 0.4);
   background: rgba(255, 255, 255, 0.6);
   z-index: 10;
-  flex-shrink: 0; /* Prevents header from collapsing */
+  flex-shrink: 0; 
 }
 
 .crm-header-text h3 {
@@ -100,7 +105,6 @@
   display: flex;
   flex-direction: row;
   background: transparent;
-  /* Controls the max height of the overall modal content */
   height: 640px; 
   max-height: 75vh;
   flex: 1;
@@ -109,15 +113,18 @@
 .crm-form-col {
   flex: 1;
   display: flex;
-  flex-direction: column; /* Creates the structure to push footer down */
+  flex-direction: column;
   position: relative;
   z-index: 2;
+  /* Prevent horizontal overflow strictly */
+  min-width: 0; 
 }
 
-/* ✅ NEW: Dedicated scroll area for form inputs */
+/* ✅ Scrollable Form Area with strict bounds */
 .crm-form-scroll {
   flex: 1;
-  overflow-y: auto; /* Scroll bar appears only here */
+  overflow-y: auto; 
+  overflow-x: hidden; /* ✅ PREVENT HORIZONTAL WIGGLE */
   padding: 36px 36px 20px 36px;
   overscroll-behavior: contain;
 }
@@ -133,6 +140,7 @@
   align-items: center;
   position: relative;
   overflow: hidden;
+  flex-shrink: 0; /* Prevents column from squishing */
 }
 
 .crm-preview-col::before {
@@ -310,15 +318,16 @@
 }
 
 /* =========================================================
-   ✅ COMMAND CENTER DOCK (Permanently Fixed)
+   COMMAND CENTER DOCK (Permanently Fixed)
    ========================================================= */
 .crm-command-center {
-  flex-shrink: 0; /* Prevents squishing */
+  flex-shrink: 0; 
   padding: 16px 36px 36px 36px;
   background: rgba(255, 255, 255, 0.95);
   border-top: 1px solid rgba(0, 0, 0, 0.04);
   position: relative;
   z-index: 50;
+  width: 100%;
 }
 
 .crm-dock-glass {
@@ -405,7 +414,7 @@
 
 .crm-status-msg {
   position: absolute;
-  bottom: 12px; /* Fits exactly into the 36px bottom padding */
+  bottom: 12px; 
   left: 0;
   right: 0;
   text-align: center;
@@ -686,7 +695,6 @@
 
   .crm-body {
     flex-direction: column;
-    /* ✅ Crucial: let flexbox handle scrolling height on mobile */
     height: auto; 
     max-height: none; 
     flex: 1;
@@ -698,14 +706,18 @@
   }
 
   .crm-form-col {
-    min-height: 0; /* Lets children scroll */
+    min-height: 0; 
+    padding: 0; /* Remove padding here so scroll area takes full width */
   }
 
   .crm-form-scroll {
     padding: 24px 24px 16px 24px;
   }
 
+  /* Reset the background and gradient for mobile dock so it sits clean */
   .crm-command-center {
     padding: 16px 24px calc(20px + env(safe-area-inset-bottom)) 24px;
+    background: rgba(255, 255, 255, 0.98);
+    border-top: 1px solid rgba(0,0,0,0.05);
   }
 }
