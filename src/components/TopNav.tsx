@@ -4,10 +4,9 @@ import { useWalletBalance } from "thirdweb/react";
 import { thirdwebClient } from "../thirdweb/client";
 import { ETHERLINK_CHAIN } from "../thirdweb/etherlink";
 import { ADDRESSES } from "../config/contracts";
-import { InfraStatusPill } from "./InfraStatusPill";
 import "./TopNav.css";
 
-type Page = "home" | "explore" | "dashboard" | "about" | "faq";
+type Page = "home" | "explore" | "dashboard" | "about" | "faq" | "status";
 
 type Props = {
   page: Page;
@@ -45,6 +44,7 @@ function isHidden() {
 
 // ✅ Toast preference (only controls pop-up announcements)
 const TOAST_PREF_KEY = "ppopgi:toastEnabled";
+
 function readToastPref(): boolean {
   try {
     const v = localStorage.getItem(TOAST_PREF_KEY);
@@ -60,7 +60,6 @@ function writeToastPref(enabled: boolean) {
     localStorage.setItem(TOAST_PREF_KEY, enabled ? "true" : "false");
   } catch {}
 
-  // ✅ IMPORTANT: defer so we don't setState in NotificationCenter during TopNav render
   try {
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent("ppopgi:toast-pref", { detail: { enabled } }));
@@ -84,25 +83,21 @@ export const TopNav = memo(function TopNav({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const burgerRef = useRef<HTMLButtonElement | null>(null);
 
-  // ✅ Dropdown (desktop wallet)
   const [walletOpen, setWalletOpen] = useState(false);
   const walletBtnRef = useRef<HTMLButtonElement | null>(null);
   const walletMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ toast announcements toggle (persisted)
   const [toastEnabled, setToastEnabled] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     return readToastPref();
   });
 
-  // ✅ Toggle without dispatching inside setState callback
   const toggleToasts = useCallback(() => {
     const next = !toastEnabled;
     setToastEnabled(next);
     writeToastPref(next);
   }, [toastEnabled]);
 
-  // pause balance polling when tab hidden
   const [pollEnabled, setPollEnabled] = useState(() => !isHidden());
 
   useEffect(() => {
@@ -110,12 +105,10 @@ export const TopNav = memo(function TopNav({
     setWalletOpen(false);
   }, [page]);
 
-  // If user signs out while wallet dropdown open, close it (avoid stale menu)
   useEffect(() => {
     if (!account) setWalletOpen(false);
   }, [account]);
 
-  // Close mobile menu on outside click / esc
   useEffect(() => {
     if (!menuOpen) return;
 
@@ -144,7 +137,6 @@ export const TopNav = memo(function TopNav({
     };
   }, [menuOpen]);
 
-  // Close wallet dropdown on outside click / esc
   useEffect(() => {
     if (!walletOpen) return;
 
@@ -171,7 +163,6 @@ export const TopNav = memo(function TopNav({
     };
   }, [walletOpen]);
 
-  // keep polling off in background tabs
   useEffect(() => {
     const onVis = () => {
       const enabled = !isHidden();
@@ -186,7 +177,6 @@ export const TopNav = memo(function TopNav({
     };
   }, []);
 
-  // close menus when tab loses focus
   useEffect(() => {
     const onBlur = () => {
       setMenuOpen(false);
@@ -233,7 +223,6 @@ export const TopNav = memo(function TopNav({
     } as any
   );
 
-  // refresh balances immediately when tab becomes visible again
   useEffect(() => {
     if (!account) return;
     if (!pollEnabled) return;
@@ -276,7 +265,6 @@ export const TopNav = memo(function TopNav({
 
           <div className="topnav-right">
             <div className="desktop-actions">
-              {/* ✅ Single obvious dropdown entry-point */}
               <div className="wallet-dd">
                 <button
                   ref={walletBtnRef}
@@ -329,7 +317,6 @@ export const TopNav = memo(function TopNav({
                           🏦 Cashier
                         </button>
 
-                        {/* ✅ Alerts toggle only when signed in */}
                         <button
                           className="wallet-item"
                           onClick={() => toggleToasts()}
@@ -385,8 +372,6 @@ export const TopNav = memo(function TopNav({
                           🏦 Cashier
                         </button>
 
-                        {/* ✅ REMOVED: Alerts toggle when signed out */}
-
                         <div className="wallet-divider" />
 
                         <button
@@ -406,7 +391,6 @@ export const TopNav = memo(function TopNav({
               </div>
             </div>
 
-            {/* ✅ Mini Quick-Balance for Mobile (USDC + XTZ) */}
             {account && (
               <button className="mobile-quick-bal" onClick={() => handleNav(onOpenCashier)} aria-label="Open Cashier">
                 <div className="mobile-quick-bal-rows">
@@ -434,14 +418,8 @@ export const TopNav = memo(function TopNav({
             </button>
           </div>
         </div>
-
-        {/* Infra row (kept as-is) */}
-        <div className="topnav-infra">
-          <InfraStatusPill />
-        </div>
       </div>
 
-      {/* ✅ Mobile menu */}
       <div ref={menuRef} className={`mobile-menu ${menuOpen ? "visible" : ""}`}>
         <div className="mobile-menu-inner">
           {account && (
@@ -472,7 +450,6 @@ export const TopNav = memo(function TopNav({
 
           <button onClick={() => handleNav(onOpenCashier)}>🏦 Cashier</button>
 
-          {/* ✅ Alerts toggle only when signed in */}
           {account && (
             <button
               onClick={() => {
