@@ -1,4 +1,3 @@
-// src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useFinalizerStatus } from "../hooks/useFinalizerStatus";
@@ -47,6 +46,7 @@ function fmtUSDC(v: bigint | number | string, opts?: { decimals?: number; maxFra
   }
 }
 
+// ✅ Stable-width countdown formatting
 function fmtCountdown(totalSec: number | null | undefined) {
   if (totalSec == null) return "—";
   const s = Math.max(0, Math.floor(totalSec));
@@ -54,8 +54,10 @@ function fmtCountdown(totalSec: number | null | undefined) {
   const m = Math.floor((s % 3600) / 60);
   const r = s % 60;
 
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${r}s`;
+  const pad = (num: number) => num.toString().padStart(2, "0");
+
+  if (h > 0) return `${h}h ${pad(m)}m`;
+  if (m > 0) return `${m}m ${pad(r)}s`;
   return `${r}s`;
 }
 
@@ -188,7 +190,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     if (finalizer.running) return { value: "Drawing winners now! 🎰", label: "Magic in progress:" };
     if (finalizer.secondsToNextRun == null) return { value: "—", label: "Awaiting next draw schedule:" };
     if (finalizer.secondsToNextRun === 0) return { value: "Any moment! ✨", label: "Next lotteries drawing:" };
-    
+
     return {
       value: fmtCountdown(finalizer.secondsToNextRun),
       label: (
@@ -205,6 +207,26 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
       ),
     };
   }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
+
+  const countdownChars = useMemo(() => {
+    return String(finalizerStat.value)
+      .split("")
+      .map((char, index) => {
+        if (char === " ") return <span key={`space-${index}`} className="cd-space-char" aria-hidden="true">&nbsp;</span>;
+        if (/[0-9]/.test(char)) {
+          return (
+            <span key={`digit-${index}-${char}`} className="cd-flip-char">
+              {char}
+            </span>
+          );
+        }
+        return (
+          <span key={`static-${index}-${char}`} className="cd-static-char">
+            {char}
+          </span>
+        );
+      });
+  }, [finalizerStat.value]);
 
   return (
     <>
@@ -276,14 +298,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               <div className="hp-cd-icon">⏳</div>
               <div className="hp-cd-text">
                 <span className="hp-cd-label">{finalizerStat.label}</span>
-                
-                {/* ✅ FIXED: Nested spans prevent animation conflicts */}
-                <span className={`hp-cd-val ${finalizer.running ? 'pulse' : ''}`}>
-                  <span key={finalizerStat.value} className="cd-tick-anim">
-                    {finalizerStat.value}
-                  </span>
-                </span>
-
+                <span className={`hp-cd-val ${finalizer.running ? "pulse" : ""}`}>{countdownChars}</span>
               </div>
             </div>
           </div>
@@ -297,7 +312,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
       </div>
 
       <div className="hp-container">
-        {/* PODIUM */}
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 50 }}>
             <div className="hp-section-title">🏆 Top Active Prizepools</div>
@@ -339,7 +353,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
         </div>
 
-        {/* ENDING SOON */}
         <div>
           <div className="hp-section-header">
             <div className="hp-section-title">⏳ Ending Soon</div>
@@ -348,16 +361,16 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
           <div className="hp-strip-wrap">
             <div className="hp-strip" ref={endingRef}>
-              {!isLoading && endingSoonSorted.map((r) => (
-                <div key={r.id} className="hp-strip-item">
-                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
-                </div>
-              ))}
+              {!isLoading &&
+                endingSoonSorted.map((r) => (
+                  <div key={r.id} className="hp-strip-item">
+                    <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                  </div>
+                ))}
             </div>
           </div>
         </div>
 
-        {/* RECENTLY SETTLED */}
         <div>
           <div className="hp-section-header">
             <div className="hp-section-title">✅ Recently Finalized</div>
@@ -366,11 +379,12 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
           <div className="hp-strip-wrap">
             <div className="hp-strip" ref={settledRef}>
-              {!isLoading && recentlySettledSorted.map((r) => (
-                <div key={r.id} className="hp-strip-item">
-                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
-                </div>
-              ))}
+              {!isLoading &&
+                recentlySettledSorted.map((r) => (
+                  <div key={r.id} className="hp-strip-item">
+                    <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                  </div>
+                ))}
             </div>
           </div>
         </div>
