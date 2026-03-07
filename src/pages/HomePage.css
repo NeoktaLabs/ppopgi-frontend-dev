@@ -213,7 +213,6 @@
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* ✅ Ensures text wraps safely on all screens */
 .hp-cd-text {
   display: flex;
   align-items: center;
@@ -230,7 +229,7 @@
 }
 
 .hp-cd-label-inner {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
@@ -244,6 +243,7 @@
   align-items: center;
   gap: 4px;
   cursor: help;
+  z-index: 10; 
 }
 
 .hp-tooltip-text {
@@ -268,7 +268,7 @@
   bottom: 100%;
   left: 50%;
   transform: translate(-50%, -8px);
-  width: 260px; /* Fixed max width */
+  width: max-content;
   max-width: 85vw; /* Failsafe for tiny screens */
   background: rgba(43, 43, 51, 0.95);
   color: #fff;
@@ -301,26 +301,39 @@
   border-color: rgba(43, 43, 51, 0.95) transparent transparent transparent;
 }
 
-/* Hover AND active state for touch devices */
 .hp-tooltip-wrap:hover .hp-tooltip,
-.hp-tooltip-wrap:active .hp-tooltip {
+.hp-tooltip-wrap:active .hp-tooltip,
+.hp-tooltip-wrap:focus-within .hp-tooltip {
   opacity: 1;
   visibility: visible;
   transform: translate(-50%, -4px);
 }
 
+/* ✅ VALUES AND TICKING ANIMATION */
 .hp-cd-val {
   font-size: 16px;
   font-weight: 900;
-  color: #d97706; 
+  color: #d97706; /* Amber 600 */
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   letter-spacing: -0.5px;
-  white-space: nowrap; /* Keep the time block together */
+  white-space: nowrap; 
+  display: inline-block; /* Parent keeps structure */
+}
+
+/* Inner span handles the drop-down pop */
+.cd-tick-anim {
+  display: inline-block; /* Essential for transform to work on a span */
+  animation: tick-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes tick-pop {
+  0% { transform: translateY(-4px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }
 
 .hp-cd-val.pulse {
   animation: cd-pulse 1.5s ease-in-out infinite;
-  color: #db2777; 
+  color: #db2777; /* Pink 600 when running */
 }
 @keyframes cd-pulse {
   0%, 100% { opacity: 1; }
@@ -395,7 +408,6 @@
   .hp-stat-item { width: 100%; }
   .hp-stat-sep { width: 60px; height: 1px; background: rgba(0,0,0,0.08); margin: 0; }
   
-  /* ✅ Stack icon and text completely on small screens to prevent crowding */
   .hp-cd-pill { 
     flex-direction: column; 
     padding: 16px 20px; 
