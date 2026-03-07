@@ -1,5 +1,3 @@
-/* src/pages/HomePage.css */
-
 /* --- Base Layout --- */
 .hp-container {
   max-width: 1400px;
@@ -8,7 +6,7 @@
   color: var(--ink);
   overflow-x: hidden;
 
-  background-image: 
+  background-image:
     radial-gradient(at 0% 0%, rgba(255, 228, 230, 0.3) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(224, 242, 254, 0.3) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(253, 230, 138, 0.1) 0px, transparent 50%);
@@ -25,12 +23,12 @@
   right: 50%;
   margin-left: -50vw;
   margin-right: -50vw;
-  margin-top: 20px; 
+  margin-top: 20px;
   margin-bottom: 24px;
   background: linear-gradient(90deg, #ffe4e6 0%, #fbcfe8 50%, #ffe4e6 100%);
   background-size: 200% auto;
   animation: hp-ribbon-flow 20s linear infinite;
-  border-top: 1px solid rgba(255,255,255,0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.8);
   border-bottom: 1px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 4px 12px rgba(246, 182, 200, 0.15);
   height: 44px;
@@ -71,9 +69,9 @@
   position: absolute;
   inset: -60px;
   z-index: -1;
-  background: 
-    radial-gradient(circle at 15% 15%, rgba(254, 205, 211, 0.45), transparent 50%), 
-    radial-gradient(circle at 85% 85%, rgba(186, 230, 253, 0.45), transparent 50%), 
+  background:
+    radial-gradient(circle at 15% 15%, rgba(254, 205, 211, 0.45), transparent 50%),
+    radial-gradient(circle at 85% 85%, rgba(186, 230, 253, 0.45), transparent 50%),
     radial-gradient(circle at 50% 50%, rgba(221, 214, 254, 0.35), transparent 60%);
   filter: blur(50px);
   animation: hp-breathe 8s ease-in-out infinite alternate;
@@ -84,7 +82,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background-image: 
+  background-image:
     radial-gradient(circle at 10% 20%, white 1px, transparent 2px),
     radial-gradient(circle at 90% 80%, white 1px, transparent 2px),
     radial-gradient(circle at 50% 10%, white 1.5px, transparent 2.5px);
@@ -165,7 +163,6 @@
 
 .hp-stat-sep { width: 1px; height: 40px; background: rgba(0,0,0,0.1); margin-top: 6px; }
 
-/* ✅ Countdown Pill */
 .hp-stats-countdown-wrap {
   margin-top: 36px;
   width: 100%;
@@ -185,8 +182,8 @@
   border: 1px solid rgba(255, 255, 255, 1);
   padding: 10px 24px 10px 12px;
   border-radius: 99px;
-  box-shadow: 
-    0 10px 30px -10px rgba(245, 158, 11, 0.25), 
+  box-shadow:
+    0 10px 30px -10px rgba(245, 158, 11, 0.25),
     inset 0 2px 4px rgba(255, 255, 255, 0.8);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   max-width: 100%;
@@ -195,8 +192,8 @@
 .hp-cd-pill:hover {
   transform: translateY(-2px);
   background: rgba(255, 255, 255, 0.95);
-  box-shadow: 
-    0 12px 32px -10px rgba(245, 158, 11, 0.35), 
+  box-shadow:
+    0 12px 32px -10px rgba(245, 158, 11, 0.35),
     inset 0 2px 4px rgba(255, 255, 255, 0.8);
 }
 
@@ -217,7 +214,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap; 
+  flex-wrap: wrap;
   justify-content: center;
 }
 
@@ -236,14 +233,13 @@
   justify-content: center;
 }
 
-/* ✅ Tooltip implementation */
 .hp-tooltip-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   cursor: help;
-  z-index: 10; 
+  z-index: 10;
 }
 
 .hp-tooltip-text {
@@ -269,7 +265,7 @@
   left: 50%;
   transform: translate(-50%, -8px);
   width: max-content;
-  max-width: 85vw; /* Failsafe for tiny screens */
+  max-width: 85vw;
   background: rgba(43, 43, 51, 0.95);
   color: #fff;
   font-size: 12.5px;
@@ -309,37 +305,55 @@
   transform: translate(-50%, -4px);
 }
 
-/* ✅ VALUES AND TICKING ANIMATION */
+/* ✅ Countdown chars */
 .hp-cd-val {
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 16.5px;
   font-weight: 900;
-  color: #d97706; /* Amber 600 */
+  color: #d97706;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  letter-spacing: -0.5px;
-  white-space: nowrap; 
-  display: inline-block; /* Parent keeps structure */
+  letter-spacing: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  min-width: 78px;
+  justify-content: center;
 }
 
-/* Inner span handles the drop-down pop */
-.cd-tick-anim {
-  display: inline-block; /* Essential for transform to work on a span */
-  animation: tick-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+.cd-flip-char {
+  display: inline-block;
+  min-width: 0.65ch;
+  text-align: center;
+  animation: roll-down 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-@keyframes tick-pop {
-  0% { transform: translateY(-4px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
+.cd-static-char {
+  display: inline-block;
+  opacity: 0.75;
+  margin-left: 0;
+  margin-right: 0.08ch;
+}
+
+.cd-space-char {
+  display: inline-block;
+  width: 0.45ch;
+  flex: 0 0 0.45ch;
+}
+
+@keyframes roll-down {
+  0% { transform: translateY(-8px) scale(0.92); opacity: 0; filter: blur(2px); }
+  100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
 }
 
 .hp-cd-val.pulse {
   animation: cd-pulse 1.5s ease-in-out infinite;
-  color: #db2777; /* Pink 600 when running */
-}
-@keyframes cd-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  color: #db2777;
 }
 
+@keyframes cd-pulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 0 transparent); }
+  50% { opacity: 0.7; filter: drop-shadow(0 0 6px rgba(219, 39, 119, 0.4)); }
+}
 
 /* =========================================================
    4. ATTACHED ACTIVITY BOARD
@@ -347,16 +361,15 @@
 .hp-hero-attach {
   position: relative;
   z-index: 10;
-  margin-top: 24px; 
+  margin-top: 24px;
   margin-bottom: 60px;
   display: flex;
   justify-content: center;
-  pointer-events: none; 
+  pointer-events: none;
 }
 .hp-hero-attach-card { pointer-events: auto; position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; }
 .hp-hero-attach-card::before { content: ""; position: absolute; top: -34px; left: 50%; transform: translateX(-50%); width: 8px; height: 50px; background: linear-gradient(to bottom, rgba(255,255,255,0.4), #ffffff, #ffffff, rgba(255,255,255,0.4)); border-radius: 4px; box-shadow: 0 0 10px rgba(255,255,255,0.8), 0 2px 4px rgba(0,0,0,0.05); z-index: -1; }
 .hp-hero-attach-card .ab-board { margin-top: 0 !important; margin-bottom: 0 !important; width: min(840px, calc(100vw - 32px)); }
-
 
 /* =========================================================
    5. SECTIONS & PODIUM
@@ -385,7 +398,6 @@
 .hp-empty-msg { text-align: center; padding: 60px; opacity: 0.5; font-weight: 700; background: rgba(255,255,255,0.5); border-radius: 24px; border: 2px dashed rgba(0,0,0,0.1); }
 .hp-empty-icon { font-size: 40px; margin-bottom: 10px; }
 
-
 /* =========================================================
    6. HORIZONTAL STRIPS
    ========================================================= */
@@ -395,7 +407,6 @@
 .hp-strip-item { scroll-snap-align: start; flex: 0 0 auto; width: 300px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .hp-strip-item:hover { transform: translateY(-8px); }
 
-
 /* =========================================================
    MOBILE
    ========================================================= */
@@ -403,29 +414,29 @@
   .hp-hero-card { border-radius: 32px; margin: 10px 16px 40px 16px; }
   .hp-hero-title { font-size: 40px; }
   .hp-hero-actions { flex-direction: column; width: 100%; margin-bottom: 24px; }
-  
+
   .hp-stats-row { flex-direction: column; gap: 32px; align-items: center; width: 100%; }
   .hp-stat-item { width: 100%; }
   .hp-stat-sep { width: 60px; height: 1px; background: rgba(0,0,0,0.08); margin: 0; }
-  
-  .hp-cd-pill { 
-    flex-direction: column; 
-    padding: 16px 20px; 
-    border-radius: 24px; 
+
+  .hp-cd-pill {
+    flex-direction: column;
+    padding: 16px 20px;
+    border-radius: 24px;
   }
-  .hp-cd-text { 
-    flex-direction: column; 
-    gap: 6px; 
+  .hp-cd-text {
+    flex-direction: column;
+    gap: 6px;
     text-align: center;
   }
-  .hp-cd-label { 
-    font-size: 13.5px; 
+  .hp-cd-label {
+    font-size: 13.5px;
     line-height: 1.4;
   }
   .hp-cd-label-inner {
     text-align: center;
   }
-  
+
   .hp-podium { flex-direction: column; align-items: center; gap: 60px; margin-top: 40px; }
   .pp-gold-wrapper { order: -1; margin-bottom: 20px; }
   .hp-strip { padding: 10px 20px 50px 20px; }
