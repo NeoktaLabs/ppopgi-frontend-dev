@@ -183,7 +183,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     };
   }, [gs.data]);
 
-  // ✅ Interactive messaging with CSS classes for bulletproof mobile wrapping
   const finalizerStat = useMemo(() => {
     if (finalizer.error) return { value: "Unavailable", label: "Draw Status:" };
     if (finalizer.running) return { value: "Drawing winners now! 🎰", label: "Magic in progress:" };
@@ -277,7 +276,14 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               <div className="hp-cd-icon">⏳</div>
               <div className="hp-cd-text">
                 <span className="hp-cd-label">{finalizerStat.label}</span>
-                <span className={`hp-cd-val ${finalizer.running ? 'pulse' : ''}`}>{finalizerStat.value}</span>
+                
+                {/* ✅ FIXED: Nested spans prevent animation conflicts */}
+                <span className={`hp-cd-val ${finalizer.running ? 'pulse' : ''}`}>
+                  <span key={finalizerStat.value} className="cd-tick-anim">
+                    {finalizerStat.value}
+                  </span>
+                </span>
+
               </div>
             </div>
           </div>
