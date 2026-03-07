@@ -80,10 +80,12 @@ function setPageInUrl(next: Page) {
   if (!next || next === "home") u.searchParams.delete("page");
   else u.searchParams.set("page", next);
 
+  // ✅ preserve everything else (including ?lottery=...)
   window.history.pushState({}, "", u.toString());
 }
 
 export default function App() {
+  // --- Phase 0: baseline perf marks (app mounted) ---
   useEffect(() => {
     try {
       performance.mark("ppopgi:app_mounted");
@@ -95,21 +97,25 @@ export default function App() {
     }
   }, []);
 
+  // 1) Thirdweb
   useAutoConnect({
     client: thirdwebClient,
     chain: ETHERLINK_CHAIN,
     wallets: [createWallet("io.metamask")],
   });
 
+  // 2) Global session
   const activeAccount = useActiveAccount();
   const account = activeAccount?.address ?? null;
   const setSession = useSession((s) => s.set);
   const { disconnect } = useDisconnect();
   const activeWallet = useActiveWallet();
 
+  // 3) Routing (page + lottery deep-link)
   const [page, setPage] = useState<Page>(() => (typeof window !== "undefined" ? getPageFromUrl() : "home"));
   const { selectedLotteryId, openLottery, closeLottery } = useAppRouting();
 
+  // ✅ store (same items used by cards)
   const store = useLotteryStore("app-modal", 20_000);
 
   const selectedFromStore = useMemo(() => {
@@ -118,12 +124,14 @@ export default function App() {
     return (store.items || []).find((r: any) => String(r.id || "").toLowerCase() === id) ?? null;
   }, [store.items, selectedLotteryId]);
 
+  // 4) Modal states
   const [signInOpen, setSignInOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [cashierOpen, setCashierOpen] = useState(false);
 
   const openSignIn = useCallback(() => setSignInOpen(true), []);
 
+  // 5) Disclaimer gate — show by default on first load
   const [showGate, setShowGate] = useState(false);
   useEffect(() => {
     const hasAccepted = localStorage.getItem("ppopgi_terms_accepted") === "true";
@@ -135,10 +143,12 @@ export default function App() {
     setShowGate(false);
   };
 
+  // Actions
   const handleSignOut = () => {
     if (activeWallet) disconnect(activeWallet);
   };
 
+  // Safety modal
   const [safetyId, setSafetyId] = useState<string | null>(null);
 
   const handleOpenSafety = (id: string) => {
@@ -149,10 +159,13 @@ export default function App() {
     setSafetyId(id);
   };
 
+  // ✅ Lottery details for safety modal
   const { data: safetyData } = useLotteryDetails(safetyId, !!safetyId);
 
+  // ✅ Hide layout chrome when any modal/gate is open
   const anyModalOpen = showGate || signInOpen || createOpen || cashierOpen || !!selectedLotteryId || !!safetyId;
 
+  // ✅ prevent background scroll while a modal is open
   useEffect(() => {
     document.body.style.overflow = anyModalOpen ? "hidden" : "";
     return () => {
@@ -182,6 +195,7 @@ export default function App() {
     [account, openSignIn]
   );
 
+  // Sync page from URL on back/forward
   const didInitRef = useRef(false);
   useEffect(() => {
     const applyFromUrl = () => {
@@ -206,6 +220,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", applyFromUrl);
   }, [account, openSignIn]);
 
+  // Session sync
   useEffect(() => {
     setSession({ account, connector: account ? "thirdweb" : null });
 
@@ -215,6 +230,7 @@ export default function App() {
     }
   }, [account, page, setSession]);
 
+  // Global events
   useEffect(() => {
     const onOpenCashier = () => {
       if (account) {
@@ -302,6 +318,7 @@ export default function App() {
           </Suspense>
         )}
 
+        {/* --- Modals --- */}
         <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
 
         <Suspense fallback={null}>
@@ -322,7 +339,7 @@ export default function App() {
           />
         </Suspense>
 
-        {safetyId && (
+        {safetyId && safetyData && (
           <Suspense fallback={null}>
             <SafetyProofModal open={!!safetyId} onClose={() => setSafetyId(null)} lottery={safetyData as any} />
           </Suspense>
