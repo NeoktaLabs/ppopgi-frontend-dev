@@ -71,7 +71,7 @@ const num = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const JUST_FINISHED_WINDOW_MS = 6000;
+const JUST_FINISHED_WINDOW_MS = 10000;
 const RECENT_OK_FINISH_GAP_MS = 15000;
 
 function openCashierFromHome() {
