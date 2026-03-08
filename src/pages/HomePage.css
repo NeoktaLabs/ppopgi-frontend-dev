@@ -101,7 +101,7 @@
   border-radius: 48px;
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 24px 60px -12px rgba(203, 183, 246, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
   display: flex;
   flex-direction: column;
@@ -142,6 +142,7 @@
     radial-gradient(circle at 50% 10%, white 1.5px, transparent 2.5px);
   background-size: 100% 100%;
   opacity: 0.7;
+  border-radius: 48px;
 }
 
 .hp-hero-content {
@@ -152,6 +153,8 @@
   align-items: center;
   position: relative;
   z-index: 2;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hp-badge-shimmer {
@@ -182,6 +185,7 @@
   color: var(--ink);
   letter-spacing: -2px;
   margin-bottom: 18px;
+  white-space: nowrap;
 }
 
 .hp-text-gradient {
@@ -400,11 +404,13 @@
   justify-content: center;
   padding: 0 20px;
   box-sizing: border-box;
+  position: relative;
+  z-index: 20;
 }
 
 .hp-cd-pill {
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   gap: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
   backdrop-filter: blur(14px);
@@ -417,6 +423,8 @@
     0 8px 20px rgba(219, 39, 119, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .hp-cd-pill:hover {
@@ -458,6 +466,7 @@
 .hp-cd-icon {
   background: linear-gradient(135deg, #fff7d6, #fde68a);
   width: 46px;
+  min-width: 46px;
   height: 46px;
   border-radius: 16px;
   display: grid;
@@ -468,6 +477,7 @@
     0 8px 18px rgba(245, 158, 11, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.75);
   border: 1px solid rgba(245, 158, 11, 0.28);
+  align-self: center;
 }
 
 .hp-cd-text {
@@ -477,6 +487,8 @@
   gap: 10px;
   justify-content: center;
   text-align: center;
+  min-width: 0;
+  flex: 1;
 }
 
 .hp-cd-kicker {
@@ -490,24 +502,31 @@
 }
 
 .hp-cd-label {
+  width: 100%;
+  max-width: 100%;
   font-size: 15px;
   font-weight: 800;
   color: var(--ink);
   opacity: 0.82;
   text-align: center;
   line-height: 1.35;
+  display: flex;
+  justify-content: center;
 }
 
 .hp-cd-label-inner {
+  width: 100%;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
   justify-content: center;
+  text-align: center;
 }
 
 .hp-cd-display {
   min-width: 240px;
+  max-width: 100%;
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -521,6 +540,7 @@
     0 8px 24px rgba(43, 43, 51, 0.16);
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .hp-cd-display::before {
@@ -559,6 +579,7 @@
   text-shadow:
     0 0 10px rgba(251, 191, 36, 0.22),
     0 0 20px rgba(251, 191, 36, 0.08);
+  max-width: 100%;
 }
 
 .hp-cd-display.running .hp-cd-val {
@@ -619,9 +640,11 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   cursor: help;
-  z-index: 10;
+  z-index: 40;
+  max-width: 100%;
 }
 
 .hp-tooltip-text {
@@ -639,15 +662,16 @@
   font-size: 10px;
   font-weight: 800;
   font-family: ui-monospace, SFMono-Regular, monospace;
+  flex-shrink: 0;
 }
 
 .hp-tooltip {
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 10px);
   left: 50%;
-  transform: translate(-50%, -8px);
-  width: max-content;
-  max-width: 85vw;
+  transform: translateX(-50%);
+  width: 260px;
+  max-width: min(260px, calc(100vw - 48px));
   background: rgba(43, 43, 51, 0.95);
   color: #fff;
   font-size: 12.5px;
@@ -661,11 +685,13 @@
   opacity: 0;
   visibility: hidden;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  z-index: 100;
+  z-index: 120;
   text-align: center;
   line-height: 1.4;
   white-space: normal;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .hp-tooltip::after {
@@ -684,7 +710,7 @@
 .hp-tooltip-wrap:focus-within .hp-tooltip {
   opacity: 1;
   visibility: visible;
-  transform: translate(-50%, -4px);
+  transform: translateX(-50%) translateY(-2px);
 }
 
 /* =========================================================
@@ -908,10 +934,18 @@
   .hp-hero-card {
     border-radius: 32px;
     margin: 10px 16px 40px 16px;
+    overflow: visible;
+  }
+
+  .hp-billboard-sparkles {
+    border-radius: 32px;
   }
 
   .hp-hero-title {
-    font-size: 40px;
+    font-size: 32px;
+    line-height: 1.1;
+    letter-spacing: -1.2px;
+    white-space: nowrap;
   }
 
   .hp-hero-sub {
@@ -954,6 +988,11 @@
     flex-direction: column;
     padding: 18px 16px;
     border-radius: 24px;
+    gap: 12px;
+  }
+
+  .hp-cd-icon {
+    align-self: center;
   }
 
   .hp-cd-text {
@@ -969,9 +1008,13 @@
   .hp-cd-label {
     font-size: 13.5px;
     line-height: 1.4;
+    max-width: 100%;
   }
 
   .hp-cd-label-inner {
+    width: 100%;
+    flex-direction: column;
+    gap: 4px;
     text-align: center;
   }
 
@@ -983,6 +1026,28 @@
 
   .hp-cd-val {
     font-size: 34px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+    flex-wrap: wrap;
+  }
+
+  .hp-tooltip-wrap {
+    max-width: 100%;
+  }
+
+  .hp-tooltip {
+    width: min(240px, calc(100vw - 56px));
+    max-width: calc(100vw - 56px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .hp-tooltip-wrap:hover .hp-tooltip,
+  .hp-tooltip-wrap:active .hp-tooltip,
+  .hp-tooltip-wrap:focus-within .hp-tooltip {
+    transform: translateX(-50%) translateY(-2px);
   }
 
   .hp-podium {
