@@ -46,7 +46,6 @@ function fmtUSDC(v: bigint | number | string, opts?: { decimals?: number; maxFra
   }
 }
 
-// ✅ zero-padding keeps width stable
 function fmtCountdown(totalSec: number | null | undefined) {
   if (totalSec == null) return "—";
   const s = Math.max(0, Math.floor(totalSec));
@@ -86,14 +85,13 @@ function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "fa
 const BANNER_MESSAGES = [
   { id: "cashier", text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC", action: openCashierFromHome },
   { id: "explore", text: "🔎 Discover all lotteries from the Explore page", action: () => navigateFromHome("explore") },
-  {
-    id: "dashboard",
-    text: "🎁 Visit your dashboard to reclaim prizes or tickets",
-    action: () => navigateFromHome("dashboard"),
-  },
+  { id: "dashboard", text: "🎁 Visit your dashboard to reclaim prizes or tickets", action: () => navigateFromHome("dashboard") },
   { id: "about", text: "📖 Read the story behind Ppopgi (뽑기)", action: () => navigateFromHome("about") },
   { id: "faq", text: "❓ Learn how Ppopgi (뽑기) works (FAQ)", action: () => navigateFromHome("faq") },
 ];
+
+const HERO_SPIRIT_LINE =
+  "where players buy small tickets for a chance to win big, and creators benefit from ticket sales.";
 
 function BannerSlider() {
   const [idx, setIdx] = useState(0);
@@ -116,6 +114,46 @@ function BannerSlider() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function HeroSpiritTypewriter({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [hold, setHold] = useState(false);
+
+  useEffect(() => {
+    if (hold) {
+      const t = window.setTimeout(() => {
+        setHold(false);
+        setIsDeleting(true);
+      }, 1800);
+      return () => window.clearTimeout(t);
+    }
+
+    const speed = isDeleting ? 18 : 34;
+
+    const t = window.setTimeout(() => {
+      if (!isDeleting) {
+        const next = text.slice(0, displayed.length + 1);
+        setDisplayed(next);
+        if (next === text) setHold(true);
+      } else {
+        const next = text.slice(0, Math.max(0, displayed.length - 1));
+        setDisplayed(next);
+        if (next.length === 0) setIsDeleting(false);
+      }
+    }, speed);
+
+    return () => window.clearTimeout(t);
+  }, [displayed, isDeleting, hold, text]);
+
+  return (
+    <div className="hp-hero-typer-wrap" aria-label={text}>
+      <span className="hp-hero-typer-prefix">where </span>
+      <span className="hp-hero-typer-text">{displayed.replace(/^where\s+/i, "")}</span>
+      <span className="hp-hero-caret" aria-hidden="true" />
     </div>
   );
 }
@@ -190,46 +228,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
   }, [gs.data]);
 
   const finalizerStat = useMemo(() => {
-    if (finalizer.error) {
-      return {
-        value: "OFFLINE",
-        tone: "warn" as const,
-        title: "Draw board offline",
-        label: "Ppopgi draw board:",
-      };
-    }
-
-    if (finalizer.running) {
-      return {
-        value: "LIVE",
-        tone: "live" as const,
-        title: "Drawing in progress",
-        label: "🎰 Lucky draw in progress:",
-      };
-    }
-
-    if (finalizer.secondsToNextRun == null) {
-      return {
-        value: "—",
-        tone: "idle" as const,
-        title: "Awaiting next schedule",
-        label: "🎡 Next Lucky Draw:",
-      };
-    }
-
-    if (finalizer.secondsToNextRun === 0) {
-      return {
-        value: "NOW",
-        tone: "soon" as const,
-        title: "Draw about to pop",
-        label: "✨ Next Lucky Draw:",
-      };
-    }
+    if (finalizer.error) return { value: "Unavailable", label: "Draw Status:" };
+    if (finalizer.running) return { value: "Drawing winners now! 🎰", label: "Magic in progress:" };
+    if (finalizer.secondsToNextRun == null) return { value: "—", label: "Awaiting next draw schedule:" };
+    if (finalizer.secondsToNextRun === 0) return { value: "Any moment! ✨", label: "Next lotteries drawing:" };
 
     return {
       value: fmtCountdown(finalizer.secondsToNextRun),
-      tone: "idle" as const,
-      title: "Next Lucky Draw",
       label: (
         <span className="hp-cd-label-inner">
           <span className="hp-tooltip-wrap">
@@ -259,12 +264,14 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           <div className="hp-badge-shimmer">
             <div className="hp-hero-badge">✨ The Fair On-Chain Lottery</div>
           </div>
+
           <div className="hp-hero-title">
             Welcome to <br />
             <span className="hp-text-gradient">Ppopgi (뽑기)</span>
           </div>
-          <div className="hp-hero-sub">
-            A decentralized playground where every spin is fair, transparent, and verified on-chain.
+
+          <div className="hp-hero-sub hp-hero-sub-typer">
+            <HeroSpiritTypewriter text={HERO_SPIRIT_LINE} />
           </div>
 
           <div className="hp-hero-actions">
@@ -311,25 +318,21 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           )}
 
           <div className="hp-stats-countdown-wrap">
-            <div className={`hp-cd-pill hp-cd-pill-${finalizerStat.tone}`}>
+            <div className="hp-cd-pill">
               <div className="hp-cd-icon">⏳</div>
-
               <div className="hp-cd-text">
-                <div className="hp-cd-kicker">{finalizerStat.title}</div>
                 <span className="hp-cd-label">{finalizerStat.label}</span>
 
-                <div className={`hp-cd-display ${finalizer.running ? "running" : ""}`}>
-                  <span className={`hp-cd-val ${finalizer.running ? "pulse" : ""}`}>
-                    {finalizerStat.value.split("").map((char, index) => (
-                      <span
-                        key={`${index}-${char}`}
-                        className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
-                      >
-                        {char}
-                      </span>
-                    ))}
-                  </span>
-                </div>
+                <span className={`hp-cd-val ${finalizer.running ? "pulse" : ""}`}>
+                  {finalizerStat.value.split("").map((char, index) => (
+                    <span
+                      key={`${index}-${char}`}
+                      className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
+                    >
+                      {char}
+                    </span>
+                  ))}
+                </span>
               </div>
             </div>
           </div>
@@ -351,15 +354,9 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           <div className="hp-podium">
             {isLoading && (
               <>
-                <div className="pp-silver-wrapper">
-                  <LotteryCardSkeleton />
-                </div>
-                <div className="pp-gold-wrapper">
-                  <LotteryCardSkeleton />
-                </div>
-                <div className="pp-bronze-wrapper">
-                  <LotteryCardSkeleton />
-                </div>
+                <div className="pp-silver-wrapper"><LotteryCardSkeleton /></div>
+                <div className="pp-gold-wrapper"><LotteryCardSkeleton /></div>
+                <div className="pp-bronze-wrapper"><LotteryCardSkeleton /></div>
               </>
             )}
 
@@ -376,7 +373,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                 />
               </div>
             )}
-
             {!isLoading && podium.gold && (
               <div className="pp-gold-wrapper">
                 <div className="pp-rank-badge gold">1</div>
@@ -390,7 +386,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                 />
               </div>
             )}
-
             {!isLoading && podium.bronze && (
               <div className="pp-bronze-wrapper">
                 <div className="pp-rank-badge bronze">3</div>
@@ -404,7 +399,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                 />
               </div>
             )}
-
             {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
               <div className="hp-empty-msg">
                 <div className="hp-empty-icon">🍃</div>
