@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useFinalizerStatus } from "../hooks/useFinalizerStatus";
 import { useGlobalStatsBillboard } from "../hooks/useGlobalStatsBillboard";
@@ -77,10 +77,6 @@ function navigateFromHome(page: "explore" | "faq") {
   } catch {}
 }
 
-/* =========================================================
-   HERO TYPEWRITER (runs once)
-   ========================================================= */
-
 function HeroSpiritTypewriter() {
   const line1 = "where players risk small for a chance to win bigger";
   const line2 = "and creators build their prize pools from ticket sales";
@@ -92,27 +88,21 @@ function HeroSpiritTypewriter() {
   useEffect(() => {
     if (phase === 1) {
       if (text1.length < line1.length) {
-        const t = setTimeout(() => {
-          setText1(line1.slice(0, text1.length + 1));
-        }, 28);
-        return () => clearTimeout(t);
-      } else {
-        const t = setTimeout(() => setPhase(2), 400);
+        const t = setTimeout(() => setText1(line1.slice(0, text1.length + 1)), 28);
         return () => clearTimeout(t);
       }
+      const t = setTimeout(() => setPhase(2), 350);
+      return () => clearTimeout(t);
     }
 
     if (phase === 2) {
       if (text2.length < line2.length) {
-        const t = setTimeout(() => {
-          setText2(line2.slice(0, text2.length + 1));
-        }, 28);
+        const t = setTimeout(() => setText2(line2.slice(0, text2.length + 1)), 28);
         return () => clearTimeout(t);
-      } else {
-        setPhase(3);
       }
+      setPhase(3);
     }
-  }, [text1, text2, phase]);
+  }, [phase, text1, text2]);
 
   return (
     <div className="hp-hero-typer">
@@ -120,7 +110,6 @@ function HeroSpiritTypewriter() {
         {text1}
         {phase === 1 && <span className="hp-hero-caret" />}
       </div>
-
       <div className="hp-hero-typer-line">
         {text2}
         {phase === 2 && <span className="hp-hero-caret" />}
@@ -155,8 +144,9 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
   );
 
   const podium = useMemo(() => {
-    if (!bigPrizes || bigPrizes.length === 0)
+    if (!bigPrizes || bigPrizes.length === 0) {
       return { gold: null, silver: null, bronze: null };
+    }
 
     const sorted = [...bigPrizes].sort((a, b) => {
       try {
@@ -184,7 +174,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
   const stats = useMemo(() => {
     if (!gs.data) return null;
-
     return {
       tix: fmtInt(gs.data.totalTicketsSold),
       lots: fmtInt(gs.data.totalLotteriesCreated),
@@ -193,24 +182,63 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     };
   }, [gs.data]);
 
+  const finalizerTone = useMemo(() => {
+    if (finalizer.error) return "warn";
+    if (finalizer.running) return "live";
+    if (finalizer.secondsToNextRun === 0) return "soon";
+    return "idle";
+  }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
+
   const finalizerStat = useMemo(() => {
-    if (finalizer.error)
-      return { value: "Unavailable", label: "Draw status:" };
+    if (finalizer.error) {
+      return {
+        value: "Unavailable",
+        kicker: "Draw monitor",
+        label: "We’re having trouble checking the next draw.",
+      };
+    }
 
-    if (finalizer.running)
-      return { value: "Drawing winners now! 🎰", label: "Lucky tickets are being picked:" };
+    if (finalizer.running) {
+      return {
+        value: "Drawing winners now! 🎰",
+        kicker: "Live draw in progress",
+        label: "Lucky tickets are being picked on-chain right now.",
+      };
+    }
 
-    if (finalizer.secondsToNextRun === 0)
-      return { value: "Any moment now ✨", label: "Next Ppopgi draw:" };
+    if (finalizer.secondsToNextRun == null) {
+      return {
+        value: "—",
+        kicker: "Draw monitor",
+        label: "Awaiting next draw schedule.",
+      };
+    }
 
-    if (finalizer.secondsToNextRun == null)
-      return { value: "—", label: "Awaiting draw schedule:" };
+    if (finalizer.secondsToNextRun === 0) {
+      return {
+        value: "Any moment now ✨",
+        kicker: "Draw almost ready",
+        label: "One or more eligible lotteries are about to be processed.",
+      };
+    }
 
     return {
       value: fmtCountdown(finalizer.secondsToNextRun),
-      label: "Next Ppopgi draw in:",
+      kicker: "Next Ppopgi draw",
+      label: (
+        <span className="hp-cd-label-inner">
+          <span className="hp-tooltip-wrap" tabIndex={0}>
+            <span className="hp-tooltip-text">Eligible lotteries</span>
+            <span className="hp-info-icon">i</span>
+            <span className="hp-tooltip">
+              Eligible lotteries include the ones with deadline reached or max tickets sold.
+            </span>
+          </span>
+          <span>will be drawn in:</span>
+        </span>
+      ),
     };
-  }, [finalizer]);
+  }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
 
   return (
     <>
@@ -232,53 +260,65 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-hero-actions">
-            <button
-              className="hp-btn-primary"
-              onClick={() => navigateFromHome("explore")}
-            >
+            <button className="hp-btn-primary" onClick={() => navigateFromHome("explore")}>
               Explore Lotteries
             </button>
-
-            <button
-              className="hp-btn-secondary"
-              onClick={() => navigateFromHome("faq")}
-            >
+            <button className="hp-btn-secondary" onClick={() => navigateFromHome("faq")}>
               Learn More
             </button>
           </div>
         </div>
 
-        {/* =====================================================
-           NEW COUNTDOWN CARD
-        ===================================================== */}
+        {stats && (
+          <div className="hp-stats-dock">
+            <div className="hp-stats-title-wrap">
+              <div className="hp-stats-title">Live Ppopgi (뽑기) Stats</div>
+            </div>
+
+            <div className="hp-stats-row">
+              <div className="hp-stat-item highlight">
+                <div className="hp-stat-val">{stats.tix}</div>
+                <div className="hp-stat-lbl">Tickets Sold</div>
+              </div>
+
+              <div className="hp-stat-sep" />
+
+              <div className="hp-stat-item">
+                <div className="hp-stat-val">{stats.lots}</div>
+                <div className="hp-stat-lbl">Lotteries Created</div>
+              </div>
+
+              <div className="hp-stat-sep" />
+
+              <div className="hp-stat-item">
+                <div className="hp-stat-val">{stats.activeUsd}</div>
+                <div className="hp-stat-lbl">Active Volume</div>
+              </div>
+
+              <div className="hp-stat-sep" />
+
+              <div className="hp-stat-item">
+                <div className="hp-stat-val">{stats.settledUsd}</div>
+                <div className="hp-stat-lbl">Prizes Settled</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="hp-stats-countdown-wrap">
-          <div
-            className={[
-              "hp-cd-card",
-              finalizer.error
-                ? "is-warn"
-                : finalizer.running
-                ? "is-live"
-                : finalizer.secondsToNextRun === 0
-                ? "is-soon"
-                : "is-idle",
-            ].join(" ")}
-          >
+          <div className={`hp-cd-card is-${finalizerTone}`}>
             <div className="hp-cd-top">
               <div className="hp-cd-badge">
                 <span className="hp-cd-badge-dot" />
-                Live Draw Status
+                {finalizerStat.kicker}
               </div>
             </div>
 
             <div className="hp-cd-main">
-              <div className="hp-cd-icon-wrap">⏳</div>
+              <div className="hp-cd-icon-wrap">{finalizer.running ? "🎰" : "⏳"}</div>
 
               <div className="hp-cd-copy">
-                <div className="hp-cd-label">
-                  {finalizerStat.label}
-                </div>
+                <div className="hp-cd-label">{finalizerStat.label}</div>
 
                 <div
                   className={[
@@ -287,19 +327,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                     finalizer.error ? "is-error" : "",
                   ].join(" ")}
                 >
-                  <span className="hp-cd-value">
-                    {finalizerStat.value}
-                  </span>
+                  <span className="hp-cd-value">{finalizerStat.value}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* =====================================================
-         ACTIVITY BOARD
-      ===================================================== */}
 
       <div className="hp-hero-attach">
         <div className="hp-hero-attach-card">
@@ -308,8 +342,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
       </div>
 
       <div className="hp-container">
-        {/* PODIUM */}
-
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 50 }}>
             <div className="hp-section-title">🏆 Top Active Prizepools</div>
@@ -324,20 +356,19 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               </>
             )}
 
-            {!isLoading && podium.gold && (
-              <LotteryCard
-                lottery={podium.gold}
-                ribbon="gold"
-                nowMs={nowMs}
-                finalizer={finalizerForCards}
-                onOpen={onOpenLottery}
-                onOpenSafety={onOpenSafety}
-              />
-            )}
+            {!isLoading &&
+              podium.gold && (
+                <LotteryCard
+                  lottery={podium.gold}
+                  ribbon="gold"
+                  nowMs={nowMs}
+                  finalizer={finalizerForCards}
+                  onOpen={onOpenLottery}
+                  onOpenSafety={onOpenSafety}
+                />
+              )}
           </div>
         </div>
-
-        {/* ENDING SOON */}
 
         <div>
           <div className="hp-section-header">
@@ -359,8 +390,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             ))}
           </div>
         </div>
-
-        {/* RECENTLY SETTLED */}
 
         <div>
           <div className="hp-section-header">
