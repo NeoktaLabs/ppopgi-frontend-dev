@@ -7,7 +7,6 @@ import { LotteryCardSkeleton } from "../components/LotteryCardSkeleton";
 import { ActivityBoard } from "../components/ActivityBoard";
 import "./HomePage.css";
 
-// ✅ UI Helper: prettify large numbers
 function fmtInt(n: bigint | number | string) {
   try {
     if (typeof n === "bigint") return n.toLocaleString("en-US");
@@ -19,14 +18,15 @@ function fmtInt(n: bigint | number | string) {
   }
 }
 
-// ✅ UI Helper: format USDC bigint (6 decimals)
 function fmtUSDC(v: bigint | number | string, opts?: { decimals?: number; maxFrac?: number }) {
   const decimals = opts?.decimals ?? 6;
   const maxFrac = opts?.maxFrac ?? 0;
 
   try {
     const x =
-      typeof v === "bigint" ? v : BigInt(typeof v === "number" ? Math.trunc(v) : String(v || "0").trim() || "0");
+      typeof v === "bigint"
+        ? v
+        : BigInt(typeof v === "number" ? Math.trunc(v) : String(v || "0").trim() || "0");
 
     const sign = x < 0n ? "-" : "";
     const a = x < 0n ? -x : x;
@@ -48,12 +48,13 @@ function fmtUSDC(v: bigint | number | string, opts?: { decimals?: number; maxFra
 
 function fmtCountdown(totalSec: number | null | undefined) {
   if (totalSec == null) return "—";
+
   const s = Math.max(0, Math.floor(totalSec));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const r = s % 60;
 
-  const pad = (num: number) => num.toString().padStart(2, "0");
+  const pad = (n: number) => n.toString().padStart(2, "0");
 
   if (h > 0) return `${h}h ${pad(m)}m`;
   if (m > 0) return `${m}m ${pad(r)}s`;
@@ -70,90 +71,60 @@ const num = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-function openCashierFromHome() {
-  try {
-    window.dispatchEvent(new CustomEvent("ppopgi:open-cashier"));
-  } catch {}
-}
-
-function navigateFromHome(page: "home" | "explore" | "dashboard" | "about" | "faq") {
+function navigateFromHome(page: "explore" | "faq") {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page } }));
   } catch {}
 }
 
-const BANNER_MESSAGES = [
-  { id: "cashier", text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC", action: openCashierFromHome },
-  { id: "explore", text: "🔎 Discover all lotteries from the Explore page", action: () => navigateFromHome("explore") },
-  { id: "dashboard", text: "🎁 Visit your dashboard to reclaim prizes or tickets", action: () => navigateFromHome("dashboard") },
-  { id: "about", text: "📖 Read the story behind Ppopgi (뽑기)", action: () => navigateFromHome("about") },
-  { id: "faq", text: "❓ Learn how Ppopgi (뽑기) works (FAQ)", action: () => navigateFromHome("faq") },
-];
+/* =========================================================
+   HERO TYPEWRITER (runs once)
+   ========================================================= */
 
-const HERO_SPIRIT_LINE =
-  "where players buy small tickets for a chance to win big, and creators benefit from ticket sales.";
+function HeroSpiritTypewriter() {
+  const line1 = "where players risk small for a chance to win bigger";
+  const line2 = "and creators build their prize pools from ticket sales";
 
-function BannerSlider() {
-  const [idx, setIdx] = useState(0);
+  const [text1, setText1] = useState("");
+  const [text2, setText2] = useState("");
+  const [phase, setPhase] = useState<1 | 2 | 3>(1);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setIdx((prev) => (prev + 1) % BANNER_MESSAGES.length);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="hp-banner-wrapper">
-      <div className="hp-banner-track" style={{ transform: `translateX(-${idx * 100}%)` }}>
-        {BANNER_MESSAGES.map((msg) => (
-          <div key={msg.id} className="hp-banner-slide">
-            <button className="hp-banner-btn" onClick={msg.action}>
-              {msg.text}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HeroSpiritTypewriter({ text }: { text: string }) {
-  const [displayed, setDisplayed] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [hold, setHold] = useState(false);
-
-  useEffect(() => {
-    if (hold) {
-      const t = window.setTimeout(() => {
-        setHold(false);
-        setIsDeleting(true);
-      }, 1800);
-      return () => window.clearTimeout(t);
+    if (phase === 1) {
+      if (text1.length < line1.length) {
+        const t = setTimeout(() => {
+          setText1(line1.slice(0, text1.length + 1));
+        }, 28);
+        return () => clearTimeout(t);
+      } else {
+        const t = setTimeout(() => setPhase(2), 400);
+        return () => clearTimeout(t);
+      }
     }
 
-    const speed = isDeleting ? 18 : 34;
-
-    const t = window.setTimeout(() => {
-      if (!isDeleting) {
-        const next = text.slice(0, displayed.length + 1);
-        setDisplayed(next);
-        if (next === text) setHold(true);
+    if (phase === 2) {
+      if (text2.length < line2.length) {
+        const t = setTimeout(() => {
+          setText2(line2.slice(0, text2.length + 1));
+        }, 28);
+        return () => clearTimeout(t);
       } else {
-        const next = text.slice(0, Math.max(0, displayed.length - 1));
-        setDisplayed(next);
-        if (next.length === 0) setIsDeleting(false);
+        setPhase(3);
       }
-    }, speed);
-
-    return () => window.clearTimeout(t);
-  }, [displayed, isDeleting, hold, text]);
+    }
+  }, [text1, text2, phase]);
 
   return (
-    <div className="hp-hero-typer-wrap" aria-label={text}>
-      <span className="hp-hero-typer-prefix">where </span>
-      <span className="hp-hero-typer-text">{displayed.replace(/^where\s+/i, "")}</span>
-      <span className="hp-hero-caret" aria-hidden="true" />
+    <div className="hp-hero-typer">
+      <div className="hp-hero-typer-line">
+        {text1}
+        {phase === 1 && <span className="hp-hero-caret" />}
+      </div>
+
+      <div className="hp-hero-typer-line">
+        {text2}
+        {phase === 2 && <span className="hp-hero-caret" />}
+      </div>
     </div>
   );
 }
@@ -164,13 +135,14 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
   }, []);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
+
   useEffect(() => {
     const t = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, []);
 
   const finalizer = useFinalizerStatus();
-  const { bigPrizes, endingSoon, recentlyFinalized, isLoading, refetch } = useHomeLotteries();
+  const { bigPrizes, endingSoon, recentlyFinalized, isLoading } = useHomeLotteries();
   const gs = useGlobalStatsBillboard();
 
   const finalizerForCards = useMemo(
@@ -182,19 +154,10 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     [finalizer.running, finalizer.secondsToNextRun, finalizer.tsMs]
   );
 
-  useEffect(() => {
-    const onFocus = () => {
-      try {
-        refetch();
-        gs.refetch();
-      } catch {}
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [refetch, gs]);
-
   const podium = useMemo(() => {
-    if (!bigPrizes || bigPrizes.length === 0) return { gold: null, silver: null, bronze: null };
+    if (!bigPrizes || bigPrizes.length === 0)
+      return { gold: null, silver: null, bronze: null };
+
     const sorted = [...bigPrizes].sort((a, b) => {
       try {
         return BigInt(a.winningPot || "0") < BigInt(b.winningPot || "0") ? 1 : -1;
@@ -202,7 +165,12 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
         return 0;
       }
     });
-    return { gold: sorted[0] || null, silver: sorted[1] || null, bronze: sorted[2] || null };
+
+    return {
+      gold: sorted[0] || null,
+      silver: sorted[1] || null,
+      bronze: sorted[2] || null,
+    };
   }, [bigPrizes]);
 
   const endingSoonSorted = useMemo(() => {
@@ -214,48 +182,38 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     return (recentlyFinalized ?? []).slice(0, 5);
   }, [recentlyFinalized]);
 
-  const endingRef = useRef<HTMLDivElement | null>(null);
-  const settledRef = useRef<HTMLDivElement | null>(null);
-
   const stats = useMemo(() => {
     if (!gs.data) return null;
+
     return {
       tix: fmtInt(gs.data.totalTicketsSold),
       lots: fmtInt(gs.data.totalLotteriesCreated),
-      activeUsd: fmtUSDC(gs.data.activeVolumeUSDC, { maxFrac: 0 }),
-      settledUsd: fmtUSDC(gs.data.totalPrizesSettledUSDC, { maxFrac: 0 }),
+      activeUsd: fmtUSDC(gs.data.activeVolumeUSDC),
+      settledUsd: fmtUSDC(gs.data.totalPrizesSettledUSDC),
     };
   }, [gs.data]);
 
   const finalizerStat = useMemo(() => {
-    if (finalizer.error) return { value: "Unavailable", label: "Draw Status:" };
-    if (finalizer.running) return { value: "Drawing winners now! 🎰", label: "Magic in progress:" };
-    if (finalizer.secondsToNextRun == null) return { value: "—", label: "Awaiting next draw schedule:" };
-    if (finalizer.secondsToNextRun === 0) return { value: "Any moment! ✨", label: "Next lotteries drawing:" };
+    if (finalizer.error)
+      return { value: "Unavailable", label: "Draw status:" };
+
+    if (finalizer.running)
+      return { value: "Drawing winners now! 🎰", label: "Lucky tickets are being picked:" };
+
+    if (finalizer.secondsToNextRun === 0)
+      return { value: "Any moment now ✨", label: "Next Ppopgi draw:" };
+
+    if (finalizer.secondsToNextRun == null)
+      return { value: "—", label: "Awaiting draw schedule:" };
 
     return {
       value: fmtCountdown(finalizer.secondsToNextRun),
-      label: (
-        <span className="hp-cd-label-inner">
-          <span className="hp-tooltip-wrap">
-            <span className="hp-tooltip-text">Eligible</span>
-            <span className="hp-info-icon">i</span>
-            <div className="hp-tooltip">
-              Eligible lotteries include the ones with deadline reached or max tickets sold.
-            </div>
-          </span>
-          <span>lotteries to be drawn in:</span>
-        </span>
-      ),
+      label: "Next Ppopgi draw in:",
     };
-  }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
+  }, [finalizer]);
 
   return (
     <>
-      <div className="hp-announcement-bar hp-announcement-top">
-        <BannerSlider />
-      </div>
-
       <div className="hp-hero-card hp-billboard">
         <div className="hp-billboard-bg" />
         <div className="hp-billboard-sparkles" />
@@ -266,78 +224,82 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-hero-title">
-            Welcome to <br />
-            <span className="hp-text-gradient">Ppopgi (뽑기)</span>
+            Welcome to <span className="hp-text-gradient">Ppopgi (뽑기)</span>
           </div>
 
           <div className="hp-hero-sub hp-hero-sub-typer">
-            <HeroSpiritTypewriter text={HERO_SPIRIT_LINE} />
+            <HeroSpiritTypewriter />
           </div>
 
           <div className="hp-hero-actions">
-            <button className="hp-btn-primary" onClick={() => navigateFromHome("explore")}>
+            <button
+              className="hp-btn-primary"
+              onClick={() => navigateFromHome("explore")}
+            >
               Explore Lotteries
             </button>
-            <button className="hp-btn-secondary" onClick={() => navigateFromHome("faq")}>
+
+            <button
+              className="hp-btn-secondary"
+              onClick={() => navigateFromHome("faq")}
+            >
               Learn More
             </button>
           </div>
         </div>
 
-        <div className="hp-stats-dock">
-          <div className="hp-stats-title-wrap">
-            <div className="hp-stats-title">Live Ppopgi (뽑기) Stats</div>
-          </div>
+        {/* =====================================================
+           NEW COUNTDOWN CARD
+        ===================================================== */}
 
-          {gs.error ? (
-            <div style={{ opacity: 0.5, fontSize: 13, fontWeight: 700 }}>Stats currently unavailable</div>
-          ) : !stats ? (
-            <div style={{ opacity: 0.5, fontSize: 13, fontWeight: 700 }}>Loading stats...</div>
-          ) : (
-            <div className="hp-stats-row">
-              <div className="hp-stat-item highlight">
-                <div className="hp-stat-val hp-count-pop">{stats.tix}</div>
-                <div className="hp-stat-lbl">Tickets Sold</div>
-              </div>
-              <div className="hp-stat-sep" />
-              <div className="hp-stat-item">
-                <div className="hp-stat-val hp-count-pop">{stats.lots}</div>
-                <div className="hp-stat-lbl">Lotteries Created</div>
-              </div>
-              <div className="hp-stat-sep" />
-              <div className="hp-stat-item">
-                <div className="hp-stat-val hp-count-pop">{stats.activeUsd}</div>
-                <div className="hp-stat-lbl">Active Volume</div>
-              </div>
-              <div className="hp-stat-sep" />
-              <div className="hp-stat-item">
-                <div className="hp-stat-val hp-count-pop">{stats.settledUsd}</div>
-                <div className="hp-stat-lbl">Prizes Settled</div>
+        <div className="hp-stats-countdown-wrap">
+          <div
+            className={[
+              "hp-cd-card",
+              finalizer.error
+                ? "is-warn"
+                : finalizer.running
+                ? "is-live"
+                : finalizer.secondsToNextRun === 0
+                ? "is-soon"
+                : "is-idle",
+            ].join(" ")}
+          >
+            <div className="hp-cd-top">
+              <div className="hp-cd-badge">
+                <span className="hp-cd-badge-dot" />
+                Live Draw Status
               </div>
             </div>
-          )}
 
-          <div className="hp-stats-countdown-wrap">
-            <div className="hp-cd-pill">
-              <div className="hp-cd-icon">⏳</div>
-              <div className="hp-cd-text">
-                <span className="hp-cd-label">{finalizerStat.label}</span>
+            <div className="hp-cd-main">
+              <div className="hp-cd-icon-wrap">⏳</div>
 
-                <span className={`hp-cd-val ${finalizer.running ? "pulse" : ""}`}>
-                  {finalizerStat.value.split("").map((char, index) => (
-                    <span
-                      key={`${index}-${char}`}
-                      className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
-                    >
-                      {char}
-                    </span>
-                  ))}
-                </span>
+              <div className="hp-cd-copy">
+                <div className="hp-cd-label">
+                  {finalizerStat.label}
+                </div>
+
+                <div
+                  className={[
+                    "hp-cd-display",
+                    finalizer.running ? "is-running" : "",
+                    finalizer.error ? "is-error" : "",
+                  ].join(" ")}
+                >
+                  <span className="hp-cd-value">
+                    {finalizerStat.value}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* =====================================================
+         ACTIVITY BOARD
+      ===================================================== */}
 
       <div className="hp-hero-attach">
         <div className="hp-hero-attach-card">
@@ -346,6 +308,8 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
       </div>
 
       <div className="hp-container">
+        {/* PODIUM */}
+
         <div className="hp-podium-section">
           <div className="hp-section-header" style={{ justifyContent: "center", marginBottom: 50 }}>
             <div className="hp-section-title">🏆 Top Active Prizepools</div>
@@ -354,59 +318,26 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           <div className="hp-podium">
             {isLoading && (
               <>
-                <div className="pp-silver-wrapper"><LotteryCardSkeleton /></div>
-                <div className="pp-gold-wrapper"><LotteryCardSkeleton /></div>
-                <div className="pp-bronze-wrapper"><LotteryCardSkeleton /></div>
+                <LotteryCardSkeleton />
+                <LotteryCardSkeleton />
+                <LotteryCardSkeleton />
               </>
             )}
 
-            {!isLoading && podium.silver && (
-              <div className="pp-silver-wrapper">
-                <div className="pp-rank-badge silver">2</div>
-                <LotteryCard
-                  lottery={podium.silver}
-                  onOpen={onOpenLottery}
-                  onOpenSafety={onOpenSafety}
-                  ribbon="silver"
-                  nowMs={nowMs}
-                  finalizer={finalizerForCards}
-                />
-              </div>
-            )}
             {!isLoading && podium.gold && (
-              <div className="pp-gold-wrapper">
-                <div className="pp-rank-badge gold">1</div>
-                <LotteryCard
-                  lottery={podium.gold}
-                  onOpen={onOpenLottery}
-                  onOpenSafety={onOpenSafety}
-                  ribbon="gold"
-                  nowMs={nowMs}
-                  finalizer={finalizerForCards}
-                />
-              </div>
-            )}
-            {!isLoading && podium.bronze && (
-              <div className="pp-bronze-wrapper">
-                <div className="pp-rank-badge bronze">3</div>
-                <LotteryCard
-                  lottery={podium.bronze}
-                  onOpen={onOpenLottery}
-                  onOpenSafety={onOpenSafety}
-                  ribbon="bronze"
-                  nowMs={nowMs}
-                  finalizer={finalizerForCards}
-                />
-              </div>
-            )}
-            {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
-              <div className="hp-empty-msg">
-                <div className="hp-empty-icon">🍃</div>
-                <div>No active lotteries to display.</div>
-              </div>
+              <LotteryCard
+                lottery={podium.gold}
+                ribbon="gold"
+                nowMs={nowMs}
+                finalizer={finalizerForCards}
+                onOpen={onOpenLottery}
+                onOpenSafety={onOpenSafety}
+              />
             )}
           </div>
         </div>
+
+        {/* ENDING SOON */}
 
         <div>
           <div className="hp-section-header">
@@ -414,23 +345,22 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             <div className="hp-section-line" />
           </div>
 
-          <div className="hp-strip-wrap">
-            <div className="hp-strip" ref={endingRef}>
-              {!isLoading &&
-                endingSoonSorted.map((r) => (
-                  <div key={r.id} className="hp-strip-item">
-                    <LotteryCard
-                      lottery={r}
-                      onOpen={onOpenLottery}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowMs}
-                      finalizer={finalizerForCards}
-                    />
-                  </div>
-                ))}
-            </div>
+          <div className="hp-strip">
+            {endingSoonSorted.map((r) => (
+              <div key={r.id} className="hp-strip-item">
+                <LotteryCard
+                  lottery={r}
+                  onOpen={onOpenLottery}
+                  onOpenSafety={onOpenSafety}
+                  nowMs={nowMs}
+                  finalizer={finalizerForCards}
+                />
+              </div>
+            ))}
           </div>
         </div>
+
+        {/* RECENTLY SETTLED */}
 
         <div>
           <div className="hp-section-header">
@@ -438,21 +368,18 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             <div className="hp-section-line" />
           </div>
 
-          <div className="hp-strip-wrap">
-            <div className="hp-strip" ref={settledRef}>
-              {!isLoading &&
-                recentlySettledSorted.map((r) => (
-                  <div key={r.id} className="hp-strip-item">
-                    <LotteryCard
-                      lottery={r}
-                      onOpen={onOpenLottery}
-                      onOpenSafety={onOpenSafety}
-                      nowMs={nowMs}
-                      finalizer={finalizerForCards}
-                    />
-                  </div>
-                ))}
-            </div>
+          <div className="hp-strip">
+            {recentlySettledSorted.map((r) => (
+              <div key={r.id} className="hp-strip-item">
+                <LotteryCard
+                  lottery={r}
+                  onOpen={onOpenLottery}
+                  onOpenSafety={onOpenSafety}
+                  nowMs={nowMs}
+                  finalizer={finalizerForCards}
+                />
+              </div>
+            ))}
           </div>
         </div>
       </div>
