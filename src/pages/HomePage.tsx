@@ -1,4 +1,3 @@
-// src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useFinalizerStatus } from "../hooks/useFinalizerStatus";
@@ -71,6 +70,9 @@ const num = (v: any) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+
+const JUST_FINISHED_WINDOW_MS = 6000;
+const RECENT_OK_FINISH_GAP_MS = 15000;
 
 function openCashierFromHome() {
   try {
@@ -236,14 +238,58 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     };
   }, [gs.data]);
 
+  const justCompletedSuccess = useMemo(() => {
+    if (finalizer.error) return false;
+    if (finalizer.running) return false;
+    if (finalizer.status !== "ok") return false;
+    if (finalizer.lastFinishedMs == null) return false;
+    if (finalizer.lastOkMs == null) return false;
+    if (Math.abs(finalizer.lastFinishedMs - finalizer.lastOkMs) > RECENT_OK_FINISH_GAP_MS) return false;
+    return nowMs - finalizer.lastFinishedMs <= JUST_FINISHED_WINDOW_MS;
+  }, [
+    finalizer.error,
+    finalizer.running,
+    finalizer.status,
+    finalizer.lastFinishedMs,
+    finalizer.lastOkMs,
+    nowMs,
+  ]);
+
+  const justCompletedError = useMemo(() => {
+    if (finalizer.error) return false;
+    if (finalizer.running) return false;
+    if (finalizer.lastRunMs == null) return false;
+    if (finalizer.lastFinishedMs == null) return false;
+
+    const failed = finalizer.status === "error" || !!finalizer.lastError;
+    if (!failed) return false;
+
+    return nowMs - finalizer.lastFinishedMs <= JUST_FINISHED_WINDOW_MS;
+  }, [
+    finalizer.error,
+    finalizer.running,
+    finalizer.lastRunMs,
+    finalizer.lastFinishedMs,
+    finalizer.status,
+    finalizer.lastError,
+    nowMs,
+  ]);
+
   const finalizerTone = useMemo(() => {
     if (finalizer.error) return "warn";
     if (finalizer.running) return "live";
+    if (justCompletedSuccess) return "done";
+    if (justCompletedError) return "fail";
     if (finalizer.secondsToNextRun === 0) return "soon";
     return "idle";
-  }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
+  }, [
+    finalizer.error,
+    finalizer.running,
+    justCompletedSuccess,
+    justCompletedError,
+    finalizer.secondsToNextRun,
+  ]);
 
-  // ✅ Added `isText: boolean` to distinguish plain text from ticker string
   const finalizerStat = useMemo(() => {
     if (finalizer.error) {
       return {
@@ -260,6 +306,24 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
         value: "Drawing winners! 🎰",
         kicker: "Live draw in progress",
         label: "Lucky tickets are being picked on-chain right now.",
+      };
+    }
+
+    if (justCompletedSuccess) {
+      return {
+        isText: true,
+        value: "Draw completed ✅",
+        kicker: "Latest draw completed",
+        label: "Eligible lotteries were just processed on-chain.",
+      };
+    }
+
+    if (justCompletedError) {
+      return {
+        isText: true,
+        value: "An error occurred",
+        kicker: "Latest draw failed",
+        label: "The latest finalizer run did not complete successfully.",
       };
     }
 
@@ -298,7 +362,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
         </span>
       ),
     };
-  }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
+  }, [
+    finalizer.error,
+    finalizer.running,
+    finalizer.secondsToNextRun,
+    justCompletedSuccess,
+    justCompletedError,
+  ]);
 
   return (
     <>
@@ -380,23 +450,31 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             </div>
 
             <div className="hp-cd-main">
-              <div className="hp-cd-icon-wrap">{finalizer.running ? "🎰" : "⏳"}</div>
+              <div className="hp-cd-icon-wrap">
+                {finalizer.running ? "🎰" : justCompletedSuccess ? "✅" : justCompletedError ? "⚠️" : "⏳"}
+              </div>
 
               <div className="hp-cd-copy">
                 <div className="hp-cd-label">{finalizerStat.label}</div>
 
-                <div className={`hp-cd-display ${finalizer.running ? "is-running" : ""} ${finalizer.error ? "is-error" : ""}`}>
-                  
-                  {/* ✅ Fixed Rendering logic. Uses specific class for text vs timer */}
-                  <span className={`hp-cd-val ${finalizerStat.isText ? 'text-mode' : 'timer-mode'} ${finalizer.running ? 'pulse' : ''}`}>
+                <div
+                  className={`hp-cd-display ${
+                    finalizer.running ? "is-running" : ""
+                  } ${finalizer.error || justCompletedError ? "is-error" : ""} ${
+                    justCompletedSuccess ? "is-success" : ""
+                  }`}
+                >
+                  <span
+                    className={`hp-cd-val ${finalizerStat.isText ? "text-mode" : "timer-mode"} ${
+                      finalizer.running ? "pulse" : ""
+                    } ${justCompletedSuccess ? "success-mode" : ""} ${justCompletedError ? "error-mode" : ""}`}
+                  >
                     {finalizerStat.isText ? (
-                      // Plain text, no character splitting to prevent wild gaps
                       finalizerStat.value
                     ) : (
-                      // Animated slot-machine ticking logic
                       finalizerStat.value.split("").map((char, index) => (
-                        <span 
-                          key={`${index}-${char}`} 
+                        <span
+                          key={`${index}-${char}`}
                           className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
                         >
                           {char}
@@ -404,7 +482,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                       ))
                     )}
                   </span>
-
                 </div>
               </div>
             </div>
