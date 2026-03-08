@@ -243,9 +243,11 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     return "idle";
   }, [finalizer.error, finalizer.running, finalizer.secondsToNextRun]);
 
+  // ✅ Added `isText: boolean` to distinguish plain text from ticker string
   const finalizerStat = useMemo(() => {
     if (finalizer.error) {
       return {
+        isText: true,
         value: "Unavailable",
         kicker: "Draw monitor",
         label: "We’re having trouble checking the next draw.",
@@ -254,6 +256,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
     if (finalizer.running) {
       return {
+        isText: true,
         value: "Drawing winners! 🎰",
         kicker: "Live draw in progress",
         label: "Lucky tickets are being picked on-chain right now.",
@@ -262,6 +265,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
     if (finalizer.secondsToNextRun == null) {
       return {
+        isText: true,
         value: "—",
         kicker: "Draw monitor",
         label: "Awaiting next draw schedule.",
@@ -270,6 +274,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
     if (finalizer.secondsToNextRun === 0) {
       return {
+        isText: true,
         value: "Any moment now ✨",
         kicker: "Draw almost ready",
         label: "One or more eligible lotteries are about to be processed.",
@@ -277,6 +282,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     }
 
     return {
+      isText: false,
       value: fmtCountdown(finalizer.secondsToNextRun),
       kicker: "Next Ppopgi draw",
       label: (
@@ -380,19 +386,26 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                 <div className="hp-cd-label">{finalizerStat.label}</div>
 
                 <div className={`hp-cd-display ${finalizer.running ? "is-running" : ""} ${finalizer.error ? "is-error" : ""}`}>
-                  <span className="hp-cd-value">
-                    {/* ✅ THE MAGIC: Split the string so numbers flip independently! */}
-                    {finalizerStat.value.split("").map((char, index) => (
-                      <span 
-                        key={`${index}-${char}`} 
-                        className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
-                      >
-                        {char}
-                      </span>
-                    ))}
+                  
+                  {/* ✅ Fixed Rendering logic. Uses specific class for text vs timer */}
+                  <span className={`hp-cd-val ${finalizerStat.isText ? 'text-mode' : 'timer-mode'} ${finalizer.running ? 'pulse' : ''}`}>
+                    {finalizerStat.isText ? (
+                      // Plain text, no character splitting to prevent wild gaps
+                      finalizerStat.value
+                    ) : (
+                      // Animated slot-machine ticking logic
+                      finalizerStat.value.split("").map((char, index) => (
+                        <span 
+                          key={`${index}-${char}`} 
+                          className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
+                        >
+                          {char}
+                        </span>
+                      ))
+                    )}
                   </span>
-                </div>
 
+                </div>
               </div>
             </div>
           </div>
@@ -420,33 +433,50 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               </>
             )}
 
-            {!isLoading && podium.gold && (
-              <div className="pp-gold-wrapper">
-                <div className="pp-rank-badge gold">1</div>
-                <LotteryCard lottery={podium.gold} ribbon="gold" nowMs={nowMs} finalizer={finalizerForCards} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
-              </div>
-            )}
-            
-            {!isLoading && podium.silver && (
-              <div className="pp-silver-wrapper">
-                <div className="pp-rank-badge silver">2</div>
-                <LotteryCard lottery={podium.silver} ribbon="silver" nowMs={nowMs} finalizer={finalizerForCards} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
-              </div>
-            )}
-            
-            {!isLoading && podium.bronze && (
-              <div className="pp-bronze-wrapper">
-                <div className="pp-rank-badge bronze">3</div>
-                <LotteryCard lottery={podium.bronze} ribbon="bronze" nowMs={nowMs} finalizer={finalizerForCards} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
-              </div>
-            )}
-            
-            {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
-              <div className="hp-empty-msg">
-                <div className="hp-empty-icon">🍃</div>
-                <div>No active lotteries to display.</div>
-              </div>
-            )}
+            {!isLoading &&
+              podium.gold && (
+                <div className="pp-gold-wrapper">
+                  <div className="pp-rank-badge gold">1</div>
+                  <LotteryCard
+                    lottery={podium.gold}
+                    ribbon="gold"
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                    onOpen={onOpenLottery}
+                    onOpenSafety={onOpenSafety}
+                  />
+                </div>
+              )}
+
+            {!isLoading &&
+              podium.silver && (
+                <div className="pp-silver-wrapper">
+                  <div className="pp-rank-badge silver">2</div>
+                  <LotteryCard
+                    lottery={podium.silver}
+                    ribbon="silver"
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                    onOpen={onOpenLottery}
+                    onOpenSafety={onOpenSafety}
+                  />
+                </div>
+              )}
+
+            {!isLoading &&
+              podium.bronze && (
+                <div className="pp-bronze-wrapper">
+                  <div className="pp-rank-badge bronze">3</div>
+                  <LotteryCard
+                    lottery={podium.bronze}
+                    ribbon="bronze"
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                    onOpen={onOpenLottery}
+                    onOpenSafety={onOpenSafety}
+                  />
+                </div>
+              )}
           </div>
         </div>
 
@@ -460,7 +490,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             <div className="hp-strip" ref={endingRef}>
               {endingSoonSorted.map((r) => (
                 <div key={r.id} className="hp-strip-item">
-                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                  <LotteryCard
+                    lottery={r}
+                    onOpen={onOpenLottery}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                  />
                 </div>
               ))}
             </div>
@@ -477,7 +513,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             <div className="hp-strip" ref={settledRef}>
               {recentlySettledSorted.map((r) => (
                 <div key={r.id} className="hp-strip-item">
-                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                  <LotteryCard
+                    lottery={r}
+                    onOpen={onOpenLottery}
+                    onOpenSafety={onOpenSafety}
+                    nowMs={nowMs}
+                    finalizer={finalizerForCards}
+                  />
                 </div>
               ))}
             </div>
