@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+// src/pages/HomePage.tsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useFinalizerStatus } from "../hooks/useFinalizerStatus";
 import { useGlobalStatsBillboard } from "../hooks/useGlobalStatsBillboard";
@@ -71,10 +72,49 @@ const num = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-function navigateFromHome(page: "explore" | "faq") {
+function openCashierFromHome() {
+  try {
+    window.dispatchEvent(new CustomEvent("ppopgi:open-cashier"));
+  } catch {}
+}
+
+function navigateFromHome(page: "explore" | "faq" | "dashboard" | "about") {
   try {
     window.dispatchEvent(new CustomEvent("ppopgi:navigate", { detail: { page } }));
   } catch {}
+}
+
+const BANNER_MESSAGES = [
+  { id: "cashier", text: "💡 Pro tip: Visit the Cashier to buy more XTZ or USDC", action: openCashierFromHome },
+  { id: "explore", text: "🔎 Discover all lotteries from the Explore page", action: () => navigateFromHome("explore") },
+  { id: "dashboard", text: "🎁 Visit your dashboard to reclaim prizes or tickets", action: () => navigateFromHome("dashboard") },
+  { id: "about", text: "📖 Read the story behind Ppopgi (뽑기)", action: () => navigateFromHome("about") },
+  { id: "faq", text: "❓ Learn how Ppopgi (뽑기) works (FAQ)", action: () => navigateFromHome("faq") },
+];
+
+function BannerSlider() {
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setIdx((prev) => (prev + 1) % BANNER_MESSAGES.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="hp-banner-wrapper">
+      <div className="hp-banner-track" style={{ transform: `translateX(-${idx * 100}%)` }}>
+        {BANNER_MESSAGES.map((msg) => (
+          <div key={msg.id} className="hp-banner-slide">
+            <button className="hp-banner-btn" onClick={msg.action}>
+              {msg.text}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function HeroSpiritTypewriter() {
@@ -131,7 +171,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
   }, []);
 
   const finalizer = useFinalizerStatus();
-  const { bigPrizes, endingSoon, recentlyFinalized, isLoading } = useHomeLotteries();
+  const { bigPrizes, endingSoon, recentlyFinalized, isLoading, refetch } = useHomeLotteries();
   const gs = useGlobalStatsBillboard();
 
   const finalizerForCards = useMemo(
@@ -142,6 +182,17 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     }),
     [finalizer.running, finalizer.secondsToNextRun, finalizer.tsMs]
   );
+
+  useEffect(() => {
+    const onFocus = () => {
+      try {
+        refetch();
+        gs.refetch();
+      } catch {}
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refetch, gs]);
 
   const podium = useMemo(() => {
     if (!bigPrizes || bigPrizes.length === 0) {
@@ -172,13 +223,16 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
     return (recentlyFinalized ?? []).slice(0, 5);
   }, [recentlyFinalized]);
 
+  const endingRef = useRef<HTMLDivElement | null>(null);
+  const settledRef = useRef<HTMLDivElement | null>(null);
+
   const stats = useMemo(() => {
     if (!gs.data) return null;
     return {
       tix: fmtInt(gs.data.totalTicketsSold),
       lots: fmtInt(gs.data.totalLotteriesCreated),
-      activeUsd: fmtUSDC(gs.data.activeVolumeUSDC),
-      settledUsd: fmtUSDC(gs.data.totalPrizesSettledUSDC),
+      activeUsd: fmtUSDC(gs.data.activeVolumeUSDC, { maxFrac: 0 }),
+      settledUsd: fmtUSDC(gs.data.totalPrizesSettledUSDC, { maxFrac: 0 }),
     };
   }, [gs.data]);
 
@@ -200,7 +254,7 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
     if (finalizer.running) {
       return {
-        value: "Drawing winners now! 🎰",
+        value: "Drawing winners! 🎰",
         kicker: "Live draw in progress",
         label: "Lucky tickets are being picked on-chain right now.",
       };
@@ -242,6 +296,10 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
 
   return (
     <>
+      <div className="hp-announcement-bar hp-announcement-top">
+        <BannerSlider />
+      </div>
+
       <div className="hp-hero-card hp-billboard">
         <div className="hp-billboard-bg" />
         <div className="hp-billboard-sparkles" />
@@ -252,7 +310,8 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-hero-title">
-            Welcome to <span className="hp-text-gradient">Ppopgi (뽑기)</span>
+            Welcome to <br className="hp-mobile-break" />
+            <span className="hp-text-gradient">Ppopgi (뽑기)</span>
           </div>
 
           <div className="hp-hero-sub hp-hero-sub-typer">
@@ -320,15 +379,20 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               <div className="hp-cd-copy">
                 <div className="hp-cd-label">{finalizerStat.label}</div>
 
-                <div
-                  className={[
-                    "hp-cd-display",
-                    finalizer.running ? "is-running" : "",
-                    finalizer.error ? "is-error" : "",
-                  ].join(" ")}
-                >
-                  <span className="hp-cd-value">{finalizerStat.value}</span>
+                <div className={`hp-cd-display ${finalizer.running ? "is-running" : ""} ${finalizer.error ? "is-error" : ""}`}>
+                  <span className="hp-cd-value">
+                    {/* ✅ THE MAGIC: Split the string so numbers flip independently! */}
+                    {finalizerStat.value.split("").map((char, index) => (
+                      <span 
+                        key={`${index}-${char}`} 
+                        className={/[0-9]/.test(char) ? "cd-flip-char" : "cd-static-char"}
+                      >
+                        {char}
+                      </span>
+                    ))}
+                  </span>
                 </div>
+
               </div>
             </div>
           </div>
@@ -356,17 +420,33 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               </>
             )}
 
-            {!isLoading &&
-              podium.gold && (
-                <LotteryCard
-                  lottery={podium.gold}
-                  ribbon="gold"
-                  nowMs={nowMs}
-                  finalizer={finalizerForCards}
-                  onOpen={onOpenLottery}
-                  onOpenSafety={onOpenSafety}
-                />
-              )}
+            {!isLoading && podium.gold && (
+              <div className="pp-gold-wrapper">
+                <div className="pp-rank-badge gold">1</div>
+                <LotteryCard lottery={podium.gold} ribbon="gold" nowMs={nowMs} finalizer={finalizerForCards} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
+              </div>
+            )}
+            
+            {!isLoading && podium.silver && (
+              <div className="pp-silver-wrapper">
+                <div className="pp-rank-badge silver">2</div>
+                <LotteryCard lottery={podium.silver} ribbon="silver" nowMs={nowMs} finalizer={finalizerForCards} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
+              </div>
+            )}
+            
+            {!isLoading && podium.bronze && (
+              <div className="pp-bronze-wrapper">
+                <div className="pp-rank-badge bronze">3</div>
+                <LotteryCard lottery={podium.bronze} ribbon="bronze" nowMs={nowMs} finalizer={finalizerForCards} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} />
+              </div>
+            )}
+            
+            {!isLoading && !podium.gold && !podium.silver && !podium.bronze && (
+              <div className="hp-empty-msg">
+                <div className="hp-empty-icon">🍃</div>
+                <div>No active lotteries to display.</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -376,18 +456,14 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             <div className="hp-section-line" />
           </div>
 
-          <div className="hp-strip">
-            {endingSoonSorted.map((r) => (
-              <div key={r.id} className="hp-strip-item">
-                <LotteryCard
-                  lottery={r}
-                  onOpen={onOpenLottery}
-                  onOpenSafety={onOpenSafety}
-                  nowMs={nowMs}
-                  finalizer={finalizerForCards}
-                />
-              </div>
-            ))}
+          <div className="hp-strip-wrap">
+            <div className="hp-strip" ref={endingRef}>
+              {endingSoonSorted.map((r) => (
+                <div key={r.id} className="hp-strip-item">
+                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -397,18 +473,14 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
             <div className="hp-section-line" />
           </div>
 
-          <div className="hp-strip">
-            {recentlySettledSorted.map((r) => (
-              <div key={r.id} className="hp-strip-item">
-                <LotteryCard
-                  lottery={r}
-                  onOpen={onOpenLottery}
-                  onOpenSafety={onOpenSafety}
-                  nowMs={nowMs}
-                  finalizer={finalizerForCards}
-                />
-              </div>
-            ))}
+          <div className="hp-strip-wrap">
+            <div className="hp-strip" ref={settledRef}>
+              {recentlySettledSorted.map((r) => (
+                <div key={r.id} className="hp-strip-item">
+                  <LotteryCard lottery={r} onOpen={onOpenLottery} onOpenSafety={onOpenSafety} nowMs={nowMs} finalizer={finalizerForCards} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
