@@ -229,10 +229,10 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
   const endingRef = useRef<HTMLDivElement | null>(null);
   const settledRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ Scroll helper function for the strips
-  const scrollStrip = (ref: React.RefObject<HTMLDivElement>, direction: "left" | "right") => {
+  // ✅ FIXED: Using { current: HTMLDivElement | null } resolves the TS2345 error
+  const scrollStrip = (ref: { current: HTMLDivElement | null }, direction: "left" | "right") => {
     if (ref.current) {
-      const scrollAmount = direction === "left" ? -340 : 340; // Card width + gap
+      const scrollAmount = direction === "left" ? -340 : 340; 
       ref.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
   };
@@ -573,7 +573,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-strip-wrap">
-            {/* ✅ Left Arrow */}
             {endingSoonSorted.length > 0 && (
               <button className="hp-strip-nav left" onClick={() => scrollStrip(endingRef, "left")}>
                 ←
@@ -594,7 +593,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               ))}
             </div>
 
-            {/* ✅ Right Arrow */}
             {endingSoonSorted.length > 0 && (
               <button className="hp-strip-nav right" onClick={() => scrollStrip(endingRef, "right")}>
                 →
@@ -610,7 +608,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-strip-wrap">
-            {/* ✅ Left Arrow */}
             {recentlySettledSorted.length > 0 && (
               <button className="hp-strip-nav left" onClick={() => scrollStrip(settledRef, "left")}>
                 ←
@@ -631,7 +628,6 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
               ))}
             </div>
 
-            {/* ✅ Right Arrow */}
             {recentlySettledSorted.length > 0 && (
               <button className="hp-strip-nav right" onClick={() => scrollStrip(settledRef, "right")}>
                 →
