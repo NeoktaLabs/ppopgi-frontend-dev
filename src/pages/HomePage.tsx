@@ -229,6 +229,14 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
   const endingRef = useRef<HTMLDivElement | null>(null);
   const settledRef = useRef<HTMLDivElement | null>(null);
 
+  // ✅ Scroll helper function for the strips
+  const scrollStrip = (ref: React.RefObject<HTMLDivElement>, direction: "left" | "right") => {
+    if (ref.current) {
+      const scrollAmount = direction === "left" ? -340 : 340; // Card width + gap
+      ref.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
   const stats = useMemo(() => {
     if (!gs.data) return null;
     return {
@@ -565,6 +573,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-strip-wrap">
+            {/* ✅ Left Arrow */}
+            {endingSoonSorted.length > 0 && (
+              <button className="hp-strip-nav left" onClick={() => scrollStrip(endingRef, "left")}>
+                ←
+              </button>
+            )}
+            
             <div className="hp-strip" ref={endingRef}>
               {endingSoonSorted.map((r) => (
                 <div key={r.id} className="hp-strip-item">
@@ -578,6 +593,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                 </div>
               ))}
             </div>
+
+            {/* ✅ Right Arrow */}
+            {endingSoonSorted.length > 0 && (
+              <button className="hp-strip-nav right" onClick={() => scrollStrip(endingRef, "right")}>
+                →
+              </button>
+            )}
           </div>
         </div>
 
@@ -588,6 +610,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
           </div>
 
           <div className="hp-strip-wrap">
+            {/* ✅ Left Arrow */}
+            {recentlySettledSorted.length > 0 && (
+              <button className="hp-strip-nav left" onClick={() => scrollStrip(settledRef, "left")}>
+                ←
+              </button>
+            )}
+
             <div className="hp-strip" ref={settledRef}>
               {recentlySettledSorted.map((r) => (
                 <div key={r.id} className="hp-strip-item">
@@ -601,6 +630,13 @@ export function HomePage({ onOpenLottery, onOpenSafety }: Props) {
                 </div>
               ))}
             </div>
+
+            {/* ✅ Right Arrow */}
+            {recentlySettledSorted.length > 0 && (
+              <button className="hp-strip-nav right" onClick={() => scrollStrip(settledRef, "right")}>
+                →
+              </button>
+            )}
           </div>
         </div>
       </div>
