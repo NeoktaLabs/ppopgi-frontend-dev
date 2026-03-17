@@ -1,3 +1,4 @@
+// src/pages/HomePage.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHomeLotteries } from "../hooks/useHomeLotteries";
 import { useFinalizerStatus } from "../hooks/useFinalizerStatus";
