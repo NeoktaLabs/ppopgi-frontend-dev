@@ -6,7 +6,7 @@
   margin: 0 auto;
   padding: 0 0 60px 0;
   color: var(--ink);
-  /* ✅ Removed the light transparent background and fixed the overflow issue */
+  overflow-x: hidden;
 }
 
 /* =========================================================
@@ -512,7 +512,7 @@
   justify-content: center;
   gap: 4px;
   cursor: help;
-  z-index: 10;
+  z-index: 40;
 }
 
 .hp-tooltip-text {
@@ -645,7 +645,7 @@
 /* ✅ Grounded Podium */
 .hp-podium { display: flex; justify-content: center; align-items: flex-end; gap: 24px; padding-bottom: 40px; margin-top: 20px;}
 
-.pp-gold-wrapper, .pp-silver-wrapper, .pp-bronze-wrapper { position: relative; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pp-gold-wrapper, .pp-silver-wrapper, .pp-bronze-wrapper { position: relative; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .pp-gold-wrapper { z-index: 3; transform: scale(1.06); margin-bottom: 12px;}
 .pp-silver-wrapper { z-index: 2; transform: scale(0.96); }
 .pp-bronze-wrapper { z-index: 2; transform: scale(0.96); }
@@ -699,6 +699,43 @@
 
 .hp-strip-item { scroll-snap-align: start; flex: 0 0 auto; width: 300px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .hp-strip-item:hover { transform: translateY(-6px) scale(1.02); }
+
+/* ✅ Arrow Navigation Buttons */
+.hp-strip-nav {
+  position: absolute;
+  top: 45%; 
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid rgba(246, 182, 200, 0.8);
+  color: #be185d;
+  font-size: 20px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 20;
+  box-shadow: 0 8px 20px rgba(246, 182, 200, 0.3);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(8px);
+}
+.hp-strip-nav:hover {
+  background: var(--sakura-pink, #F6B6C8);
+  color: #fff;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 10px 24px rgba(246, 182, 200, 0.5);
+}
+.hp-strip-nav:active {
+  transform: translateY(-50%) scale(0.95);
+}
+.hp-strip-nav.left {
+  left: 10px;
+}
+.hp-strip-nav.right {
+  right: 10px;
+}
 
 /* =========================================================
    MOBILE
@@ -754,4 +791,7 @@
   .hp-podium { flex-direction: column; align-items: center; gap: 60px; margin-top: 40px; }
   .pp-gold-wrapper { order: -1; margin-bottom: 20px; }
   .hp-strip { padding: 10px 20px 50px 20px; }
+  
+  /* ✅ Hide arrows on mobile because users can just swipe */
+  .hp-strip-nav { display: none; }
 }
