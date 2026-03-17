@@ -6,13 +6,7 @@
   margin: 0 auto;
   padding: 0 0 60px 0;
   color: var(--ink);
-  overflow-x: hidden;
-
-  background-image:
-    radial-gradient(at 0% 0%, rgba(255, 228, 230, 0.3) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(224, 242, 254, 0.3) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(253, 230, 138, 0.1) 0px, transparent 50%);
-  background-attachment: fixed;
+  /* ✅ Removed the light transparent background and fixed the overflow issue */
 }
 
 /* =========================================================
@@ -152,7 +146,7 @@
   background: linear-gradient(135deg, #be185d 0%, #db2777 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 4px 8px rgba(190, 24, 93, 0.25)); /* Enhanced glow */
+  filter: drop-shadow(0 4px 8px rgba(190, 24, 93, 0.25));
 }
 
 .hp-hero-sub {
@@ -195,7 +189,6 @@
 
 .hp-hero-actions { display: flex; gap: 14px; margin-bottom: 0px; }
 
-/* ✅ Cutest Ppopgi Button styling */
 .hp-btn-primary { 
   background: linear-gradient(135deg, var(--peach-glow, #FAD1B8), var(--sakura-pink, #F6B6C8)); 
   color: var(--ink); 
@@ -519,7 +512,7 @@
   justify-content: center;
   gap: 4px;
   cursor: help;
-  z-index: 40;
+  z-index: 10;
 }
 
 .hp-tooltip-text {
@@ -652,7 +645,7 @@
 /* ✅ Grounded Podium */
 .hp-podium { display: flex; justify-content: center; align-items: flex-end; gap: 24px; padding-bottom: 40px; margin-top: 20px;}
 
-.pp-gold-wrapper, .pp-silver-wrapper, .pp-bronze-wrapper { position: relative; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pp-gold-wrapper, .pp-silver-wrapper, .pp-bronze-wrapper { position: relative; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .pp-gold-wrapper { z-index: 3; transform: scale(1.06); margin-bottom: 12px;}
 .pp-silver-wrapper { z-index: 2; transform: scale(0.96); }
 .pp-bronze-wrapper { z-index: 2; transform: scale(0.96); }
@@ -674,8 +667,36 @@
    6. HORIZONTAL STRIPS
    ========================================================= */
 .hp-strip-wrap { position: relative; }
-.hp-strip { display: flex; gap: 20px; overflow-x: auto; padding: 20px 40px 60px 40px; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-.hp-strip::-webkit-scrollbar { display: none; }
+
+/* ✅ Restored the beautiful horizontal slider layout */
+.hp-strip { 
+  display: flex; 
+  gap: 20px; 
+  overflow-x: auto; 
+  padding: 20px 40px 60px 40px; 
+  scroll-snap-type: x mandatory; 
+  -webkit-overflow-scrolling: touch; 
+}
+
+/* Beautiful Ppopgi Scrollbar */
+.hp-strip::-webkit-scrollbar {
+  height: 10px;
+}
+.hp-strip::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  margin: 0 40px; 
+}
+.hp-strip::-webkit-scrollbar-thumb {
+  background: rgba(246, 182, 200, 0.6); 
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.hp-strip::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sakura-pink, #F6B6C8);
+}
+
 .hp-strip-item { scroll-snap-align: start; flex: 0 0 auto; width: 300px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .hp-strip-item:hover { transform: translateY(-6px) scale(1.02); }
 
